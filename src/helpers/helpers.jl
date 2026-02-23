@@ -58,7 +58,7 @@ function get_disp_fiber_params(L, radius, core_NA, alpha, nx, sim, fiber_fname; 
         npzwrite(fiber_fname, Dict("gamma" => γ, "phi" => ϕ, "x" => x, "D_w" => Dω, "betas" => βn_ω))
     end
     println()
-    return Dict("ϕ" => ϕ, "Dω" => Dω, "γ" => γ, "L" => L, "hRω" => hRω, "one_m_fR" => one_m_fR, "zsave" => nothing, "x" => x)
+    return Dict("ϕ" => ϕ, "Dω" => Dω, "γ" => γ, "L" => L, "hRω" => hRω, "one_m_fR" => one_m_fR, "zsave" => nothing, "x" => x, "gω" => nothing)
 end
 
 
@@ -90,5 +90,5 @@ function get_disp_fiber_params_user_defined(L, sim; fR=0.18, τ1=12.2, τ2=32, g
 
     println(βn_ω)
 
-    return Dict("ϕ" => nothing, "Dω" => Dω, "γ" => γ, "L" => L, "hRω" => hRω, "one_m_fR" => one_m_fR, "zsave" => nothing, "x" => nothing)
+    return Dict("ϕ" => nothing, "Dω" => Dω, "γ" => γ, "L" => L, "hRω" => hRω, "one_m_fR" => one_m_fR, "zsave" => nothing, "x" => nothing, "gω" => nothing)
 end
