@@ -27,7 +27,7 @@ function build_GRIN(lambda, Nx, spatial_window, radius, core_NA, alpha)
     return epsilon, x, dx
 end
 
-function get_params(f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, Δt, β_order; Δf=1, gamma_user=nothing, betas_user=nothing)
+function get_params(f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, Δt, β_order; Δf=1)
     points = 2 * β_order + 1
     half_p = (points - 1) ÷ 2
     offsets = collect(-half_p:half_p)  # Symmetric stencil [-M, ..., M]
@@ -52,12 +52,6 @@ function get_params(f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, �
 
     βn_ω = [β_f[β_order+1, :]' .- β_f[β_order+1, 1]; ∂nβ∂fn[1, :]' .- ∂nβ∂fn[1, 1]; ∂nβ∂fn[2:end, :]]
 
-    println(betas_user, gamma_user)
-
-    if !isnothing(betas_user)
-        βn_ω = [0.0; 0.0; betas_user;;]
-    end
-
     Dω = hcat([(2 * π * fftfreq(Nt, 1 / Δt) * 1e12) .^ n / factorial(n) for n in 0:β_order]...) * βn_ω
 
     λ0 = c0 / f0 / 1e12
@@ -69,10 +63,6 @@ function get_params(f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, �
     n2 = 2.3e-20
     ω0 = 2 * π * f0 * 1e12
     γ = SK * n2 * ω0 / c0
-
-    if !isnothing(gamma_user)
-        γ = fill(gamma_user, 1, 1, 1, 1)
-    end
 
     return βn_ω, Dω, γ, ϕ, x
 end
