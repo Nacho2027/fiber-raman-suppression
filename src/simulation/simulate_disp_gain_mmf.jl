@@ -14,7 +14,7 @@ function disp_gain_mmf!(dũω, ũω, p, z)
     @. exp_D_p = exp(1im * Dω * z)
     @. exp_D_m = exp(-1im * Dω * z)
 
-    @. uω = exp_D_p * exp(0.5 * gω * z) * ũω  # Now has gain and dispersion applied
+    @. uω = exp_D_p * ũω  #  dispersion applied
 
     fft_plan_M! * uω
     @. ut = attenuator * uω
@@ -41,8 +41,8 @@ function disp_gain_mmf!(dũω, ũω, p, z)
     ifft_plan_M! * ηt
     ηt .*= selfsteep
 
-    # Removes gain and dispersion factor 
-    @. dũω = 1im * exp_D_m * exp(-0.5 * gω * z) * ηt
+    # applied gain as well 
+    @. dũω = 1im * exp_D_m * ηt + 0.5 * gω * ũω
 end
 
 """
@@ -129,7 +129,7 @@ function solve_disp_gain_mmf(uω0, fiber, sim)
         ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
 
         for i in 1:length(fiber["zsave"])
-            uω_z[i, :, :] = exp.(1im * fiber["Dω"] * fiber["zsave"][i]) .* exp.(0.5 * fiber["gω"] * fiber["zsave"][i]) .* sol_disp_gain_mmf(fiber["zsave"][i])
+            uω_z[i, :, :] = exp.(1im * fiber["Dω"] * fiber["zsave"][i]) .* sol_disp_gain_mmf(fiber["zsave"][i])
             ut_z[i, :, :] = fft(uω_z[i, :, :], 1)
         end
 
