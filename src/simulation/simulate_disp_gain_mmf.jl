@@ -102,7 +102,7 @@ Currently returns a constant (or provided template) gain for every frequency and
 Replace this function body with a spectrum-dependent model, e.g. `compute_gain(uω)`.
 """
 function compute_gain(uω, pGain::Number)
-    gω = pGain  # Linear Gain
+    gω = fill(pGain, size(uω))  # Linear Gain
     gP = -1  # Placeholder for pump power
     return gω, gP
 end

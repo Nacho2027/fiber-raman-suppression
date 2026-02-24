@@ -45,28 +45,6 @@ Base.@kwdef mutable struct YDFAParams
 end
 
 
-
-"""
-    get_ydfa_cross_sections(fs; data_dir=".", absorption_file="Yb_absorption.npz", emission_file="Yb_emission.npz", scale=1e-27)
-
-Load YDFA absorption/emission spectra from NPZ files and interpolate them onto a
-frequency grid `fs` (THz).
-
-# Arguments
-- `fs`: Frequency grid in THz (for example `sim["fs"]`).
-
-# Keyword Arguments
-- `data_dir`: Directory where NPZ files are stored (default: current directory).
-- `absorption_file`: NPZ filename for absorption data.
-- `emission_file`: NPZ filename for emission data.
-- `scale`: Scale factor applied to `"intensity"` values before interpolation.
-
-# Returns
-A dictionary with:
-- `"lambda"`: wavelength grid in meters used for interpolation.
-- `"sigma_as"`: absorption cross section on the `fs` grid.
-- `"sigma_es"`: emission cross section on the `fs` grid.
-"""
 function get_ydfa_cross_sections(fs; data_dir=@__DIR__,
     absorption_file="Yb_absorption.npz",
     emission_file="Yb_emission.npz",
