@@ -1,44 +1,3 @@
-mutable struct DispGainSMFParams{
-    Tself,TD,Tγ,ThRω,Tone_m_fR,Tatt,Tgm,Tgω,TgP,
-    TF1,TF2,TF3,TF4,
-    TexpDp,TexpDm,Tuω,Tut,Tv,Tw,
-    TδKt,TδKt_cplx,TαK,TβK,TηKt,
-    ThRω_δRω,ThR_conv_δR,TδRt,TαR,TβR,TηRt,Tηt
-}
-    selfsteep::Tself
-    Dω::TD
-    γ::Tγ
-    hRω::ThRω
-    one_m_fR::Tone_m_fR
-    attenuator::Tatt
-    pGain::Tgm
-    gω::Tgω
-    gP::TgP
-    fft_plan_M!::TF1
-    ifft_plan_M!::TF2
-    fft_plan_MM!::TF3
-    ifft_plan_MM!::TF4
-    exp_D_p::TexpDp
-    exp_D_m::TexpDm
-    uω::Tuω
-    ut::Tut
-    v::Tv
-    w::Tw
-    δKt::TδKt
-    δKt_cplx::TδKt_cplx
-    αK::TαK
-    βK::TβK
-    ηKt::TηKt
-    hRω_δRω::ThRω_δRω
-    hR_conv_δR::ThR_conv_δR
-    δRt::TδRt
-    αR::TαR
-    βR::TβR
-    ηRt::TηRt
-    ηt::Tηt
-end
-
-
 """
     disp_gain_smf!(dũω, ũω, p, z)
 
@@ -51,45 +10,47 @@ The equation is written in the interaction picture to separate the fast linear
 """
 function disp_gain_smf!(dũ, ũ, p, z)
 
+    selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
+
     Pp = ũ[1]  # Pump
     ũω = ũ[2:end]  # Signal modes
 
-    @. p.exp_D_p = exp(1im * p.Dω * z)
-    @. p.exp_D_m = exp(-1im * p.Dω * z)
+    @. exp_D_p = exp(1im * Dω * z)
+    @. exp_D_m = exp(-1im * Dω * z)
 
-    @. p.uω = p.exp_D_p * ũω  #  dispersion applied
+    @. uω = exp_D_p * ũω
 
-    p.gω, p.gP = compute_gain(p.uω, p.pGain, Pp)  # gω is updated in place, gP is returned since float
+    gω, gP = compute_gain(uω, pGain, Pp)  # gω is updated in place, gP is returned since float
 
-    p.fft_plan_M! * p.uω
-    @. p.ut = p.attenuator * p.uω
-    @. p.v = real(p.ut)
-    @. p.w = imag(p.ut)
+    fft_plan_M! * uω
+    @. ut = attenuator * uω
+    @. v = real(ut)
+    @. w = imag(ut)
 
-    @tullio p.δKt[t, i, j] = p.γ[i, j, k, l] * (p.v[t, k] * p.v[t, l] + p.w[t, k] * p.w[t, l])
-    @tullio p.αK[t, i] = p.δKt[t, i, j] * p.v[t, j]
-    @tullio p.βK[t, i] = p.δKt[t, i, j] * p.w[t, j]
-    @. p.ηKt = p.αK + 1im * p.βK
-    @. p.ηKt *= p.one_m_fR
+    @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t, k] * v[t, l] + w[t, k] * w[t, l])
+    @tullio αK[t, i] = δKt[t, i, j] * v[t, j]
+    @tullio βK[t, i] = δKt[t, i, j] * w[t, j]
+    @. ηKt = αK + 1im * βK
+    @. ηKt *= one_m_fR
 
-    @. p.δKt_cplx = ComplexF64(p.δKt, 0.0)
-    p.fft_plan_MM! * p.δKt_cplx
-    @. p.hRω_δRω = p.hRω * p.δKt_cplx
-    p.ifft_plan_MM! * p.hRω_δRω
-    fftshift!(p.hR_conv_δR, p.hRω_δRω, 1)
-    @. p.δRt = real(p.hR_conv_δR)
-    @tullio p.αR[t, i] = p.δRt[t, i, j] * p.v[t, j]
-    @tullio p.βR[t, i] = p.δRt[t, i, j] * p.w[t, j]
-    @. p.ηRt = p.αR + 1im * p.βR
+    @. δKt_cplx = ComplexF64(δKt, 0.0)
+    fft_plan_MM! * δKt_cplx
+    @. hRω_δRω = hRω * δKt_cplx
+    ifft_plan_MM! * hRω_δRω
+    fftshift!(hR_conv_δR, hRω_δRω, 1)
+    @. δRt = real(hR_conv_δR)
+    @tullio αR[t, i] = δRt[t, i, j] * v[t, j]
+    @tullio βR[t, i] = δRt[t, i, j] * w[t, j]
+    @. ηRt = αR + 1im * βR
 
-    @. p.ηt = p.ηKt + p.ηRt
-    p.ifft_plan_M! * p.ηt
-    p.ηt .*= p.selfsteep
+    @. ηt = ηKt + ηRt
+    ifft_plan_M! * ηt
+    ηt .*= selfsteep
 
     # @. dũω = 1im * p.exp_D_m * p.ηt + 0.5 * p.gω * ũω
 
-    dũ[1] = p.gP * Pp  # Pump is undepleted in this model
-    @. dũ[2:end] = 1im * p.exp_D_m * p.ηt + 0.5 * p.gω * ũω
+    dũ[1] = gP * Pp  # Pump is undepleted in this model
+    @. dũ[2:end] = 1im * exp_D_m * ηt + 0.5 * gω * ũω
 
 end
 
@@ -152,7 +113,7 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, at
     gω = zeros(Nt, M)
     gP = 0.0
 
-    p = DispGainSMFParams(selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
+    p = (selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
     return p
 end
 
