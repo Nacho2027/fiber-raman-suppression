@@ -185,7 +185,7 @@ Gain is applied as exp(±0.5*gω*z), separate from Dω.
 function solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0)
 
     if sim["M"] != 1
-        throw(ArgumentError("disp_gain_smf requires M = 1 (got M = $(sim["M"]))"))
+        throw(ArgumentError("disp_gain_smf is single mode only, requires M = 1 (got M = $(sim["M"]))"))
     end
 
     pGain = haskey(fiber, "gain_parameters") ? fiber["gain_parameters"] : 0.0
