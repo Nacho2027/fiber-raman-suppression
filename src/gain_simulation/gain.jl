@@ -84,7 +84,8 @@ function psd_from_uω(uω, p::YDFAParams)
     return fftshift(ESD) .* p.pulse_rep_rate # W/Hz
 end
 
-function calculate_gain_YDFA(Pp::ComplexF64, Ps_vec::AbstractVector{<:Real}, p::YDFAParams)
+function calculate_gain_YDFA(Pp::ComplexF64, Ps_vec::Matrix{Float64}, p::YDFAParams)
+    h = 6.62607015e-34
     R12 = (p.Gamma_p * p.σap * Pp) / (h * p.νp * p.A)
     R21 = (p.Gamma_p * p.σep * Pp) / (h * p.νp * p.A)
 

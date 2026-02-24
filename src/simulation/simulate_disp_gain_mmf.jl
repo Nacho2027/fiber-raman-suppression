@@ -59,7 +59,7 @@ function disp_gain_smf!(dũ, ũ, p, z)
 
     @. p.uω = p.exp_D_p * ũω  #  dispersion applied
 
-    p.gω, p.gP = compute_gain(p.uω, p.pGain)  # gω is updated in place, gP is returned since float
+    p.gω, p.gP = compute_gain(p.uω, p.pGain, Pp)  # gω is updated in place, gP is returned since float
 
     p.fft_plan_M! * p.uω
     @. p.ut = p.attenuator * p.uω
@@ -101,15 +101,21 @@ Placeholder gain model.
 Currently returns a constant (or provided template) gain for every frequency and mode.
 Replace this function body with a spectrum-dependent model, e.g. `compute_gain(uω)`.
 """
-function compute_gain(uω, pGain::Number)
+function compute_gain(uω, pGain::Number, Pp)
     gω = fill(pGain, size(uω))  # Linear Gain
     gP = -1  # Placeholder for pump power
     return gω, gP
 end
 
-function compute_gain(uω, pGain::YDFAParams)
-    gω = fill(5.0, size(uω))  # temporary
-    gP = -1  # Placeholder for pump power
+function compute_gain(uω, pGain::YDFAParams, Pp)
+
+    Ps_vec = psd_from_uω(uω, pGain)  # W/Hz on fs grid
+    gω_vec, gP = calculate_gain_YDFA(Pp, Ps_vec, pGain)
+
+    gω_shifted = ifftshift(gω_vec)  # You have to shift since uω is in the fft convention
+
+    gω = reshape(gω_shifted, size(uω))
+
     return gω, gP
 end
 
