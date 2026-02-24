@@ -1,3 +1,44 @@
+mutable struct DispGainSMFParams{
+    Tself,TD,Tγ,ThRω,Tone_m_fR,Tatt,Tgm,Tgω,TgP,
+    TF1,TF2,TF3,TF4,
+    TexpDp,TexpDm,Tuω,Tut,Tv,Tw,
+    TδKt,TδKt_cplx,TαK,TβK,TηKt,
+    ThRω_δRω,ThR_conv_δR,TδRt,TαR,TβR,TηRt,Tηt
+}
+    selfsteep::Tself
+    Dω::TD
+    γ::Tγ
+    hRω::ThRω
+    one_m_fR::Tone_m_fR
+    attenuator::Tatt
+    pGain::Tgm
+    gω::Tgω
+    gP::TgP
+    fft_plan_M!::TF1
+    ifft_plan_M!::TF2
+    fft_plan_MM!::TF3
+    ifft_plan_MM!::TF4
+    exp_D_p::TexpDp
+    exp_D_m::TexpDm
+    uω::Tuω
+    ut::Tut
+    v::Tv
+    w::Tw
+    δKt::TδKt
+    δKt_cplx::TδKt_cplx
+    αK::TαK
+    βK::TβK
+    ηKt::TηKt
+    hRω_δRω::ThRω_δRω
+    hR_conv_δR::ThR_conv_δR
+    δRt::TδRt
+    αR::TαR
+    βR::TβR
+    ηRt::TηRt
+    ηt::Tηt
+end
+
+
 """
     disp_gain_smf!(dũω, ũω, p, z)
 
@@ -8,59 +49,68 @@ linear gain term `gω`.
 The equation is written in the interaction picture to separate the fast linear
 (disperive) and slow nonlinear dynamics.
 """
-function disp_gain_smf!(dũω, ũω, p, z)
-    selfsteep, Dω, γ, hRω, one_m_fR, attenuator, gain_template, gω, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
-    @. exp_D_p = exp(1im * Dω * z)
-    @. exp_D_m = exp(-1im * Dω * z)
+function disp_gain_smf!(dũ, ũ, p, z)
 
-    @. uω = exp_D_p * ũω  #  dispersion applied
+    Pp = ũ[1]  # Pump
+    ũω = ũ[2:end]  # Signal modes
 
-    compute_gain!(gω, uω, gain_template)  # update gain profile based on current uω
+    @. p.exp_D_p = exp(1im * p.Dω * z)
+    @. p.exp_D_m = exp(-1im * p.Dω * z)
 
-    fft_plan_M! * uω
-    @. ut = attenuator * uω
-    @. v = real(ut)
-    @. w = imag(ut)
+    @. p.uω = p.exp_D_p * ũω  #  dispersion applied
 
-    @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t, k] * v[t, l] + w[t, k] * w[t, l])
-    @tullio αK[t, i] = δKt[t, i, j] * v[t, j]
-    @tullio βK[t, i] = δKt[t, i, j] * w[t, j]
-    @. ηKt = αK + 1im * βK
-    @. ηKt *= one_m_fR
+    p.gω, p.gP = compute_gain(p.uω, p.pGain)  # gω is updated in place, gP is returned since float
 
-    @. δKt_cplx = ComplexF64(δKt, 0.0)
-    fft_plan_MM! * δKt_cplx
-    @. hRω_δRω = hRω * δKt_cplx
-    ifft_plan_MM! * hRω_δRω
-    fftshift!(hR_conv_δR, hRω_δRω, 1)
-    @. δRt = real(hR_conv_δR)
-    @tullio αR[t, i] = δRt[t, i, j] * v[t, j]
-    @tullio βR[t, i] = δRt[t, i, j] * w[t, j]
-    @. ηRt = αR + 1im * βR
+    p.fft_plan_M! * p.uω
+    @. p.ut = p.attenuator * p.uω
+    @. p.v = real(p.ut)
+    @. p.w = imag(p.ut)
 
-    @. ηt = ηKt + ηRt
-    ifft_plan_M! * ηt
-    ηt .*= selfsteep
+    @tullio p.δKt[t, i, j] = p.γ[i, j, k, l] * (p.v[t, k] * p.v[t, l] + p.w[t, k] * p.w[t, l])
+    @tullio p.αK[t, i] = p.δKt[t, i, j] * p.v[t, j]
+    @tullio p.βK[t, i] = p.δKt[t, i, j] * p.w[t, j]
+    @. p.ηKt = p.αK + 1im * p.βK
+    @. p.ηKt *= p.one_m_fR
 
-    # applied gain as well 
-    @. dũω = 1im * exp_D_m * ηt + 0.5 * gω * ũω
+    @. p.δKt_cplx = ComplexF64(p.δKt, 0.0)
+    p.fft_plan_MM! * p.δKt_cplx
+    @. p.hRω_δRω = p.hRω * p.δKt_cplx
+    p.ifft_plan_MM! * p.hRω_δRω
+    fftshift!(p.hR_conv_δR, p.hRω_δRω, 1)
+    @. p.δRt = real(p.hR_conv_δR)
+    @tullio p.αR[t, i] = p.δRt[t, i, j] * p.v[t, j]
+    @tullio p.βR[t, i] = p.δRt[t, i, j] * p.w[t, j]
+    @. p.ηRt = p.αR + 1im * p.βR
+
+    @. p.ηt = p.ηKt + p.ηRt
+    p.ifft_plan_M! * p.ηt
+    p.ηt .*= p.selfsteep
+
+    # @. dũω = 1im * p.exp_D_m * p.ηt + 0.5 * p.gω * ũω
+
+    dũ[1] = p.gP * Pp  # Pump is undepleted in this model
+    @. dũ[2:end] = 1im * p.exp_D_m * p.ηt + 0.5 * p.gω * ũω
+
 end
 
 """
-    compute_gain!(gω, uω, gain_template)
+    compute_gain!(gω, uω, pGain)
 
 Placeholder gain model.
 
 Currently returns a constant (or provided template) gain for every frequency and mode.
 Replace this function body with a spectrum-dependent model, e.g. `compute_gain(uω)`.
 """
-function compute_gain!(gω, uω, gain_template)
-    if gain_template isa Number
-        @. gω = gain_template
-    else
-        @. gω = gain_template
-    end
-    return nothing
+function compute_gain(uω, pGain::Number)
+    gω = pGain  # Linear Gain
+    gP = -1  # Placeholder for pump power
+    return gω, gP
+end
+
+function compute_gain(uω, pGain::YDFAParams)
+    gω = fill(5.0, size(uω))  # temporary
+    gP = -1  # Placeholder for pump power
+    return gω, gP
 end
 
 
@@ -69,7 +119,7 @@ end
 
 Create the tuple of parameters necessary to call `disp_gain_smf!`.
 """
-function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gain_template, Nt, M, attenuator)
+function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator)
     selfsteep = fftshift(ωs / ω0)
     fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1)
     ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1)
@@ -94,8 +144,9 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gain_template, N
     ηRt = zeros(ComplexF64, Nt, M)
     ηt = zeros(ComplexF64, Nt, M)
     gω = zeros(Nt, M)
+    gP = 0.0
 
-    p = (selfsteep, Dω, γ, hRω, one_m_fR, attenuator, gain_template, gω, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
+    p = DispGainSMFParams(selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
     return p
 end
 
@@ -131,13 +182,21 @@ Solve the gain-augmented dispersive smf propagation problem.
 If `fiber["gω"]` is not provided, a zero gain profile is used by default.
 Gain is applied as exp(±0.5*gω*z), separate from Dω.
 """
-function solve_disp_gain_smf(uω0, fiber, sim)
-    # gω = haskey(fiber, "gω") ? fiber["gω"] : zeros(sim["Nt"], sim["M"])
-    gain_template = haskey(fiber, "gω") && !isnothing(fiber["gω"]) ? fiber["gω"] : 0.0
+function solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0)
+
+    if sim["M"] != 1
+        throw(ArgumentError("disp_gain_smf requires M = 1 (got M = $(sim["M"]))"))
+    end
+
+    pGain = haskey(fiber, "gain_parameters") ? fiber["gain_parameters"] : 0.0
 
     p_disp_gain_smf = get_p_disp_gain_smf(sim["ωs"], sim["ω0"], fiber["Dω"], fiber["γ"], fiber["hRω"], fiber["one_m_fR"],
-        gain_template, sim["Nt"], sim["M"], sim["attenuator"])
-    prob_disp_gain_smf = ODEProblem(disp_gain_smf!, uω0, (0, fiber["L"]), p_disp_gain_smf)
+        pGain, sim["Nt"], sim["M"], sim["attenuator"])
+
+    Pp0 = pump_power
+    u0 = vcat(Pp0, uω0)
+
+    prob_disp_gain_smf = ODEProblem(disp_gain_smf!, u0, (0, fiber["L"]), p_disp_gain_smf)
 
     if isnothing(fiber["zsave"])
         sol_disp_gain_smf = solve(prob_disp_gain_smf, Tsit5(), reltol=1e-5)
@@ -148,12 +207,14 @@ function solve_disp_gain_smf(uω0, fiber, sim)
 
         uω_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
         ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
+        Ppz = zeros(length(fiber["zsave"]), sim["M"])
 
         for i in 1:length(fiber["zsave"])
-            uω_z[i, :, :] = exp.(1im * fiber["Dω"] * fiber["zsave"][i]) .* sol_disp_gain_smf(fiber["zsave"][i])
+            uω_z[i, :, :] = exp.(1im .* fiber["Dω"] .* fiber["zsave"][i]) .* sol_disp_gain_smf(fiber["zsave"][i])[2:end]
             ut_z[i, :, :] = fft(uω_z[i, :, :], 1)
+            Ppz[i, :] .= sol_disp_gain_smf(fiber["zsave"][i])[1]
         end
 
-        return Dict("ode_sol" => sol_disp_gain_smf, "uω_z" => uω_z, "ut_z" => ut_z)
+        return Dict("ode_sol" => sol_disp_gain_smf, "uω_z" => uω_z, "ut_z" => ut_z, "Ppz" => Ppz)
     end
 end

@@ -13,6 +13,8 @@ using PyPlot
 using FiniteDifferences
 using Interpolations
 
+include("gain_simulation/gain.jl")
+
 include("simulation/simulate_disp_mmf.jl")
 include("simulation/sensitivity_disp_mmf.jl")
 include("simulation/simulate_disp_gain_mmf.jl")
@@ -22,7 +24,5 @@ include("analysis/analysis.jl")
 include("analysis/plotting.jl")
 
 include("helpers/helpers.jl")
-
-include("gain_simulation/gain.jl")
 
 end
