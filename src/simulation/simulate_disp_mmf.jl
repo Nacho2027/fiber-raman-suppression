@@ -125,11 +125,11 @@ function solve_disp_mmf(uω0, fiber, sim)
     prob_disp_mmf = ODEProblem(disp_mmf!, uω0, (0, fiber["L"]), p_disp_mmf)
 
     if isnothing(fiber["zsave"])
-        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=1e-5)
+        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=1e-8)
 
         return Dict("ode_sol" => sol_disp_mmf)
     else
-        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=1e-5, saveat=fiber["zsave"])
+        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=1e-8, saveat=fiber["zsave"])
 
         uω_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
         ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
