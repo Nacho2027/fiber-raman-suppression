@@ -408,6 +408,64 @@ end
     @test J3 ≈ J4  # zero phase has zero regularization penalty
 end
 
+@testset "GDD/TOD penalty" begin
+    uω0, fiber, sim, band_mask, _, _ = make_test_problem()
+
+    # Quadratic phase (pure GDD) should increase cost when λ_gdd > 0
+    Δω = 2π / (sim["Nt"] * sim["Δt"])
+    ω_grid = 2π .* fftfreq(sim["Nt"], 1 / sim["Δt"])
+    φ_gdd = 0.5 .* 1e-3 .* ω_grid.^2  # GDD = 1e-3 ps²
+    φ_gdd_2d = reshape(φ_gdd, sim["Nt"], sim["M"])
+
+    J_no_reg, _ = cost_and_gradient(φ_gdd_2d, uω0, fiber, sim, band_mask)
+    J_with_gdd, _ = cost_and_gradient(φ_gdd_2d, uω0, fiber, sim, band_mask;
+        λ_gdd=1e-2)
+    @test J_with_gdd > J_no_reg
+
+    # Cubic phase (pure TOD) should increase cost when λ_tod > 0
+    φ_tod = (1e-6 / 6.0) .* ω_grid.^3
+    φ_tod_2d = reshape(φ_tod, sim["Nt"], sim["M"])
+    J_no_reg_t, _ = cost_and_gradient(φ_tod_2d, uω0, fiber, sim, band_mask)
+    J_with_tod, _ = cost_and_gradient(φ_tod_2d, uω0, fiber, sim, band_mask;
+        λ_tod=1e-3)
+    @test J_with_tod > J_no_reg_t
+
+    # Zero phase has zero GDD/TOD penalty
+    φ_zero = zeros(sim["Nt"], sim["M"])
+    J_zero_noreg, _ = cost_and_gradient(φ_zero, uω0, fiber, sim, band_mask)
+    J_zero_gdd, _ = cost_and_gradient(φ_zero, uω0, fiber, sim, band_mask;
+        λ_gdd=1e-2, λ_tod=1e-3)
+    @test J_zero_noreg ≈ J_zero_gdd
+end
+
+@testset "property: gradient finite-difference with GDD/TOD" begin
+    uω0, fiber, sim, band_mask, _, _ = make_test_problem()
+    for trial in 1:3
+        φ = 0.1 * randn(sim["Nt"], sim["M"])
+        J, grad = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
+            λ_gdd=1e-2, λ_tod=1e-3)
+
+        power = vec(sum(abs2.(uω0), dims=2))
+        sig_idx = findall(power .> 0.01 * maximum(power))
+        # Pick indices away from edges to avoid boundary effects on stencils
+        interior = filter(i -> 3 <= i <= sim["Nt"] - 2, sig_idx)
+        idx = interior[rand(1:length(interior))]
+
+        ε = 1e-5
+        φp = copy(φ); φp[idx, 1] += ε
+        φm = copy(φ); φm[idx, 1] -= ε
+        Jp, _ = cost_and_gradient(φp, uω0, fiber, sim, band_mask;
+            λ_gdd=1e-2, λ_tod=1e-3)
+        Jm, _ = cost_and_gradient(φm, uω0, fiber, sim, band_mask;
+            λ_gdd=1e-2, λ_tod=1e-3)
+
+        fd = (Jp - Jm) / (2ε)
+        adj = grad[idx, 1]
+        rel_err = abs(adj - fd) / max(abs(adj), abs(fd), 1e-15)
+        @test rel_err < 1e-2
+    end
+end
+
 @testset "property: gradient finite-difference with phase regularization" begin
     uω0, fiber, sim, band_mask, _, _ = make_test_problem()
     for trial in 1:3
