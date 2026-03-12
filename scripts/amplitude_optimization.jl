@@ -42,7 +42,7 @@ include("visualization.jl")
 
 """
     amplitude_cost(A, uω0, J_raman, grad_raman;
-                   λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+                   λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
 Compute regularized cost and gradient contributions for amplitude optimization.
 
@@ -50,7 +50,7 @@ Returns (J_total, grad_total, cost_breakdown::Dict) where cost_breakdown maps
 component names to their individual cost values.
 """
 function amplitude_cost(A, uω0, J_raman, grad_raman;
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
     # PRECONDITIONS
     @assert all(A .> 0) "amplitude must be positive (min=$(minimum(A)))"
@@ -81,11 +81,12 @@ function amplitude_cost(A, uω0, J_raman, grad_raman;
         breakdown["J_energy"] = J_E
     end
 
-    # --- Tikhonov regularization ---
+    # --- Tikhonov regularization (normalized by number of elements) ---
     if λ_tikhonov > 0
         deviation = A .- 1.0
-        J_T = λ_tikhonov * sum(deviation .^ 2)
-        grad_T = 2.0 .* λ_tikhonov .* deviation
+        N_elem = length(deviation)
+        J_T = λ_tikhonov * sum(deviation .^ 2) / N_elem
+        grad_T = 2.0 .* λ_tikhonov .* deviation ./ N_elem
         J_total += J_T
         grad_total .+= grad_T
         breakdown["J_tikhonov"] = J_T
@@ -107,8 +108,8 @@ function amplitude_cost(A, uω0, J_raman, grad_raman;
                 grad_TV[i-1, m] -= ds
             end
         end
-        J_TV *= λ_tv
-        grad_TV .*= λ_tv
+        J_TV *= λ_tv / Nt
+        grad_TV .*= λ_tv / Nt
         J_total += J_TV
         grad_total .+= grad_TV
         breakdown["J_tv"] = J_TV
@@ -159,7 +160,7 @@ Full forward-adjoint pipeline for amplitude optimization:
 Returns (J_total, ∂J_total/∂A, cost_breakdown).
 """
 function cost_and_gradient_amplitude(A, uω0, fiber, sim, band_mask;
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
     # PRECONDITIONS
     @assert size(A) == size(uω0) "A shape $(size(A)) ≠ uω0 shape $(size(uω0))"
@@ -216,7 +217,7 @@ for box constraints A ∈ [1 - δ, 1 + δ]. Returns Optim result and the final c
 """
 function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
     A0=nothing, max_iter=50, δ_bound=0.10,
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -242,9 +243,12 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
         elapsed = time() - t_start
         bd = last_breakdown[]
         J_r = get(bd, "J_raman", NaN)
+        J_e = get(bd, "J_energy", NaN)
+        J_t = get(bd, "J_tikhonov", NaN)
+        J_tv = get(bd, "J_tv", NaN)
         A_min, A_max = last_A_extrema[]
-        @info @sprintf("  [%3d/%d] J=%.6f  J_ram=%.4e  A∈[%.3f,%.3f]  (%.1f s)",
-                state.iteration, max_iter, state.value, J_r, A_min, A_max, elapsed)
+        @info @sprintf("  [%3d/%d] J=%.6f  J_ram=%.4e  J_E=%.4e  J_T=%.4e  J_TV=%.4e  A∈[%.3f,%.3f]  (%.1f s)",
+                state.iteration, max_iter, state.value, J_r, J_e, J_t, J_tv, A_min, A_max, elapsed)
         return false
     end
 
@@ -284,7 +288,7 @@ Validate the adjoint-based amplitude gradient against finite differences.
 """
 function validate_amplitude_gradient(uω0, fiber, sim, band_mask;
     n_checks=5, ε=1e-5,
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
     Nt = sim["Nt"]
     M = sim["M"]
@@ -354,7 +358,7 @@ and Raman suppression. Returns Dict mapping δ → (J_opt, A_opt, cost_breakdown
 """
 function sweep_amplitude_bounds(uω0, fiber, sim, band_mask;
     δ_values=[0.05, 0.10, 0.15, 0.20, 0.30], max_iter=30,
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0)
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0)
 
     reg_kwargs = (λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
     results = Dict{Float64,Tuple{Float64,Matrix{Float64},Dict{String,Float64}}}()
@@ -470,7 +474,7 @@ End-to-end amplitude optimization:
 function run_amplitude_optimization(;
     max_iter=20, validate=true, save_prefix="amp_opt",
     A0=nothing, δ_bound=0.10,
-    λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0,
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
     kwargs...)
 
     t_total = time()
@@ -550,47 +554,48 @@ if abspath(PROGRAM_FILE) == @__FILE__
 @info "  Amplitude Optimization — Example Runs"
 @info "═══════════════════════════════════════════"
 
-# Run 1: Gentle regime — single fission (N ≈ 1.5)
-@info "\n▶ Run 1: Gentle regime (L=1m, P=0.05W, δ=0.10)"
+# Run 1: Moderate power with wide bounds — strong Raman signal
+@info "\n▶ Run 1: Moderate power (L=1m, P=0.15W, δ=0.30)"
 result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_amplitude_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=15,
+    L_fiber=1.0, P_cont=0.15, max_iter=100,
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.10,
-    save_prefix="amp_opt_L1m_P005W_d010"
+    δ_bound=0.30,
+    save_prefix="amp_opt_L1m_P015W_d030"
 )
 GC.gc()
 
-# Run 2: Same fiber, wider amplitude bounds
-@info "\n▶ Run 2: Wider bounds (L=1m, P=0.05W, δ=0.20)"
+# Run 2: Zero-regularization baseline — pure Raman minimization
+@info "\n▶ Run 2: Zero-reg baseline (L=1m, P=0.15W, δ=0.30)"
 result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_amplitude_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=15,
+    L_fiber=1.0, P_cont=0.15, max_iter=100,
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.20,
-    save_prefix="amp_opt_L1m_P005W_d020"
+    δ_bound=0.30,
+    λ_energy=0.0, λ_tikhonov=0.0, λ_tv=0.0,
+    save_prefix="amp_opt_L1m_P015W_d030_noreg"
 )
 GC.gc()
 
-# Run 3: Moderate power (N ≈ 2.7) — harder landscape
-@info "\n▶ Run 3: Moderate power (L=1m, P=0.15W, δ=0.15)"
+# Run 3: Longer fiber — more nonlinear interaction
+@info "\n▶ Run 3: Longer fiber (L=5m, P=0.15W, δ=0.30)"
 result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization(
-    L_fiber=1.0, P_cont=0.15, max_iter=20,
-    time_window=10.0, Nt=2^13, β_order=3,
+    L_fiber=5.0, P_cont=0.15, max_iter=100,
+    time_window=20.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.15,
-    save_prefix="amp_opt_L1m_P015W_d015"
+    δ_bound=0.30,
+    save_prefix="amp_opt_L5m_P015W_d030"
 )
 GC.gc()
 
-# Sweep: explore the δ trade-off at the gentle regime
-@info "\n▶ Sweep: δ trade-off at gentle regime"
+# Sweep: explore the δ trade-off at moderate power
+@info "\n▶ Sweep: δ trade-off at moderate power"
 uω0_sw, fiber_sw, sim_sw, band_mask_sw, Δf_sw, _ = setup_amplitude_problem(
-    L_fiber=1.0, P_cont=0.05, time_window=10.0, Nt=2^13, β_order=3,
+    L_fiber=1.0, P_cont=0.15, time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40]
 )
 sweep_results = sweep_amplitude_bounds(uω0_sw, fiber_sw, sim_sw, band_mask_sw;
-    δ_values=[0.05, 0.10, 0.15, 0.20, 0.30], max_iter=15)
+    δ_values=[0.05, 0.10, 0.15, 0.20, 0.30], max_iter=50)
 
 @info "═══ All runs complete ═══"
 

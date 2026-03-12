@@ -235,6 +235,179 @@ function analyze_time_windows(;
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 2b. Time Window Analysis with Optimized Phase
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    analyze_time_windows_optimized(φ_opt, uω0_ref, fiber_ref, sim_ref, band_mask_ref;
+        windows=[5.0, 10.0, 15.0, 20.0, 30.0, 40.0], kwargs...)
+
+Test how an optimized spectral phase transfers across different time window sizes.
+
+Unlike `analyze_time_windows` (which propagates an unshaped pulse), this function:
+1. Takes an optimized phase `φ_opt` from a reference grid.
+2. For each target window size, sets up a new grid and interpolates the phase
+   onto the new frequency axis via linear interpolation.
+3. Propagates the shaped pulse and reports J + boundary status.
+
+This detects whether the optimization result is robust to grid changes and
+whether boundary artifacts appear at different window sizes.
+
+# Returns
+Dict mapping window size → Dict("J", "edge_frac", "status", "J_dB")
+"""
+function analyze_time_windows_optimized(φ_opt, uω0_ref, fiber_ref, sim_ref, band_mask_ref;
+    windows=[5.0, 10.0, 15.0, 20.0, 30.0, 40.0],
+    Nt=sim_ref["Nt"],
+    P_cont=0.05,
+    plot_results=true,
+    save_prefix="time_window_optimized",
+    kwargs...)
+
+    # PRECONDITIONS
+    @assert size(φ_opt) == size(uω0_ref) "φ_opt shape must match uω0_ref"
+    @assert length(windows) > 0 "windows must not be empty"
+
+    @info "Time Window Analysis (Optimized Phase)" Nt=Nt n_windows=length(windows) P_cont=P_cont
+
+    # Reference frequency axis for interpolation
+    Δf_ref = fftfreq(sim_ref["Nt"], 1 / sim_ref["Δt"])
+
+    results = Dict{Float64, Dict{String, Any}}()
+
+    for tw in windows
+        @debug @sprintf("  time_window = %5.1f ps ...", tw)
+
+        # Setup new grid at this window size
+        uω0_tw, fiber_tw, sim_tw, band_mask_tw, _, _ = setup_raman_problem(;
+            L_fiber=fiber_ref["L"],
+            P_cont=P_cont,
+            Nt=Nt, time_window=tw, kwargs...)
+
+        # Interpolate phase from reference grid to new grid
+        Δf_tw = fftfreq(Nt, 1 / sim_tw["Δt"])
+        M = sim_tw["M"]
+        φ_interp = zeros(Nt, M)
+        for m in 1:M
+            # Linear interpolation: find nearest reference frequency for each target frequency
+            for j in 1:Nt
+                f_target = Δf_tw[j]
+                # Find bracketing indices in reference grid
+                dists = abs.(Δf_ref .- f_target)
+                idx_near = argmin(dists)
+                φ_interp[j, m] = φ_opt[idx_near, m]
+            end
+        end
+
+        # Propagate shaped pulse
+        uω0_shaped = @. uω0_tw * cis(φ_interp)
+        fiber_fwd = deepcopy(fiber_tw)
+        fiber_fwd["zsave"] = [fiber_tw["L"]]
+        sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_fwd, sim_tw)
+        uωf = sol["uω_z"][end, :, :]
+        utf = sol["ut_z"][end, :, :]
+
+        # Cost
+        J, _ = spectral_band_cost(uωf, band_mask_tw)
+        J_dB = MultiModeNoise.lin_to_dB(J)
+
+        # Boundary check
+        bc_ok, edge_frac = check_boundary_conditions(utf, sim_tw)
+
+        status = if edge_frac < 1e-6
+            "OK"
+        elseif edge_frac < 1e-3
+            "WARNING"
+        else
+            "DANGER"
+        end
+
+        results[tw] = Dict(
+            "J" => J,
+            "J_dB" => J_dB,
+            "edge_frac" => edge_frac,
+            "status" => status
+        )
+
+        @debug @sprintf("  → J=%.4e (%.1f dB), edge=%.2e [%s]", J, J_dB, edge_frac, status)
+    end
+
+    # Summary table
+    table = String[]
+    push!(table, "╔═════════════╦════════════════╦══════════╦════════════════╦══════════╗")
+    push!(table, "║  window [ps] ║      J [dB]    ║  J [lin] ║  edge_energy   ║  status  ║")
+    push!(table, "╠═════════════╬════════════════╬══════════╬════════════════╬══════════╣")
+    for tw in sort(collect(keys(results)))
+        r = results[tw]
+        push!(table, @sprintf("║  %8.1f    ║  %12.2f  ║ %8.2e ║  %12.2e  ║  %-7s ║",
+                tw, r["J_dB"], r["J"], r["edge_frac"], r["status"]))
+    end
+    push!(table, "╚═════════════╩════════════════╩══════════╩════════════════╩══════════╝")
+    @info join(table, "\n")
+
+    if plot_results
+        plot_time_window_analysis_v2(results; save_prefix=save_prefix)
+    end
+
+    return results
+end
+
+"""
+    plot_time_window_analysis_v2(results; save_prefix="time_window_optimized")
+
+Two-panel bar chart for optimized time window analysis:
+- Left panel: J in dB per window size, bars color-coded by boundary status
+- Right panel: Edge energy fraction per window size, with DANGER threshold line
+
+Status colors: OK=green, WARNING=orange, DANGER=red.
+"""
+function plot_time_window_analysis_v2(results; save_prefix="time_window_optimized")
+    windows = sort(collect(keys(results)))
+    n = length(windows)
+
+    J_dB = [results[tw]["J_dB"] for tw in windows]
+    edge_fracs = [results[tw]["edge_frac"] for tw in windows]
+    statuses = [results[tw]["status"] for tw in windows]
+
+    # Color map by status
+    status_colors = Dict("OK" => "#2ecc71", "WARNING" => "#f39c12", "DANGER" => "#e74c3c")
+    colors = [get(status_colors, s, "#95a5a6") for s in statuses]
+
+    fig, (ax1, ax2) = subplots(1, 2, figsize=(12, 5))
+
+    # Left panel: J in dB
+    x = 1:n
+    labels = [@sprintf("%.0f", tw) for tw in windows]
+    ax1.bar(x, J_dB, color=colors, edgecolor="black", linewidth=0.5)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels)
+    ax1.set_xlabel("Time window [ps]")
+    ax1.set_ylabel("J [dB]")
+    ax1.set_title("Raman cost vs time window (optimized phase)")
+    # Add value labels on bars
+    for (i, v) in enumerate(J_dB)
+        ax1.text(i, v + 0.3, @sprintf("%.1f", v), ha="center", va="bottom", fontsize=7)
+    end
+
+    # Right panel: Edge energy fraction (log scale)
+    ax2.bar(x, max.(edge_fracs, 1e-20), color=colors, edgecolor="black", linewidth=0.5)
+    ax2.set_yscale("log")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(labels)
+    ax2.set_xlabel("Time window [ps]")
+    ax2.set_ylabel("Edge energy fraction")
+    ax2.set_title("Boundary condition check")
+    ax2.axhline(y=1e-6, color="red", ls="--", alpha=0.7, label="DANGER threshold")
+    ax2.axhline(y=1e-3, color="orange", ls="--", alpha=0.7, label="WARNING threshold")
+    ax2.legend(fontsize=8)
+
+    fig.tight_layout()
+    savefig("$(save_prefix).png", dpi=150)
+    @info "Saved time window analysis plot to $(save_prefix).png"
+    return fig
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 3. Continuation Method with Adaptive Time Window
 # ─────────────────────────────────────────────────────────────────────────────
 
