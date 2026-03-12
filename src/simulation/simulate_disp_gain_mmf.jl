@@ -15,8 +15,8 @@ function disp_gain_smf!(dũ, ũ, p, z)
     Pp = ũ[1]  # Pump
     ũω = ũ[2:end]  # Signal modes
 
-    @. exp_D_p = exp(1im * Dω * z)
-    @. exp_D_m = exp(-1im * Dω * z)
+    @. exp_D_p = cis(Dω * z)
+    @. exp_D_m = cis(-Dω * z)
 
     @. uω = exp_D_p * ũω
 
@@ -88,10 +88,10 @@ Create the tuple of parameters necessary to call `disp_gain_smf!`.
 """
 function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator)
     selfsteep = fftshift(ωs / ω0)
-    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1)
-    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1)
-    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1)
-    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1)
+    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
     exp_D_p = zeros(ComplexF64, Nt, M)
     exp_D_m = zeros(ComplexF64, Nt, M)
     uω = zeros(ComplexF64, Nt, M)
@@ -177,7 +177,7 @@ function solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0)
         Ppz = zeros(length(fiber["zsave"]), sim["M"])
 
         for i in 1:length(fiber["zsave"])
-            uω_z[i, :, :] = exp.(1im .* fiber["Dω"] .* fiber["zsave"][i]) .* sol_disp_gain_smf(fiber["zsave"][i])[2:end]
+            uω_z[i, :, :] = cis.(fiber["Dω"] .* fiber["zsave"][i]) .* sol_disp_gain_smf(fiber["zsave"][i])[2:end]
             ut_z[i, :, :] = fft(uω_z[i, :, :], 1)
             Ppz[i, :] .= sol_disp_gain_smf(fiber["zsave"][i])[1]
         end

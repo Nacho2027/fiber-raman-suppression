@@ -60,15 +60,13 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
         @. uω0_shaped = uω0 * cis(φ)
     end
 
-    # Forward solve (deepcopy avoids zsave mutation across calls)
-    fiber_local = deepcopy(fiber)
-    fiber_local["zsave"] = nothing
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_local, sim)
+    # Forward solve
+    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
     ũω = sol["ode_sol"]
 
     # Get output field in lab frame using cis() for the dispersion phase
-    L = fiber_local["L"]
-    Dω = fiber_local["Dω"]
+    L = fiber["L"]
+    Dω = fiber["Dω"]
     ũω_L = ũω(L)
     if isnothing(uωf_buffer)
         uωf = @. cis(Dω * L) * ũω_L
@@ -81,7 +79,7 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     J, λωL = spectral_band_cost(uωf, band_mask)
 
     # Adjoint solve: propagate λ backward from L to 0
-    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber_local, sim)
+    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     λ0 = sol_adj(0)
 
     # Chain rule: ∂J/∂φ(ω) = 2 · Re(λ₀*(ω) · i · u₀(ω))
@@ -113,6 +111,9 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     if isnothing(φ0)
         φ0 = zeros(Nt, M)
     end
+
+    # Ensure zsave=nothing for optimization (avoids deepcopy in cost_and_gradient)
+    fiber["zsave"] = nothing
 
     # Pre-allocate buffers reused every iteration (avoids GC pressure)
     uω0_shaped = similar(uω0_base)

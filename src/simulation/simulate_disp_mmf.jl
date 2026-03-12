@@ -12,8 +12,8 @@ Right-hand side of the ODE governing th evolution of pulses in multimode fibers,
 function disp_mmf!(dũω, ũω, p, z)
     selfsteep, Dω, γ, hRω, one_m_fR, attenuator, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
 
-    @. exp_D_p = exp(1im * Dω * z)
-    @. exp_D_m = exp(-1im * Dω * z)
+    @. exp_D_p = cis(Dω * z)
+    @. exp_D_m = cis(-Dω * z)
 
     @. uω = exp_D_p * ũω
 
@@ -59,10 +59,10 @@ Create the tuple of parameters necessary to call disp_mmf!.
 """
 function get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M, attenuator)
     selfsteep = fftshift(ωs / ω0)
-    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1)
-    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1)
-    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1)
-    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1)
+    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
     exp_D_p = zeros(ComplexF64, Nt, M)
     exp_D_m = zeros(ComplexF64, Nt, M)
     uω = zeros(ComplexF64, Nt, M)
@@ -135,7 +135,7 @@ function solve_disp_mmf(uω0, fiber, sim)
         ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
 
         for i in 1:length(fiber["zsave"])
-            uω_z[i, :, :] = exp.(1im * fiber["Dω"] * fiber["zsave"][i]) .* sol_disp_mmf(fiber["zsave"][i])
+            uω_z[i, :, :] = cis.(fiber["Dω"] * fiber["zsave"][i]) .* sol_disp_mmf(fiber["zsave"][i])
             ut_z[i, :, :] = fft(uω_z[i, :, :], 1)
         end
 

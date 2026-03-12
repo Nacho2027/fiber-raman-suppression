@@ -17,8 +17,8 @@ function adjoint_disp_mmf!(dλ̃ω, λ̃ω, p, z)
     fft_plan_M, ifft_plan_M, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM! = p_fft
     exp_D_p, exp_D_m, λω, λt, λωc, ũω_z, uω, ut, utc, δK1t, δK2t, δK1t_cplx, hRω_δRω, hR_conv_δR, δR1t, δKR1t, sum_res, γ_λt_utc, γ_λt_ut_ut, λ_∂fKR1c∂uc, λc_∂fK∂uc, λ_∂fR2c∂uc, λc_∂fR∂uc = p_prealloc
 
-    @. exp_D_p = exp(1im * Dω * z)
-    @. exp_D_m = exp(-1im * Dω * z)
+    @. exp_D_p = cis(Dω * z)
+    @. exp_D_m = cis(-Dω * z)
 
     @. λω = exp_D_p * λ̃ω
     λω .*= τω
@@ -122,12 +122,12 @@ end
 
 function get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, fR, Nt, M)
     p_params = (ũω, τω, Dω, hRω, conj.(hRω), γ, one_m_fR, fR, Nt, exp.(1im * π * repeat([0, 1], Int(Nt / 2))), exp.(1im * π * repeat([1, 0], Int(Nt / 2))))
-    fft_plan_M = plan_fft(zeros(ComplexF64, Nt, M), 1)
-    ifft_plan_M = plan_ifft(zeros(ComplexF64, Nt, M), 1)
-    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1)
-    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1)
-    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1)
-    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1)
+    fft_plan_M = plan_fft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_M = plan_ifft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
+    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
+    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
     p_fft = (fft_plan_M, ifft_plan_M, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!)
 
     exp_D_p = zeros(ComplexF64, Nt, M)
@@ -164,13 +164,13 @@ function get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, fR, Nt, M)
     return (p_params, p_fft, p_prealloc, p_calc_δs, p_γ_a_b)
 end
 
-function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim; dt=1e-3)
+function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     λ̃ωL = exp.(-1im * fiber["Dω"] * fiber["L"]) .* λωL # possibly an initial condition of λ̃ωL at z=L in the adjoint (back-propagation) case
 
     p_adjoint_disp_mmf = get_p_adjoint_disp_mmf(ũω, fftshift(sim["ωs"] / sim["ω0"]), fiber["Dω"], fiber["hRω"], fiber["γ"],
         fiber["one_m_fR"], 1 - fiber["one_m_fR"], sim["Nt"], sim["M"])
     prob_adjoint_disp_mmf = ODEProblem(adjoint_disp_mmf!, λ̃ωL, (fiber["L"], 0), p_adjoint_disp_mmf) # ODEProblem(f,u0,tspan,p); u0 = initial cond., tspan = t range (t=z=domain), p = optional parameter
-    sol_adjoint_disp_mmf = solve(prob_adjoint_disp_mmf, Vern9(), dt=dt, adaptive=false, saveat=(0, fiber["L"])) # solves for λωL with fixed interval t = dt, and saves the results at z = 0, L
+    sol_adjoint_disp_mmf = solve(prob_adjoint_disp_mmf, Vern9(), reltol=1e-6, saveat=(0, fiber["L"]))
 
     return sol_adjoint_disp_mmf
 end
