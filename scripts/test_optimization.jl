@@ -383,6 +383,57 @@ end
     end
 end
 
+@testset "phase regularization" begin
+    uω0, fiber, sim, band_mask, _, _ = make_test_problem()
+
+    # With zero regularization, same as before
+    φ_test = 0.1 * randn(sim["Nt"], sim["M"])
+    J0, g0 = cost_and_gradient(φ_test, uω0, fiber, sim, band_mask)
+    J1, g1 = cost_and_gradient(φ_test, uω0, fiber, sim, band_mask;
+        λ_phase_smooth=0.0, λ_phase_tikhonov=0.0)
+    @test J0 ≈ J1
+    @test g0 ≈ g1
+
+    # With regularization, cost should be higher (φ ≠ 0)
+    J2, g2 = cost_and_gradient(φ_test, uω0, fiber, sim, band_mask;
+        λ_phase_smooth=1e-3, λ_phase_tikhonov=1e-3)
+    @test J2 > J0
+    @test !isapprox(g2, g0)
+
+    # With zero phase, regularization adds nothing
+    φ_zero = zeros(sim["Nt"], sim["M"])
+    J3, _ = cost_and_gradient(φ_zero, uω0, fiber, sim, band_mask;
+        λ_phase_smooth=1e-3, λ_phase_tikhonov=1e-3)
+    J4, _ = cost_and_gradient(φ_zero, uω0, fiber, sim, band_mask)
+    @test J3 ≈ J4  # zero phase has zero regularization penalty
+end
+
+@testset "property: gradient finite-difference with phase regularization" begin
+    uω0, fiber, sim, band_mask, _, _ = make_test_problem()
+    for trial in 1:3
+        φ = 0.1 * randn(sim["Nt"], sim["M"])
+        J, grad = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
+            λ_phase_smooth=1e-3, λ_phase_tikhonov=1e-3)
+
+        power = vec(sum(abs2.(uω0), dims=2))
+        sig_idx = findall(power .> 0.01 * maximum(power))
+        idx = sig_idx[rand(1:length(sig_idx))]
+
+        ε = 1e-5
+        φp = copy(φ); φp[idx, 1] += ε
+        φm = copy(φ); φm[idx, 1] -= ε
+        Jp, _ = cost_and_gradient(φp, uω0, fiber, sim, band_mask;
+            λ_phase_smooth=1e-3, λ_phase_tikhonov=1e-3)
+        Jm, _ = cost_and_gradient(φm, uω0, fiber, sim, band_mask;
+            λ_phase_smooth=1e-3, λ_phase_tikhonov=1e-3)
+
+        fd = (Jp - Jm) / (2ε)
+        adj = grad[idx, 1]
+        rel_err = abs(adj - fd) / max(abs(adj), abs(fd), 1e-15)
+        @test rel_err < 1e-2
+    end
+end
+
 @testset "property: cost is bounded [0, 1] for phase optimization" begin
     uω0, fiber, sim, band_mask, _, _ = make_test_problem()
     for _ in 1:10

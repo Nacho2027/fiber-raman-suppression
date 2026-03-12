@@ -177,7 +177,8 @@ function cost_and_gradient_amplitude(A, uω0, fiber, sim, band_mask;
     # Get output field in lab frame
     L = fiber_local["L"]
     Dω = fiber_local["Dω"]
-    uωf = exp.(1im .* Dω .* L) .* ũω(L)
+    ũω_L = ũω(L)
+    uωf = @. cis(Dω * L) * ũω_L
 
     # Raman band cost and adjoint terminal condition
     J_raman, λωL = spectral_band_cost(uωf, band_mask)
@@ -210,8 +211,8 @@ end
 """
     optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask; kwargs...)
 
-Optimize spectral amplitude A(ω) using Fminbox(LBFGS()) with box constraints
-A ∈ [1 - δ, 1 + δ]. Returns Optim result and the final cost breakdown.
+Optimize spectral amplitude A(ω) using LBFGS with projected gradient (manual clamping)
+for box constraints A ∈ [1 - δ, 1 + δ]. Returns Optim result and the final cost breakdown.
 """
 function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
     A0=nothing, max_iter=50, δ_bound=0.10,
@@ -229,31 +230,36 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
         A0 = ones(Nt, M)
     end
 
-    lower = fill(1.0 - δ_bound, Nt * M)
-    upper = fill(1.0 + δ_bound, Nt * M)
-
+    lower_val = 1.0 - δ_bound
+    upper_val = 1.0 + δ_bound
     reg_kwargs = (λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
 
     last_breakdown = Ref(Dict{String,Float64}())
+    last_A_extrema = Ref((1.0, 1.0))
 
+    t_start = time()
     function callback(state)
+        elapsed = time() - t_start
         bd = last_breakdown[]
         J_r = get(bd, "J_raman", NaN)
-        J_e = get(bd, "J_energy", NaN)
-        J_t = get(bd, "J_tikhonov", NaN)
-        J_v = get(bd, "J_tv", NaN)
-        @debug @sprintf("Iter %3d: J_total=%.6f  [Raman=%.4e  Energy=%.4e  Tikh=%.4e  TV=%.4e]",
-                state.iteration, state.value, J_r, J_e, J_t, J_v)
+        A_min, A_max = last_A_extrema[]
+        @info @sprintf("  [%3d/%d] J=%.6f  J_ram=%.4e  A∈[%.3f,%.3f]  (%.1f s)",
+                state.iteration, max_iter, state.value, J_r, A_min, A_max, elapsed)
         return false
     end
 
+    # Use regular LBFGS with manual projection (clamping) instead of Fminbox
     result = optimize(
         Optim.only_fg!() do F, G, A_vec
+            # Project back into box constraints
+            clamp!(A_vec, lower_val, upper_val)
+
             A = reshape(A_vec, Nt, M)
             J, grad, breakdown = cost_and_gradient_amplitude(
                 A, uω0_base, fiber, sim, band_mask; reg_kwargs...
             )
             last_breakdown[] = breakdown
+            last_A_extrema[] = extrema(A)
             if G !== nothing
                 G .= vec(grad)
             end
@@ -261,11 +267,9 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
                 return J
             end
         end,
-        lower,
-        upper,
         vec(A0),
-        Fminbox(LBFGS()),
-        Optim.Options(iterations=max_iter, f_abstol=1e-8, callback=callback)
+        LBFGS(m=10),
+        Optim.Options(iterations=max_iter, f_abstol=1e-6, callback=callback)
     )
 
     return result, last_breakdown[]
@@ -315,7 +319,7 @@ function validate_amplitude_gradient(uω0, fiber, sim, band_mask;
 
         push!(lines, @sprintf("  %5d  %12.6e  %12.6e  %10.2e", idx, adj_grad, fd_grad, rel_err))
     end
-    @debug join(lines, "\n")
+    @info join(lines, "\n")
     if max_rel_err < 1e-3
         @info "Gradient validation PASSED (max rel. error = $(round(max_rel_err, sigdigits=2)))"
     else
@@ -357,8 +361,9 @@ function sweep_amplitude_bounds(uω0, fiber, sim, band_mask;
 
     @info "Amplitude Bound Sweep: δ Trade-off"
 
-    for δ in δ_values
-        @debug "  δ = $(round(δ, digits=2)) ..."
+    for (k, δ) in enumerate(δ_values)
+        t_sweep = time()
+        @info @sprintf("  Sweep [%d/%d]: δ = %.2f ...", k, length(δ_values), δ)
 
         result, breakdown = optimize_spectral_amplitude(
             uω0, fiber, sim, band_mask;
@@ -370,7 +375,8 @@ function sweep_amplitude_bounds(uω0, fiber, sim, band_mask;
         J_opt = result.minimum
 
         results[δ] = (J_opt, A_opt, breakdown)
-        @debug @sprintf("  δ=%.2f → J_total=%.6f  J_raman=%.4e", δ, J_opt, breakdown["J_raman"])
+        @info @sprintf("  Sweep [%d/%d]: δ=%.2f → J=%.6f  J_ram=%.4e  (%.1f s)",
+            k, length(δ_values), δ, J_opt, breakdown["J_raman"], time() - t_sweep)
     end
 
     # Summary table
@@ -467,20 +473,23 @@ function run_amplitude_optimization(;
     λ_energy=100.0, λ_tikhonov=1.0, λ_tv=0.1, λ_flat=0.0,
     kwargs...)
 
+    t_total = time()
     # Step 1–2: Setup (includes time_window check)
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_amplitude_problem(; kwargs...)
     Nt = sim["Nt"]; M = sim["M"]
 
+    @info "═══ Amplitude Optimization ═══" L=fiber["L"] Nt=Nt δ=δ_bound max_iter=max_iter λ_E=λ_energy λ_T=λ_tikhonov λ_TV=λ_tv
+
     # Step 3: Gradient validation
     if validate
-        @info "Amplitude Gradient Validation"
+        @info "Step 1: Gradient Validation"
         validate_amplitude_gradient(uω0, fiber, sim, band_mask;
             n_checks=3, λ_energy=λ_energy, λ_tikhonov=λ_tikhonov,
             λ_tv=λ_tv, λ_flat=λ_flat)
     end
 
     # Step 4: Optimize
-    @info "Amplitude Optimization (δ = $δ_bound)"
+    @info "Step 2: Optimization (δ = $δ_bound)"
     result, breakdown = optimize_spectral_amplitude(
         uω0, fiber, sim, band_mask;
         A0=A0, max_iter=max_iter, δ_bound=δ_bound,
@@ -494,7 +503,7 @@ function run_amplitude_optimization(;
     print_solution_report(A_opt, uω0, fiber, sim, band_mask, breakdown)
 
     # Step 6: Plot
-    @info "Plotting"
+    @info "Step 3: Plotting"
     A_before = ones(Nt, M)
 
     # Optimization comparison (3×2 panel)
@@ -502,11 +511,12 @@ function run_amplitude_optimization(;
         band_mask, Δf, raman_threshold;
         save_path="$(save_prefix).png")
 
-    # Evolution plot: re-run with fine z-sampling
-    @info "Evolution Plot"
+    # Evolution comparison (2×2 grid: temporal/spectral × before/after)
+    @info "Step 4: Evolution Comparison"
     uω0_opt = uω0 .* A_opt
-    propagate_and_plot_evolution(uω0_opt, fiber, sim;
-        title="Optimized pulse evolution (L=$(fiber["L"])m)",
+    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
+        label_before="Unmodulated (A=1)", label_after="Modulated (A=A_opt)",
+        title="Pulse evolution comparison (L=$(fiber["L"])m)",
         save_path="$(save_prefix)_evolution.png")
 
     # Boundary diagnostic
@@ -517,6 +527,16 @@ function run_amplitude_optimization(;
     savefig("$(save_prefix)_boundary.png", dpi=300)
     @info "Saved boundary diagnostic to $(save_prefix)_boundary.png"
 
+    bc_ok, edge_frac = check_boundary_conditions(sol_bc["ut_z"][end, :, :], sim)
+    if !bc_ok
+        @warn @sprintf("Boundary corruption detected (edge energy = %.2e). Consider increasing time_window.", edge_frac)
+    end
+
+    elapsed = time() - t_total
+    A_opt_final = reshape(result.minimizer, Nt, M)
+    A_min, A_max = extrema(A_opt_final)
+    @info @sprintf("═══ Done (%s, %.1f s) — J_final=%.6f, A∈[%.4f,%.4f] ═══", save_prefix, elapsed, result.minimum, A_min, A_max)
+
     return result, uω0, fiber, sim, band_mask, Δf
 end
 
@@ -526,8 +546,12 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
+@info "═══════════════════════════════════════════"
+@info "  Amplitude Optimization — Example Runs"
+@info "═══════════════════════════════════════════"
+
 # Run 1: Gentle regime — single fission (N ≈ 1.5)
-# time_window=10ps is safe for L=1m (walk-off ≈ 1.6ps)
+@info "\n▶ Run 1: Gentle regime (L=1m, P=0.05W, δ=0.10)"
 result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_amplitude_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=15,
     time_window=10.0, Nt=2^13, β_order=3,
@@ -535,8 +559,10 @@ result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_amplitude_optimization
     δ_bound=0.10,
     save_prefix="amp_opt_L1m_P005W_d010"
 )
+GC.gc()
 
 # Run 2: Same fiber, wider amplitude bounds
+@info "\n▶ Run 2: Wider bounds (L=1m, P=0.05W, δ=0.20)"
 result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_amplitude_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=15,
     time_window=10.0, Nt=2^13, β_order=3,
@@ -544,8 +570,10 @@ result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_amplitude_optimization
     δ_bound=0.20,
     save_prefix="amp_opt_L1m_P005W_d020"
 )
+GC.gc()
 
 # Run 3: Moderate power (N ≈ 2.7) — harder landscape
+@info "\n▶ Run 3: Moderate power (L=1m, P=0.15W, δ=0.15)"
 result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization(
     L_fiber=1.0, P_cont=0.15, max_iter=20,
     time_window=10.0, Nt=2^13, β_order=3,
@@ -553,13 +581,17 @@ result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization
     δ_bound=0.15,
     save_prefix="amp_opt_L1m_P015W_d015"
 )
+GC.gc()
 
 # Sweep: explore the δ trade-off at the gentle regime
+@info "\n▶ Sweep: δ trade-off at gentle regime"
 uω0_sw, fiber_sw, sim_sw, band_mask_sw, Δf_sw, _ = setup_amplitude_problem(
     L_fiber=1.0, P_cont=0.05, time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40]
 )
 sweep_results = sweep_amplitude_bounds(uω0_sw, fiber_sw, sim_sw, band_mask_sw;
     δ_values=[0.05, 0.10, 0.15, 0.20, 0.30], max_iter=15)
+
+@info "═══ All runs complete ═══"
 
 end # if main script

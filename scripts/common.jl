@@ -261,7 +261,7 @@ When `fiber_preset` is provided, its `gamma`, `betas`, and `fR` override the
 corresponding keyword arguments. Explicit kwargs take precedence when
 `fiber_preset` is `nothing` (the default).
 
-Defaults: Nt=2^14, time_window=5.0, β_order=2, P_cont=0.25, betas_user=[-2.6e-26].
+Defaults: Nt=2^14, time_window=10.0, β_order=2, P_cont=0.05, betas_user=[-2.6e-26].
 
 Returns (uω0, fiber, sim, band_mask, Δf, raman_threshold).
 """
@@ -269,10 +269,10 @@ function setup_raman_problem(;
     λ0 = 1550e-9,
     M = 1,
     Nt = 2^14,
-    time_window = 5.0,
+    time_window = 10.0,
     β_order = 2,
     L_fiber = 1.0,
-    P_cont = 0.25,
+    P_cont = 0.05,
     pulse_fwhm = 185e-15,
     pulse_rep_rate = 80.5e6,
     pulse_shape = "sech_sq",
