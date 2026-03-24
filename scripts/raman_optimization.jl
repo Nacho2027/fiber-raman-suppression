@@ -319,41 +319,109 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 10. Example runs (only when script is executed directly)
+# 10. Heavy-duty Raman runs (only when script is executed directly)
+#
+# Five configurations spanning moderate to extreme Raman shifting:
+#   Run 1: SMF-28 baseline       (L=1m,  P=0.05W, N~2.3)
+#   Run 2: SMF-28 high power     (L=2m,  P=0.30W, N~5.6)
+#   Run 3: HNLF short fiber      (L=1m,  P=0.05W, N~6.9 from high gamma)
+#   Run 4: HNLF long fiber       (L=5m,  P=0.10W, N~9.8 heavy-duty)
+#   Run 5: SMF-28 long fiber     (L=10m, P=0.15W, warm-started from Run 2)
+# Chirp sensitivity analysis on the heaviest run (Run 4).
 # ─────────────────────────────────────────────────────────────────────────────
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
-# Run 1: Baseline (L=1m, P=0.25W)
+using Interpolations
+
+@info "═══════════════════════════════════════════"
+@info "  Raman Phase Optimization — Heavy-Duty Runs"
+@info "═══════════════════════════════════════════"
+
+# ── SMF-28 parameters (canonical single-mode fiber at 1550nm) ──
+const SMF28_GAMMA = 1.1e-3        # W⁻¹m⁻¹ (1.1 /W/km)
+const SMF28_BETAS = [-2.17e-26, 1.2e-40]  # β₂ [s²/m], β₃ [s³/m]
+
+# ── HNLF parameters (Highly Nonlinear Fiber at 1550nm) ──
+const HNLF_GAMMA = 10.0e-3       # W⁻¹m⁻¹ (10 /W/km)
+const HNLF_BETAS = [-0.5e-26, 1.0e-40]  # near-zero dispersion
+
+# Run 1: SMF-28 baseline (moderate Raman, N~2.3)
+@info "\n▶ Run 1: SMF-28 baseline (L=1m, P=0.05W)"
 result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
-    L_fiber=1.0, P_cont=0.25, max_iter=10,
-    gamma_user=0.0013, betas_user=[-2.6e-26],
-    save_prefix="raman_opt_L1m_P025W"
+    L_fiber=1.0, P_cont=0.05, max_iter=50,
+    Nt=2^13, β_order=3, time_window=10.0,
+    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    save_prefix="results/images/raman_opt_L1m_P005W"
 )
+φ_opt_1 = reshape(result1.minimizer, sim_1["Nt"], sim_1["M"])
+GC.gc()
 
-# Run 2: Moderate regime (L=2m, P=0.5W)
+# Run 2: SMF-28 high power (strong Raman, N~5.6)
+@info "\n▶ Run 2: SMF-28 high power (L=2m, P=0.30W)"
 result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_optimization(
-    L_fiber=2.0, P_cont=0.5, max_iter=15, validate=false,
-    gamma_user=0.0013, betas_user=[-2.6e-26],
-    save_prefix="raman_opt_L2m_P05W"
+    L_fiber=2.0, P_cont=0.30, max_iter=50, validate=false,
+    Nt=2^13, β_order=3, time_window=20.0,
+    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    save_prefix="results/images/raman_opt_smf_L2m_P030W"
 )
+φ_opt_2 = reshape(result2.minimizer, sim_2["Nt"], sim_2["M"])
+GC.gc()
 
-# Run 3: Stronger nonlinearity (L=5m, P=1W), warm-started from Run 2 solution
-Nt_2 = sim_2["Nt"]; M_2 = sim_2["M"]
-φ_warm = reshape(result2.minimizer, Nt_2, M_2)
+# Run 3: HNLF short fiber (very strong Raman at LOW power, N~6.9)
+@info "\n▶ Run 3: HNLF (L=1m, P=0.05W) — strong Raman from high γ"
 result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_optimization(
-    L_fiber=5.0, P_cont=1.0, max_iter=15, validate=false,
-    gamma_user=0.0013, betas_user=[-2.6e-26],
-    save_prefix="raman_opt_L5m_P1W", φ0=φ_warm
+    L_fiber=1.0, P_cont=0.05, max_iter=80, validate=false,
+    Nt=2^14, β_order=3, time_window=15.0,
+    gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
+    save_prefix="results/images/raman_opt_hnlf_L1m_P005W"
 )
+φ_opt_3 = reshape(result3.minimizer, sim_3["Nt"], sim_3["M"])
+GC.gc()
 
-# Chirp sensitivity (uncomment after implementing TODO(human) in chirp_sensitivity)
-# println("\n=== Chirp Sensitivity (L=1m, P=0.25W) ===\n")
-# Nt_1 = sim_1["Nt"]; M_1 = sim_1["M"]
-# φ_opt_1 = reshape(result1.minimizer, Nt_1, M_1)
-# gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
-#     φ_opt_1, uω0_1, fiber_1, sim_1, band_mask_1
-# )
-# plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod; save_prefix="chirp_sens_L1m_P025W")
+# Run 4: HNLF long fiber (HEAVY Raman, N~9.8)
+@info "\n▶ Run 4: HNLF long fiber (L=5m, P=0.10W) — heavy-duty Raman shifting"
+result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_optimization(
+    L_fiber=5.0, P_cont=0.10, max_iter=100, validate=false,
+    Nt=2^14, β_order=3, time_window=50.0,
+    gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
+    save_prefix="results/images/raman_opt_hnlf_L5m_P010W"
+)
+φ_opt_4 = reshape(result4.minimizer, sim_4["Nt"], sim_4["M"])
+GC.gc()
+
+# Run 5: SMF-28 LONG fiber (L=10m, P=0.15W, warm-started from Run 2)
+@info "\n▶ Run 5: SMF-28 long fiber (L=10m, warm-started)"
+# Interpolate phase from Run 2's frequency grid to Run 5's grid
+let Nt_2 = sim_2["Nt"], M_2 = sim_2["M"]
+    f2 = collect(fftfreq(Nt_2, 1 / sim_2["Δt"]))
+    perm = sortperm(f2)
+    itp = linear_interpolation(f2[perm], φ_opt_2[perm, 1], extrapolation_bc=0.0)
+    tw5 = 60.0
+    Δt_5 = tw5 / Nt_2  # approximate — actual comes from setup
+    f5 = collect(fftfreq(Nt_2, 1 / Δt_5))
+    global φ_warm5 = zeros(Nt_2, M_2)
+    φ_warm5[:, 1] = itp.(f5)
+end
+result5, uω0_5, fiber_5, sim_5, band_mask_5, Δf_5 = run_optimization(
+    L_fiber=10.0, P_cont=0.15, max_iter=100, validate=false,
+    Nt=2^13, β_order=3, time_window=60.0,
+    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    save_prefix="results/images/raman_opt_smf_L10m_P015W",
+    φ0=φ_warm5
+)
+φ_opt_5 = reshape(result5.minimizer, sim_5["Nt"], sim_5["M"])
+GC.gc()
+
+# Chirp sensitivity on the heaviest run (Run 4: HNLF L=5m)
+@info "\n▶ Chirp Sensitivity (Run 4: HNLF L=5m)"
+gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
+    φ_opt_4, uω0_4, fiber_4, sim_4, band_mask_4;
+    gdd_range=range(-2e-2, 2e-2, length=101)
+)
+plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
+    save_prefix="results/images/chirp_sens_hnlf_L5m_P010W")
+
+@info "═══ All runs complete ═══"
 
 end # if main script
