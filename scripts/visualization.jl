@@ -43,6 +43,12 @@ PyPlot.matplotlib.rcParams["grid.alpha"] = 0.3
 # Physical constants
 const C_NM_THZ = 299792.458  # speed of light in nm·THz
 
+# Okabe-Ito color scheme for colorblind-safe plots
+const COLOR_INPUT  = "#0072B2"  # blue
+const COLOR_OUTPUT = "#D55E00"  # vermillion
+const COLOR_RAMAN  = "#CC79A7"  # reddish purple
+const COLOR_REF    = "#000000"  # black
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Phase wrapping utilities
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +111,194 @@ function _auto_time_limits(P_t, ts_ps; padding_factor=3.0)
     end
     margin = max(fwhm * padding_factor, 0.5)
     return (peak_t - margin, peak_t + margin)
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2b. Phase analysis: unwrap, group delay, GDD, instantaneous frequency
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    _manual_unwrap(φ)
+
+Unwrap a 1D phase vector by removing jumps > π between consecutive samples.
+"""
+function _manual_unwrap(φ)
+    out = copy(float.(φ))
+    for i in 2:length(out)
+        d = out[i] - out[i-1]
+        if abs(d) > π
+            out[i:end] .-= 2π * round(d / (2π))
+        end
+    end
+    return out
+end
+
+"""
+    _central_diff(y, dx)
+
+First derivative via central finite differences with forward/backward at boundaries.
+"""
+function _central_diff(y, dx)
+    N = length(y)
+    dy = similar(y)
+    dy[1] = (y[2] - y[1]) / dx
+    dy[N] = (y[N] - y[N-1]) / dx
+    for i in 2:N-1
+        dy[i] = (y[i+1] - y[i-1]) / (2dx)
+    end
+    return dy
+end
+
+"""
+    _second_central_diff(y, dx)
+
+Second derivative via central finite differences. Boundary values set to NaN.
+"""
+function _second_central_diff(y, dx)
+    N = length(y)
+    d2y = similar(y)
+    d2y[1] = d2y[N] = NaN
+    for i in 2:N-1
+        d2y[i] = (y[i+1] - 2y[i] + y[i-1]) / dx^2
+    end
+    return d2y
+end
+
+"""
+    _spectral_omega_step(sim)
+
+Return the angular frequency step dω [rad/ps] for the fftshifted grid.
+"""
+function _spectral_omega_step(sim)
+    Δf_grid = fftshift(fftfreq(sim["Nt"], 1 / sim["Δt"]))
+    return 2π * (Δf_grid[2] - Δf_grid[1])
+end
+
+"""
+    _apply_dB_mask(data, power_spectrum; threshold_dB=-30)
+
+Return a copy of `data` with NaN where `power_spectrum` is below `threshold_dB`
+relative to peak. Works on any 1D arrays of matching length.
+"""
+function _apply_dB_mask(data, power_spectrum; threshold_dB=-30)
+    P_peak = maximum(power_spectrum)
+    dB = 10 .* log10.(power_spectrum ./ P_peak .+ 1e-30)
+    masked = copy(float.(data))
+    masked[dB .≤ threshold_dB] .= NaN
+    return masked
+end
+
+"""
+    compute_group_delay(φ_shifted, sim)
+
+Compute group delay τ(ω) = dφ/dω in fs from fftshifted spectral phase.
+Δω is in rad/ps, so dφ/dω is in ps; multiply by 1e3 to get fs.
+"""
+function compute_group_delay(φ_shifted, sim)
+    dω = _spectral_omega_step(sim)
+    φ_unwrapped = _manual_unwrap(φ_shifted)
+    return _central_diff(φ_unwrapped, dω) .* 1e3
+end
+
+"""
+    compute_gdd(φ, sim)
+
+Compute GDD = d²φ/dω² in fs² from fftshifted spectral phase.
+Δω is in rad/ps, so d²φ/dω² is in ps²; multiply by 1e6 to get fs².
+"""
+function compute_gdd(φ, sim)
+    dω = _spectral_omega_step(sim)
+    φ_unwrapped = _manual_unwrap(φ)
+    return _second_central_diff(φ_unwrapped, dω) .* 1e6
+end
+
+"""
+    compute_instantaneous_frequency(ut, sim)
+
+Compute instantaneous frequency offset Δf(t) in THz from a complex time-domain
+field vector. Extracts temporal phase, unwraps, and differentiates.
+dφ/dt in rad/ps divided by 2π gives THz.
+"""
+function compute_instantaneous_frequency(ut, sim)
+    dt_ps = (sim["ts"][2] - sim["ts"][1]) * 1e12
+    φ_unwrapped = _manual_unwrap(angle.(ut))
+    return _central_diff(φ_unwrapped, dt_ps) ./ (2π)
+end
+
+"""
+    plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
+
+Standalone 2×2 phase diagnostic figure:
+  (1,1): Unwrapped spectral phase φ(ω) [rad] vs wavelength
+  (1,2): Group delay τ(ω) [fs] vs wavelength
+  (2,1): GDD [fs²] vs wavelength
+  (2,2): Instantaneous frequency [THz offset] vs time
+
+All spectral quantities are masked where power < -30 dB relative to peak.
+"""
+function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
+    f0 = sim["f0"]
+    ts_ps = sim["ts"] .* 1e12
+    dω = _spectral_omega_step(sim)
+
+    λ_nm, pos_mask, sort_idx = _freq_to_wavelength(sim)
+
+    # Spectral power for masking (fftshifted, positive-freq, wavelength-sorted)
+    spec_pos = abs2.(fftshift(uω0_base[:, 1]))[pos_mask][sort_idx]
+
+    # Unwrap once on the full fftshifted grid, then derive group delay and GDD
+    φ_shifted = fftshift(φ[:, 1])
+    φ_unwrapped_full = _manual_unwrap(φ_shifted)
+
+    φ_unwrapped = φ_unwrapped_full[pos_mask][sort_idx]
+    τ_pos = (_central_diff(φ_unwrapped_full, dω) .* 1e3)[pos_mask][sort_idx]
+    gdd_pos = (_second_central_diff(φ_unwrapped_full, dω) .* 1e6)[pos_mask][sort_idx]
+
+    # Instantaneous frequency from shaped temporal field
+    ut_shaped = ifft(uω0_base .* cis.(φ), 1)
+    Δf_inst = compute_instantaneous_frequency(ut_shaped[:, 1], sim)
+
+    λ_raman_onset = C_NM_THZ / (f0 - 13.0)
+
+    # Apply -30dB mask to spectral quantities
+    φ_masked = _apply_dB_mask(φ_unwrapped, spec_pos)
+    τ_masked = _apply_dB_mask(τ_pos, spec_pos)
+    gdd_masked = _apply_dB_mask(gdd_pos, spec_pos)
+
+    fig, axs = subplots(2, 2, figsize=(12, 9))
+    λ0_nm = C_NM_THZ / f0
+
+    # Spectral panel config: (row, col, data, ylabel, title)
+    spectral_panels = [
+        (1, 1, φ_masked,   "Spectral phase [rad]", "Unwrapped spectral phase φ(ω)"),
+        (1, 2, τ_masked,   "Group delay [fs]",     "Group delay τ(ω)"),
+        (2, 1, gdd_masked, "GDD [fs²]",            "Group delay dispersion"),
+    ]
+    for (r, c, data, ylabel, title) in spectral_panels
+        axs[r, c].plot(λ_nm, data, color=COLOR_REF, linewidth=0.8)
+        axs[r, c].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+        axs[r, c].set_xlabel("Wavelength [nm]")
+        axs[r, c].set_ylabel(ylabel)
+        axs[r, c].set_title(title)
+        axs[r, c].set_xlim(λ0_nm - 300, λ0_nm + 500)
+        axs[r, c].legend(fontsize=8)
+    end
+
+    axs[2, 2].plot(ts_ps, Δf_inst, color=COLOR_REF, linewidth=0.8)
+    axs[2, 2].set_xlabel("Time [ps]")
+    axs[2, 2].set_ylabel("Δf [THz]")
+    axs[2, 2].set_title("Instantaneous frequency offset")
+    t_lims = _auto_time_limits(abs2.(ut_shaped[:, 1]), ts_ps; padding_factor=4.0)
+    axs[2, 2].set_xlim(t_lims...)
+
+    fig.tight_layout()
+
+    if !isnothing(save_path)
+        savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved phase diagnostic to $save_path"
+    end
+
+    return fig, axs
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -517,13 +711,16 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=9,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
-        # ── Row 3: Spectral phase [0, 2π] ──
-        φ_wrapped = wrap_phase(fftshift(φ[:, 1]))
-        axs[3, col].plot(λ_nm, φ_wrapped, "k-", linewidth=0.8)
+        # ── Row 3: Unwrapped spectral phase φ(ω) [rad] ──
+        φ_unwrapped = _manual_unwrap(fftshift(φ[:, 1]))
+        spec_power = abs2.(fftshift(uω0_shaped[:, 1]))
+        φ_display = _apply_dB_mask(φ_unwrapped, spec_power)
+
+        axs[3, col].plot(λ_nm, φ_display, color=COLOR_REF, linewidth=0.8)
         axs[3, col].set_xlabel("Wavelength [nm]")
-        set_phase_yticks!(axs[3, col])
+        axs[3, col].set_ylabel("Spectral phase [rad]")
         axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
-        axs[3, col].set_title("Spectral phase")
+        axs[3, col].set_title("Spectral phase φ(ω)")
     end
 
     fig.tight_layout()
