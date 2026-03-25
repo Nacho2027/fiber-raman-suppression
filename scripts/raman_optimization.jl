@@ -335,14 +335,11 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
     Nt = sim["Nt"]; M = sim["M"]
 
-    # Physics-based auto GDD penalty weight
+    # GDD penalty weight: use a light default that prevents the dominant
+    # temporal broadening without constraining useful phase structure.
+    # λ_gdd = 1e-4 was validated in prior runs (annealing Stage 1).
     if λ_gdd === :auto
-        T0 = 185e-15 / (2 * acosh(sqrt(2)))
-        tw_ps = Nt * sim["Δt"]
-        GDD_max = T0^2 * sqrt(max((0.15 * tw_ps * 1e-12 / T0)^2 - 1, 1.0))
-        J_unshaped, _ = cost_and_gradient(zeros(Nt, M), uω0, fiber, sim, band_mask)
-        λ_gdd_val = J_unshaped / (GDD_max^2 * Nt)
-        @info @sprintf("Auto λ_gdd = %.2e  (GDD_max = %.2e s², J₀ = %.2e)", λ_gdd_val, GDD_max, J_unshaped)
+        λ_gdd_val = 1e-4
     else
         λ_gdd_val = Float64(λ_gdd)
     end
@@ -437,12 +434,14 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         band_mask, Δf, raman_threshold;
         save_path="$(save_prefix).png")
 
-    # Evolution comparison: unshaped vs optimized (2×2 grid)
-    @info "Evolution Comparison"
-    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
-        label_before="Unshaped", label_after="Optimized",
-        title="Pulse evolution (L=$(fiber["L"])m)",
-        save_path="$(save_prefix)_evolution.png")
+    # Evolution plots: unshaped and optimized
+    @info "Evolution Plots"
+    propagate_and_plot_evolution(uω0, fiber, sim;
+        title="Unshaped pulse evolution (L=$(fiber["L"])m)",
+        save_path="$(save_prefix)_evolution_unshaped.png")
+    propagate_and_plot_evolution(uω0_opt, fiber, sim;
+        title="Optimized pulse evolution (L=$(fiber["L"])m)",
+        save_path="$(save_prefix)_evolution_optimized.png")
 
     # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
     @info "Phase Diagnostic"
