@@ -330,9 +330,22 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
-    λ_gdd=:auto, λ_boundary=10.0, kwargs...)
+    λ_gdd=:auto, λ_boundary=10.0, fiber_name="Custom", kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
+
+    # Construct metadata for figure annotations (META-01)
+    _λ0 = get(kwargs, :λ0, 1550e-9)
+    _P_cont = get(kwargs, :P_cont, 0.05)
+    _pulse_fwhm = get(kwargs, :pulse_fwhm, 185e-15)
+    _L_fiber = get(kwargs, :L_fiber, 1.0)
+    run_meta = (
+        fiber_name = fiber_name,
+        L_m = _L_fiber,
+        P_cont_W = _P_cont,
+        lambda0_nm = _λ0 * 1e9,
+        fwhm_fs = _pulse_fwhm * 1e15,
+    )
     Nt = sim["Nt"]; M = sim["M"]
 
     # GDD penalty weight: use a light default that prevents the dominant
@@ -432,21 +445,27 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     # 3×2 optimization comparison (spectra, temporal, group delay)
     plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
-        save_path="$(save_prefix).png")
+        save_path="$(save_prefix).png", metadata=run_meta)
 
-    # Evolution plots: unshaped and optimized
+    # Evolution: solve both via propagate_and_plot_evolution (handles deepcopy + zsave),
+    # then merge into a single 2×2 figure (ORG-01, ORG-02)
     @info "Evolution Plots"
-    propagate_and_plot_evolution(uω0, fiber, sim;
-        title="Unshaped pulse evolution (L=$(fiber["L"])m)",
-        save_path="$(save_prefix)_evolution_unshaped.png")
-    propagate_and_plot_evolution(uω0_opt, fiber, sim;
-        title="Optimized pulse evolution (L=$(fiber["L"])m)",
-        save_path="$(save_prefix)_evolution_optimized.png")
+    sol_unshaped, fig_tmp1, _ = propagate_and_plot_evolution(uω0, fiber, sim)
+    close(fig_tmp1)
+    sol_opt_evo, fig_tmp2, _ = propagate_and_plot_evolution(uω0_opt, fiber, sim)
+    close(fig_tmp2)
+
+    # Merged 2×2 evolution comparison (replaces two separate _unshaped/_optimized PNGs)
+    fiber_evo = deepcopy(fiber)
+    fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], 101))
+    plot_merged_evolution(sol_opt_evo, sol_unshaped, sim, fiber_evo;
+        metadata=run_meta,
+        save_path="$(save_prefix)_evolution.png")
 
     # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
     @info "Phase Diagnostic"
     plot_phase_diagnostic(φ_after, uω0, sim;
-        save_path="$(save_prefix)_phase.png")
+        save_path="$(save_prefix)_phase.png", metadata=run_meta)
     close("all")
 
     return result, uω0, fiber, sim, band_mask, Δf
@@ -497,6 +516,7 @@ result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=50,
     Nt=2^13, β_order=3, time_window=10.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    fiber_name="SMF-28",
     save_prefix=joinpath(dir1, "opt")
 )
 φ_opt_1 = reshape(result1.minimizer, sim_1["Nt"], sim_1["M"])
@@ -509,6 +529,7 @@ result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_optimization(
     L_fiber=2.0, P_cont=0.30, max_iter=50, validate=false,
     Nt=2^13, β_order=3, time_window=20.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    fiber_name="SMF-28",
     save_prefix=joinpath(dir2, "opt")
 )
 φ_opt_2 = reshape(result2.minimizer, sim_2["Nt"], sim_2["M"])
@@ -521,6 +542,7 @@ result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=80, validate=false,
     Nt=2^14, β_order=3, time_window=15.0,
     gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
+    fiber_name="HNLF",
     save_prefix=joinpath(dir3, "opt")
 )
 φ_opt_3 = reshape(result3.minimizer, sim_3["Nt"], sim_3["M"])
@@ -535,6 +557,7 @@ result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_optimization(
     L_fiber=2.0, P_cont=0.05, max_iter=100, validate=false,
     Nt=2^14, β_order=3, time_window=30.0,
     gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
+    fiber_name="HNLF",
     save_prefix=joinpath(dir4, "opt")
 )
 φ_opt_4 = reshape(result4.minimizer, sim_4["Nt"], sim_4["M"])
@@ -549,6 +572,7 @@ result5, uω0_5, fiber_5, sim_5, band_mask_5, Δf_5 = run_optimization(
     L_fiber=5.0, P_cont=0.15, max_iter=100, validate=false,
     Nt=2^13, β_order=3, time_window=30.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
+    fiber_name="SMF-28",
     save_prefix=joinpath(dir5, "opt")
 )
 φ_opt_5 = reshape(result5.minimizer, sim_5["Nt"], sim_5["M"])
