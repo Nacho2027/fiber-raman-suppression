@@ -230,6 +230,17 @@ lo, hi = _spectral_signal_xlim(spec_xlim_test, lambda_xlim; threshold_dB=-40.0, 
 @assert hi > lambda0_nm "Auto-zoom hi=$hi does not bracket center wavelength"
 println("  ✓ _spectral_signal_xlim: [$lo, $hi] nm brackets signal around $(round(lambda0_nm, digits=1)) nm")
 
+# Test 21: Global P_ref pattern in optimization comparison functions
+println("\nTest 21: Global P_ref normalization in comparison functions...")
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+# Both optimization comparison functions must use global normalization
+@assert occursin("P_ref_global", viz_src) "P_ref_global not found — BUG-04 fix missing"
+# Per-column normalization pattern must be gone from comparison functions
+# (The pattern "P_ref = max(maximum(spec_in), maximum(spec_out))" should not appear)
+n_local_pref = length(collect(eachmatch(r"P_ref = max\(maximum\(spec_in\)", viz_src)))
+@assert n_local_pref == 0 "Found $n_local_pref per-column P_ref patterns — BUG-04 not fully fixed"
+println("  OK global P_ref: P_ref_global found, no per-column P_ref patterns remain")
+
 println("\n" * "="^60)
 println("All smoke tests passed!")
 println("="^60)

@@ -9,20 +9,20 @@
 
 - [x] **BUG-01**: Raman band `axvspan` shading must only cover the ~13 THz Raman gain band (~1600-1700 nm for 1550 nm center), not the entire red-shifted half of the spectrum
 - [ ] **BUG-02**: Replace jet colormap with inferno on all evolution heatmaps (jet creates ~3 dB false perceptual features)
-- [ ] **BUG-03**: Apply spectral power mask BEFORE phase unwrapping, not after (current order propagates noise into valid phase data)
-- [ ] **BUG-04**: Use global normalization (shared P_ref) across Before/After comparison columns so dB values are directly comparable
+- [x] **BUG-03**: Apply spectral power mask BEFORE phase unwrapping, not after (current order propagates noise into valid phase data)
+- [x] **BUG-04**: Use global normalization (shared P_ref) across Before/After comparison columns so dB values are directly comparable
 
 ### Phase Representation
 
-- [ ] **PHASE-01**: Use group delay τ(ω) [fs] as the primary phase display in opt.png row 3 (most physically intuitive)
-- [ ] **PHASE-02**: In phase diagnostic (opt_phase.png), show all phase views: wrapped φ(ω) [0,2π], unwrapped φ(ω), group delay τ(ω), GDD, and instantaneous frequency — all masked to signal region before derivative computation
-- [ ] **PHASE-03**: Clip GDD display to a sensible range (percentile-based or physics-based) to prevent outlier spikes from dominating the axis
-- [ ] **PHASE-04**: Wrapped phase panel uses π-labeled y-ticks (0, π/2, π, 3π/2, 2π) for readability
+- [x] **PHASE-01**: Use group delay τ(ω) [fs] as the primary phase display in opt.png row 3 (most physically intuitive)
+- [x] **PHASE-02**: In phase diagnostic (opt_phase.png), show all phase views: wrapped φ(ω) [0,2π], unwrapped φ(ω), group delay τ(ω), GDD, and instantaneous frequency — all masked to signal region before derivative computation
+- [x] **PHASE-03**: Clip GDD display to a sensible range (percentile-based or physics-based) to prevent outlier spikes from dominating the axis
+- [x] **PHASE-04**: Wrapped phase panel uses π-labeled y-ticks (0, π/2, π, 3π/2, 2π) for readability
 
 ### Axis and Layout
 
-- [ ] **AXIS-01**: Before/After comparison columns must share identical xlim and ylim for all matched panel pairs
-- [ ] **AXIS-02**: Spectral plots must auto-zoom to the region with actual signal, not show 800 nm of noise floor
+- [x] **AXIS-01**: Before/After comparison columns must share identical xlim and ylim for all matched panel pairs
+- [x] **AXIS-02**: Spectral plots must auto-zoom to the region with actual signal, not show 800 nm of noise floor
 - [ ] **AXIS-03**: Disable grid lines on pcolormesh heatmap axes (grid appears as data artifacts)
 
 ### Annotations and Metadata
@@ -66,14 +66,14 @@
 |-------------|-------|--------|
 | BUG-01 | Phase 1 | Complete |
 | BUG-02 | Phase 1 | Pending |
-| BUG-03 | Phase 2 | Pending |
-| BUG-04 | Phase 2 | Pending |
-| PHASE-01 | Phase 2 | Pending |
-| PHASE-02 | Phase 2 | Pending |
-| PHASE-03 | Phase 2 | Pending |
-| PHASE-04 | Phase 2 | Pending |
-| AXIS-01 | Phase 2 | Pending |
-| AXIS-02 | Phase 2 | Pending |
+| BUG-03 | Phase 2 | Complete |
+| BUG-04 | Phase 2 | Complete |
+| PHASE-01 | Phase 2 | Complete |
+| PHASE-02 | Phase 2 | Complete |
+| PHASE-03 | Phase 2 | Complete |
+| PHASE-04 | Phase 2 | Complete |
+| AXIS-01 | Phase 2 | Complete |
+| AXIS-02 | Phase 2 | Complete |
 | AXIS-03 | Phase 1 | Pending |
 | META-01 | Phase 3 | Pending |
 | META-02 | Phase 3 | Pending |
