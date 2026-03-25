@@ -615,11 +615,12 @@ function plot_spectrum_comparison(uω_in, uω_out, sim;
     # Raman band shading
     if !isnothing(raman_threshold)
         Δf_shifted = fftshift(fftfreq(Nt, 1 / Δt))
-        raman_idx = Δf_shifted .< raman_threshold
+        raman_half_bw_thz = 2.5  # ±2.5 THz window around gain peak (~10 THz FWHM silica Raman)
+        raman_idx = abs.(Δf_shifted .- raman_threshold) .< raman_half_bw_thz
         if any(raman_idx)
             λ_raman = λ_nm[raman_idx]
             ax.axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color="red", label="Raman band")
+                alpha=0.12, color=COLOR_RAMAN, label="Raman band")
         end
     end
 
@@ -668,7 +669,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
 
     # Raman band in wavelength
     Δf_shifted = fftshift(fftfreq(Nt, 1 / Δt))
-    raman_λ_idx = Δf_shifted .< raman_threshold
+    raman_half_bw_thz = 2.5  # ±2.5 THz window around gain peak (~10 THz FWHM silica Raman)
+    raman_λ_idx = abs.(Δf_shifted .- raman_threshold) .< raman_half_bw_thz
 
     fig, axs = subplots(3, 2, figsize=figsize)
 
@@ -699,10 +701,10 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         if any(raman_λ_idx)
             λ_raman = λ_nm[raman_λ_idx]
             axs[1, col].axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color="red", label="Raman band")
+                alpha=0.12, color=COLOR_RAMAN)
         end
         λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
-        axs[1, col].axvline(x=λ_raman_onset, color="red", ls="--",
+        axs[1, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--",
             alpha=0.7, linewidth=1.0, label="Raman onset")
 
         axs[1, col].set_xlabel("Wavelength [nm]")
@@ -766,7 +768,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[3, col].set_ylabel("Group delay [fs]")
         axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
         axs[3, col].set_title("Group delay τ(ω)")
-        axs[3, col].axvline(x=λ_raman_onset, color="red", ls="--", alpha=0.5, linewidth=0.8)
+        axs[3, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.8)
     end
 
     fig.tight_layout()
@@ -807,7 +809,8 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
     λ0_nm = C_NM_THZ / f0
 
     Δf_shifted = fftshift(fftfreq(Nt, 1 / Δt))
-    raman_λ_idx = Δf_shifted .< raman_threshold
+    raman_half_bw_thz = 2.5  # ±2.5 THz window around gain peak (~10 THz FWHM silica Raman)
+    raman_λ_idx = abs.(Δf_shifted .- raman_threshold) .< raman_half_bw_thz
 
     fig, axs = subplots(3, 2, figsize=figsize)
 
@@ -834,7 +837,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         if any(raman_λ_idx)
             λ_raman = λ_nm[raman_λ_idx]
             axs[1, col].axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color="red", label="Raman band")
+                alpha=0.12, color=COLOR_RAMAN)
         end
 
         axs[1, col].set_xlabel("Wavelength [nm]")
