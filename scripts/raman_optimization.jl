@@ -478,6 +478,97 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         @warn "Boundary energy is too high — increase time_window or Nt"
     end
 
+    # ── Result serialization (XRUN-01) ──
+    jld2_path = "$(save_prefix)_result.jld2"
+    convergence_history = Optim.f_trace(result)
+    @info "Saving results to $jld2_path"
+    jldsave(jld2_path;
+        # Run identification
+        fiber_name   = run_meta.fiber_name,
+        run_tag      = (@isdefined(RUN_TAG) ? RUN_TAG : "interactive"),
+        # Fiber parameters
+        L_m          = fiber["L"],
+        P_cont_W     = run_meta.P_cont_W,
+        lambda0_nm   = run_meta.lambda0_nm,
+        fwhm_fs      = run_meta.fwhm_fs,
+        gamma        = fiber["γ"][1],
+        betas        = haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        # Grid parameters
+        Nt           = Nt,
+        time_window_ps = tw_ps,
+        # Optimization results
+        J_before     = J_before,
+        J_after      = J_after,
+        delta_J_dB   = ΔJ_dB,
+        grad_norm    = grad_norm,
+        converged    = Optim.converged(result),
+        iterations   = Optim.iterations(result),
+        wall_time_s  = elapsed,
+        convergence_history = convergence_history,
+        # Fields for re-propagation (Phase 6)
+        phi_opt      = φ_after,
+        uomega0      = uω0,
+        # Diagnostics
+        E_conservation    = E_conservation,
+        bc_input_frac     = bc_input_frac,
+        bc_output_frac    = bc_output_frac,
+        bc_input_ok       = bc_input_ok,
+        bc_output_ok      = bc_output_ok,
+        # Simulation context (for Phase 6 grid compatibility checks)
+        band_mask    = band_mask,
+        sim_Dt       = sim["Δt"],
+        sim_omega0   = sim["ω0"],
+    )
+
+    # ── Manifest update (XRUN-01) ──
+    manifest_path = joinpath("results", "raman", "manifest.json")
+    manifest_entry = Dict{String,Any}(
+        "fiber_name"     => run_meta.fiber_name,
+        "L_m"            => fiber["L"],
+        "P_cont_W"       => run_meta.P_cont_W,
+        "lambda0_nm"     => run_meta.lambda0_nm,
+        "J_before"       => J_before,
+        "J_before_dB"    => MultiModeNoise.lin_to_dB(J_before),
+        "J_after"        => J_after,
+        "J_after_dB"     => MultiModeNoise.lin_to_dB(J_after),
+        "delta_J_dB"     => ΔJ_dB,
+        "converged"      => Optim.converged(result),
+        "iterations"     => Optim.iterations(result),
+        "wall_time_s"    => elapsed,
+        "Nt"             => Nt,
+        "time_window_ps" => tw_ps,
+        "grad_norm"      => grad_norm,
+        "E_conservation" => E_conservation,
+        "bc_ok"          => bc_input_ok && bc_output_ok,
+        "result_file"    => jld2_path,
+    )
+
+    # Append-safe: read existing manifest, update/append this run, write back
+    existing_manifest = if isfile(manifest_path)
+        try
+            JSON3.read(read(manifest_path, String), Vector{Dict{String,Any}})
+        catch e
+            @warn "Could not parse existing manifest.json, starting fresh" exception=e
+            Dict{String,Any}[]
+        end
+    else
+        Dict{String,Any}[]
+    end
+
+    # Replace existing entry for same result_file, or append
+    idx = findfirst(e -> get(e, "result_file", "") == jld2_path, existing_manifest)
+    if idx !== nothing
+        existing_manifest[idx] = manifest_entry
+    else
+        push!(existing_manifest, manifest_entry)
+    end
+
+    mkpath(dirname(manifest_path))
+    open(manifest_path, "w") do io
+        JSON3.pretty(io, existing_manifest)
+    end
+    @info "Updated manifest at $manifest_path ($(length(existing_manifest)) runs)"
+
     # ── Plots ──
     @info "Plotting"
 
