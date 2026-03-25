@@ -50,7 +50,9 @@ Plans:
   1. After running `raman_optimization.jl`, each of the 5 run directories contains a `_result.jld2` file with fiber params, J_before, J_after, convergence history, and wall time
   2. A top-level `results/raman/manifest.json` exists and lists all 5 runs with their scalar summaries in a format readable by `jq` or any JSON parser
   3. The serialization adds no new positional arguments or breaking changes to `run_optimization()` — the existing call sites still work unchanged
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 05-01-PLAN.md — Add JLD2/JSON3 deps, thread store_trace, save _result.jld2 per run, update manifest.json
 
 ### Phase 6: Cross-Run Comparison and Pattern Analysis
 **Goal**: All 5 optimization runs can be compared in single overlay figures, and each optimal phase profile is explained in terms of physically interpretable polynomial chirp components
@@ -69,11 +71,13 @@ Plans:
 **Goal**: The optimization cost J_final is mapped over a coarse L x P grid per fiber type, and multi-start robustness is quantified, enabling identification of favorable operating regimes
 **Depends on**: Phase 6 (sweeps call run_comparison_suite at completion; needs stable comparison infrastructure)
 **Requirements**: SWEEP-01, SWEEP-02
+**CRITICAL PREREQUISITE (from Phase 4 VERIF-02):** `recommended_time_window()` in `common.jl` is power-blind — only accounts for linear dispersive walk-off. Phase 4 verification showed 2.7% photon number drift at low power but 38-49% at high power/long fiber, meaning the super-Gaussian attenuator absorbs significant pulse energy when the time window is undersized. Before running sweeps, this function MUST be extended with a power-aware correction (e.g., SPM broadening estimate) OR each sweep point must use a generous fixed window (safety_factor=4-5x) with Nt scaled to maintain resolution. Without this, high-P sweep points produce artificially low J values because attenuator eats energy before it reaches the Raman band. Evidence: `results/raman/validation/verification_20260325_173537.md`.
 **Success Criteria** (what must be TRUE):
   1. A J_final heatmap for at least one fiber type (SMF-28) is produced over a coarse L x P grid, with axes labeled in physical units and Raman suppression depth shown in dB
   2. Each sweep point is tagged with `converged::Bool`, `iterations::Int`, and `gradient_norm::Float64`; non-converged points are visually marked distinct from converged points in the heatmap
   3. A multi-start analysis runs optimization from 5-10 random initial phases for one canonical config and reports the distribution of J_final values, revealing whether the cost landscape has multiple local minima
   4. Sweep results are saved to `results/raman/sweeps/` with one `_result.jld2` per sweep point and a `sweep_results.jld2` aggregate, enabling re-plotting without re-running
+  5. Every sweep point has photon number drift <5%, confirming the time window is adequately sized (no attenuator absorption corrupting results)
 **Plans**: TBD
 **UI hint**: yes
 
@@ -82,6 +86,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
-| 5. Result Serialization | 0/? | Not started | - |
+| 5. Result Serialization | 0/1 | Planning complete | - |
 | 6. Cross-Run Comparison and Pattern Analysis | 0/? | Not started | - |
 | 7. Parameter Sweeps | 0/? | Not started | - |

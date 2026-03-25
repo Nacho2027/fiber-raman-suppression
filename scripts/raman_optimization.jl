@@ -19,6 +19,8 @@ ENV["MPLBACKEND"] = "Agg"  # Non-interactive backend for headless execution
 using PyPlot
 using MultiModeNoise
 using Optim
+using JLD2
+using JSON3
 
 include("common.jl")
 include("visualization.jl")
@@ -147,7 +149,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
-    φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0)
+    φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -191,7 +193,7 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
         end,
         vec(φ0),
         LBFGS(),
-        Optim.Options(iterations=max_iter, f_abstol=1e-6, callback=callback)
+        Optim.Options(iterations=max_iter, f_abstol=1e-6, callback=callback, store_trace=store_trace)
     )
 
     return result
@@ -400,7 +402,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     @info "Optimization" λ_gdd=λ_gdd_val λ_boundary=λ_boundary
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
-        max_iter=max_iter, φ0=φ0, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary)
+        max_iter=max_iter, φ0=φ0, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
+        store_trace=true)
 
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
