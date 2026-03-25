@@ -27,9 +27,9 @@
 
 ### Annotations and Metadata
 
-- [ ] **META-01**: Every figure includes a metadata annotation block: fiber type, length L, peak power P₀, center wavelength λ₀, pulse FWHM
-- [ ] **META-02**: Optimization cost J (before/after, in dB) annotated on comparison figures
-- [ ] **META-03**: Evolution figures include fiber length and title identifying optimized vs unshaped
+- [x] **META-01**: Every figure includes a metadata annotation block: fiber type, length L, peak power P₀, center wavelength λ₀, pulse FWHM
+- [x] **META-02**: Optimization cost J (before/after, in dB) annotated on comparison figures
+- [x] **META-03**: Evolution figures include fiber length and title identifying optimized vs unshaped
 
 ### Color and Style
 
@@ -39,7 +39,7 @@
 
 ### Plot Organization
 
-- [ ] **ORG-01**: Merge the two separate evolution PNGs (optimized + unshaped) into a single 4-panel comparison figure (2×2: temporal/spectral × optimized/unshaped)
+- [x] **ORG-01**: Merge the two separate evolution PNGs (optimized + unshaped) into a single 4-panel comparison figure (2×2: temporal/spectral × optimized/unshaped)
 - [ ] **ORG-02**: Each run produces 3 output files: opt.png (comparison), opt_phase.png (phase diagnostic), opt_evolution.png (merged evolution)
 
 ## v2 Requirements
@@ -75,13 +75,13 @@
 | AXIS-01 | Phase 2 | Complete |
 | AXIS-02 | Phase 2 | Complete |
 | AXIS-03 | Phase 1 | Pending |
-| META-01 | Phase 3 | Pending |
-| META-02 | Phase 3 | Pending |
-| META-03 | Phase 3 | Pending |
+| META-01 | Phase 3 | Complete |
+| META-02 | Phase 3 | Complete |
+| META-03 | Phase 3 | Complete |
 | STYLE-01 | Phase 1 | Complete |
 | STYLE-02 | Phase 1 | Complete |
 | STYLE-03 | Phase 1 | Pending |
-| ORG-01 | Phase 3 | Pending |
+| ORG-01 | Phase 3 | Complete |
 | ORG-02 | Phase 3 | Pending |
 
 **Coverage:**

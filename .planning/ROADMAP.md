@@ -62,7 +62,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Add _add_metadata_block! helper, expand J annotation to show before/after/delta, create plot_merged_evolution 2x2 function, add metadata= kwarg to 3 top-level plotters
+- [x] 03-01-PLAN.md — Add _add_metadata_block! helper, expand J annotation to show before/after/delta, create plot_merged_evolution 2x2 function, add metadata= kwarg to 3 top-level plotters
 - [ ] 03-02-PLAN.md — Wire metadata construction and plot_merged_evolution into run_optimization (raman) and both run functions (amplitude), enforce 3-file output naming
 
 ## Progress
@@ -74,4 +74,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Stop Actively Misleading | 0/2 | Complete    | 2026-03-25 |
 | 2. Axis, Normalization, and Phase Correctness | 0/2 | In progress | - |
-| 3. Structure, Annotation, and Final Assembly | 0/2 | Not started | - |
+| 3. Structure, Annotation, and Final Assembly | 1/2 | In Progress|  |

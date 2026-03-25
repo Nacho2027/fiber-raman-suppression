@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-25T02:59:44.195Z"
+status: Ready to execute
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-25T03:30:04.416Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** Every plot clearly communicates the underlying physics without external context.
-**Current focus:** Phase 02 — axis-normalization-and-phase-correctness
+**Current focus:** Phase 03 — structure-annotation-and-final-assembly
 
 ## Current Position
 
-Phase: 02 (axis-normalization-and-phase-correctness) — EXECUTING
+Phase: 03 (structure-annotation-and-final-assembly) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -49,6 +49,7 @@ Plan: 2 of 2
 | Phase 01 P02 | 3min | 2 tasks | 1 files |
 | Phase 02-axis-normalization-and-phase-correctness P01 | 17 | 2 tasks | 3 files |
 | Phase 02-axis-normalization-and-phase-correctness P02 | 8 | 2 tasks | 3 files |
+| Phase 03 P01 | 3 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - [Phase 02-axis-normalization-and-phase-correctness]: GDD percentile clipping: quantile(gdd_valid, 0.02/0.98) with 5% margin, minimum 100 fs² floor
 - [Phase 02-axis-normalization-and-phase-correctness]: Use _energy_window not _auto_time_limits for amplitude comparison temporal limits — more robust for dispersed pulses
 - [Phase 02-axis-normalization-and-phase-correctness]: plot_spectral_evolution auto-zooms to z=0 input spectrum as reference — stable reference avoids over-expansion from output broadening
+- [Phase 03]: Use subplots_adjust instead of tight_layout in plot_merged_evolution — tight_layout after add_axes displaces the manual colorbar axis
+- [Phase 03]: Metadata block at bottom-left via fig.text+transFigure, consistent with existing add_caption! pattern
+- [Phase 03]: Delta-J annotation expanded to full J_before/J_after/Delta-J block (META-02) in both comparison functions
 
 ### Pending Todos
 
@@ -79,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25T02:59:44.193Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-03-25T03:30:04.412Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
