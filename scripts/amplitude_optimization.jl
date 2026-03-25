@@ -280,10 +280,24 @@ function run_amplitude_optimization_lowdim(;
     K=10, max_iter=20, validate=true, save_prefix="results/images/amp_opt_lowdim",
     δ_bound=0.10,
     λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
+    fiber_name="Custom",
     kwargs...)
 
     t_total = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_amplitude_problem(; kwargs...)
+
+    # Construct metadata for figure annotations (META-01)
+    _λ0 = get(kwargs, :λ0, 1550e-9)
+    _P_cont = get(kwargs, :P_cont, 0.05)
+    _pulse_fwhm = get(kwargs, :pulse_fwhm, 185e-15)
+    _L_fiber = get(kwargs, :L_fiber, 1.0)
+    run_meta = (
+        fiber_name = fiber_name,
+        L_m = _L_fiber,
+        P_cont_W = _P_cont,
+        lambda0_nm = _λ0 * 1e9,
+        fwhm_fs = _pulse_fwhm * 1e15,
+    )
     Nt = sim["Nt"]; M = sim["M"]
 
     @info "═══ Low-Dim Amplitude Optimization ═══" L=fiber["L"] Nt=Nt K=K δ=δ_bound max_iter=max_iter
@@ -334,13 +348,20 @@ function run_amplitude_optimization_lowdim(;
     A_before = ones(Nt, M)
     plot_amplitude_result_v2(A_before, A_opt, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
-        save_path="$(save_prefix).png")
+        save_path="$(save_prefix).png", metadata=run_meta)
 
+    # Evolution: solve both, merge into single 2×2 figure (ORG-01, ORG-02)
     @info "Step 4: Evolution Comparison"
     uω0_opt = uω0 .* A_opt
-    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
-        label_before="Unmodulated (A=1)", label_after="Lowdim modulated",
-        title="Low-dim pulse evolution (L=$(fiber["L"])m, K=$K)",
+    sol_unshaped, fig_tmp1, _ = propagate_and_plot_evolution(uω0, fiber, sim)
+    close(fig_tmp1)
+    sol_opt_evo, fig_tmp2, _ = propagate_and_plot_evolution(uω0_opt, fiber, sim)
+    close(fig_tmp2)
+
+    fiber_evo = deepcopy(fiber)
+    fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], 101))
+    plot_merged_evolution(sol_opt_evo, sol_unshaped, sim, fiber_evo;
+        metadata=run_meta,
         save_path="$(save_prefix)_evolution.png")
 
     elapsed = time() - t_total
@@ -697,11 +718,25 @@ function run_amplitude_optimization(;
     max_iter=20, validate=true, save_prefix="results/images/amp_opt",
     A0=nothing, δ_bound=0.10,
     λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
+    fiber_name="Custom",
     kwargs...)
 
     t_total = time()
     # Step 1–2: Setup (includes time_window check)
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_amplitude_problem(; kwargs...)
+
+    # Construct metadata for figure annotations (META-01)
+    _λ0 = get(kwargs, :λ0, 1550e-9)
+    _P_cont = get(kwargs, :P_cont, 0.05)
+    _pulse_fwhm = get(kwargs, :pulse_fwhm, 185e-15)
+    _L_fiber = get(kwargs, :L_fiber, 1.0)
+    run_meta = (
+        fiber_name = fiber_name,
+        L_m = _L_fiber,
+        P_cont_W = _P_cont,
+        lambda0_nm = _λ0 * 1e9,
+        fwhm_fs = _pulse_fwhm * 1e15,
+    )
     Nt = sim["Nt"]; M = sim["M"]
 
     @info "═══ Amplitude Optimization ═══" L=fiber["L"] Nt=Nt δ=δ_bound max_iter=max_iter λ_E=λ_energy λ_T=λ_tikhonov λ_TV=λ_tv
@@ -743,14 +778,20 @@ function run_amplitude_optimization(;
     # Optimization comparison (3×2 panel)
     plot_amplitude_result_v2(A_before, A_opt, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
-        save_path="$(save_prefix).png")
+        save_path="$(save_prefix).png", metadata=run_meta)
 
-    # Evolution comparison (2×2 grid: temporal/spectral × before/after)
+    # Evolution: solve both, merge into single 2×2 figure (ORG-01, ORG-02)
     @info "Step 4: Evolution Comparison"
     uω0_opt = uω0 .* A_opt
-    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
-        label_before="Unmodulated (A=1)", label_after="Modulated (A=A_opt)",
-        title="Pulse evolution comparison (L=$(fiber["L"])m)",
+    sol_unshaped, fig_tmp1, _ = propagate_and_plot_evolution(uω0, fiber, sim)
+    close(fig_tmp1)
+    sol_opt_evo, fig_tmp2, _ = propagate_and_plot_evolution(uω0_opt, fiber, sim)
+    close(fig_tmp2)
+
+    fiber_evo = deepcopy(fiber)
+    fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], 101))
+    plot_merged_evolution(sol_opt_evo, sol_unshaped, sim, fiber_evo;
+        metadata=run_meta,
         save_path="$(save_prefix)_evolution.png")
 
     # Boundary diagnostic
@@ -791,6 +832,7 @@ result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_amplitude_optimization
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
     δ_bound=0.15,
+    fiber_name="SMF-28",
     save_prefix="results/images/amp_opt_L1m_P015W_d015"
 )
 GC.gc()
@@ -802,6 +844,7 @@ result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_amplitude_optimization
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
     δ_bound=0.10,
+    fiber_name="SMF-28",
     save_prefix="results/images/amp_opt_L1m_P015W_d010"
 )
 GC.gc()
@@ -822,6 +865,7 @@ result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
     K=10, δ_bound=0.15,
+    fiber_name="SMF-28",
     save_prefix="results/images/amp_opt_lowdim_L1m_K10_d015"
 )
 GC.gc()
@@ -832,6 +876,7 @@ result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_amplitude_optimization
     time_window=15.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
     K=10, δ_bound=0.15,
+    fiber_name="SMF-28",
     save_prefix="results/images/amp_opt_lowdim_L2m_K10_d015"
 )
 GC.gc()
@@ -845,6 +890,7 @@ for K_val in [5, 10, 15, 20]
         time_window=10.0, Nt=2^13, β_order=3,
         gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
         K=K_val, δ_bound=0.15, validate=false,
+        fiber_name="SMF-28",
         save_prefix="results/images/amp_opt_lowdim_L1m_K$(K_val)_d015"
     )
     GC.gc()
