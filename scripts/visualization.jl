@@ -759,91 +759,130 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
     λ_nm = C_NM_THZ ./ f_shifted
     λ0_nm = C_NM_THZ / f0
 
-    # Raman band in wavelength
-    Δf_shifted = fftshift(fftfreq(Nt, 1 / Δt))
-    raman_half_bw_thz = 2.5  # ±2.5 THz window around gain peak (~10 THz FWHM silica Raman)
-    raman_λ_idx = abs.(Δf_shifted .- raman_threshold) .< raman_half_bw_thz
+    # Raman onset wavelength
+    λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
 
-    fig, axs = subplots(3, 2, figsize=figsize)
-
-    J_values = Float64[]  # track J per column for ΔJ annotation
-
-    for (col, (φ, label)) in enumerate([(φ_before, "Before"), (φ_after, "After")])
-        uω0_shaped = @. uω0_base * cis(φ)
-
+    # ── Pass 1: simulate both columns and collect results ──
+    # Pre-compute all fields so shared quantities can be derived globally.
+    col_data = NamedTuple[]
+    for (phi_col, label) in [(φ_before, "Before"), (φ_after, "After")]
+        uω0_shaped = @. uω0_base * cis(phi_col)
         fiber_plot = deepcopy(fiber)
         fiber_plot["zsave"] = [0.0, fiber["L"]]
         sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_plot, sim)
         uωf = sol["uω_z"][end, :, :]
         utf = sol["ut_z"][end, :, :]
         ut_in = fft(uω0_shaped, 1)
+        push!(col_data, (
+            uω0_shaped = uω0_shaped,
+            uωf        = uωf,
+            utf        = utf,
+            ut_in      = ut_in,
+            label      = label,
+            spec_in    = abs2.(fftshift(uω0_shaped[:, 1])),
+            spec_out   = abs2.(fftshift(uωf[:, 1])),
+            P_in       = abs2.(ut_in[:, 1]),
+            P_out      = abs2.(utf[:, 1]),
+            phi_col    = phi_col,
+        ))
+    end
 
+    # ── Pass 2: compute shared normalization and axis limits from ALL results ──
+
+    # BUG-04: global P_ref — maximum across ALL spectra (both columns, input + output)
+    # Without this, each column normalizes to its own peak, hiding the optimization improvement.
+    P_ref_global = maximum(
+        max(maximum(r.spec_in), maximum(r.spec_out))
+        for r in col_data
+    )
+
+    # AXIS-01: shared temporal xlim — union of energy windows for all columns
+    # If Before and After have different pulse widths, the wider window is used so
+    # pulse compression appears as narrowing, not as axis rescaling.
+    all_t_lims = [
+        let t_in  = _energy_window(r.P_in,  ts_ps),
+            t_out = _energy_window(r.P_out, ts_ps)
+            (min(t_in[1], t_out[1]), max(t_in[2], t_out[2]))
+        end
+        for r in col_data
+    ]
+    t_lo_shared = minimum(t[1] for t in all_t_lims)
+    t_hi_shared = maximum(t[2] for t in all_t_lims)
+
+    # AXIS-01: shared temporal ylim — peak power range across all columns
+    P_max_shared = maximum(max(maximum(r.P_in), maximum(r.P_out)) for r in col_data)
+
+    # AXIS-02: shared spectral xlim — signal extent from the union of all spectra
+    all_specs = vcat([r.spec_in for r in col_data], [r.spec_out for r in col_data])
+    spec_union = maximum(hcat(all_specs...), dims=2)[:]
+    spec_xlim = _spectral_signal_xlim(spec_union, λ_nm)
+
+    # ── Pass 3: render using shared quantities ──
+    fig, axs = subplots(3, 2, figsize=figsize)
+
+    J_values = Float64[]  # track J per column for ΔJ annotation
+
+    for (col, r) in enumerate(col_data)
         # ── Row 1: Spectra (wavelength, dB) ──
-        spec_out = abs2.(fftshift(uωf[:, 1]))
-        spec_in = abs2.(fftshift(uω0_shaped[:, 1]))
-        P_ref = max(maximum(spec_in), maximum(spec_out))
-        spec_in_dB = 10 .* log10.(spec_in ./ P_ref .+ 1e-30)
-        spec_out_dB = 10 .* log10.(spec_out ./ P_ref .+ 1e-30)
+        # P_ref_global ensures both columns share the same dB reference — the dB
+        # offset between Before and After columns now reflects the true improvement.
+        spec_in_dB  = 10 .* log10.(r.spec_in  ./ P_ref_global .+ 1e-30)
+        spec_out_dB = 10 .* log10.(r.spec_out ./ P_ref_global .+ 1e-30)
 
         axs[1, col].plot(λ_nm, spec_out_dB, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
         axs[1, col].plot(λ_nm, spec_in_dB, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
 
-        # Set xlim before adding line markers for correct clipping
-        axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
+        # AXIS-02: auto-zoom to signal-bearing region (replaces fixed λ0 ± offset)
+        axs[1, col].set_xlim(spec_xlim...)
         axs[1, col].set_ylim(-60, 3)
 
-        # Raman onset line: axvline at Stokes onset wavelength
-        λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
+        # Raman onset line
         axs[1, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--",
             alpha=0.7, linewidth=1.0, label="Raman onset")
 
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
-        axs[1, col].set_title("$label optimization")
+        axs[1, col].set_title("$(r.label) optimization")
         axs[1, col].legend(fontsize=8)
         axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
-        J_val = sum(abs2.(uωf) .* band_mask) / sum(abs2.(uωf))
+        J_val = sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
         push!(J_values, J_val)
         axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
         # ── Row 2: Temporal pulse shape ──
-        P_in = abs2.(ut_in[:, 1])
-        P_out = abs2.(utf[:, 1])
-
-        axs[2, col].plot(ts_ps, P_out, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
-        axs[2, col].plot(ts_ps, P_in, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
+        axs[2, col].plot(ts_ps, r.P_out, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
+        axs[2, col].plot(ts_ps, r.P_in, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
         axs[2, col].set_xlabel("Time [ps]")
         axs[2, col].set_ylabel("Power [W]")
         axs[2, col].set_title("Temporal pulse shape")
         axs[2, col].legend(fontsize=8)
 
-        # Energy-window auto-ranging (robust for dispersed pulses at long L)
-        t_lims_in = _energy_window(P_in, ts_ps)
-        t_lims_out = _energy_window(P_out, ts_ps)
-        t_lims = (min(t_lims_in[1], t_lims_out[1]), max(t_lims_in[2], t_lims_out[2]))
-        axs[2, col].set_xlim(t_lims...)
+        # AXIS-01: apply shared xlim and ylim so pulse compression is visible as
+        # narrowing rather than as axis rescaling across the two columns.
+        axs[2, col].set_xlim(t_lo_shared, t_hi_shared)
+        axs[2, col].set_ylim(0, P_max_shared * 1.05)
 
         # Zoom inset when pulse is very dispersed (full_range / FWHM > 20)
-        half_max_out = maximum(P_out) / 2
-        above_out = findall(P_out .>= half_max_out)
+        half_max_out = maximum(r.P_out) / 2
+        above_out = findall(r.P_out .>= half_max_out)
         fwhm_out = length(above_out) > 1 ? ts_ps[above_out[end]] - ts_ps[above_out[1]] : 1.0
-        full_range = t_lims[2] - t_lims[1]
+        full_range = t_hi_shared - t_lo_shared
         if full_range / max(fwhm_out, 0.01) > 20
             inset = axs[2, col].inset_axes([0.55, 0.45, 0.40, 0.48])
-            inset.plot(ts_ps, P_out, color=COLOR_OUTPUT, linewidth=0.8)
-            inset.plot(ts_ps, P_in, color=COLOR_INPUT, ls="--", linewidth=0.8, alpha=0.7)
-            peak_idx_in = argmax(P_in)
+            inset.plot(ts_ps, r.P_out, color=COLOR_OUTPUT, linewidth=0.8)
+            inset.plot(ts_ps, r.P_in, color=COLOR_INPUT, ls="--", linewidth=0.8, alpha=0.7)
+            peak_idx_in = argmax(r.P_in)
             t_peak = ts_ps[peak_idx_in]
             inset.set_xlim(t_peak - 3fwhm_out, t_peak + 3fwhm_out)
             inset.tick_params(labelsize=7)
             inset.set_title("Zoom", fontsize=8)
         end
 
-        peak_in = maximum(P_in)
-        peak_out = maximum(P_out)
+        peak_in = maximum(r.P_in)
+        peak_out = maximum(r.P_out)
         axs[2, col].annotate(@sprintf("Peak in: %.0f W\nPeak out: %.0f W", peak_in, peak_out),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=9,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
@@ -851,14 +890,15 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         # ── Row 3: Group delay τ(ω) [fs] ──
         # Group delay is the most human-readable phase view: it shows
         # how much each wavelength is delayed/advanced in time.
-        τ_fs = compute_group_delay(fftshift(φ[:, 1]), sim)
-        spec_power = abs2.(fftshift(uω0_shaped[:, 1]))
+        τ_fs = compute_group_delay(fftshift(r.phi_col[:, 1]), sim)
+        spec_power = abs2.(fftshift(r.uω0_shaped[:, 1]))
         τ_display = _apply_dB_mask(τ_fs, spec_power)
 
         axs[3, col].plot(λ_nm, τ_display, color=COLOR_REF, linewidth=0.8)
         axs[3, col].set_xlabel("Wavelength [nm]")
         axs[3, col].set_ylabel("Group delay [fs]")
-        axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
+        # AXIS-02: auto-zoom spectral xlim (replaces fixed λ0 ± offset)
+        axs[3, col].set_xlim(spec_xlim...)
         axs[3, col].set_title("Group delay τ(ω)")
         axs[3, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.8)
         axs[3, col].ticklabel_format(useOffset=false, style="plain", axis="x")
