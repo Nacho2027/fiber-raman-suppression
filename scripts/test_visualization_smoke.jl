@@ -271,6 +271,38 @@ viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
 @assert occursin("Delta-J", viz_src) || occursin("ΔJ", viz_src) "Missing Delta-J label in expanded annotation"
 println("  ok Expanded J annotation pattern found in source")
 
+# Test 24: plot_merged_evolution exists and has correct structure
+println("\nTest 24: plot_merged_evolution structure...")
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+@assert occursin("function plot_merged_evolution(", viz_src) "plot_merged_evolution function not found"
+@assert occursin("plot_temporal_evolution(sol_opt", viz_src) "Missing plot_temporal_evolution call for optimized"
+@assert occursin("plot_temporal_evolution(sol_unshaped", viz_src) "Missing plot_temporal_evolution call for unshaped"
+@assert occursin("plot_spectral_evolution(sol_opt", viz_src) "Missing plot_spectral_evolution call for optimized"
+@assert occursin("plot_spectral_evolution(sol_unshaped", viz_src) "Missing plot_spectral_evolution call for unshaped"
+@assert occursin("Evolution comparison", viz_src) "Missing suptitle with fiber length"
+@assert occursin("cbar_ax = fig.add_axes", viz_src) "Missing shared colorbar axis"
+println("  ok plot_merged_evolution has 2x2 layout with shared colorbar and suptitle")
+
+# Test 25: plot_merged_evolution callable with mock data
+println("\nTest 25: plot_merged_evolution renders without error...")
+Nt_evo = 2^8; nz_evo = 11
+sim_evo = Dict("Nt" => Nt_evo, "M" => 1, "f0" => 193.4, "Dt" => 0.01,
+    "Δt" => 0.01,
+    "ts" => collect(range(-Nt_evo/2, Nt_evo/2 - 1)) .* 0.01)
+fiber_evo = Dict("L" => 1.0,
+    "zsave" => collect(LinRange(0, 1.0, nz_evo)))
+sol_mock = Dict(
+    "uω_z" => complex.(randn(nz_evo, Nt_evo, 1)),
+    "ut_z" => complex.(randn(nz_evo, Nt_evo, 1)),
+)
+fig_evo, axs_evo = plot_merged_evolution(sol_mock, sol_mock, sim_evo, fiber_evo)
+@assert size(axs_evo) == (2, 2) "Expected 2x2 axes array"
+# Check suptitle text contains "Evolution comparison"
+suptitle_text = fig_evo._suptitle !== nothing ? fig_evo._suptitle.get_text() : ""
+@assert occursin("Evolution comparison", suptitle_text) "Suptitle missing or wrong"
+close(fig_evo)
+println("  ok plot_merged_evolution renders 2x2 figure with suptitle")
+
 println("\n" * "="^60)
 println("All smoke tests passed!")
 println("="^60)

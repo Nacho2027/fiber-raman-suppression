@@ -607,6 +607,76 @@ function plot_combined_evolution(sol, sim, fiber;
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5b. Merged 2x2 evolution comparison (optimized vs unshaped)
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    plot_merged_evolution(sol_opt, sol_unshaped, sim, fiber;
+        dB_range=40.0, cmap="inferno", figsize=(14, 10),
+        length_unit=:auto, metadata=nothing, save_path=nothing)
+
+2x2 merged evolution figure: rows = temporal/spectral, columns = optimized/unshaped.
+Shared colorbar on the right. Column titles identify which is optimized vs unshaped.
+Fiber length displayed in suptitle (META-03). Metadata block if provided (META-01).
+
+Returns (fig, axs) where axs is a 2x2 array.
+"""
+function plot_merged_evolution(sol_opt, sol_unshaped, sim, fiber;
+    dB_range=40.0, cmap="inferno", figsize=(14, 10),
+    length_unit=:auto, metadata=nothing, save_path=nothing)
+
+    fig, axs = subplots(2, 2, figsize=figsize)
+
+    # Column 1: Optimized
+    _, _, im1 = plot_temporal_evolution(sol_opt, sim, fiber;
+        dB_range=dB_range, cmap=cmap, length_unit=length_unit,
+        ax=axs[1,1], fig=fig)
+    axs[1,1].set_title("Optimized -- temporal")
+
+    _, _, _ = plot_spectral_evolution(sol_opt, sim, fiber;
+        dB_range=dB_range, cmap=cmap, length_unit=length_unit,
+        ax=axs[2,1], fig=fig)
+    axs[2,1].set_title("Optimized -- spectral")
+    axs[2,1].legend(fontsize=7, loc="upper right")
+
+    # Column 2: Unshaped
+    _, _, _ = plot_temporal_evolution(sol_unshaped, sim, fiber;
+        dB_range=dB_range, cmap=cmap, length_unit=length_unit,
+        ax=axs[1,2], fig=fig)
+    axs[1,2].set_title("Unshaped -- temporal")
+
+    _, _, _ = plot_spectral_evolution(sol_unshaped, sim, fiber;
+        dB_range=dB_range, cmap=cmap, length_unit=length_unit,
+        ax=axs[2,2], fig=fig)
+    axs[2,2].set_title("Unshaped -- spectral")
+    axs[2,2].legend(fontsize=7, loc="upper right")
+
+    # Shared colorbar on the right (same pattern as plot_combined_evolution)
+    # Do NOT call tight_layout after add_axes — it displaces manually positioned axes (Pitfall 1)
+    fig.subplots_adjust(right=0.88, top=0.93, bottom=0.06)
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.025, 0.7])
+    cb = fig.colorbar(im1, cax=cbar_ax)
+    cb.set_label("Power [dB]")
+
+    # META-03: fiber length in suptitle
+    L_val = fiber["L"]
+    L_str = L_val >= 1.0 ? @sprintf("L = %.1f m", L_val) : @sprintf("L = %.0f cm", L_val * 100)
+    fig.suptitle("Evolution comparison -- $L_str", fontsize=13, y=0.98)
+
+    # META-01: metadata annotation block (bottom=0.06 in subplots_adjust reserves space for it)
+    if !isnothing(metadata)
+        _add_metadata_block!(fig, metadata)
+    end
+
+    if !isnothing(save_path)
+        savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved merged evolution plot to $save_path"
+    end
+
+    return fig, axs
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 6. Spectrogram (STFT)
 # ─────────────────────────────────────────────────────────────────────────────
 
