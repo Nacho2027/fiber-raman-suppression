@@ -12,7 +12,7 @@ Three phases refactor `scripts/visualization.jl` bottom-up by dependency: first 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Stop Actively Misleading** - Fix confirmed rendering bugs: jet colormap, Raman axvspan bounds, color literal inconsistencies, rcParams mutation
+- [x] **Phase 1: Stop Actively Misleading** - Fix confirmed rendering bugs: jet colormap, Raman axvspan bounds, color literal inconsistencies, rcParams mutation (completed 2026-03-25)
 - [ ] **Phase 2: Axis, Normalization, and Phase Correctness** - Shared axis limits, global dB normalization, correct phase representation with masking-before-unwrapping
 - [ ] **Phase 3: Structure, Annotation, and Final Assembly** - Panel builder extraction, metadata annotation on every figure, merged 4-panel evolution figure
 
@@ -44,7 +44,11 @@ Plans:
   3. Spectral plots auto-zoom to the signal-bearing region — noise floor is not the dominant feature of the wavelength axis
   4. Phase diagnostic (opt_phase.png) shows group delay as the primary phase display, with wrapped phase, unwrapped phase, GDD, and instantaneous frequency all masked to the signal region before any derivative computation
   5. GDD panel y-axis is clipped to the 2nd-98th percentile of valid samples — no +/-10^6 fs^2 spikes that flatten the physically meaningful range
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [x] 02-01-PLAN.md — Add _spectral_signal_xlim helper, synthetic mask-before-unwrap test, rewrite plot_phase_diagnostic to 3x2 layout with mask-before-unwrap and all 5 phase views
+- [ ] 02-02-PLAN.md — Refactor plot_optimization_result_v2 and plot_amplitude_result_v2 to two-pass with global P_ref and shared axes, apply auto-zoom to standalone functions, mark PHASE-01 complete
 
 ### Phase 3: Structure, Annotation, and Final Assembly
 **Goal**: Every saved figure is self-documenting and the two evolution PNGs are replaced by one merged comparison figure
@@ -64,6 +68,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Stop Actively Misleading | 0/2 | Not started | - |
-| 2. Axis, Normalization, and Phase Correctness | 0/TBD | Not started | - |
+| 1. Stop Actively Misleading | 0/2 | Complete    | 2026-03-25 |
+| 2. Axis, Normalization, and Phase Correctness | 0/2 | In progress | - |
 | 3. Structure, Annotation, and Final Assembly | 0/TBD | Not started | - |
