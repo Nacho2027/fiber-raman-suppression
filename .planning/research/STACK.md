@@ -1,297 +1,305 @@
-# Technology Stack: Visualization Layer
+# Stack Research
 
-**Project:** SMF Gain-Noise Visualization Overhaul
-**Researched:** 2026-03-24
-**Scope:** Matplotlib/PyPlot best practices for nonlinear fiber optics plots
-
----
-
-## 1. Colormap Recommendation
-
-### Verdict: Use `inferno` for evolution heatmaps. Replace `jet` immediately.
-
-**Confidence:** HIGH (matplotlib official docs + colorscience literature + field practice analysis)
-
-### Evidence
-
-**The Dudley connection (MEDIUM confidence):** The canonical supercontinuum simulation code — `test_Dudley.m` from the SCG book companion repository (`github.com/jtravs/SCGBookCode`, written by J.C. Travers, M.H. Frosz, and J.M. Dudley) — calls `pcolor()` with no explicit colormap. In MATLAB before R2014b, the default was `jet`. This is why jet became the de-facto standard in nonlinear fiber optics: it was never a deliberate choice, it was the MATLAB default circa 2006-2013. Papers that followed Dudley et al.'s visual conventions inherited jet by accident.
-
-**Why jet is wrong for this data:**
-- Jet has non-monotonic lightness (L* value). It has a bright band around cyan-green that creates false perceptual features — structures appear in the heatmap that do not correspond to real intensity changes.
-- At 40 dB dynamic range (the typical `dB_range` used in this codebase), jet creates artificial "rings" around soliton tracks.
-- Jet converts to grayscale non-monotonically. Features near the cyan-green region disappear or invert when printed black-and-white.
-- Source: matplotlib official documentation explicitly lists jet as a cautionary example of a bad colormap: "the L* values vary widely throughout the colormap, making it a poor choice for representing data."
-
-**Why `hot` is also wrong:**
-- `hot` has kinks in its L* function, particularly a long plateau in the yellow region where large intensity ranges all look the same.
-- The yellow/white region "washes out" fine structure at high intensity — exactly where solitons and Raman-shifted components live.
-- Source: matplotlib colormap docs note `hot` has "pronounced banding" with "long stretches of indistinguishable colors."
-
-**Why `inferno` is correct for this application:**
-- Inferno is perceptually uniform: equal dB steps produce equal perceptual steps across the full range.
-- Inferno's L* is strictly monotonically increasing from black (noise floor) to near-white (peak intensity). This means the noise floor is dark and the bright soliton cores are maximally visible.
-- Inferno starts at black, which is physically correct: the noise floor should be absence-of-signal (dark), not a bright color.
-- Inferno converts to grayscale with maintained information content.
-- Inferno is colorblind-safe (the blue-purple-orange-yellow sequence is accessible to deuteranomaly).
-- Source: Kenneth Moreland's color map advice, matplotlib official perceptually uniform colormap documentation, BIDS colormap design paper.
-
-**Why not `viridis`:**
-- Viridis is also perceptually uniform and acceptable, but its dark end is blue-green, not black. For spectral/temporal evolution plots where the physics interpretation is "dark = noise floor = nothing happening," inferno's black-to-bright trajectory is more physically intuitive.
-- Viridis looks qualitatively similar to a "cool" heatmap, which can be visually confusing when the data represents thermal or intensity phenomena.
-
-**Why not `hot_r` (reversed hot):**
-- Reversing hot so white=noise floor and black=peak creates a white background with dark solitons. This wastes ink on print, and the kinks in hot's L* function are still present regardless of direction.
-
-**Why not `magma`:**
-- Magma is a close second to inferno (same design family, both from the matplotlib/viridis project). Inferno has a slightly warmer terminal color (near-white yellow), which makes the peak intensity more visually distinct than magma's purple-white.
-- Either is acceptable if the team prefers magma's cooler look. The choice is aesthetic, not perceptual.
-
-**Practical note on `_r` suffix:**
-All matplotlib colormaps have a reversed variant with `_r` appended. For inferno, `inferno` runs black-to-near-white (dark = low dB = noise, bright = 0 dB = peak). This is the correct orientation when `vmin = -dB_range` and `vmax = 0`. Do NOT use `inferno_r` — that would map noise floor to near-white and peak to black.
-
-### Recommended colormap table
-
-| Plot type | Recommended cmap | vmin/vmax | Rationale |
-|-----------|-----------------|-----------|-----------|
-| Spectral evolution heatmap | `inferno` | `(-dB_range, 0)` | Dark noise floor, bright signal |
-| Temporal evolution heatmap | `inferno` | `(-dB_range, 0)` | Same physics, same convention |
-| Spectrogram (STFT) | `inferno` | `(-dB_range, 0)` | Consistency across all intensity maps |
-| Phase diagnostic overlays | `RdBu_r` or `coolwarm` | symmetric around 0 | Diverging data (phase is centered on 0) — not yet implemented |
+**Domain:** Verification, cross-run comparison, parameter sweeps, and pattern detection for Julia nonlinear fiber optics simulation
+**Researched:** 2026-03-25
+**Confidence:** HIGH
 
 ---
 
-## 2. Matplotlib rcParams Settings
+## Scope
 
-### Verdict: Current rcParams have two bugs and several missing settings for publication quality.
-
-**Confidence:** HIGH (official matplotlib docs + PyPlot.jl GitHub issues)
-
-### Bug 1: rcParams mutation does not persist in Julia/PyPlot
-
-The current code uses:
-```julia
-PyPlot.matplotlib.rcParams["font.size"] = 11
-```
-
-Per PyPlot.jl documentation and GitHub issue #417 ("Setting rcParams fails silently"), `PyPlot.matplotlib.rcParams` returns a **copy** of the dict via PyCall, so mutations to it may not persist in the actual Python rcParams. The correct pattern is:
-
-```julia
-const _mpl_rc = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-_mpl_rc["font.size"] = 11
-```
-
-Or equivalently use matplotlib's `rc()` function:
-```julia
-PyPlot.matplotlib.rc("font", size=11)
-PyPlot.matplotlib.rc("axes", labelsize=12)
-```
-
-**Whether the current code actually fails** depends on PyCall version and Julia runtime behavior. However: the current code assigns to `rcParams["..."]` at module load time (top of file) rather than through `PyDict`. If the plots look correct it may work by coincidence, but the PyDict pattern is the only documented-correct approach per PyPlot.jl maintainers.
-
-### Bug 2: Missing savefig bbox setting
-
-The current code sets `savefig.dpi = 300` but not `savefig.bbox`. Without `savefig.bbox = "tight"`, saved figures will use the default bounding box which clips axis labels on the left/bottom edges. This is a known matplotlib issue on figures with long y-axis labels (e.g., "Propagation distance [m]").
-
-### Recommended rcParams block (complete)
-
-```julia
-const _rc = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-
-# Typography — sized for single-column journal figure (8.4 cm wide)
-# At 3.31 inches wide, 10pt text renders cleanly after reduction
-_rc["font.size"]          = 10
-_rc["axes.labelsize"]     = 11
-_rc["axes.titlesize"]     = 11
-_rc["xtick.labelsize"]    = 9
-_rc["ytick.labelsize"]    = 9
-_rc["legend.fontsize"]    = 9
-
-# Font family — sans-serif is standard for Optica journals
-# Avoid text.usetex = true unless LaTeX is available; it causes
-# silent failures in CI/batch environments
-_rc["font.family"]        = "sans-serif"
-_rc["font.sans-serif"]    = ["DejaVu Sans", "Arial", "Helvetica"]
-
-# Lines and axes
-_rc["axes.linewidth"]     = 0.8      # thin frame, not heavy
-_rc["lines.linewidth"]    = 1.5      # visible at print size
-_rc["xtick.major.width"]  = 0.8
-_rc["ytick.major.width"]  = 0.8
-_rc["xtick.minor.visible"] = true
-_rc["ytick.minor.visible"] = true
-
-# Grid — subtle, not dominant
-_rc["axes.grid"]          = true
-_rc["grid.alpha"]         = 0.25
-_rc["grid.linewidth"]     = 0.5
-
-# Resolution
-_rc["figure.dpi"]         = 150      # screen preview
-_rc["savefig.dpi"]        = 300      # archive output
-_rc["savefig.bbox"]       = "tight"  # prevent label clipping
-_rc["savefig.pad_inches"] = 0.05     # minimal whitespace around figure
-
-# Color cycle — Okabe-Ito (already matches project constants)
-_rc["axes.prop_cycle"] = PyPlot.matplotlib.cycler(
-    "color", ["#0072B2", "#D55E00", "#009E73", "#CC79A7",
-               "#F0E442", "#56B4E9", "#E69F00", "#000000"])
-```
-
-### Notes on font settings
-
-- Do NOT set `text.usetex = true` unless the execution environment has a working LaTeX installation. PyPlot in batch/CI environments will fail silently or raise cryptic Popen errors.
-- `DejaVu Sans` is bundled with matplotlib and always available — no system font needed.
-- The Okabe-Ito cycle replaces the default blue/orange/green cycle with the colorblind-safe palette already defined as constants in the project (consistent with `COLOR_INPUT`, `COLOR_OUTPUT`, etc.).
+This document covers only NEW stack additions for the v2.0 milestone. The existing
+stack (Julia 1.12, DifferentialEquations.jl, FFTW.jl, Optim.jl, PyPlot.jl, Optim.jl v1.13.3) is validated and unchanged.
 
 ---
 
-## 3. Figure Sizes
+## Recommended Stack
 
-### Verdict: Size figures to journal column widths from the start.
+### Core Technologies (New)
 
-**Confidence:** MEDIUM (Optica style guide referenced; exact pixel specs not directly accessible but derived from confirmed 8.4 cm single-column standard)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| JLD2.jl | 0.6.3 | Structured run data persistence (phase profiles, costs, fiber params, convergence history) | HDF5-compatible binary format; saves any Julia object including complex arrays with full precision; round-trips Dict{String,Any} exactly; already used by NPZ.jl (same HDF5 backend family); no Python dependency; file-level compression. Preferred over BSON.jl (no compression) and NPZ.jl (NPZ is for numpy arrays only — cannot store nested Dicts or convergence vectors cleanly). |
+| JSON3.jl | 1.14.3 | Run manifest files — human-readable metadata index linking run parameters to JLD2 data files | Required for cross-run discovery: grep-able, diff-able, readable in any text editor. Stores the scalar run summary (fiber type, L, P, J_before, J_after, wall_time) separately from the heavy binary data. Lighter and faster than JSON.jl; JSON3 uses StructTypes for zero-allocation parsing. |
+| Statistics (stdlib) | 1.11.1 | Pattern detection — mean, std, median, percentile across sweep results | Already in the global environment. Used in visualization.jl already. No new package needed. |
+| TOML (stdlib) | bundled with Julia 1.9+ | Optional: sweep configuration files (parameter grids in TOML format) | Julia's standard TOML parser. Cleaner than Julia-syntax config files for parameter grids that non-programmers need to edit. Only use if the parameter sweep is driven by a config file; omit if sweeps are coded directly. |
 
-### Optica Publishing Group specifications (Optics Express, JOSA B, Optics Letters)
+### Supporting Libraries (No New Additions Needed)
 
-| Format | Width | In inches | Common use |
-|--------|-------|-----------|------------|
-| Single column | 8.4 cm | 3.31 in | Most figures, single panel |
-| 1.5 column | ~12.5 cm | ~4.92 in | Not common |
-| Double column | 17.2 cm | 6.77 in | Multi-panel comparisons |
+| Library | Version | Purpose | Status |
+|---------|---------|---------|--------|
+| LinearAlgebra (stdlib) | 1.12.0 | norm(), cross-run gradient norms, cosine similarity between phase profiles | Already in project |
+| Printf (stdlib) | bundled | Formatted summary tables in run manifests | Already in project |
+| FFTW.jl | 1.10.0 | Cross-correlation between optimized phase profiles (pattern detection via FFT-based correlation) | Already in project |
+| PyPlot.jl | 2.11.6 | Overlay plots: multiple phase profiles on one axis, cost-vs-iteration comparisons across runs | Already in project — no new plotting library needed |
+| NPZ.jl | 0.4.3 | Export selected arrays to numpy for cross-language verification | Already in project — use for exporting field arrays when comparing against reference Python/MATLAB NLSE solvers |
 
-Source: Optica Publishing Group traditional journals style guide confirms "figures will normally be reduced to one column width (8.4 cm)." Double-column figures use approximately 17 cm (confirmed from OSA/Optica LaTeX templates).
+### Development Tools
 
-### Minimum font size requirement
-
-After figure reduction to 8.4 cm, text must be no smaller than **6 pt**. At 300 DPI and 3.31 in width:
-- `font.size = 10` at 3.31 in → approximately 9 pt at final size → safe.
-- `font.size = 8` at 3.31 in → approximately 7 pt at final size → safe (minimum, not comfortable).
-- Font sizes smaller than 8 in the figure → will be below 6 pt limit after reduction → rejected.
-
-### Recommended figsize by plot type
-
-| Plot type | figsize (W, H) in inches | Description |
-|-----------|--------------------------|-------------|
-| Single-panel spectral | `(3.31, 2.6)` | Single column, 4:5 aspect |
-| Two-panel evolution (current) | `(6.77, 4.5)` | Double column, two heatmaps side by side |
-| Four-panel comparison (opt.png) | `(6.77, 5.0)` | Double column, 3×2 grid |
-| Phase diagnostic (2×2 grid) | `(6.77, 5.5)` | Double column, 2×2 panels |
-
-### Current code assessment
-
-The current code uses `figsize=(8, 10)` for evolution plots and `figsize=(8, 6)` for individual panels. At 300 DPI that produces 2400×3000 px files — oversized for submission. Reducing to 6.77×4.5 produces 2031×1350 px at 300 DPI, which is correct for double-column figures.
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| Julia Test stdlib | Verification tests: soliton invariance, energy conservation, Taylor remainder | Already used in test_optimization.jl — extend with physics-verification tests |
+| Julia Dates stdlib | Run tagging — `RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")` | Already used in raman_optimization.jl |
 
 ---
 
-## 4. DPI Settings
-
-### Verdict: 300 DPI for PNG export is correct. 600 DPI is needed only for line-art-only figures.
-
-**Confidence:** HIGH (Optica style guide confirmed: "at least 300 dpi; 600 dpi if there is text or line art")
-
-- **Mixed figures (heatmap + line plots):** 300 DPI sufficient. The continuous-tone heatmap is the limiting element.
-- **Pure line-art figures (spectra, phase curves):** 600 DPI preferred to maintain sharp edges.
-- **The current code has `savefig.dpi = 300` which is correct** for the evolution heatmaps (dominant figure type).
-- For pure spectral comparison plots (opt.png), consider PDF export rather than PNG. PDF is vector and infinitely scalable with no DPI concern.
-
----
-
-## 5. Colorbar and Dynamic Range
-
-### Verdict: 40 dB dynamic range with symmetric normalization is the field standard.
-
-**Confidence:** HIGH (directly from Dudley/Travers/Frosz SCGBookCode: `caxis([mlIW-40.0, mlIW])`)
-
-The official SCG book code normalizes to the **local maximum per figure** with a 40 dB window. The current code does the same (`dB_range=40.0`, `vmin=-dB_range, vmax=0`). This is correct.
-
-Do NOT use a fixed absolute dB floor (e.g., `vmin=-100 dBm`) across runs — different power levels shift the noise floor by 10–20 dB, making cross-run comparisons meaningless.
-
-**Colorbar settings to add:**
-```python
-cbar = fig.colorbar(im, ax=ax, label="Intensity [dB]")
-cbar.ax.tick_params(labelsize=8)   # prevent crowding
-cbar.set_ticks([-40, -30, -20, -10, 0])  # explicit major ticks
-```
-
----
-
-## 6. Grid Visibility on Heatmaps
-
-### Verdict: Disable grid on pcolormesh axes. Grid lines are invisible on heatmaps and create visual noise.
-
-**Confidence:** HIGH (direct matplotlib behavior: grid lines are rendered on top of pcolormesh but appear as faint stripes that look like data artifacts)
-
-The current code sets `axes.grid = True` globally, which applies to heatmap axes. This should be overridden per-axis after creating each pcolormesh:
+## Installation
 
 ```julia
-ax.grid(false)   # disable on heatmap axes only
+# Add to Project.toml — only JLD2 and JSON3 are new
+# Run from the project root:
+julia --project -e 'using Pkg; Pkg.add(["JLD2", "JSON3"])'
 ```
 
-Line-plot axes (spectra, phase) should retain the grid.
+All other capabilities use packages already in `Project.toml` or Julia stdlib.
 
 ---
 
-## 7. Julia-Specific PyPlot Tips
+## Architecture of New Capabilities
 
-**Confidence:** MEDIUM (PyPlot.jl GitHub docs + issues; runtime behavior may vary by PyCall version)
+### Run Data Persistence (JLD2)
 
-### Tip 1: Use PyDict for rcParams (critical)
+Each optimization run saves one JLD2 file alongside the existing PNGs:
 
-As noted in Section 2. The `PyPlot.matplotlib.rcParams["key"] = value` pattern may silently fail. Use `PyPlot.PyDict(PyPlot.matplotlib."rcParams")` once at module load and mutate that dict.
-
-### Tip 2: pcolormesh `shading="nearest"` is correct
-
-The current code already uses `shading="nearest"` — this is the correct setting for simulation data on a regular grid. `shading="gouraud"` interpolates between cells (inappropriate for discrete physics data), and `shading="auto"` behaves differently depending on data dimensions. Keep `"nearest"`.
-
-### Tip 3: `tight_layout()` vs `constrained_layout`
-
-The current code does not appear to call `tight_layout()` consistently. For multi-panel figures:
-```julia
-fig.set_constrained_layout(true)  # preferred: computed at render time
-# OR: call tight_layout() just before savefig
 ```
-`constrained_layout` is preferred over `tight_layout` in modern matplotlib (3.x) because it handles colorbars correctly.
-
-### Tip 4: savefig with explicit dpi parameter
-
-Even with `savefig.dpi` set in rcParams, pass it explicitly to `savefig()` to be safe:
-```julia
-savefig(path, dpi=300, bbox_inches="tight")
+results/raman/smf28/L1m_P005W/
+  opt.png                  # existing
+  opt_evolution.png        # existing
+  opt_phase.png            # existing
+  opt_run.jld2             # NEW — structured binary data
 ```
-The rcParams value is a fallback; the keyword argument takes precedence and documents intent.
 
-### Tip 5: Avoid plt.show() in batch mode
+The JLD2 file stores:
 
-When running from scripts (not interactive), `plt.show()` blocks execution. Use:
 ```julia
-PyPlot.close("all")  # after saving, release memory
+# What to save per run
+jldsave("opt_run.jld2";
+    # Input parameters
+    fiber_name = "SMF-28",
+    L_m        = 1.0,
+    P_cont_W   = 0.05,
+    lambda0_nm = 1550.0,
+    fwhm_fs    = 185.0,
+    Nt         = 8192,
+    gamma      = 1.1e-3,
+    betas      = [-2.17e-26, 1.2e-40],
+    fR         = 0.18,
+    # Results
+    phi_opt    = φ_after,      # Complex array (Nt, M) — the core result
+    J_before   = J_before,
+    J_after    = J_after,
+    delta_J_dB = ΔJ_dB,
+    grad_norm  = grad_norm,
+    iterations = result.iterations,
+    converged  = Optim.converged(result),
+    wall_time_s = elapsed,
+    # Diagnostics
+    E_conservation   = E_conservation,
+    bc_input_frac    = bc_input_frac,
+    bc_output_frac   = bc_output_frac,
+    run_tag          = RUN_TAG,
+)
 ```
+
+Loading a run for cross-comparison:
+
+```julia
+using JLD2
+data = load("results/raman/smf28/L1m_P005W/opt_run.jld2")
+phi_opt = data["phi_opt"]   # direct key access
+J_after = data["J_after"]
+```
+
+### Run Manifest (JSON3)
+
+A top-level `results/raman/manifest.json` is appended after each run, enabling fast discovery without loading heavy JLD2 files:
+
+```json
+[
+  {
+    "run_id": "smf28_L1m_P005W_20260325_143201",
+    "fiber": "SMF-28",
+    "L_m": 1.0,
+    "P_cont_W": 0.05,
+    "lambda0_nm": 1550.0,
+    "J_before_dB": -24.8,
+    "J_after_dB": -30.6,
+    "delta_J_dB": 5.8,
+    "converged": true,
+    "iterations": 50,
+    "wall_time_s": 47.0,
+    "bc_ok": true,
+    "jld2_path": "raman/smf28/L1m_P005W/opt_run.jld2"
+  }
+]
+```
+
+JSON3 write pattern:
+
+```julia
+using JSON3
+entry = (; run_id, fiber_name, L_m, P_cont_W, J_before_dB, J_after_dB, ...)
+open("results/raman/manifest.json", "a") do io
+    JSON3.write(io, entry)
+    write(io, "\n")
+end
+```
+
+### Cross-Run Comparison (PyPlot only)
+
+No new library needed. Cross-run overlay plots use PyPlot directly:
+
+```julia
+# Load multiple runs and overlay phase profiles
+runs = [load("results/raman/smf28/L1m_P005W/opt_run.jld2"),
+        load("results/raman/smf28/L2m_P030W/opt_run.jld2"),
+        load("results/raman/hnlf/L1m_P005W/opt_run.jld2")]
+
+fig, ax = subplots(1, 1, figsize=(6.77, 3.5))
+colors = ["#0072B2", "#D55E00", "#009E73"]
+for (i, data) in enumerate(runs)
+    label = "$(data["fiber_name"]) L=$(data["L_m"])m"
+    ax.plot(freq_thz, vec(data["phi_opt"]), color=colors[i], label=label, alpha=0.8)
+end
+ax.legend(); ax.set_xlabel("Frequency offset [THz]"); ax.set_ylabel("Phase [rad]")
+```
+
+### Parameter Sweep Infrastructure (plain Julia, no new packages)
+
+Sweeps are coded as loops over parameter vectors using the existing `run_optimization()` function. Results accumulate in a named tuple array:
+
+```julia
+L_sweep = [0.5, 1.0, 2.0, 5.0, 10.0]  # meters
+sweep_results = []
+
+for L in L_sweep
+    result, uω0, fiber, sim, band_mask, Δf = run_optimization(
+        L_fiber=L, P_cont=0.05, max_iter=50,
+        save_prefix=joinpath(run_dir("smf28", "sweep_L$(L)m"), "opt")
+    )
+    push!(sweep_results, (L=L, J_after=Optim.minimum(result),
+                          converged=Optim.converged(result)))
+end
+
+# Summary plot: J_after vs L
+fig, ax = subplots(figsize=(3.31, 2.6))
+ax.plot([r.L for r in sweep_results],
+        MultiModeNoise.lin_to_dB.([r.J_after for r in sweep_results]),
+        "o-", color="#0072B2")
+ax.set_xlabel("Fiber length [m]"); ax.set_ylabel("J [dB]")
+```
+
+### Pattern Detection (Statistics stdlib + FFTW.jl)
+
+Pattern detection across optimized phase profiles uses:
+
+1. **Phase correlation**: `crosscor(phi1, phi2)` via Statistics.jl — detects if two runs produce shifted versions of the same phase mask
+2. **Cosine similarity**: `dot(phi1, phi2) / (norm(phi1) * norm(phi2))` via LinearAlgebra.jl — measures structural similarity independent of scale
+3. **FFT-based cross-correlation**: `real(ifft(fft(phi1) .* conj(fft(phi2))))` via FFTW.jl — detects periodic patterns and relative delays between phase profiles
+
+These are 3–5 line computations, no pattern-detection library needed.
 
 ---
 
-## 8. What NOT to Use
+## Alternatives Considered
 
-| What | Why not |
-|------|---------|
-| `cmap="jet"` | Non-monotonic L*, creates false features, inherited from MATLAB 2006 default by accident |
-| `cmap="hot"` | Kinks in L*, washes out high-intensity detail in yellow plateau |
-| `cmap="rainbow"` or `cmap="Spectral"` | Rainbow colormaps; same problems as jet, also physically misleading for intensity data |
-| `cmap="viridis"` for intensity maps | Acceptable but blue-to-yellow progression is less physically intuitive than black-to-white for intensity |
-| `text.usetex = true` without checking LaTeX availability | Silently fails in batch environments; use DejaVu Sans instead |
-| `figsize=(8, 6)` default | Not aligned to journal column widths; forces rescaling at submission |
-| `axes.grid = True` on heatmap axes | Grid lines appear as data artifacts on pcolormesh |
-| Absolute dB normalization across runs | Meaningless for cross-run comparison at different power levels |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| JLD2.jl for run data | BSON.jl | If cross-language compatibility (Python/MATLAB HDF5 readers) is not needed; BSON is simpler but no compression and no HDF5 compat |
+| JLD2.jl for run data | NPZ.jl only | NPZ.jl is fine for simple arrays but cannot store nested metadata Dicts or strings without separate files. Use NPZ for field array export to Python only. |
+| JLD2.jl for run data | HDF5.jl directly | HDF5.jl is the low-level library JLD2 wraps. Only use directly if you need custom HDF5 group structure or partial I/O. JLD2 is simpler. |
+| JSON3.jl for manifests | CSV.jl (already in project) | Use CSV.jl if the manifest is a flat table with no nested structures and you want to open it in Excel. JSON3 is better for flexible metadata with optional fields. |
+| JSON3.jl for manifests | TOML.jl | TOML is better for configuration files that users edit manually. JSON3 is better for machine-written run manifests. |
+| Plain Julia sweep loops | DrWatson.jl | DrWatson is a full project management framework for scientific simulation projects. Appropriate if the project scales to hundreds of runs with complex naming schemes. For 10–50 runs, it's unnecessary overhead and a new dependency. |
+| Statistics stdlib for pattern detection | Clustering.jl / MultivariateStats.jl | Use Clustering.jl if you need k-means or hierarchical clustering across >50 runs. Statistics stdlib handles mean/std/correlation for the current 5-run scale. |
+
+---
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| Serialization.jl (Julia stdlib serialize/deserialize) | Julia-version locked — .jls files written by Julia 1.11 may be unreadable by Julia 1.12 or 1.13. Cannot be read from Python/MATLAB. | JLD2.jl (HDF5-compatible, version-stable) |
+| Arrow.jl / Parquet.jl | Column-oriented tabular formats. Good for millions of rows; unnecessary for 5–50 optimization runs with heterogeneous data types (arrays + scalars + strings). | JSON3.jl manifest + JLD2.jl data |
+| DrWatson.jl | Full experiment management framework. Adds complexity (project-specific @produce_or_load macros, naming conventions) before the benefit threshold is reached for a 5-config codebase. | Plain Julia sweep loops + JLD2 + JSON3 |
+| DifferentialEquations.jl SciMLBase ensemble API (EnsembleProblem) | Designed for Monte Carlo with identical ODE structure. Our parameter sweeps change fiber parameters between runs (different Dω operators), so EnsembleProblem doesn't apply. | Plain Julia for-loop over run_optimization() |
+| Makie.jl / GLMakie / CairoMakie | New visualization dependency. The constraint "no new visualization dependencies" is explicit in the project constraints. All new plots use PyPlot.jl. | PyPlot.jl (already in project) |
+| DataFrames.jl for sweep results | DataFrames.jl is already in the project but is heavy for small result tables. Using it for 5–20 sweep results adds unnecessary complexity. | Named tuple arrays + manual Printf.@sprintf tables |
+
+---
+
+## Stack Patterns by Variant
+
+**If sweep has <= 20 parameter combinations:**
+- Use a plain Julia for-loop with `run_optimization()`
+- Collect results in a `Vector{NamedTuple}`
+- Write summary as `@sprintf` table to log and to JSON3 manifest
+- No framework needed
+
+**If sweep has > 50 combinations (future):**
+- Consider DrWatson.jl `@produce_or_load` for caching
+- Consider EnsembleProblem if the ODE structure is fixed across all runs
+- This threshold is not reached in v2.0
+
+**If cross-language verification is needed (comparing to MATLAB/Python GNLSE solvers):**
+- Export input/output fields as NPZ: `NPZ.npzwrite("field_smf28_L1m.npz", Dict("uω0" => uω0, "uωf" => uωf, "ts" => sim["ts"]))`
+- NPZ is already in the project and is readable by NumPy directly
+- Do NOT use JLD2 for this — MATLAB/Python cannot read JLD2 without special plugins
+
+**If analytical verification requires comparison against published GNLSE solvers:**
+- Export Dω, hRω, γ as NPZ
+- Python reference: `gnlse` package (pip install gnlse) or the SCGBookCode Python port
+- Comparison is done outside Julia; the Julia side only needs NPZ export
+
+---
+
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| JLD2 v0.6.3 | Julia 1.9+ | Confirmed in General registry. HDF5 backend; files are readable by h5py in Python |
+| JSON3 v1.14.3 | Julia 1.6+ | Uses StructTypes v1.10+; no conflicts with current deps |
+| JLD2 v0.6.3 | NPZ v0.4.3 | No conflict — different file formats |
+| Statistics v1.11.1 | Julia 1.9+ | stdlib; always compatible |
+
+---
+
+## Integration Points
+
+### Where in the existing codebase to add JLD2 saves
+
+1. **`run_optimization()` in `scripts/raman_optimization.jl`** (line ~508): Add `jldsave()` call after the run summary `@info` block, just before the plotting section. The JLD2 save is ~10ms and adds no perceptible overhead.
+
+2. **`run_optimization()` in `scripts/amplitude_optimization.jl`**: Same pattern — save after the run summary.
+
+3. **New `scripts/sweep_analysis.jl`**: A new script (not yet existing) that loads the manifest, loads JLD2 files for selected runs, and produces overlay plots and pattern detection tables.
+
+### Where in the existing codebase to add manifest writes
+
+In `run_optimization()`, after the JLD2 save:
+
+```julia
+# Append to manifest — create if missing, append if exists
+manifest_path = joinpath("results", "raman", "manifest.json")
+entry = (run_id = save_prefix * "_" * RUN_TAG,
+         fiber  = fiber_name, L_m = fiber["L"],
+         J_after_dB = MultiModeNoise.lin_to_dB(J_after),
+         jld2   = relative_path_from_manifest_to_jld2)
+open(manifest_path, "a") do io; JSON3.write(io, entry); write(io, "\n"); end
+```
 
 ---
 
 ## Sources
 
-- [Matplotlib Colormap Documentation](https://matplotlib.org/stable/users/explain/colors/colormaps.html) — HIGH confidence; official source for perceptual uniformity analysis, jet/hot criticism
-- [BIDS Colormap Design (viridis, inferno, etc.)](https://bids.github.io/colormap/) — HIGH confidence; original design rationale for the perceptually uniform colormap family
-- [Kenneth Moreland Color Advice](https://www.kennethmoreland.com/color-advice/) — HIGH confidence; blackbody/inferno recommendation for sequential intensity data
-- [PyPlot.jl GitHub repository](https://github.com/JuliaPy/PyPlot.jl) — HIGH confidence; official source for PyDict rcParams mutation pattern
-- [PyPlot.jl Issue #417: Setting rcParams fails silently](https://github.com/JuliaPy/PyPlot.jl/issues/417) — HIGH confidence; confirmed bug in direct rcParams assignment
-- [SCGBookCode: test_Dudley.m](https://github.com/jtravs/SCGBookCode) — HIGH confidence; direct evidence that Dudley et al. code used MATLAB default (jet) with no explicit colormap call
-- [MATLAB default colormap history (jet → parula 2014b)](https://www.mathworks.com/matlabcentral/answers/169307-why-has-the-default-colormap-of-surface-plots-changed-in-matlab-r2014b) — HIGH confidence; confirms jet was MATLAB default when SCG conventions were established
-- [Optica Publishing Group style guide reference](https://opg.optica.org/submit/style/osa-styleguide.cfm) — MEDIUM confidence; 8.4 cm single-column width confirmed via search; direct PDF access was blocked
-- [Optics Express figure requirements summary](https://opg.optica.org/josaa/submit/style/coloronline.cfm) — MEDIUM confidence; 300/600 DPI requirement confirmed via search result extraction
+- [JLD2.jl GitHub](https://github.com/JuliaIO/JLD2.jl) — HIGH confidence; confirmed v0.6.3 from Julia General registry; HDF5 compatibility documented in README
+- [JSON3.jl GitHub](https://github.com/quinnj/JSON3.jl) — HIGH confidence; confirmed v1.14.3 from Julia General registry
+- [Julia General Registry (pkg.julialang.org)](https://pkg.julialang.org/) — HIGH confidence; version numbers verified by `julia -e 'using Pkg; Pkg.add(["JLD2","JSON3"])'` on this machine
+- Julia stdlib documentation — HIGH confidence; Statistics, TOML, Printf, Dates are bundled with Julia 1.9+; confirmed `pkgversion(Statistics)` = 1.11.1 in this environment
+- Project CLAUDE.md and Project.toml — HIGH confidence; existing package versions read directly from the repo
+- [DrWatson.jl documentation](https://juliadynamics.github.io/DrWatson.jl/stable/) — MEDIUM confidence (WebSearch); consulted to confirm it would be overkill at current project scale
+
+---
+
+*Stack research for: v2.0 verification, cross-run comparison, parameter sweeps, pattern detection*
+*Researched: 2026-03-25*

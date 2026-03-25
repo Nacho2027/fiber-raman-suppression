@@ -1,77 +1,87 @@
-# Roadmap: SMF Gain-Noise Visualization Overhaul
+# Roadmap: SMF Gain-Noise
 
-## Overview
+## Milestones
 
-Three phases refactor `scripts/visualization.jl` bottom-up by dependency: first eliminate the confirmed bugs that make current plots scientifically unreadable (wrong colormap, wrong Raman shading, color literal inconsistency); then fix axis, normalization, and phase representation so before/after panels are actually comparable; then extract shared panel builders, add metadata annotation, and assemble the final merged evolution figure. Every phase delivers plots that are observably better than the previous phase with no step requiring a later step to make sense.
+- v1.0 **Visualization Overhaul** — Phases 1-3 (shipped 2026-03-25)
+- v2.0 **Verification & Discovery** — Phases 4-7 (active)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+<details>
+<summary>v1.0 Visualization Overhaul (Phases 1-3) — SHIPPED 2026-03-25</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
+- [x] Phase 1: Stop Actively Misleading (2/2 plans) — completed 2026-03-25
+- [x] Phase 2: Axis, Normalization, and Phase Correctness (2/2 plans) — completed 2026-03-25
+- [x] Phase 3: Structure, Annotation, and Final Assembly (2/2 plans) — completed 2026-03-25
 
-- [x] **Phase 1: Stop Actively Misleading** - Fix confirmed rendering bugs: jet colormap, Raman axvspan bounds, color literal inconsistencies, rcParams mutation (completed 2026-03-25)
-- [ ] **Phase 2: Axis, Normalization, and Phase Correctness** - Shared axis limits, global dB normalization, correct phase representation with masking-before-unwrapping
-- [x] **Phase 3: Structure, Annotation, and Final Assembly** - Panel builder extraction, metadata annotation on every figure, merged 4-panel evolution figure (completed 2026-03-25)
+See: `.planning/milestones/v1.0-ROADMAP.md` for full details.
+
+</details>
+
+### v2.0 Verification & Discovery
+
+- [ ] **Phase 4: Correctness Verification** - Prove the forward solver and adjoint are physically correct before trusting any optimization output
+- [ ] **Phase 5: Result Serialization** - Save structured run data to JLD2/JSON so cross-run comparison has something to load
+- [ ] **Phase 6: Cross-Run Comparison and Pattern Analysis** - Overlay and compare all 5 optimization runs; decompose phase profiles onto physical basis
+- [ ] **Phase 7: Parameter Sweeps** - Systematically explore L x P space and multi-start robustness using verified, serialized infrastructure
 
 ## Phase Details
 
-### Phase 1: Stop Actively Misleading
-**Goal**: Plots no longer contain confirmed rendering bugs that actively mislead physics interpretation
-**Depends on**: Nothing (first phase)
-**Requirements**: BUG-01, BUG-02, STYLE-01, STYLE-02, STYLE-03, AXIS-03
+### Phase 4: Correctness Verification
+**Goal**: The forward solver and adjoint gradient are confirmed physically correct against analytical solutions and theoretical invariants
+**Depends on**: Nothing (uses only existing `common.jl` and MultiModeNoise module)
+**Requirements**: VERIF-01, VERIF-02, VERIF-03, VERIF-04
 **Success Criteria** (what must be TRUE):
-  1. Evolution heatmaps display in inferno colormap — no yellow/cyan banding from jet that creates false ~3 dB perceptual features
-  2. Raman band shading on spectral plots covers only the ~13 THz gain band (~1600-1700 nm for 1550 nm center), not the entire red-shifted half of the spectrum
-  3. All input curves render in #0072B2 (blue) and all output curves in #D55E00 (vermillion) — no "b--", "darkgreen", or "r-" string literals anywhere
-  4. Raman shading is visually subtle and does not obscure the spectral curves underneath
-  5. rcParams is mutated via PyPlot.PyDict and savefig.bbox is set to "tight" — no silent rcParams failures in batch runs
-**Plans**: 2 plans
-
+  1. A fundamental soliton (N=1 sech pulse) propagates one soliton period and its output shape matches the analytical prediction to within 2% max deviation
+  2. Photon number integral |U(w)|^2/w is conserved to <1% across a full production forward propagation, reported explicitly in the verification output
+  3. A Taylor remainder gradient test produces a log-log residual vs. eps plot with slope ~2, confirming the adjoint gradient is O(eps^2) correct
+  4. The cost J returned by spectral_band_cost matches direct numerical integration of the same Raman-band bins to machine precision, confirming mask correctness
+  5. A human-readable verification report in `results/raman/validation/` shows PASS/FAIL for each of the four tests with numeric evidence
+**Plans:** 2 plans
 Plans:
-- [ ] 01-PLAN-01.md — Fix rcParams (PyDict pattern + savefig.bbox), replace jet with inferno in all 4 heatmap functions, disable grid on pcolormesh axes
-- [ ] 01-PLAN-02.md — Fix Raman axvspan bounds (two-sided frequency window), standardize all color literals to COLOR_INPUT / COLOR_OUTPUT
+- [ ] 04-01-PLAN.md — Verification skeleton with VERIF-01 (soliton shape) and VERIF-04 (cost cross-check)
+- [ ] 04-02-PLAN.md — VERIF-02 (photon number conservation) and VERIF-03 (Taylor remainder at production grid)
 
-### Phase 2: Axis, Normalization, and Phase Correctness
-**Goal**: Before/after comparison panels and phase diagnostics communicate the actual optimization result faithfully
-**Depends on**: Phase 1
-**Requirements**: BUG-03, BUG-04, AXIS-01, AXIS-02, PHASE-01, PHASE-02, PHASE-03, PHASE-04
+### Phase 5: Result Serialization
+**Goal**: Every optimization run saves structured metadata and results to disk so subsequent phases can load and compare without re-running simulations
+**Depends on**: Phase 4 (verification must pass before serializing results that will be analyzed)
+**Requirements**: XRUN-01
 **Success Criteria** (what must be TRUE):
-  1. Before and after temporal panels share identical x-axis range — pulse compression is visible as narrowing within the same window, not as an axis rescaling artifact
-  2. Before and after spectral panels reference the same global P_ref — the dB offset between columns reflects the actual optimization improvement J
-  3. Spectral plots auto-zoom to the signal-bearing region — noise floor is not the dominant feature of the wavelength axis
-  4. Phase diagnostic (opt_phase.png) shows group delay as the primary phase display, with wrapped phase, unwrapped phase, GDD, and instantaneous frequency all masked to the signal region before any derivative computation
-  5. GDD panel y-axis is clipped to the 2nd-98th percentile of valid samples — no +/-10^6 fs^2 spikes that flatten the physically meaningful range
-**Plans**: 2 plans
+  1. After running `raman_optimization.jl`, each of the 5 run directories contains a `_result.jld2` file with fiber params, J_before, J_after, convergence history, and wall time
+  2. A top-level `results/raman/manifest.json` exists and lists all 5 runs with their scalar summaries in a format readable by `jq` or any JSON parser
+  3. The serialization adds no new positional arguments or breaking changes to `run_optimization()` — the existing call sites still work unchanged
+**Plans**: TBD
 
-Plans:
-- [x] 02-01-PLAN.md — Add _spectral_signal_xlim helper, synthetic mask-before-unwrap test, rewrite plot_phase_diagnostic to 3x2 layout with mask-before-unwrap and all 5 phase views
-- [x] 02-02-PLAN.md — Refactor plot_optimization_result_v2 and plot_amplitude_result_v2 to two-pass with global P_ref and shared axes, apply auto-zoom to standalone functions, mark PHASE-01 complete
-
-### Phase 3: Structure, Annotation, and Final Assembly
-**Goal**: Every saved figure is self-documenting and the two evolution PNGs are replaced by one merged comparison figure
-**Depends on**: Phase 2
-**Requirements**: META-01, META-02, META-03, ORG-01, ORG-02
+### Phase 6: Cross-Run Comparison and Pattern Analysis
+**Goal**: All 5 optimization runs can be compared in single overlay figures, and each optimal phase profile is explained in terms of physically interpretable polynomial chirp components
+**Depends on**: Phase 5 (needs `_result.jld2` files and manifest to exist)
+**Requirements**: XRUN-02, XRUN-03, XRUN-04, PATT-01, PATT-02
 **Success Criteria** (what must be TRUE):
-  1. Every saved figure (opt.png, opt_phase.png, opt_evolution.png) contains a visible annotation block with fiber type, length L, peak power P0, center wavelength lambda0, and pulse FWHM — figure is identifiable without the filename
-  2. Optimization cost J (before and after, in dB) is annotated directly on opt.png
-  3. Each run produces exactly 3 output files: opt.png, opt_phase.png, opt_evolution.png — the two separate evolution PNGs no longer exist
-  4. opt_evolution.png is a single 2x2 figure showing temporal and spectral evolution for both optimized and unshaped propagation side by side with a shared colorbar
-**Plans**: 2 plans
+  1. A single summary table shows J_before, J_after, delta-dB, iterations, and wall time for all 5 runs in one view, written to `results/images/`
+  2. A single overlay convergence figure shows J vs. iteration for all 5 runs on shared axes, with each run clearly labeled by fiber type and config
+  3. A single overlay spectral figure shows all optimized output spectra per fiber type on shared dB axes, enabling direct comparison of Raman suppression depth
+  4. Each optimal phase profile is projected onto GDD and TOD polynomial basis, and the residual fraction (unexplained by polynomial terms) is reported in the summary
+  5. The soliton number N = sqrt(gamma*P0*T0^2/|beta2|) is recorded in the metadata for each run and appears in the summary table
+**Plans**: TBD
+**UI hint**: yes
 
-Plans:
-- [x] 03-01-PLAN.md — Add _add_metadata_block! helper, expand J annotation to show before/after/delta, create plot_merged_evolution 2x2 function, add metadata= kwarg to 3 top-level plotters
-- [x] 03-02-PLAN.md — Wire metadata construction and plot_merged_evolution into run_optimization (raman) and both run functions (amplitude), enforce 3-file output naming
+### Phase 7: Parameter Sweeps
+**Goal**: The optimization cost J_final is mapped over a coarse L x P grid per fiber type, and multi-start robustness is quantified, enabling identification of favorable operating regimes
+**Depends on**: Phase 6 (sweeps call run_comparison_suite at completion; needs stable comparison infrastructure)
+**Requirements**: SWEEP-01, SWEEP-02
+**Success Criteria** (what must be TRUE):
+  1. A J_final heatmap for at least one fiber type (SMF-28) is produced over a coarse L x P grid, with axes labeled in physical units and Raman suppression depth shown in dB
+  2. Each sweep point is tagged with `converged::Bool`, `iterations::Int`, and `gradient_norm::Float64`; non-converged points are visually marked distinct from converged points in the heatmap
+  3. A multi-start analysis runs optimization from 5-10 random initial phases for one canonical config and reports the distribution of J_final values, revealing whether the cost landscape has multiple local minima
+  4. Sweep results are saved to `results/raman/sweeps/` with one `_result.jld2` per sweep point and a `sweep_results.jld2` aggregate, enabling re-plotting without re-running
+**Plans**: TBD
+**UI hint**: yes
 
-## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
+## Progress Table
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Stop Actively Misleading | 0/2 | Complete    | 2026-03-25 |
-| 2. Axis, Normalization, and Phase Correctness | 0/2 | In progress | - |
-| 3. Structure, Annotation, and Final Assembly | 2/2 | Complete   | 2026-03-25 |
+| 4. Correctness Verification | 0/2 | Planned | - |
+| 5. Result Serialization | 0/? | Not started | - |
+| 6. Cross-Run Comparison and Pattern Analysis | 0/? | Not started | - |
+| 7. Parameter Sweeps | 0/? | Not started | - |

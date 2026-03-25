@@ -1,329 +1,260 @@
-# Feature Landscape: Scientific Visualization for Nonlinear Fiber Optics
+# Feature Research: v2.0 Verification & Discovery
 
-**Domain:** Spectral phase optimization / Raman suppression in single-mode fibers
-**Researched:** 2026-03-24
-**Confidence overall:** HIGH for conventions (multiple sources), MEDIUM for some specific choices
-
----
-
-## 1. Wrapped vs Unwrapped Spectral Phase — Definitive Recommendation
-
-**Recommendation: Show group delay τ(ω) as the primary phase panel. Keep unwrapped φ(ω) in a secondary diagnostic panel. Never show wrapped phase [0, 2π] as a primary result.**
-
-### Evidence
-
-The rp-photonics spectral phase encyclopedia article confirms that **deviations from a flat spectral phase are the informative measure** — which requires seeing the full shape, not a series of 2π jumps. Wrapped phase destroys this information for readers.
-
-The rp-photonics group delay article states explicitly: "Group delay calculation is an original alternative to spectral phase calculation and brings equivalent results with the advantage of being **more direct**." The derivative τ(ω) = dφ/dω has units of time (femtoseconds), which maps directly to how much each wavelength component is advanced or delayed. A reader can immediately answer "does this pulse have chirp here?" from group delay without doing mental integration.
-
-Agrawal (NLFO, Ch. 3) plots group delay dispersion (GDD = d²φ/dω²) as the design parameter for fiber dispersion, treating phase only implicitly. He does not plot φ(ω) directly.
-
-Dudley et al. 2006 (Rev. Mod. Phys. 78, 1135) — the canonical supercontinuum reference — does not include spectral phase plots at all in the main figures. The standard figure set (replicated in Matlab reference code at `jtravs/SCGBookCode`) is: spectral evolution 2D map + temporal evolution 2D map, 40 dB scale.
-
-The gnlse-python package (WUST-FOG, one of the main community GNLSE implementations) shows no spectral phase panel whatsoever — intensity only.
-
-### Decision Tree for Phase Representation
-
-| Use Case | Recommended | Avoid |
-|----------|-------------|-------|
-| Main optimization comparison | Group delay τ(ω) [fs] vs wavelength | Wrapped phase (useless discontinuities) |
-| Diagnosing oscillatory artifacts / GDD | Unwrapped φ(ω) [rad] masked where power < −30 dB | Full unwrapped over noise (wild oscillations) |
-| Checking dispersion character (chirp) | GDD d²φ/dω² [fs²] | — |
-| Communicating physical delay to audience | Group delay τ(ω) [fs] | Raw phase [rad] (requires mental differentiation) |
-
-### When Unwrapped Phase is Appropriate
-
-Include unwrapped φ(ω) in the **phase diagnostic panel** (not the main comparison) when:
-- Debugging phase mask artifacts
-- Verifying the optimization variable directly
-- Checking for discontinuities or numerical issues
-
-Always mask below −30 dB relative to spectral peak to prevent noise-floor phase (which is meaningless) from dominating the axis scale.
-
-### Why the Code's Existing [0, 2π] Wrapped Display is Wrong
-
-The current `wrap_phase()` and `set_phase_yticks!()` functions map phase to [0, 2π] and label axes with "0, π/2, π, 3π/2, 2π". This is the wrong representation because:
-1. Optimization produces slowly varying phase profiles that typically span many × 2π — wrapping makes a smooth curve look like a sawtooth
-2. The wrapped version tells you nothing about the shape of the applied phase mask
-3. Group delay is what physically determines temporal redistribution of spectral components, which is the mechanism for Raman suppression
+**Domain:** Correctness verification, cross-run comparison, parameter sweeps, and pattern detection for nonlinear fiber optics simulation and Raman suppression optimization
+**Researched:** 2026-03-25
+**Confidence:** HIGH for verification methods (established practice), MEDIUM for pattern detection (domain-specific, fewer references), LOW for automated pattern detection (novel/custom territory)
 
 ---
 
-## 2. Table Stakes — Features Required for Professional Plots
+## Context: What Already Exists
 
-Missing any of these makes plots look unprofessional or uninterpretable.
+Before mapping the feature landscape, the following capabilities are already built and should not be rebuilt:
 
-| Feature | Why Required | Current Status |
-|---------|-------------|---------------|
-| Perceptually uniform colormap for heatmaps | Jet creates false structure; community moved away from it | Bug: still using "jet" |
-| Raman band marked as narrow shaded region, not full-width span | Readers need to know exactly which frequencies are the target | Bug: axvspan uses wrong bounds |
-| dB scale for all spectral plots | Log scale required to see broadband features; linear hides sidelobes | Present |
-| Wavelength axis [nm] for all spectral plots | Standard in fiber optics (not frequency offset) | Present |
-| Time axis [ps] for all temporal plots | Standard unit for fs-ps pulse regime | Present |
-| Shared axis ranges between before/after comparison panels | Mismatched ranges prevent visual comparison | Active issue |
-| Cost function value J annotated on spectral panels | Reader needs to know the optimization metric without reading logs | Present (but see notes) |
-| Fiber length L and center wavelength λ₀ as figure-level annotation | Without this, plots have no context at all; change L by 2× and everything shifts | Missing |
-| Peak power P₀ annotated | Different power means different nonlinearity regime; context critical | Missing |
-| dB range −40 dB floor on spectral evolution heatmaps | Dudley 2006 reference code uses 40 dB; standard in field; anything below is noise floor | Present; confirm |
-| Colorbar with dB label on every heatmap | Every 2D plot must label its color axis | Present |
-| Separate input and output curves in distinct colors, consistent across figures | Input always same color, output always same color — reader learns the code | Partially present; inconsistent |
+| Already Built | Location |
+|---------------|----------|
+| Gradient FD check (5 random indices, 1% tolerance) | `test_optimization.jl` (lines 335–357) |
+| Gradient FD check for amplitude (3 trials, 5% tolerance) | `test_optimization.jl` (lines 359–384) |
+| Energy conservation check (5% tolerance, single forward pass) | `test_optimization.jl` (line 404–412) |
+| Boundary energy detection (5% edge threshold) | `benchmark_optimization.jl`, `common.jl` |
+| Time window sensitivity analysis (6 window sizes) | `benchmark_optimization.jl` `analyze_time_windows` |
+| Chirp sensitivity (GDD and TOD sweeps, 2D sensitivity plot) | `raman_optimization.jl` `chirp_sensitivity` |
+| Grid size benchmarking (Nt scaling table) | `benchmark_optimization.jl` `benchmark_grid_sizes` |
+| Contract violation tests for all setup functions | `test_optimization.jl` |
+| Single-run convergence plot (J vs iteration) | `visualization.jl` |
+| Design-by-contract assertions throughout cost pipeline | `raman_optimization.jl`, `common.jl` |
 
-### Raman Band Shading — Correct Specification
-
-The Raman gain peak in silica fiber is at ~13.2 THz downshift from pump. For pump at 1550 nm (193.4 THz), the Raman peak is at ~1660 nm. The band that matters spans roughly 10–15 THz downshift (~100 nm wide at 1550 nm).
-
-Correct `axvspan` bounds: compute `λ_raman_start = C/(f0 - 10.0)` and `λ_raman_end = C/(f0 - 15.0)` in nm. The current code computes `λ_raman = λ_nm[raman_λ_idx]` where `raman_λ_idx = Δf_shifted .< raman_threshold`, which likely spans from the onset to the negative-frequency edge of the FFT grid — wrong.
+Features below are what is **missing** for v2.0.
 
 ---
 
-## 3. Differentiators — Features That Mark High-Quality Plots
+## Feature Landscape
 
-These separate "a plot that runs" from "a plot that communicates."
+### Table Stakes (Users Expect These)
 
-| Feature | Value | Complexity |
-|---------|-------|------------|
-| Metadata annotation block per figure | Every plot self-documenting without filename context | Low |
-| −30 dB mask on phase panels | Phase below noise floor is meaningless — masking prevents wild oscillations dominating the axis | Low (present in code, verify applied) |
-| GDD trace in phase diagnostic | Shows what dispersion the optimization is applying — directly maps to pulse compressor physics | Low |
-| Cost function expressed in dB alongside linear: "J = 0.0012 (−29.2 dB)" | dB is intuitive for suppression ratios; linear alone is not | Trivial (already in code — keep) |
-| Evolution colorbar normalized to input peak, not frame maximum | Allows comparison of input vs output evolution on same scale | Medium |
-| Raman onset vertical dashed line on spectra | Shows readers the critical threshold frequency — context for the optimization goal | Low (present) |
-| Inset zoom on temporal panel when pulse disperses heavily | Long fibers produce spread-out pulses; zoom shows peak structure | Present (conditional) |
-| Fiber type label in plot title or annotation (e.g., "SMF-28", "HNLF") | Identical plots from different fibers look the same without this | Missing |
-| Optimization iteration count and initial J₀ on convergence plot | Context: did it converge? How much room was there? | Missing |
-| Pulse width FWHM in annotation (not just "Peak in: X W") | FWHM maps to transform-limited duration concept | Missing |
-| Energy fraction table: pump band / Raman band / other | Shows where energy went, not just Raman fraction | Medium |
-| Before/after Raman fraction improvement as ΔdB annotation | E.g., "−8.3 dB suppression" directly labels the result | Low |
+Features the research group expects a "verified and correct" simulation to demonstrate. Missing these means the pipeline is not trustworthy.
 
-### Metadata Annotation Block — Recommended Format
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Fundamental soliton propagation test (N=1 sech pulse) | Standard NLSE correctness benchmark — N=1 sech pulse propagates without shape change over soliton period; any deviation is numerical error | MEDIUM | Requires choosing β₂ < 0 (anomalous dispersion), γ, and T₀ such that N=1; propagate one z_sol and compare input to output shape; currently no such test |
+| Photon number conservation check | Energy is technically not conserved in GNLSE with self-steepening and Raman; photon number is; tracking it flags unphysical results (known issue from IEEE 2021) | MEDIUM | Compute ∫|U(ω)|²/ω dω at input and output; expect <1% drift for typical SMF-28 runs; currently only energy (which drifts more) is checked |
+| Adjoint gradient full-grid FD check with Taylor remainder test | Current FD check uses 5 random indices; Taylor remainder (confirm O(ε²) convergence) is stronger — proves the adjoint is correct not just close | MEDIUM | Plot ‖J(φ+εd) - J(φ) - ε⟨∇J,d⟩‖ vs ε; expect slope 2 on log-log; currently not done |
+| Cost J verified to match spectral energy ratio by direct integration | J = E_Raman/E_total; should verify the mask computation is correct by computing J both via spectral_band_cost and via direct sum and checking they agree | LOW | Simple direct-computation cross-check; catches mask index bugs |
+| Cross-run J summary table (all 5 configs) | After running all 5 optimization configs, need a summary showing J_before, J_after, ΔdB, convergence iterations, wall time in one table | LOW | Currently this information is printed per-run but never aggregated; a researcher reviewing results needs the full table to understand relative performance |
+| Overlay convergence plot (all runs on one axes) | Convergence curves from all 5 runs overlaid; shows whether SMF-28 converges faster than HNLF, whether longer fibers need more iterations | MEDIUM | Currently one convergence plot per run; need multi-run overlay in a single figure |
+| Overlay spectral comparison (all runs, before vs after) | One panel per fiber type showing all optimized spectra together; reveals which fiber/power combos suppress most | MEDIUM | Currently separate figures per run; no cross-run spectral overlay exists |
+| Per-run metadata saved to structured file (not just logs) | JSON/CSV record of {fiber_type, L, P, J_before, J_after, iterations, wall_time, phase_norm} per run | LOW | Enables downstream analysis and plotting; currently only printed to stdout/log |
 
-Every figure should carry (either in suptitle or as axes-fraction text):
+### Differentiators (Competitive Advantage)
+
+Features that elevate this from "the code works" to "the physics is understood."
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Phase shape clustering: is the optimal phase quadratic, soliton-like, or irregular? | Researchers need to know if the optimizer finds a physically interpretable solution (e.g., pre-chirp to counteract SPM) or just numerical noise | HIGH | Project each optimized phase profile onto GDD/TOD basis; compute unexplained residual; if residual << total phase, phase is essentially a polynomial chirp and has physical meaning |
+| Parameter sweep: J_final vs (L, P) heatmap grid | Shows the landscape of Raman suppression achievability — is HNLF at 1m x 100W very suppressible? Is SMF-28 at 5m x 200W suppression-limited? | HIGH | Run optimization over a grid of (L, P) pairs for each fiber; plot J_final as a 2D heatmap; computationally expensive but scientifically essential |
+| Soliton number N vs suppression quality correlation | N = L_D/L_NL; higher N means more complex nonlinear dynamics; expect correlation between N and J_before (hard problem) and between N and ΔdB (optimization potential) | MEDIUM | Compute N for each run config; plot N vs J_before and N vs ΔdB; a correlation here validates that the optimizer is exploiting known physics |
+| Phase shape universality test: do SMF-28 and HNLF at matched N produce similar phase profiles? | If optimal phase shape depends only on N (not fiber parameters), it suggests a universal strategy independent of fiber type | HIGH | Requires designing matched-N runs, then comparing normalized phase profiles; computationally expensive |
+| Optimization sensitivity to initial phase (multi-start test) | Show that L-BFGS converges to the same basin from multiple random starts, establishing that the optimization landscape has a well-defined minimum | MEDIUM | Run 5–10 random initial phases; plot all convergence curves and final J values; if variance < 0.5 dB across starts, the minimum is robust. `benchmark_optimization.jl` has `multi_start_optimization` but it's not integrated into the standard run pipeline |
+
+### Anti-Features (Commonly Requested, Often Problematic)
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Automatic differentiation (AD) to verify adjoint | Seems like a clean replacement for hand-derived adjoint | Julia AD (Zygote/Enzyme) struggles with DifferentialEquations.jl callbacks, pre-allocated buffers, and in-place mutations; would require major refactor with no physics insight gain | Keep the hand-derived adjoint verified by finite differences + Taylor remainder; this is exact and explainable |
+| Full parameter grid with dense sampling (e.g., 20×20 L×P) | "More points = better coverage" | Each (L,P) point requires a full optimization run (~50 L-BFGS iterations × forward + adjoint solve); at 50s/run, a 20×20 grid = 55 CPU-hours; wall time on a workstation would be days | Use a coarse 4×4 or 5×4 grid first to find regions of interest, then refine selectively |
+| Comparing against other simulators (PyNLO, Luna.jl) | Validates that the simulation is correct | Cross-simulator comparison requires matching all physical parameters, ODE solver tolerances, and interaction-picture conventions exactly; differences often reflect solver configuration, not physics errors; creates maintenance burden | Use analytical solutions (fundamental soliton, photon number) and internal consistency checks instead |
+| Automated ML-based pattern detection | Pattern detection over many runs sounds like a differentiator | The current 5 runs are not enough data for clustering or ML methods; PCA on 5 vectors is meaningless; would need 50+ runs | Manual physical projection (GDD, TOD basis decomposition) gives more insight with less data and is directly interpretable |
+| Interactive dashboard (web-based or notebook) | Useful for exploratory analysis | PROJECT.md explicitly rules out interactive plots; static PNG/PDF output is the constraint; Jupyter notebooks exist but are not the primary workflow | Well-structured static summary figure that shows all runs together |
+
+---
+
+## Feature Dependencies
 
 ```
-SMF-28 | L = 2.0 m | λ₀ = 1550 nm | P₀ = 30 W | T_FWHM = 185 fs | J_before → J_after
+[Metadata file per run]
+    └──required by──> [Cross-run J summary table]
+    └──required by──> [Overlay convergence plot]
+    └──required by──> [Overlay spectral comparison]
+    └──required by──> [Parameter sweep heatmap]
+    └──required by──> [Soliton number correlation plot]
+
+[Fundamental soliton test]
+    └──validates──> [Photon number conservation check]
+    (must pass before trusting photon-number as a metric)
+
+[Taylor remainder gradient test]
+    └──supersedes──> existing 5-index FD check
+    (does not remove it; adds a stronger assertion on top)
+
+[Parameter sweep L×P grid]
+    └──requires──> [Metadata file per run]
+    └──enhances──> [Soliton number correlation]
+    (sweep generates the data; correlation uses it)
+
+[Phase shape clustering]
+    └──requires──> [Metadata file per run]
+    (need per-run phase vectors saved, not just J values)
 ```
 
-This can be placed as `fig.suptitle(...)` or as a text annotation in a top-of-figure stripe. Audience is the research group, so dense annotation is appropriate — there is no journal page limit constraint here.
+### Dependency Notes
+
+- **Metadata file is the prerequisite for everything cross-run:** Every aggregation feature (summary table, convergence overlay, spectral overlay, scatter plots) requires that per-run outputs are written to a structured file, not just printed. This is the single most important infrastructure feature.
+- **Fundamental soliton test validates the forward solver before any gradient work:** Run this first in the verification sequence. If the forward solver is wrong, all gradient and optimization tests are suspect.
+- **Taylor remainder test is independent** of the soliton test and can run in parallel. It tests the adjoint pipeline, not the ODE propagator.
+- **Parameter sweep is computationally expensive** and should only run after the verification tests pass, to avoid running a long sweep with a buggy solver.
 
 ---
 
-## 4. Anti-Features — What to Deliberately NOT Do
+## MVP Definition
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Wrapped phase [0, 2π] as primary display | Sawtooth pattern tells reader nothing about phase shape | Group delay τ(ω) [fs] |
-| Jet colormap | Non-perceptually-uniform; creates false spectral features; field has moved on | Magma or inferno (see below) |
-| Raman shading spanning from onset to plot edge | Covers most of the spectral plot; obscures the data being compared | Narrow band marking: onset line + shaded 10–15 THz window only |
-| Mismatched x-axis ranges between before/after panels | Comparison impossible if ranges differ | Shared xlim determined before creating subplots |
-| Phase panels over full grid including noise floor | Noise floor phase is numerically random, oscillates wildly, dominates axis scale | Always apply −30 dB mask before plotting phase quantities |
-| Separate figures per run that require external filenames to interpret | Breaks "self-documenting" principle | Embed fiber/pulse params in every figure |
-| Plotting temporal evolution with initial pulse auto-centering on z=0 but final pulse dispersed off-frame | Reader loses the output pulse | Use energy-window method to span both input and output, with zoom inset |
-| Cost function J without dB conversion | J = 0.001 is meaningless without context; dB scale gives intuition | Always show both: "J = 0.001 (−30.0 dB)" |
-| Evolution colorbar labeled just "dB" without normalization reference | Is this normalized to input? To frame maximum? Ambiguous | Label as "Power [dB, re peak]" |
-| Showing evolution only for optimized run without baseline run | Optimization result is uninterpretable without the unshaped reference | Both runs must appear side by side or in labeled pairs |
+This milestone is a research milestone, not a software product milestone. The MVP is: "I can trust the results and see patterns across runs."
 
----
+### Launch With (v2.0 core)
 
-## 5. Colormap Recommendation — Evidence-Based
+These are needed to close the milestone and present results at a lab meeting.
 
-**Recommendation: Use `magma` for all spectral and temporal evolution heatmaps.**
+- [ ] **Fundamental soliton propagation test** — without this, the NLSE solver has no known-ground-truth validation
+- [ ] **Photon number conservation check** — energy conservation already passes at 5%; photon number is the physically correct invariant for GNLSE with self-steepening + Raman
+- [ ] **Taylor remainder gradient test** — stronger than existing FD check; proves adjoint is correct to O(ε²)
+- [ ] **Per-run metadata JSON output** — infrastructure prerequisite for all cross-run features
+- [ ] **Cross-run J summary table** — human-readable table showing all 5 configs' J_before, J_after, ΔdB, wall time
+- [ ] **Overlay convergence plot (all 5 runs)** — single figure showing convergence curves; immediately reveals relative optimization difficulty
 
-### Evidence
+### Add After Core Passes (v2.0 extended)
 
-The gnlse-python community package (WUST-FOG, actively maintained, used in Dudley group tradition) uses `magma` as its default colormap — found directly in `gnlse/visualization.py`.
+Add once verification passes and core infrastructure is in place.
 
-Luna.jl (Julia nonlinear optics package) uses a −40 dB floor with perceptually uniform colormaps.
+- [ ] **Overlay spectral comparison** — after core J summary is working, add spectral overlays per fiber type
+- [ ] **Phase projection onto GDD/TOD basis** — compute how much of the optimal phase is explainable as a polynomial chirp; report residual
+- [ ] **Soliton number N annotation in metadata and summary** — annotate each run with N = sqrt(L_D/L_NL); enables correlation plots without re-running
 
-Matplotlib official documentation (matplotlib 3.10) classifies `magma`, `inferno`, `viridis`, `plasma` as the "Perceptually Uniform Sequential" category, explicitly recommended for sequential intensity data. `jet` is in the "Miscellaneous" category with explicit warnings about non-uniformity.
+### Future Consideration (v2.0+, separate planning)
 
-Kenneth Moreland's color advice (referenced by matplotlib): "Do not use rainbow colormaps. The perception of color is not monotonic, causing false perceptual boundaries in the data."
+Deferred because computationally expensive or require more runs to be meaningful.
 
-**Why magma over inferno/viridis for this application:**
-- `magma` starts near-black (dark background = zero/noise), transitions through purple and orange to near-white at peak — this creates a natural "dark is background, bright is signal" mapping that matches dB power displays intuitively
-- `inferno` is very similar; either works. Magma has slightly warmer mid-tones, more legible in print
-- `viridis` (blue-green-yellow) is excellent for general scientific use but the green midrange blends with many journal figure annotation colors
-- `hot` (black-red-yellow-white) is not perceptually uniform but has a long tradition in the field; acceptable if the group has strong prior preference, but magma is strictly better
-
-**For temporal and spectral 2D evolution: `magma`**
-**For spectrogram (STFT, time-frequency): `inferno` or `magma` (either)**
-**Never: `jet`, `hot`, `rainbow`, `hsv`**
+- [ ] **Parameter sweep L×P heatmap** — expensive; requires dedicated compute session; plan separately
+- [ ] **Phase universality test at matched N** — requires custom run configs beyond current 5; needs dedicated design
+- [ ] **Multi-start robustness analysis** — `multi_start_optimization` exists in `benchmark_optimization.jl` but is not wired to the standard pipeline; activate separately
 
 ---
 
-## 6. Standard Plot Set Per Run
+## Feature Prioritization Matrix
 
-Based on: Dudley 2006 canonical set + pulse shaping literature + current project structure.
+| Feature | Research Value | Implementation Cost | Priority |
+|---------|----------------|---------------------|----------|
+| Fundamental soliton N=1 propagation test | HIGH — ground truth for solver | MEDIUM | P1 |
+| Photon number conservation | HIGH — physically correct invariant | MEDIUM | P1 |
+| Taylor remainder gradient test | HIGH — proves adjoint correctness | MEDIUM | P1 |
+| Per-run metadata JSON | HIGH — enables all cross-run analysis | LOW | P1 |
+| Cross-run J summary table | HIGH — lab meeting deliverable | LOW (depends on metadata) | P1 |
+| Overlay convergence plot | HIGH — shows optimization landscape | MEDIUM | P1 |
+| Overlay spectral comparison | MEDIUM — visual; summary table covers the numbers | MEDIUM | P2 |
+| Phase GDD/TOD projection | MEDIUM — physical insight | MEDIUM | P2 |
+| Soliton number N annotation | MEDIUM — links physics to optimization | LOW | P2 |
+| Parameter sweep L×P heatmap | HIGH eventually — but expensive | HIGH | P3 |
+| Phase universality test | HIGH scientifically — but needs design | HIGH | P3 |
+| Multi-start robustness | MEDIUM — confidence in optimizer | MEDIUM | P3 |
 
-**Recommended output per optimization run: 4 files (matches current structure, fix contents)**
-
-### File 1: `opt.png` — The Primary Result (3×2 layout)
-
-The main deliverable showing what the optimization achieved.
-
-| Panel | Content | Notes |
-|-------|---------|-------|
-| (1,1) Input spectrum before opt | Wavelength [nm], dB scale, Raman band shaded | Reference |
-| (1,2) Output spectrum after opt | Same scale, same xlim, J annotated | Comparison |
-| (2,1) Temporal pulse before opt | Time [ps], energy-window limits | Temporal context |
-| (2,2) Temporal pulse after opt | Same shared xlim as (2,1) | Must match |
-| (3,1) Group delay before opt | τ(ω) [fs], −30 dB masked, Raman onset line | Phase result |
-| (3,2) Group delay after opt | Same range as (3,1) | Phase comparison |
-
-**Suptitle**: "SMF-28 | L=2.0 m | P₀=30 W | λ₀=1550 nm | FWHM=185 fs | J: 0.0234 → 0.0012 (−13.1 dB)"
-
-### File 2: `opt_phase.png` — Phase Diagnostic Panel (2×2 layout)
-
-Diagnostic for understanding what the optimizer did, not for presenting to external audiences.
-
-| Panel | Content | Notes |
-|-------|---------|-------|
-| (1,1) Unwrapped φ(ω) [rad] vs wavelength | After optimization; −30 dB masked | Shows raw optimization variable |
-| (1,2) Group delay τ(ω) [fs] vs wavelength | After optimization; −30 dB masked | Human-readable phase |
-| (2,1) GDD d²φ/dω² [fs²] vs wavelength | After optimization; masked | Dispersion character |
-| (2,2) Instantaneous frequency Δf(t) [THz] vs time | Of shaped input pulse | Time-domain frequency sweep |
-
-**Suptitle**: "Phase diagnostic — [same params]"
-
-### File 3: `opt_evolution_unshaped.png` — Baseline Evolution (2-panel)
-
-The unshaped pulse propagation. Shows what happens without optimization — the Raman problem.
-
-| Panel | Content | Notes |
-|-------|---------|-------|
-| Top | Temporal evolution heatmap, magma, −40 dB, time axis centered | |
-| Bottom | Spectral evolution heatmap, magma, −40 dB, wavelength axis | Raman onset line overlaid |
-
-**Suptitle**: "Baseline (unshaped) — [params]"
-
-### File 4: `opt_evolution_optimized.png` — Optimized Evolution (2-panel)
-
-Identical layout to File 3. Side-by-side with File 3, reader can compare directly.
-
-**Suptitle**: "Optimized — [params] | J = 0.0012 (−29.2 dB)"
-
-### Optional File 5: `opt_convergence.png`
-
-Convergence J vs iteration, log scale. Include:
-- Horizontal dashed line at J_initial
-- Annotation "J₀ = X, J_final = Y, ΔdB = Z"
-- Only needed for reports or debugging; current code already handles this
+**Priority key:**
+- P1: Must have for v2.0 lab meeting presentation
+- P2: Should have, add when P1 is complete
+- P3: Future milestone or dedicated compute session
 
 ---
 
-## 7. Spectral Evolution Heatmap — Detailed Specification
+## Verification Method Details
 
-Based on Dudley 2006 code reference (`jtravs/SCGBookCode`) and gnlse-python conventions.
+### Fundamental Soliton Test
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Color floor | −40 dB | Industry standard; gnlse-python and Luna.jl both use this |
-| Color ceiling | 0 dB | Normalized to peak |
-| Normalization reference | Global peak across all z-steps | Not per-row; evolution should show energy redistribution |
-| Wavelength window | λ₀ ± [400, 700] nm or physics-driven | Cover Raman soliton (~100 nm red) + dispersive wave (~200 nm blue), but exclude noise floor edges |
-| Colormap | magma | Per community standard above |
-| Raman band | Vertical dashed line at onset (13 THz shift) | Do not shade the heatmap — too visually noisy on a dark background |
-| Colorbar label | "Power [dB, re peak]" | Specifies normalization |
-| z-axis label | "Length [m]" or "Length [mm]" depending on scale | Auto-select based on max(zsave) |
-| Shared colorbar | Both panels (temporal + spectral) share one colorbar | Saves space; same scale |
-
-### Axis Range Selection — Anti-Noise-Floor Rule
-
-The spectral window must be determined from the 0 dB region, not from the simulation grid edges. Strategy:
-
-1. Find the spectral range where peak power (over all z) exceeds −35 dB
-2. Add 50 nm margin on each side
-3. Never let the window be smaller than λ₀ ± 300 nm
-
-For temporal evolution, use the energy-window method (99.9% energy) with padding, not FWHM of initial pulse. Dispersed pulses at long fiber can spread 10× the input duration.
-
----
-
-## 8. Before/After Comparison — Layout Principles
-
-Based on pulse shaping literature and visual communication research.
-
-**Use side-by-side columns, not sequential rows.** The brain compares features at the same vertical position more easily than top-to-bottom. The existing 3×2 layout (3 rows, 2 columns = before/after) is correct.
-
-**Axis locking is mandatory.** If before and after spectral panels have different ylim, the reader cannot see whether suppression occurred or whether it was just autoscaling. All paired panels must share xlim AND ylim. Compute both datasets first, then set limits.
-
-**Annotation of the key metric directly on the figure.** Do not require readers to compute J_before - J_after in dB. State it: "Raman suppression: −13.1 dB" in a prominent annotation on the comparison spectra.
-
-**Color convention must be consistent across all figures:**
-- Input / unshaped / before → COLOR_INPUT (`#0072B2`, Okabe-Ito blue)
-- Output / optimized / after → COLOR_OUTPUT (`#D55E00`, Okabe-Ito vermillion)
-- Raman band / reference → `#CC79A7` (Okabe-Ito reddish purple)
-- Raman onset line → same purple, dashed
-- Black for neutral traces (phase, diagnostic)
-
-This convention is already defined in the code but inconsistently applied — the optimization result function uses hardcoded `"b--"`, `"r-"`, `"darkgreen"` instead of the named constants.
-
----
-
-## 9. Self-Documenting Annotation Standard
-
-Every figure needs a **run parameter block** that makes the figure interpretable without the filename or external context. Audience is research group at lab meetings.
-
-### Minimum Required Annotations
-
+**Physical basis:** For the NLSE without Raman or self-steepening, a hyperbolic secant pulse with
 ```
-Fiber type:       SMF-28  [or HNLF]
-Fiber length:     2.0 m
-Center wavelength: 1550 nm
-Peak power:       30 W
-Pulse FWHM:       185 fs
-Optimization type: Phase [or Amplitude]
-Cost J:           0.0234 → 0.0012  (−13.1 dB improvement)
+N = sqrt(γ P₀ T₀² / |β₂|) = 1
+```
+is an exact soliton solution. It propagates without shape change over distance z_sol = π/2 · L_D where L_D = T₀²/|β₂|.
+
+**Test protocol:**
+1. Use SMF28_beta2_only preset (β₂ only, no β₃, no Raman: fR=0 for this test)
+2. Choose T₀ such that N=1 at P_peak (e.g., T₀ = sqrt(γ P₀ / |β₂|))
+3. Propagate exactly one soliton period z_sol
+4. Compare temporal intensity profile |u(t,z_sol)|² to input |u(t,0)|²
+5. Expect: max relative error < 2% for Nt=2^12, time_window > 10×T₀
+
+**Why this catches real bugs:** This test fails if the interaction-picture phase factors (exp_D_p, exp_D_m) are wrong, if the step size is too large, or if FFT normalization is wrong. It cannot fail due to Raman or self-steepening complications.
+
+**Confidence:** HIGH — fundamental soliton is a textbook result (Agrawal, Nonlinear Fiber Optics, Ch.5; gnlse-python validates against this exact test)
+
+### Photon Number Conservation
+
+**Physical basis:** The GNLSE with frequency-dependent nonlinearity (self-steepening) conserves photon number N_ph = ∫|U(ω)|²/ω dω, not energy. Using energy as the conservation test underestimates numerical errors for pulses where self-steepening is significant.
+
+**Test protocol:**
+1. Compute N_ph_in = sum(abs2.(uω0) ./ abs.(sim["ωs"] .+ sim["ω0"])) * sim["Δt"]
+2. Run forward propagation
+3. Compute N_ph_out = sum(abs2.(uωf) ./ abs.(ωs .+ ω0)) * Δt
+4. Assert |N_ph_out / N_ph_in - 1| < 0.01 (1% tolerance)
+
+**Confidence:** MEDIUM — photon number conservation in GNLSE is well-established theory (IEEE JLT 2021, Agrawal review 2024), but the tolerance (1% vs 5%) needs empirical calibration on current runs
+
+### Taylor Remainder Test
+
+**Physical basis:** If ∇J is the correct gradient, then J(φ + εd) - J(φ) - ε⟨∇J, d⟩ = O(ε²). Plotting this residual vs ε on a log-log scale should show slope 2 for the second-order term.
+
+**Test protocol:**
+1. Pick a random direction d (unit vector in φ-space)
+2. Compute J(φ), ∇J at a fixed φ
+3. For ε in [1e-6, 1e-2]: compute |J(φ + εd) - J(φ) - ε⟨∇J, d⟩|
+4. Assert slope ≈ 2 in the log-log plot for the range ε ∈ [1e-5, 1e-3] (below machine epsilon effects, above truncation effects)
+5. This is strictly stronger than the existing 5-index FD check, which only verifies approximate agreement at one ε value
+
+**Expected gradient accuracy:** The current 1% FD tolerance passes with ε=1e-5. The Taylor test with slope 2 proves the adjoint is exact (not just close) to machine precision.
+
+**Confidence:** HIGH — Taylor remainder test is standard PDE-constrained optimization verification practice (Stevens Johnson MIT 18.336 notes; Meep project documentation)
+
+### Cross-Run Metadata JSON Schema
+
+Each run should write a JSON file with this structure:
+
+```json
+{
+  "run_tag": "RUN_20260325_v7_smf28_L2m",
+  "fiber_type": "SMF-28",
+  "fiber_preset": "SMF28",
+  "L_fiber": 2.0,
+  "P_cont": 30.0,
+  "lambda0_nm": 1550.0,
+  "pulse_fwhm_fs": 185.0,
+  "Nt": 16384,
+  "time_window_ps": 20.0,
+  "soliton_number_N": 2.34,
+  "J_before": 0.0234,
+  "J_before_dB": -16.3,
+  "J_after": 0.0012,
+  "J_after_dB": -29.2,
+  "delta_dB": -12.9,
+  "n_iterations": 47,
+  "wall_time_s": 83.2,
+  "phase_norm_rad": 4.71,
+  "phase_gdd_component_frac": 0.82,
+  "convergence_history": [0.0234, 0.019, 0.012, ...]
+}
 ```
 
-### Placement
-
-Use `fig.suptitle()` with the first three fields (fiber type, L, λ₀) as a compact single-line header. For individual panels that show optimization results, add a small text box (axes fraction coordinates) with J value and improvement.
-
-The existing bbox annotation pattern in the code (`Dict("boxstyle"=>"round,pad=0.3", ...)`) is correct — keep it.
-
-### What Annotations Are NOT Needed in Research Group Context
-
-- Author name (this is internal)
-- Date (filenames have timestamps)
-- Simulation parameters that don't vary run-to-run (dt, Nt, solver tolerances)
-- Intermediate numerical values (β₂, β₃, γ) — these are fiber-type-determined
-
----
-
-## 10. Phase Plot Readability — Specific Fixes
-
-The existing phase diagnostic panel has known issues: "oscillatory artifacts, empty panels." Here is the root cause and fix.
-
-### Oscillatory Artifacts (Root Cause)
-
-Phase derivative on noise floor oscillates wildly. A 1 dB fluctuation in spectral power corresponds to a random phase change of up to 2π between adjacent frequency samples. When you differentiate this, you get Δf-scale oscillations in group delay that can be ±10⁶ fs.
-
-**Fix already in code:** `_apply_dB_mask()` with `threshold_dB=-30`. Verify it is applied to τ_masked and gdd_masked before plotting. The axis autoscale then only shows the meaningful region.
-
-### Empty Panels
-
-If a panel appears empty, the masked data is all NaN. This happens when:
-1. The spectral window is outside the signal region (wrong xlim)
-2. The −30 dB threshold is too aggressive for the power level
-
-**Fix:** Set xlim to the wavelength range where the spectrum is strong (±200 nm from λ₀ for normal propagation), not ±800 nm. Current xlim `λ0_nm - 300, λ0_nm + 500` may be too wide for short fibers where broadening is minimal.
-
-### GDD Panel Wild Excursions
-
-GDD is a second derivative — noise is amplified twice. Even with masking, edge effects near the 30 dB boundary cause spikes.
-
-**Fix:** Clip GDD display to physically reasonable range: `±10000 fs²` for SMF-28. GDD of silica fiber is ~−21700 fs²/m at 1550 nm, so a 2m fiber accumulates ~−43000 fs² of dispersion. Any GDD values beyond ±50000 fs² are numerical artifacts — clip them.
+This requires adding a metadata-write step at the end of each `run_optimization()` call. The `convergence_history` array enables the overlay convergence plot without re-running.
 
 ---
 
 ## Sources
 
-- Dudley, Genty, Coen. "Supercontinuum generation in photonic crystal fiber." Rev. Mod. Phys. 78, 1135 (2006) — [link](https://link.aps.org/doi/10.1103/RevModPhys.78.1135)
-- Reference MATLAB code for Dudley 2006 figures: [jtravs/SCGBookCode](https://github.com/jtravs/SCGBookCode/blob/master/test_Dudley.m) — confirmed 40 dB range, wavelength [nm] axis, distance [m] axis
-- gnlse-python WUST-FOG visualization module (verified directly from source): [github.com/WUST-FOG/gnlse-python](https://github.com/WUST-FOG/gnlse-python) — confirmed `magma` default, −40 dB floor, "Wavelength [nm]", "Distance [m]"
-- Luna.jl documentation: [github.com/LupoLab/Luna.jl](https://github.com/LupoLab/Luna.jl) — confirmed `dBmin=-40`, wavelength range parameter
-- Matplotlib colormap documentation: [matplotlib.org/stable/users/explain/colors/colormaps.html](https://matplotlib.org/stable/users/explain/colors/colormaps.html) — confirmed magma/inferno/viridis as perceptually uniform; jet explicitly deprecated for scientific use
-- rp-photonics group delay: [rp-photonics.com/group_delay.html](https://www.rp-photonics.com/group_delay.html) — group delay as derivative of spectral phase; direct quantity for temporal characterization
-- rp-photonics spectral phase: [rp-photonics.com/spectral_phase.html](https://www.rp-photonics.com/spectral_phase.html) — deviations from flat phase as the informative measure; pulse compression quality
-- Kenneth Moreland color advice: [kennethmoreland.com/color-advice/](https://www.kennethmoreland.com/color-advice/) — do not use rainbow colormaps; perceptual uniformity requirement
-- Raman gain peak in silica: ~13.2 THz downshift from pump — [rp-photonics.com/raman_scattering.html](https://www.rp-photonics.com/raman_scattering.html)
+- Agrawal, "Nonlinear Fiber Optics," 6th ed. — soliton N=1 propagation, photon number conservation, standard benchmark setups
+- Dudley, Genty, Coen. Rev. Mod. Phys. 78, 1135 (2006) — canonical supercontinuum verification benchmark; soliton fission test cases
+- gnlse-python (WUST-FOG): [github.com/WUST-FOG/gnlse-python](https://github.com/WUST-FOG/gnlse-python) — example_soliton.html shows soliton test structure; test_nonlinearity.py and test_raman.py show N=3 soliton fission benchmarks
+- Luna.jl: [github.com/LupoLab/Luna.jl](https://github.com/LupoLab/Luna.jl) — validates against Dudley 2006 Fig. 3; reference for GNLSE benchmark parameters
+- IEEE JLT 2021, "Revisiting Soliton Dynamics Under Strict Photon-Number Conservation": [ieeexplore.ieee.org/document/9309249](https://ieeexplore.ieee.org/document/9309249/) — photon number is the correct invariant for GNLSE with self-steepening; energy alone is insufficient
+- Steven G. Johnson, MIT 18.336, "Notes on Adjoint Methods": [math.mit.edu/~stevenj/18.336/adjoint.pdf](https://math.mit.edu/~stevenj/18.336/adjoint.pdf) — Taylor remainder test as standard gradient verification
+- cs231n Neural Network notes (Karpathy): gradient check tolerance — relative error > 1e-2 wrong; < 1e-4 ok; step size h=1e-5 typical — [cs231n.github.io](https://cs231n.github.io/neural-networks-3/) — confirmed standard practice
+- Meep adjoint gradient inconsistency report: [github.com/NanoComp/meep/issues/1484](https://github.com/NanoComp/meep/issues/1484) — real-world example of adjoint FD discrepancy and how Taylor remainder test pinpoints the source
+
+---
+
+*Feature research for: v2.0 Verification & Discovery, SMF Gain-Noise project*
+*Researched: 2026-03-25*
