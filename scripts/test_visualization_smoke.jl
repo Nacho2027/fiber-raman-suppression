@@ -98,9 +98,9 @@ println("\nTest 9: Checking INVALID watermark...")
 @assert occursin("box constraints violated", viz_source)
 println("  ✓ INVALID watermark present for negative amplitudes")
 
-# Test 10: Verify ΔJ annotation
+# Test 10: Verify ΔJ annotation (META-02: now shows J_before, J_after, Delta-J)
 println("\nTest 10: Checking ΔJ improvement annotation...")
-@assert occursin("ΔJ =", viz_source)
+@assert occursin("Delta-J", viz_source) || occursin("ΔJ", viz_source)
 println("  ✓ ΔJ improvement annotation present")
 
 # Test 11: Verify ticklabel_format(useOffset=false)
@@ -163,6 +163,145 @@ println("\nTest 18: Checking time window overlay improvements...")
 @assert occursin("tw_colors", bench_src) "Okabe-Ito color array not present"
 @assert occursin("axhspan(-1, 1", bench_src) "±1 dB band not present"
 println("  ✓ Time window overlay: Okabe-Ito colors, ±1 dB band present")
+
+# Test 19: Mask-before-unwrap recovers known GDD
+println("\nTest 19: mask_before_unwrap recovers known GDD...")
+Nt_test = 2^12
+Dt_test = 0.01  # 10 fs sample interval in ps (Δt units are ps throughout this codebase)
+f0_test = 193.4  # THz (1550 nm center)
+sim_mbu = Dict("Nt" => Nt_test, "Δt" => Dt_test, "M" => 1, "f0" => f0_test,
+               "ts" => collect(range(-Nt_test/2, Nt_test/2 - 1)) .* Dt_test)
+
+# Known GDD: beta2 * L = -21700 fs^2 = -0.0217 ps^2
+GDD_target_fs2 = -21700.0
+GDD_target_ps2 = GDD_target_fs2 * 1e-6  # -0.0217 ps^2
+
+# Build quadratic spectral phase: phi(omega) = 0.5 * GDD * (omega - omega0)^2
+# dw_grid in rad/ps (since Dt_test is in ps)
+dw_grid = 2π .* fftshift(fftfreq(Nt_test, 1 / Dt_test))  # rad/ps, fftshifted
+phi_quadratic = 0.5 .* GDD_target_ps2 .* dw_grid.^2
+
+# Build Gaussian spectral envelope
+spectral_fwhm_thz = 5.0  # THz
+sigma_f = spectral_fwhm_thz / (2 * sqrt(2 * log(2)))
+df_grid = fftshift(fftfreq(Nt_test, 1 / Dt_test))  # THz, fftshifted (1/ps = THz)
+spec_power = exp.(-df_grid.^2 ./ (2 * sigma_f^2))
+
+# Mask: zero phase where power < -40 dB
+P_peak_test = maximum(spec_power)
+dB_test = 10 .* log10.(spec_power ./ P_peak_test .+ 1e-30)
+signal_mask_test = dB_test .> -40.0
+phi_premask = copy(phi_quadratic)
+phi_premask[.!signal_mask_test] .= 0.0
+
+# Unwrap the pre-masked phase
+phi_unwrapped = _manual_unwrap(phi_premask)
+
+# Compute GDD via second derivative: d2phi/domega2 in ps^2, convert to fs^2
+dw_step = dw_grid[2] - dw_grid[1]  # rad/ps
+gdd_recovered = _second_central_diff(phi_unwrapped, dw_step) .* 1e6  # fs^2
+
+# Check GDD at center of signal region (within +/-1 THz of center)
+center_mask = abs.(df_grid) .< 1.0
+gdd_center = gdd_recovered[center_mask .& signal_mask_test]
+gdd_center_valid = filter(isfinite, gdd_center)
+gdd_mean = sum(gdd_center_valid) / length(gdd_center_valid)
+gdd_error = abs(gdd_mean - GDD_target_fs2) / abs(GDD_target_fs2)
+@assert gdd_error < 0.01 "GDD recovery error $(round(gdd_error*100, digits=2))% exceeds 1% threshold (got $(round(gdd_mean, digits=1)) fs^2, expected $GDD_target_fs2 fs^2)"
+println("  ✓ mask_before_unwrap: recovered GDD = $(round(gdd_mean, digits=1)) fs^2 (error $(round(gdd_error*100, digits=3))%)")
+
+# Test 20: _spectral_signal_xlim auto-zoom
+println("\nTest 20: _spectral_signal_xlim auto-zoom...")
+f0_xlim = 193.4
+Nt_xlim = 2^12
+Dt_xlim = 0.01  # 10 fs in ps units (1/ps = THz)
+f_shifted_xlim = f0_xlim .+ fftshift(fftfreq(Nt_xlim, 1 / Dt_xlim))
+lambda_xlim = C_NM_THZ ./ f_shifted_xlim
+sigma_nm = 50.0  # ~100 nm FWHM
+lambda0_nm = C_NM_THZ / f0_xlim
+spec_xlim_test = exp.(-((lambda_xlim .- lambda0_nm) ./ sigma_nm).^2)
+# Only keep positive lambda for realistic test
+spec_xlim_test[lambda_xlim .< 0] .= 0.0
+
+lo, hi = _spectral_signal_xlim(spec_xlim_test, lambda_xlim; threshold_dB=-40.0, padding_nm=80.0)
+@assert lo > 1200.0 "Auto-zoom lo=$lo too wide (should be > 1200 nm)"
+@assert hi < 2000.0 "Auto-zoom hi=$hi too wide (should be < 2000 nm)"
+@assert lo < lambda0_nm "Auto-zoom lo=$lo does not bracket center wavelength"
+@assert hi > lambda0_nm "Auto-zoom hi=$hi does not bracket center wavelength"
+println("  ✓ _spectral_signal_xlim: [$lo, $hi] nm brackets signal around $(round(lambda0_nm, digits=1)) nm")
+
+# Test 21: Global P_ref pattern in optimization comparison functions
+println("\nTest 21: Global P_ref normalization in comparison functions...")
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+# Both optimization comparison functions must use global normalization
+@assert occursin("P_ref_global", viz_src) "P_ref_global not found — BUG-04 fix missing"
+# Per-column normalization pattern must be gone from comparison functions
+# (The pattern "P_ref = max(maximum(spec_in), maximum(spec_out))" should not appear)
+n_local_pref = length(collect(eachmatch(r"P_ref = max\(maximum\(spec_in\)", viz_src)))
+@assert n_local_pref == 0 "Found $n_local_pref per-column P_ref patterns — BUG-04 not fully fixed"
+println("  OK global P_ref: P_ref_global found, no per-column P_ref patterns remain")
+
+# Test 22: _add_metadata_block! helper
+println("\nTest 22: _add_metadata_block! helper...")
+fig_meta, ax_meta = subplots(1, 1, figsize=(6, 4))
+ax_meta.plot([1, 2, 3], [1, 2, 3])
+test_metadata = (
+    fiber_name = "SMF-28",
+    L_m = 1.0,
+    P_cont_W = 0.05,
+    lambda0_nm = 1550.0,
+    fwhm_fs = 185.0,
+)
+_add_metadata_block!(fig_meta, test_metadata)
+# Verify: fig.texts should contain at least one text element with "SMF-28"
+fig_texts = [t.get_text() for t in fig_meta.texts]
+found_meta = any(occursin("SMF-28", t) for t in fig_texts)
+@assert found_meta "Metadata block not found in figure texts"
+found_L = any(occursin("1.0 m", t) for t in fig_texts)
+@assert found_L "Fiber length not found in metadata block"
+close(fig_meta)
+println("  ok _add_metadata_block! places metadata text on figure")
+
+# Test 23: Expanded J annotation (META-02)
+println("\nTest 23: Expanded J annotation contains before/after values...")
+# Check that plot_optimization_result_v2 source contains the expanded annotation
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+@assert occursin("J_before", viz_src) "Missing J_before in expanded annotation"
+@assert occursin("J_after", viz_src) "Missing J_after in expanded annotation"
+@assert occursin("Delta-J", viz_src) || occursin("ΔJ", viz_src) "Missing Delta-J label in expanded annotation"
+println("  ok Expanded J annotation pattern found in source")
+
+# Test 24: plot_merged_evolution exists and has correct structure
+println("\nTest 24: plot_merged_evolution structure...")
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+@assert occursin("function plot_merged_evolution(", viz_src) "plot_merged_evolution function not found"
+@assert occursin("plot_temporal_evolution(sol_opt", viz_src) "Missing plot_temporal_evolution call for optimized"
+@assert occursin("plot_temporal_evolution(sol_unshaped", viz_src) "Missing plot_temporal_evolution call for unshaped"
+@assert occursin("plot_spectral_evolution(sol_opt", viz_src) "Missing plot_spectral_evolution call for optimized"
+@assert occursin("plot_spectral_evolution(sol_unshaped", viz_src) "Missing plot_spectral_evolution call for unshaped"
+@assert occursin("Evolution comparison", viz_src) "Missing suptitle with fiber length"
+@assert occursin("cbar_ax = fig.add_axes", viz_src) "Missing shared colorbar axis"
+println("  ok plot_merged_evolution has 2x2 layout with shared colorbar and suptitle")
+
+# Test 25: plot_merged_evolution callable with mock data
+println("\nTest 25: plot_merged_evolution renders without error...")
+Nt_evo = 2^8; nz_evo = 11
+sim_evo = Dict("Nt" => Nt_evo, "M" => 1, "f0" => 193.4, "Dt" => 0.01,
+    "Δt" => 0.01,
+    "ts" => collect(range(-Nt_evo/2, Nt_evo/2 - 1)) .* 0.01)
+fiber_evo = Dict("L" => 1.0,
+    "zsave" => collect(LinRange(0, 1.0, nz_evo)))
+sol_mock = Dict(
+    "uω_z" => complex.(randn(nz_evo, Nt_evo, 1)),
+    "ut_z" => complex.(randn(nz_evo, Nt_evo, 1)),
+)
+fig_evo, axs_evo = plot_merged_evolution(sol_mock, sol_mock, sim_evo, fiber_evo)
+@assert size(axs_evo) == (2, 2) "Expected 2x2 axes array"
+# Check suptitle text contains "Evolution comparison"
+suptitle_text = fig_evo._suptitle !== nothing ? fig_evo._suptitle.get_text() : ""
+@assert occursin("Evolution comparison", suptitle_text) "Suptitle missing or wrong"
+close(fig_evo)
+println("  ok plot_merged_evolution renders 2x2 figure with suptitle")
 
 println("\n" * "="^60)
 println("All smoke tests passed!")
