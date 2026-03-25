@@ -16,7 +16,7 @@ Requirements for Verification & Discovery milestone. Each maps to roadmap phases
 
 ### Cross-Run Infrastructure
 
-- [ ] **XRUN-01**: Each optimization run saves structured metadata (fiber params, J values, convergence history, wall time) to JSON
+- [x] **XRUN-01**: Each optimization run saves structured metadata (fiber params, J values, convergence history, wall time) to JSON
 - [ ] **XRUN-02**: Summary table aggregates all runs showing J_before, J_after, delta-dB, iterations, wall time in one view
 - [ ] **XRUN-03**: Overlay convergence plot shows all runs' J vs iteration on a single figure
 - [ ] **XRUN-04**: Overlay spectral comparison shows all optimized spectra per fiber type on shared axes
@@ -66,7 +66,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VERIF-02 | Phase 4 | Complete |
 | VERIF-03 | Phase 4 | Complete |
 | VERIF-04 | Phase 4 | Complete |
-| XRUN-01 | Phase 5 | Pending |
+| XRUN-01 | Phase 5 | Complete |
 | XRUN-02 | Phase 6 | Pending |
 | XRUN-03 | Phase 6 | Pending |
 | XRUN-04 | Phase 6 | Pending |

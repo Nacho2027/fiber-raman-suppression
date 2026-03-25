@@ -21,7 +21,7 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full details.
 ### v2.0 Verification & Discovery
 
 - [x] **Phase 4: Correctness Verification** - Prove the forward solver and adjoint are physically correct before trusting any optimization output (completed 2026-03-25)
-- [ ] **Phase 5: Result Serialization** - Save structured run data to JLD2/JSON so cross-run comparison has something to load
+- [x] **Phase 5: Result Serialization** - Save structured run data to JLD2/JSON so cross-run comparison has something to load (completed 2026-03-25)
 - [ ] **Phase 6: Cross-Run Comparison and Pattern Analysis** - Overlay and compare all 5 optimization runs; decompose phase profiles onto physical basis
 - [ ] **Phase 7: Parameter Sweeps** - Systematically explore L x P space and multi-start robustness using verified, serialized infrastructure
 
@@ -50,9 +50,9 @@ Plans:
   1. After running `raman_optimization.jl`, each of the 5 run directories contains a `_result.jld2` file with fiber params, J_before, J_after, convergence history, and wall time
   2. A top-level `results/raman/manifest.json` exists and lists all 5 runs with their scalar summaries in a format readable by `jq` or any JSON parser
   3. The serialization adds no new positional arguments or breaking changes to `run_optimization()` — the existing call sites still work unchanged
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 05-01-PLAN.md — Add JLD2/JSON3 deps, thread store_trace, save _result.jld2 per run, update manifest.json
+- [x] 05-01-PLAN.md — Add JLD2/JSON3 deps, thread store_trace, save _result.jld2 per run, update manifest.json
 
 ### Phase 6: Cross-Run Comparison and Pattern Analysis
 **Goal**: All 5 optimization runs can be compared in single overlay figures, and each optimal phase profile is explained in terms of physically interpretable polynomial chirp components
@@ -86,6 +86,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
-| 5. Result Serialization | 0/1 | Planning complete | - |
+| 5. Result Serialization | 1/1 | Complete   | 2026-03-25 |
 | 6. Cross-Run Comparison and Pattern Analysis | 0/? | Not started | - |
 | 7. Parameter Sweeps | 0/? | Not started | - |

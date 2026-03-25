@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Phase complete — ready for verification
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-25T21:39:07.467Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-25T22:08:49.127Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 04 — correctness-verification
+**Current focus:** Phase 05 — result-serialization
 
 ## Current Position
 
-Phase: 04 (correctness-verification) — EXECUTING
-Plan: 2 of 2
+Phase: 05 (result-serialization) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 2 of 2
 *Updated after each plan completion*
 | Phase 04 P01 | 3 | 1 tasks | 2 files |
 | Phase 04-correctness-verification P02 | 35 | 2 tasks | 2 files |
+| Phase 05-result-serialization P01 | 12 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,12 +68,15 @@ Recent decisions affecting current work:
 - [Phase 04-correctness-verification]: VERIF-02 FAILs by design: attenuator absorbs energy causing 2.7-49% photon number drift
 - [Phase 04-correctness-verification]: sim['ωs'] is absolute freq (ω₀ included); photon number uses abs.(sim['ωs']) directly
 - [Phase 04-correctness-verification]: VERIF-03 Taylor remainder at Nt=2^14: L=0.1m + epsilons=[1e0,1e-1,1e-2,1e-3]; slopes [2.01,2.07,2.09] confirm adjoint O(eps²)
+- [Phase 05-result-serialization]: JLD2 + JSON3 for result persistence: JLD2 round-trips native Julia types; manifest.json at fixed path for Phase 6 discovery
+- [Phase 05-result-serialization]: Manifest is append-safe (read/update-or-append/write) so sequential runs accumulate without overwriting
 
 ### Pending Todos
 
 - Phase 4 start: Empirically calibrate photon number conservation tolerance on one real SMF-28 L=1m run before setting hard assertion threshold
 - Phase 4 start: Inspect `results/raman/MATHEMATICAL_FORMULATION.md` for verification test case specifications
 - Phase 5 start: Find exact location in raman_optimization.jl where `push!(cost_history, ...)` should be added to the callback
+- Phase 7 CRITICAL: `recommended_time_window()` has NO power dependence — only accounts for linear dispersive walk-off. SPM broadening at high power pushes energy into the attenuator, causing 38-49% photon number loss for high-P/long-L configs. The function MUST be extended with a power-aware correction OR sweeps must use generous fixed windows (safety_factor=4-5x) with Nt scaled to maintain resolution. Without this fix, high-P sweep points will have artificially low Raman cost J because attenuator absorbs energy before it reaches the Raman band.
 - Phase 7 start: Run `recommended_time_window()` for extreme sweep points (L=0.5m/high-P and L=5m/low-P) to verify a single fixed time_window covers all sweep points
 
 ### Blockers/Concerns
@@ -80,9 +84,10 @@ Recent decisions affecting current work:
 - [v1.0 flag]: _manual_unwrap behavior on arrays with leading/trailing zeros needs verification
 - [v1.0 flag]: Validate 60 dB vs 40 dB evolution floor against real run data
 - [v2.0 risk]: Phase 4 is a strict gate — if a physics bug is found, Phases 5-7 must wait for the fix before proceeding
+- [Phase 4 finding — CRITICAL for Phase 7]: recommended_time_window() is power-blind. Photon number drift: 2.7% (low-P) → 49% (long fiber). High-power sweep points will produce misleading J values unless time_window is sized for nonlinear broadening, not just linear walk-off. See verification report results/raman/validation/verification_20260325_173537.md for quantitative evidence.
 
 ## Session Continuity
 
-Last session: 2026-03-25T21:39:07.464Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-25T22:08:49.124Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
