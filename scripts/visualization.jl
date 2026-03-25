@@ -241,6 +241,25 @@ function add_caption!(fig, caption; fontsize=9, y=0.01)
 end
 
 """
+    _add_metadata_block!(fig, metadata; fontsize=8, x=0.01, y=0.01)
+
+Add a metadata annotation block to the bottom-left corner of a figure.
+`metadata` is a NamedTuple with fields: fiber_name, L_m, P_cont_W, lambda0_nm, fwhm_fs.
+"""
+function _add_metadata_block!(fig, metadata; fontsize=8, x=0.01, y=0.01)
+    lines = [
+        @sprintf("Fiber: %s  L = %.1f m", metadata.fiber_name, metadata.L_m),
+        @sprintf("P0 = %.0f mW  lambda0 = %.0f nm  FWHM = %.0f fs",
+            metadata.P_cont_W * 1000, metadata.lambda0_nm, metadata.fwhm_fs),
+    ]
+    fig.text(x, y, join(lines, "\n");
+        ha="left", va="bottom", fontsize=fontsize,
+        color="dimgray", transform=fig.transFigure,
+        bbox=Dict("boxstyle" => "round,pad=0.2", "facecolor" => "white",
+                  "alpha" => 0.7, "edgecolor" => "lightgray"))
+end
+
+"""
     compute_group_delay(φ_shifted, sim)
 
 Compute group delay τ(ω) = dφ/dω in fs from fftshifted spectral phase.
@@ -292,7 +311,7 @@ Phase is masked to -40 dB BEFORE unwrapping (BUG-03 fix). All spectral
 quantities are NaN-masked for display where power < -30 dB relative to peak.
 Spectral xlim auto-zooms to signal-bearing region (AXIS-02).
 """
-function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
+function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=nothing)
     f0 = sim["f0"]
     ts_ps = sim["ts"] .* 1e12
     dω = _spectral_omega_step(sim)
@@ -391,6 +410,10 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
     axs[3, 2].set_visible(false)
 
     fig.tight_layout()
+
+    if !isnothing(metadata)
+        _add_metadata_block!(fig, metadata)
+    end
 
     if !isnothing(save_path)
         savefig(save_path, dpi=300, bbox_inches="tight")
@@ -761,7 +784,7 @@ Row 3: Phase [0, 2π] wrapped with π-ticks
 """
 function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
     band_mask, Δf, raman_threshold;
-    figsize=(12, 12), save_path=nothing)
+    figsize=(12, 12), save_path=nothing, metadata=nothing)
 
     ts_ps = sim["ts"] .* 1e12
     Nt = sim["Nt"]
@@ -918,14 +941,20 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[3, col].ticklabel_format(useOffset=false, style="plain", axis="x")
     end
 
-    # ΔJ = J_after - J_before annotation on the "After" spectral panel
+    # META-02: J_before, J_after, and Delta-J annotation on the "After" spectral panel
     if length(J_values) == 2
-        ΔJ = J_values[2] - J_values[1]
-        ΔJ_dB = MultiModeNoise.lin_to_dB(J_values[2]) - MultiModeNoise.lin_to_dB(J_values[1])
-        axs[1, 2].annotate(@sprintf("ΔJ = %.4f (%.1f dB improvement)", ΔJ, -ΔJ_dB),
+        J_before_dB = MultiModeNoise.lin_to_dB(J_values[1])
+        J_after_dB = MultiModeNoise.lin_to_dB(J_values[2])
+        ΔJ_dB = J_after_dB - J_before_dB
+        axs[1, 2].annotate(
+            @sprintf("J_before = %.1f dB\nJ_after  = %.1f dB\nDelta-J  = %.1f dB", J_before_dB, J_after_dB, -ΔJ_dB),
             xy=(0.05, 0.85), xycoords="axes fraction", va="top", fontsize=9,
-            color=ΔJ < 0 ? "darkgreen" : "darkred",
+            color=ΔJ_dB < 0 ? "darkgreen" : "darkred",
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
+    end
+
+    if !isnothing(metadata)
+        _add_metadata_block!(fig, metadata)
     end
 
     fig.tight_layout()
@@ -954,7 +983,7 @@ Row 4: (reserved for cost breakdown — shown if cost_breakdown provided)
 """
 function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
     band_mask, Δf, raman_threshold;
-    figsize=(12, 14), save_path=nothing)
+    figsize=(12, 14), save_path=nothing, metadata=nothing)
 
     ts_ps = sim["ts"] .* 1e12
     Nt = sim["Nt"]
@@ -1102,6 +1131,24 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
             end
             @warn "plot_amplitude_result_v2: column $col has box constraints violated (A ∈ [$A_min, $A_max])"
         end
+    end
+
+    # META-02: J before/after summary on the After spectral panel
+    if length(col_data) == 2
+        J_before_val = sum(abs2.(col_data[1].uωf) .* band_mask) / sum(abs2.(col_data[1].uωf))
+        J_after_val = sum(abs2.(col_data[2].uωf) .* band_mask) / sum(abs2.(col_data[2].uωf))
+        J_before_dB = MultiModeNoise.lin_to_dB(J_before_val)
+        J_after_dB = MultiModeNoise.lin_to_dB(J_after_val)
+        ΔJ_dB = J_after_dB - J_before_dB
+        axs[1, 2].annotate(
+            @sprintf("J_before = %.1f dB\nJ_after  = %.1f dB\nDelta-J  = %.1f dB", J_before_dB, J_after_dB, -ΔJ_dB),
+            xy=(0.05, 0.85), xycoords="axes fraction", va="top", fontsize=9,
+            color=ΔJ_dB < 0 ? "darkgreen" : "darkred",
+            bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
+    end
+
+    if !isnothing(metadata)
+        _add_metadata_block!(fig, metadata)
     end
 
     fig.tight_layout()

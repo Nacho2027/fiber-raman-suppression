@@ -98,9 +98,9 @@ println("\nTest 9: Checking INVALID watermark...")
 @assert occursin("box constraints violated", viz_source)
 println("  ✓ INVALID watermark present for negative amplitudes")
 
-# Test 10: Verify ΔJ annotation
+# Test 10: Verify ΔJ annotation (META-02: now shows J_before, J_after, Delta-J)
 println("\nTest 10: Checking ΔJ improvement annotation...")
-@assert occursin("ΔJ =", viz_source)
+@assert occursin("Delta-J", viz_source) || occursin("ΔJ", viz_source)
 println("  ✓ ΔJ improvement annotation present")
 
 # Test 11: Verify ticklabel_format(useOffset=false)
@@ -240,6 +240,36 @@ viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
 n_local_pref = length(collect(eachmatch(r"P_ref = max\(maximum\(spec_in\)", viz_src)))
 @assert n_local_pref == 0 "Found $n_local_pref per-column P_ref patterns — BUG-04 not fully fixed"
 println("  OK global P_ref: P_ref_global found, no per-column P_ref patterns remain")
+
+# Test 22: _add_metadata_block! helper
+println("\nTest 22: _add_metadata_block! helper...")
+fig_meta, ax_meta = subplots(1, 1, figsize=(6, 4))
+ax_meta.plot([1, 2, 3], [1, 2, 3])
+test_metadata = (
+    fiber_name = "SMF-28",
+    L_m = 1.0,
+    P_cont_W = 0.05,
+    lambda0_nm = 1550.0,
+    fwhm_fs = 185.0,
+)
+_add_metadata_block!(fig_meta, test_metadata)
+# Verify: fig.texts should contain at least one text element with "SMF-28"
+fig_texts = [t.get_text() for t in fig_meta.texts]
+found_meta = any(occursin("SMF-28", t) for t in fig_texts)
+@assert found_meta "Metadata block not found in figure texts"
+found_L = any(occursin("1.0 m", t) for t in fig_texts)
+@assert found_L "Fiber length not found in metadata block"
+close(fig_meta)
+println("  ok _add_metadata_block! places metadata text on figure")
+
+# Test 23: Expanded J annotation (META-02)
+println("\nTest 23: Expanded J annotation contains before/after values...")
+# Check that plot_optimization_result_v2 source contains the expanded annotation
+viz_src = read(joinpath(@__DIR__, "visualization.jl"), String)
+@assert occursin("J_before", viz_src) "Missing J_before in expanded annotation"
+@assert occursin("J_after", viz_src) "Missing J_after in expanded annotation"
+@assert occursin("Delta-J", viz_src) || occursin("ΔJ", viz_src) "Missing Delta-J label in expanded annotation"
+println("  ok Expanded J annotation pattern found in source")
 
 println("\n" * "="^60)
 println("All smoke tests passed!")
