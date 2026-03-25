@@ -37,9 +37,9 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full details.
   3. A Taylor remainder gradient test produces a log-log residual vs. eps plot with slope ~2, confirming the adjoint gradient is O(eps^2) correct
   4. The cost J returned by spectral_band_cost matches direct numerical integration of the same Raman-band bins to machine precision, confirming mask correctness
   5. A human-readable verification report in `results/raman/validation/` shows PASS/FAIL for each of the four tests with numeric evidence
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 04-01-PLAN.md — Verification skeleton with VERIF-01 (soliton shape) and VERIF-04 (cost cross-check)
+- [x] 04-01-PLAN.md — Verification skeleton with VERIF-01 (soliton shape) and VERIF-04 (cost cross-check)
 - [ ] 04-02-PLAN.md — VERIF-02 (photon number conservation) and VERIF-03 (Taylor remainder at production grid)
 
 ### Phase 5: Result Serialization
@@ -81,7 +81,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 4. Correctness Verification | 0/2 | Planned | - |
+| 4. Correctness Verification | 1/2 | In Progress|  |
 | 5. Result Serialization | 0/? | Not started | - |
 | 6. Cross-Run Comparison and Pattern Analysis | 0/? | Not started | - |
 | 7. Parameter Sweeps | 0/? | Not started | - |

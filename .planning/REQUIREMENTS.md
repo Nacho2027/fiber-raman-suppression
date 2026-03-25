@@ -1,94 +1,85 @@
-# Requirements: Visualization Overhaul
+# Requirements: SMF Gain-Noise
 
-**Defined:** 2026-03-24
-**Core Value:** Every plot clearly communicates the underlying physics without external context.
+**Defined:** 2026-03-25
+**Core Value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
 
-## v1 Requirements
+## v2.0 Requirements
 
-### Bug Fixes
+Requirements for Verification & Discovery milestone. Each maps to roadmap phases.
 
-- [x] **BUG-01**: Raman band `axvspan` shading must only cover the ~13 THz Raman gain band (~1600-1700 nm for 1550 nm center), not the entire red-shifted half of the spectrum
-- [ ] **BUG-02**: Replace jet colormap with inferno on all evolution heatmaps (jet creates ~3 dB false perceptual features)
-- [x] **BUG-03**: Apply spectral power mask BEFORE phase unwrapping, not after (current order propagates noise into valid phase data)
-- [x] **BUG-04**: Use global normalization (shared P_ref) across Before/After comparison columns so dB values are directly comparable
+### Verification
 
-### Phase Representation
+- [x] **VERIF-01**: Fundamental soliton (N=1 sech) propagates one soliton period with <2% shape error, confirming NLSE solver correctness
+- [ ] **VERIF-02**: Photon number integral |U(w)|^2/w is conserved to <1% across forward propagation for all standard configs
+- [ ] **VERIF-03**: Taylor remainder test confirms adjoint gradient is O(eps^2) — slope ~2 on log-log residual vs eps plot
+- [x] **VERIF-04**: Cost J from spectral_band_cost matches direct spectral integration to machine precision, confirming mask correctness
 
-- [x] **PHASE-01**: Use group delay τ(ω) [fs] as the primary phase display in opt.png row 3 (most physically intuitive)
-- [x] **PHASE-02**: In phase diagnostic (opt_phase.png), show all phase views: wrapped φ(ω) [0,2π], unwrapped φ(ω), group delay τ(ω), GDD, and instantaneous frequency — all masked to signal region before derivative computation
-- [x] **PHASE-03**: Clip GDD display to a sensible range (percentile-based or physics-based) to prevent outlier spikes from dominating the axis
-- [x] **PHASE-04**: Wrapped phase panel uses π-labeled y-ticks (0, π/2, π, 3π/2, 2π) for readability
+### Cross-Run Infrastructure
 
-### Axis and Layout
+- [ ] **XRUN-01**: Each optimization run saves structured metadata (fiber params, J values, convergence history, wall time) to JSON
+- [ ] **XRUN-02**: Summary table aggregates all runs showing J_before, J_after, delta-dB, iterations, wall time in one view
+- [ ] **XRUN-03**: Overlay convergence plot shows all runs' J vs iteration on a single figure
+- [ ] **XRUN-04**: Overlay spectral comparison shows all optimized spectra per fiber type on shared axes
 
-- [x] **AXIS-01**: Before/After comparison columns must share identical xlim and ylim for all matched panel pairs
-- [x] **AXIS-02**: Spectral plots must auto-zoom to the region with actual signal, not show 800 nm of noise floor
-- [ ] **AXIS-03**: Disable grid lines on pcolormesh heatmap axes (grid appears as data artifacts)
+### Pattern Detection
 
-### Annotations and Metadata
+- [ ] **PATT-01**: Each optimized phase profile is decomposed onto GDD/TOD polynomial basis with residual fraction reported
+- [ ] **PATT-02**: Soliton number N = sqrt(gamma*P0*T0^2/|beta2|) annotated in metadata and summary table for each run
 
-- [x] **META-01**: Every figure includes a metadata annotation block: fiber type, length L, peak power P₀, center wavelength λ₀, pulse FWHM
-- [x] **META-02**: Optimization cost J (before/after, in dB) annotated on comparison figures
-- [x] **META-03**: Evolution figures include fiber length and title identifying optimized vs unshaped
+### Parameter Exploration
 
-### Color and Style
+- [ ] **SWEEP-01**: L x P parameter sweep runs optimization over a coarse grid and produces J_final heatmap per fiber type
+- [ ] **SWEEP-02**: Multi-start analysis runs optimization from 5-10 random initial phases and reports convergence variance
 
-- [x] **STYLE-01**: Consistent color identity across all plot types: Input = blue (#0072B2), Output = vermillion (#D55E00)
-- [x] **STYLE-02**: Reduce Raman band shading opacity (keep shading, make it subtle)
-- [ ] **STYLE-03**: Evolution heatmaps use -40 dB floor with inferno colormap, shared colorbar labeled "Power [dB]"
+## Future Requirements
 
-### Plot Organization
+Deferred to future milestones. Tracked but not in current roadmap.
 
-- [x] **ORG-01**: Merge the two separate evolution PNGs (optimized + unshaped) into a single 4-panel comparison figure (2×2: temporal/spectral × optimized/unshaped)
-- [x] **ORG-02**: Each run produces 3 output files: opt.png (comparison), opt_phase.png (phase diagnostic), opt_evolution.png (merged evolution)
+### Pattern Detection (Extended)
 
-## v2 Requirements
+- **PATT-03**: Phase universality test — do SMF-28 and HNLF at matched soliton number N produce similar phase profiles?
 
-### Future Improvements
+### Parameter Exploration (Extended)
 
-- **FUT-01**: Spectrogram (XFROG) plot for complex pulse characterization
-- **FUT-02**: Solver decoupling — remove `solve_disp_mmf` calls from inside plotting functions
-- **FUT-03**: Energy conservation tracking plot along fiber length
-- **FUT-04**: Publication-mode toggle for journal-ready figure sizes and fonts
+- **SWEEP-03**: Dense parameter grid refinement (20x20) in regions of interest identified by coarse sweep
+- **SWEEP-04**: Multi-start integration with standard run_optimization pipeline (currently separate in benchmark_optimization.jl)
 
 ## Out of Scope
 
+Explicitly excluded. Documented to prevent scope creep.
+
 | Feature | Reason |
 |---------|--------|
-| Simulation physics changes | Visualization-only project |
-| Interactive/web-based plots | Static PNG/PDF output sufficient for research group |
-| Notebook-specific plotting | Focus on scripts/visualization.jl pipeline |
-| New data formats | Keep existing solver output structure |
+| Automatic differentiation (Zygote/Enzyme) for adjoint verification | Julia AD struggles with DifferentialEquations.jl in-place mutations and preallocated buffers; FD + Taylor remainder is exact and explainable |
+| Cross-simulator comparison (PyNLO, Luna.jl) | Matching all physical parameters exactly creates maintenance burden; analytical solutions (soliton, photon number) are more reliable |
+| Dense parameter grid (20x20 L x P) | Each point = full optimization (~50s); 400 points = 5.5 CPU-hours; coarse 4x4 grid sufficient for initial exploration |
+| ML/clustering pattern detection | Only 5-12 runs — insufficient data for PCA/clustering; physical projection (GDD/TOD basis) gives more insight |
+| Interactive/web dashboards | Static PNG/PDF output constraint from PROJECT.md; not needed for internal research group |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 1 | Complete |
-| BUG-02 | Phase 1 | Pending |
-| BUG-03 | Phase 2 | Complete |
-| BUG-04 | Phase 2 | Complete |
-| PHASE-01 | Phase 2 | Complete |
-| PHASE-02 | Phase 2 | Complete |
-| PHASE-03 | Phase 2 | Complete |
-| PHASE-04 | Phase 2 | Complete |
-| AXIS-01 | Phase 2 | Complete |
-| AXIS-02 | Phase 2 | Complete |
-| AXIS-03 | Phase 1 | Pending |
-| META-01 | Phase 3 | Complete |
-| META-02 | Phase 3 | Complete |
-| META-03 | Phase 3 | Complete |
-| STYLE-01 | Phase 1 | Complete |
-| STYLE-02 | Phase 1 | Complete |
-| STYLE-03 | Phase 1 | Pending |
-| ORG-01 | Phase 3 | Complete |
-| ORG-02 | Phase 3 | Complete |
+| VERIF-01 | Phase 4 | Complete |
+| VERIF-02 | Phase 4 | Pending |
+| VERIF-03 | Phase 4 | Pending |
+| VERIF-04 | Phase 4 | Complete |
+| XRUN-01 | Phase 5 | Pending |
+| XRUN-02 | Phase 6 | Pending |
+| XRUN-03 | Phase 6 | Pending |
+| XRUN-04 | Phase 6 | Pending |
+| PATT-01 | Phase 6 | Pending |
+| PATT-02 | Phase 6 | Pending |
+| SWEEP-01 | Phase 7 | Pending |
+| SWEEP-02 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 19 total
-- Mapped to phases: 19
+- v2.0 requirements: 12 total
+- Mapped to phases: 12
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 — traceability filled after roadmap creation*
+*Requirements defined: 2026-03-25*
+*Last updated: 2026-03-25 after roadmap creation — all 12 requirements mapped*
