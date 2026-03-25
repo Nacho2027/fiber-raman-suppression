@@ -113,6 +113,22 @@ function _auto_time_limits(P_t, ts_ps; padding_factor=3.0)
     return (peak_t - margin, peak_t + margin)
 end
 
+"""
+Energy-based time window: find the smallest interval containing `energy_fraction`
+of total energy. More robust than FWHM for dispersed pulses at long fiber lengths.
+"""
+function _energy_window(P_t, ts_ps; energy_fraction=0.999, min_padding_ps=0.2)
+    E_total = sum(P_t)
+    if E_total ≈ 0
+        return (ts_ps[1], ts_ps[end])
+    end
+    E_cum = cumsum(P_t) ./ E_total
+    tail = (1 - energy_fraction) / 2
+    i_lo = something(findfirst(E_cum .>= tail), 1)
+    i_hi = something(findfirst(E_cum .>= 1 - tail), length(ts_ps))
+    return (ts_ps[i_lo] - min_padding_ps, ts_ps[i_hi] + min_padding_ps)
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 2b. Phase analysis: unwrap, group delay, GDD, instantaneous frequency
 # ─────────────────────────────────────────────────────────────────────────────
@@ -668,21 +684,26 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         spec_in_dB = 10 .* log10.(spec_in ./ P_ref .+ 1e-30)
         spec_out_dB = 10 .* log10.(spec_out ./ P_ref .+ 1e-30)
 
-        axs[1, col].plot(λ_nm, spec_in_dB, "b-", label="Input", alpha=0.7, linewidth=1.0)
-        axs[1, col].plot(λ_nm, spec_out_dB, "r-", label="Output", alpha=0.8, linewidth=1.0)
+        axs[1, col].plot(λ_nm, spec_out_dB, color="darkgreen", label="Output", alpha=0.8, linewidth=1.0)
+        axs[1, col].plot(λ_nm, spec_in_dB, "b--", label="Input", alpha=0.7, linewidth=1.5)
+
+        # Set xlim BEFORE Raman marker so axvspan clips correctly
+        axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
+        axs[1, col].set_ylim(-60, 3)
 
         if any(raman_λ_idx)
             λ_raman = λ_nm[raman_λ_idx]
             axs[1, col].axvspan(minimum(λ_raman), maximum(λ_raman),
                 alpha=0.12, color="red", label="Raman band")
         end
+        λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
+        axs[1, col].axvline(x=λ_raman_onset, color="red", ls="--",
+            alpha=0.7, linewidth=1.0, label="Raman onset")
 
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
         axs[1, col].set_title("$label optimization")
         axs[1, col].legend(fontsize=8)
-        axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
-        axs[1, col].set_ylim(-60, 3)
 
         J_val = sum(abs2.(uωf) .* band_mask) / sum(abs2.(uωf))
         axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
@@ -693,17 +714,34 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         P_in = abs2.(ut_in[:, 1])
         P_out = abs2.(utf[:, 1])
 
-        axs[2, col].plot(ts_ps, P_in, "b-", label="Input", alpha=0.7, linewidth=1.0)
-        axs[2, col].plot(ts_ps, P_out, "r-", label="Output", alpha=0.8, linewidth=1.0)
+        axs[2, col].plot(ts_ps, P_out, color="darkgreen", label="Output", alpha=0.8, linewidth=1.0)
+        axs[2, col].plot(ts_ps, P_in, "b--", label="Input", alpha=0.7, linewidth=1.5)
         axs[2, col].set_xlabel("Time [ps]")
         axs[2, col].set_ylabel("Power [W]")
         axs[2, col].set_title("Temporal pulse shape")
         axs[2, col].legend(fontsize=8)
 
-        # Auto-center on pulse
-        P_combined = max.(P_in, P_out)
-        t_lims = _auto_time_limits(P_combined, ts_ps; padding_factor=4.0)
+        # Energy-window auto-ranging (robust for dispersed pulses at long L)
+        t_lims_in = _energy_window(P_in, ts_ps)
+        t_lims_out = _energy_window(P_out, ts_ps)
+        t_lims = (min(t_lims_in[1], t_lims_out[1]), max(t_lims_in[2], t_lims_out[2]))
         axs[2, col].set_xlim(t_lims...)
+
+        # Zoom inset when pulse is very dispersed (full_range / FWHM > 20)
+        half_max_out = maximum(P_out) / 2
+        above_out = findall(P_out .>= half_max_out)
+        fwhm_out = length(above_out) > 1 ? ts_ps[above_out[end]] - ts_ps[above_out[1]] : 1.0
+        full_range = t_lims[2] - t_lims[1]
+        if full_range / max(fwhm_out, 0.01) > 20
+            inset = axs[2, col].inset_axes([0.55, 0.45, 0.40, 0.48])
+            inset.plot(ts_ps, P_out, color="darkgreen", linewidth=0.8)
+            inset.plot(ts_ps, P_in, "b--", linewidth=0.8, alpha=0.7)
+            peak_idx_in = argmax(P_in)
+            t_peak = ts_ps[peak_idx_in]
+            inset.set_xlim(t_peak - 3fwhm_out, t_peak + 3fwhm_out)
+            inset.tick_params(labelsize=7)
+            inset.set_title("Zoom", fontsize=8)
+        end
 
         peak_in = maximum(P_in)
         peak_out = maximum(P_out)
@@ -711,16 +749,19 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=9,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
-        # ── Row 3: Unwrapped spectral phase φ(ω) [rad] ──
-        φ_unwrapped = _manual_unwrap(fftshift(φ[:, 1]))
+        # ── Row 3: Group delay τ(ω) [fs] ──
+        # Group delay is the most human-readable phase view: it shows
+        # how much each wavelength is delayed/advanced in time.
+        τ_fs = compute_group_delay(fftshift(φ[:, 1]), sim)
         spec_power = abs2.(fftshift(uω0_shaped[:, 1]))
-        φ_display = _apply_dB_mask(φ_unwrapped, spec_power)
+        τ_display = _apply_dB_mask(τ_fs, spec_power)
 
-        axs[3, col].plot(λ_nm, φ_display, color=COLOR_REF, linewidth=0.8)
+        axs[3, col].plot(λ_nm, τ_display, color=COLOR_REF, linewidth=0.8)
         axs[3, col].set_xlabel("Wavelength [nm]")
-        axs[3, col].set_ylabel("Spectral phase [rad]")
+        axs[3, col].set_ylabel("Group delay [fs]")
         axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
-        axs[3, col].set_title("Spectral phase φ(ω)")
+        axs[3, col].set_title("Group delay τ(ω)")
+        axs[3, col].axvline(x=λ_raman_onset, color="red", ls="--", alpha=0.5, linewidth=0.8)
     end
 
     fig.tight_layout()

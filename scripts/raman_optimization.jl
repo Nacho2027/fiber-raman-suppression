@@ -280,6 +280,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing, kwargs...)
+    t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
     Nt = sim["Nt"]; M = sim["M"]
 
@@ -290,31 +291,88 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     @info "Optimization"
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask; max_iter=max_iter, φ0=φ0)
-    @debug "$(result)"
 
-    @info "Plotting"
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
 
-    # Optimization comparison (3×2 panel)
+    # ── Run summary table ──
+    J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask)
+    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask)
+    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
+
+    # Boundary check on optimized input pulse
+    uω0_opt = @. uω0 * cis(φ_after)
+    ut0_opt = ifft(uω0_opt, 1)
+    bc_input_ok, bc_input_frac = check_boundary_conditions(ut0_opt, sim)
+
+    # Boundary check on output pulse
+    fiber_bc = deepcopy(fiber)
+    fiber_bc["zsave"] = [fiber["L"]]
+    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
+    bc_output_ok, bc_output_frac = check_boundary_conditions(sol_bc["ut_z"][end, :, :], sim)
+
+    # Energy conservation
+    E_in = sum(abs2.(uω0_opt))
+    uωf = sol_bc["uω_z"][end, :, :]
+    E_out = sum(abs2.(uωf))
+    E_conservation = abs(E_out / E_in - 1.0)
+
+    # Gradient norm (convergence quality)
+    grad_norm = norm(grad_after)
+
+    # Peak power
+    P_peak_in = maximum(abs2.(ut0_opt))
+    P_peak_out = maximum(abs2.(sol_bc["ut_z"][end, :, :]))
+
+    elapsed = time() - t_start
+    tw_ps = Nt * sim["Δt"]
+
+    @info @sprintf("""
+    ┌─────────────────────────────────────────────────┐
+    │  RUN SUMMARY: %s
+    ├─────────────────────────────────────────────────┤
+    │  Fiber        L = %.1f m, γ = %.2e W⁻¹m⁻¹
+    │  Grid         Nt = %d, time_window = %.1f ps
+    │  Iterations   %d (%.1f s)
+    ├─────────────────────────────────────────────────┤
+    │  J (before)   %.4e  (%.1f dB)
+    │  J (after)    %.4e  (%.1f dB)
+    │  ΔJ           %.1f dB
+    │  ‖∇J‖         %.2e
+    ├─────────────────────────────────────────────────┤
+    │  Peak power   in: %.0f W → out: %.0f W
+    │  Energy cons. %.2e (%.1f%%)
+    ├─────────────────────────────────────────────────┤
+    │  Boundary (input)   %.2e  %s
+    │  Boundary (output)  %.2e  %s
+    └─────────────────────────────────────────────────┘""",
+        save_prefix,
+        fiber["L"], fiber["γ"][1],
+        Nt, tw_ps,
+        max_iter, elapsed,
+        J_before, MultiModeNoise.lin_to_dB(J_before),
+        J_after, MultiModeNoise.lin_to_dB(J_after),
+        ΔJ_dB,
+        grad_norm,
+        P_peak_in, P_peak_out,
+        E_conservation, E_conservation * 100,
+        bc_input_frac, bc_input_ok ? "OK" : "⚠ DANGER",
+        bc_output_frac, bc_output_ok ? "OK" : "⚠ DANGER")
+
+    if !bc_input_ok || !bc_output_ok
+        @warn "Boundary energy is too high — increase time_window or Nt"
+    end
+
+    # ── Plots (no boundary plot) ──
+    @info "Plotting"
     plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
         save_path="$(save_prefix).png")
 
-    # Evolution plot: re-run with fine z-sampling
     @info "Evolution Plot"
-    uω0_opt = @. uω0 * cis(φ_after)
     propagate_and_plot_evolution(uω0_opt, fiber, sim;
         title="Optimized pulse evolution (L=$(fiber["L"])m)",
         save_path="$(save_prefix)_evolution.png")
-
-    # Boundary diagnostic
-    fiber_bc = deepcopy(fiber)
-    fiber_bc["zsave"] = [fiber["L"]]
-    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
-    plot_boundary_diagnostic(sol_bc, sim, fiber_bc)
-    savefig("$(save_prefix)_boundary.png", dpi=300)
-    @info "Saved boundary diagnostic to $(save_prefix)_boundary.png"
 
     return result, uω0, fiber, sim, band_mask, Δf
 end
@@ -334,10 +392,20 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
 
 using Interpolations
+using Dates
 
 @info "═══════════════════════════════════════════"
 @info "  Raman Phase Optimization — Heavy-Duty Runs"
 @info "═══════════════════════════════════════════"
+
+# ── Output directory: results/raman/<fiber>/<params>/ ──
+# Each run gets its own folder with all plots inside.
+const RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
+function run_dir(fiber, params)
+    d = joinpath("results", "raman", fiber, params)
+    mkpath(d)
+    return d
+end
 
 # ── SMF-28 parameters (canonical single-mode fiber at 1550nm) ──
 const SMF28_GAMMA = 1.1e-3        # W⁻¹m⁻¹ (1.1 /W/km)
@@ -347,82 +415,99 @@ const SMF28_BETAS = [-2.17e-26, 1.2e-40]  # β₂ [s²/m], β₃ [s³/m]
 const HNLF_GAMMA = 10.0e-3       # W⁻¹m⁻¹ (10 /W/km)
 const HNLF_BETAS = [-0.5e-26, 1.0e-40]  # near-zero dispersion
 
-# Run 1: SMF-28 baseline (moderate Raman, N~2.3)
-@info "\n▶ Run 1: SMF-28 baseline (L=1m, P=0.05W)"
+# ─── Run 1: SMF-28 baseline (moderate Raman, N~2.3) ─────────────────────────
+dir1 = run_dir("smf28", "L1m_P005W")
+@info "\n▶ Run 1: SMF-28 baseline (L=1m, P=0.05W) → $dir1"
 result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=50,
     Nt=2^13, β_order=3, time_window=10.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    save_prefix="results/images/raman_opt_L1m_P005W"
+    save_prefix=joinpath(dir1, "opt")
 )
 φ_opt_1 = reshape(result1.minimizer, sim_1["Nt"], sim_1["M"])
 GC.gc()
 
-# Run 2: SMF-28 high power (strong Raman, N~5.6)
-@info "\n▶ Run 2: SMF-28 high power (L=2m, P=0.30W)"
+# ─── Run 2: SMF-28 high power (strong Raman, N~5.6) ─────────────────────────
+dir2 = run_dir("smf28", "L2m_P030W")
+@info "\n▶ Run 2: SMF-28 high power (L=2m, P=0.30W) → $dir2"
 result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_optimization(
     L_fiber=2.0, P_cont=0.30, max_iter=50, validate=false,
     Nt=2^13, β_order=3, time_window=20.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    save_prefix="results/images/raman_opt_smf_L2m_P030W"
+    save_prefix=joinpath(dir2, "opt")
 )
 φ_opt_2 = reshape(result2.minimizer, sim_2["Nt"], sim_2["M"])
 GC.gc()
 
-# Run 3: HNLF short fiber (very strong Raman at LOW power, N~6.9)
-@info "\n▶ Run 3: HNLF (L=1m, P=0.05W) — strong Raman from high γ"
+# ─── Run 3: HNLF short fiber (very strong Raman at LOW power, N~6.9) ────────
+dir3 = run_dir("hnlf", "L1m_P005W")
+@info "\n▶ Run 3: HNLF (L=1m, P=0.05W) — strong Raman from high γ → $dir3"
 result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_optimization(
     L_fiber=1.0, P_cont=0.05, max_iter=80, validate=false,
     Nt=2^14, β_order=3, time_window=15.0,
     gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
-    save_prefix="results/images/raman_opt_hnlf_L1m_P005W"
+    save_prefix=joinpath(dir3, "opt")
 )
 φ_opt_3 = reshape(result3.minimizer, sim_3["Nt"], sim_3["M"])
 GC.gc()
 
-# Run 4: HNLF long fiber (HEAVY Raman, N~9.8)
-@info "\n▶ Run 4: HNLF long fiber (L=5m, P=0.10W) — heavy-duty Raman shifting"
+# ─── Run 4: HNLF moderate fiber (strong Raman, N~4.9) ───────────────────────
+# N~9.8 (L=5m, P=0.10W) causes NaN in the ODE solver — too stiff.
+# Reduce to L=2m, P=0.05W for a stable heavy-Raman regime.
+dir4 = run_dir("hnlf", "L2m_P005W")
+@info "\n▶ Run 4: HNLF (L=2m, P=0.05W) — heavy Raman → $dir4"
 result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_optimization(
-    L_fiber=5.0, P_cont=0.10, max_iter=100, validate=false,
-    Nt=2^14, β_order=3, time_window=50.0,
+    L_fiber=2.0, P_cont=0.05, max_iter=100, validate=false,
+    Nt=2^14, β_order=3, time_window=30.0,
     gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
-    save_prefix="results/images/raman_opt_hnlf_L5m_P010W"
+    save_prefix=joinpath(dir4, "opt")
 )
 φ_opt_4 = reshape(result4.minimizer, sim_4["Nt"], sim_4["M"])
 GC.gc()
 
-# Run 5: SMF-28 LONG fiber (L=10m, P=0.15W, warm-started from Run 2)
-@info "\n▶ Run 5: SMF-28 long fiber (L=10m, warm-started)"
-# Interpolate phase from Run 2's frequency grid to Run 5's grid
-let Nt_2 = sim_2["Nt"], M_2 = sim_2["M"]
-    f2 = collect(fftfreq(Nt_2, 1 / sim_2["Δt"]))
-    perm = sortperm(f2)
-    itp = linear_interpolation(f2[perm], φ_opt_2[perm, 1], extrapolation_bc=0.0)
-    tw5 = 60.0
-    Δt_5 = tw5 / Nt_2  # approximate — actual comes from setup
-    f5 = collect(fftfreq(Nt_2, 1 / Δt_5))
-    global φ_warm5 = zeros(Nt_2, M_2)
-    φ_warm5[:, 1] = itp.(f5)
-end
+# ─── Run 5: SMF-28 LONG fiber (L=5m, cold start) ────────────────────────────
+# L=10m with warm-start from L=2m causes NaN (frequency grid mismatch).
+# Use L=5m cold start instead — still long enough for significant Raman.
+dir5 = run_dir("smf28", "L5m_P015W")
+@info "\n▶ Run 5: SMF-28 long fiber (L=5m, P=0.15W, cold start) → $dir5"
 result5, uω0_5, fiber_5, sim_5, band_mask_5, Δf_5 = run_optimization(
-    L_fiber=10.0, P_cont=0.15, max_iter=100, validate=false,
-    Nt=2^13, β_order=3, time_window=60.0,
+    L_fiber=5.0, P_cont=0.15, max_iter=100, validate=false,
+    Nt=2^13, β_order=3, time_window=30.0,
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    save_prefix="results/images/raman_opt_smf_L10m_P015W",
-    φ0=φ_warm5
+    save_prefix=joinpath(dir5, "opt")
 )
 φ_opt_5 = reshape(result5.minimizer, sim_5["Nt"], sim_5["M"])
 GC.gc()
 
-# Chirp sensitivity on the heaviest run (Run 4: HNLF L=5m)
+# ─── Chirp sensitivity on the heaviest run (Run 4: HNLF L=5m) ──────────────
 @info "\n▶ Chirp Sensitivity (Run 4: HNLF L=5m)"
 gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
     φ_opt_4, uω0_4, fiber_4, sim_4, band_mask_4;
     gdd_range=range(-2e-2, 2e-2, length=101)
 )
 plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
-    save_prefix="results/images/chirp_sens_hnlf_L5m_P010W")
+    save_prefix=joinpath(dir4, "chirp_sensitivity"))
+
+# ─── Phase diagnostics for each run ─────────────────────────────────────────
+@info "\n▶ Phase Diagnostics"
+for (label, φ, uω0, sim_i, dir_i) in [
+    ("Run 1", φ_opt_1, uω0_1, sim_1, dir1),
+    ("Run 2", φ_opt_2, uω0_2, sim_2, dir2),
+    ("Run 3", φ_opt_3, uω0_3, sim_3, dir3),
+    ("Run 4", φ_opt_4, uω0_4, sim_4, dir4),
+    ("Run 5", φ_opt_5, uω0_5, sim_5, dir5),
+]
+    @info "  Phase diagnostic: $label"
+    plot_phase_diagnostic(φ, uω0, sim_i; save_path=joinpath(dir_i, "phase_diagnostic.png"))
+    close("all")
+end
 
 @info "═══ All runs complete ═══"
+@info "Output directory structure:"
+@info "  results/raman/smf28/L1m_P005W/   — Run 1 (baseline)"
+@info "  results/raman/smf28/L2m_P030W/   — Run 2 (high power)"
+@info "  results/raman/hnlf/L1m_P005W/    — Run 3 (HNLF short)"
+@info "  results/raman/hnlf/L2m_P005W/    — Run 4 (HNLF heavy Raman)"
+@info "  results/raman/smf28/L5m_P015W/   — Run 5 (SMF long, cold start)"
 
 end # if main script

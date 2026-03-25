@@ -488,6 +488,7 @@ These brief explanations are suitable for figure captions and annotations:
 | `raman_opt_L1m_P005W_evolution_after.png` | 1m | 0.05W | 2-panel after | Redundant with combined |
 | `raman_opt_L2m_P015W.png` | 2m | 0.15W | 3×2 comparison | Zoom inset unreadable, phase staircase |
 | `raman_opt_L2m_P015W_evolution.png` | 2m | 0.15W | 2×2 evolution | Jet, no annotations on SSFS |
+| `raman_opt_L2m_P015W_boundary.png` | 2m | 0.15W | Boundary | OK/WARNING, same issues as all boundary plots |
 | `raman_opt_L5m_P015W.png` | 5m | 0.15W | 3×2 comparison | Extreme phase staircase, suspicious physics |
 | `raman_opt_L5m_P015W_evolution.png` | 5m | 0.15W | 2×2 evolution | Spectacular SSFS — best visual, needs annotations |
 | `raman_opt_L5m_P015W_boundary.png` | 5m | 0.15W | Boundary | WARNING status at 1.74e-5 |

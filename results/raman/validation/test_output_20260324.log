@@ -1,0 +1,150 @@
+Test Summary:      | Pass  Total  Time
+spectral_band_cost |   24     24  0.6s
+Test Summary:           | Pass  Total  Time
+recommended_time_window |    4      4  0.0s
+Test Summary:             | Pass  Total  Time
+check_boundary_conditions |    4      4  0.1s
+Test Summary:                 | Pass  Total  Time
+amplitude_cost regularization |   10     10  0.9s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                           | Pass  Total   Time
+cost_and_gradient does not mutate fiber |    1      1  28.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                                     | Pass  Total  Time
+cost_and_gradient_amplitude does not mutate fiber |    1      1  0.7s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                  | Pass  Total  Time
+contracts catch invalid inputs |   14     14  0.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                                          | Pass  Total  Time
+property: gradient finite-difference agreement (phase) |    5      5  0.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                                              | Pass  Total  Time
+property: gradient finite-difference agreement (amplitude) |    3      3  0.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                                           | Pass  Total  Time
+property: cost is bounded [0, 1] for phase optimization |   10     10  0.0s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                                              | Pass  Total  Time
+property: energy approximately conserved in lossless fiber |    1      1  1.0s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                 | Pass  Total  Time
+end-to-end phase optimization |    2      2  1.0s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info:   [  0/10] J=0.000076  J_ram=7.5465e-05  J_E=0.0000e+00  J_T=0.0000e+00  J_TV=9.9609e-11  A∈[1.000,1.000]  (1.2 s)
+[ Info:   [  1/10] J=0.000076  J_ram=7.5400e-05  J_E=3.2371e-08  J_T=3.4723e-12  J_TV=3.8134e-10  A∈[1.000,1.000]  (1.6 s)
+[ Info:   [  2/10] J=0.000059  J_ram=5.4097e-05  J_E=4.0559e-06  J_T=5.7133e-07  J_TV=1.6972e-07  A∈[0.903,1.045]  (1.6 s)
+[ Info:   [  3/10] J=0.000051  J_ram=4.4833e-05  J_E=4.3003e-06  J_T=1.3713e-06  J_TV=2.6168e-07  A∈[0.850,1.068]  (1.6 s)
+[ Info:   [  4/10] J=0.000051  J_ram=4.4833e-05  J_E=4.2984e-06  J_T=1.3713e-06  J_TV=2.6169e-07  A∈[0.850,1.068]  (1.6 s)
+[ Info:   [  5/10] J=0.000047  J_ram=4.4800e-05  J_E=5.0742e-09  J_T=1.3696e-06  J_TV=2.6045e-07  A∈[0.850,1.066]  (1.6 s)
+[ Info:   [  6/10] J=0.000047  J_ram=4.4774e-05  J_E=5.6327e-09  J_T=1.3730e-06  J_TV=2.6070e-07  A∈[0.850,1.066]  (1.6 s)
+[ Info:   [  7/10] J=0.000047  J_ram=4.4754e-05  J_E=5.6042e-09  J_T=1.3752e-06  J_TV=2.6082e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4754e-05  J_E=5.6042e-09  J_T=1.3752e-06  J_TV=2.6082e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4754e-05  J_E=4.2484e-09  J_T=1.3752e-06  J_TV=2.6082e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4754e-05  J_E=4.2365e-09  J_T=1.3752e-06  J_TV=2.6082e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4754e-05  J_E=4.2365e-09  J_T=1.3752e-06  J_TV=2.6082e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4749e-05  J_E=5.8503e-10  J_T=1.3755e-06  J_TV=2.6078e-07  A∈[0.850,1.066]  (1.7 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7192e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.7 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7192e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.7 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7185e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.8 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7185e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.9 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7185e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.9 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7184e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (1.9 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7184e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.0 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7184e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.0 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7181e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.1 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.2 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.2 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.3 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.3 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.3 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.4 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.5 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.5 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.5 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.6 s)
+[ Info:   [  0/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.6 s)
+[ Info:   [  1/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.6 s)
+[ Info:   [  2/10] J=0.000046  J_ram=4.4685e-05  J_E=5.7180e-10  J_T=1.3828e-06  J_TV=2.6099e-07  A∈[0.850,1.067]  (2.7 s)
+Test Summary:                     | Pass  Total  Time
+end-to-end amplitude optimization |    7      7  3.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+User defined fiber params
+[0.0; 0.0; -2.6e-26; 1.2e-40;;]
+Test Summary:                      | Pass  Total  Time
+no name collisions between scripts |    6      6  0.0s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+User defined fiber params
+[0.0; 0.0; -2.6e-26; 1.2e-40;;]
+Test Summary:                           | Pass  Total  Time
+setup functions have different defaults |    2      2  0.0s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+Test Summary:                             | Pass  Total  Time
+setup functions use Logging (not println) |    1      1  0.1s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Dispersion test: broadening_analytic=1.5469, broadening_measured=1.5000, L/L_D=1.1803
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Energy conservation: max deviation = 2.32e-05 over 20 z-points
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Linear regime test: relative difference = 5.31e-10
+[ Info: Soliton test: P_peak=1815.79 W, L_D=0.4236 m, z_sol=0.6654 m, P_cont=3.0681e-02 W
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Soliton test: shape_error=0.0129, peak_ratio=0.9998
+Test Summary:              | Pass  Total  Time
+Forward Solver Correctness |    5      5  0.3s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Taylor remainder test:
+[ Info:   ε=1e-01: r2=1.01e-08
+[ Info:   ε=1e-02: r2=9.99e-11
+[ Info:   ε=1e-03: r2=9.11e-13
+[ Info:   ε=1e-04: r2=2.94e-16
+[ Info:   r2 ratio (ε=1e-01 → 1e-02): 101.01 (slope=2.00)
+[ Info:   r2 ratio (ε=1e-02 → 1e-03): 109.69 (slope=2.04)
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Full FD check: 29 components tested, max rel error = 2.64e-04
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Amplitude FD check with all regularizers: 29 components, max rel error = 3.05e-04
+Test Summary:                  | Pass  Total  Time
+Adjoint & Gradient Correctness |    4      4  0.3s
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Armijo test: J0=7.546502e-05, J1=7.540539e-05, decrease=5.96e-08
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Gradient norm: initial=5.9638e-05, final=9.1958e-08, ratio=0.0015
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: GDD chirp test: J0=7.546502e-05, J_gdd=1.469214e-04, ratio=1.9469
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Multi-start: costs (dB) = [-69.15, -67.63, -69.11], spread = 1.52 dB
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+User defined fiber params
+[0.0; 0.0; -2.6e-26;;]
+[ Info: Monotonicity test: J_short(L=0.1m)=7.546502e-05, J_long(L=0.5m)=7.349233e-04
+Test Summary:            | Pass  Total  Time
+Optimization Formulation |    7      7  0.5s

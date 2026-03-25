@@ -142,6 +142,213 @@ function amplitude_cost(A, uω0, J_raman, grad_raman;
     return J_total, grad_total, breakdown
 end
 
+"""
+    project_energy!(A, uω0)
+
+Rescale amplitude profile A so that the shaped pulse has the same energy as the
+original: E_shaped = Σ A² |uω0|² → E_original = Σ |uω0|².
+Modifies A in place and returns it.
+"""
+function project_energy!(A, uω0)
+    E_original = sum(abs2.(uω0))
+    E_shaped = sum(A .^ 2 .* abs2.(uω0))
+    if E_shaped > 0
+        A .*= sqrt(E_original / E_shaped)
+    end
+    return A
+end
+
+"""
+    build_dct_basis(Nt, K; bandwidth_mask=nothing)
+
+Build an orthonormal DCT-II basis matrix of size (Nt, K).
+If `bandwidth_mask` is provided (a vector of length Nt), each column is
+element-wise multiplied by the mask (useful for restricting to pulse bandwidth).
+"""
+function build_dct_basis(Nt, K; bandwidth_mask=nothing)
+    B = zeros(Nt, K)
+    for k in 0:K-1
+        for i in 1:Nt
+            B[i, k+1] = cos(k * π * (i - 0.5) / Nt)
+        end
+        B[:, k+1] ./= norm(B[:, k+1])
+    end
+    if bandwidth_mask !== nothing
+        B .*= bandwidth_mask
+    end
+    return B
+end
+
+"""
+    cost_and_gradient_lowdim(c, δ, B, uω0, fiber, sim, band_mask; kwargs...)
+
+Evaluate cost and gradient in the low-dimensional DCT coefficient space.
+A(ω) = 1 + δ · B · c, where B is (Nt, K) and c is (K·M,).
+Returns (J, grad_c, breakdown).
+"""
+function cost_and_gradient_lowdim(c, δ, B, uω0, fiber, sim, band_mask; kwargs...)
+    Nt = sim["Nt"]; M = sim["M"]
+    K = size(B, 2)
+    c_mat = reshape(c, K, M)
+    A = 1.0 .+ δ .* (B * c_mat)
+    clamp!(A, 1e-6, Inf)  # safety: ensure positivity
+    J, grad_A, breakdown = cost_and_gradient_amplitude(A, uω0, fiber, sim, band_mask; kwargs...)
+    grad_c = δ .* (B' * grad_A)
+    return J, vec(grad_c), breakdown
+end
+
+"""
+    optimize_spectral_amplitude_lowdim(uω0_base, fiber, sim, band_mask; kwargs...)
+
+Optimize spectral amplitude using a low-dimensional DCT parameterization:
+A(ω) = 1 + δ · Σ c_k · B_k(ω), with c_k ∈ [-1, 1].
+
+Uses Fminbox(LBFGS) on the K·M coefficient vector.
+Returns (Optim result, cost_breakdown). The minimizer contains the optimal c vector.
+"""
+function optimize_spectral_amplitude_lowdim(uω0_base, fiber, sim, band_mask;
+    K=10, max_iter=50, δ_bound=0.10,
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
+    bandwidth_mask=nothing)
+
+    # PRECONDITIONS
+    @assert max_iter > 0 "max_iter must be positive"
+    @assert 0 < δ_bound < 1 "δ_bound must be in (0, 1), got $δ_bound"
+    @assert K > 0 "K must be positive"
+
+    Nt = sim["Nt"]; M = sim["M"]
+    B = build_dct_basis(Nt, K; bandwidth_mask=bandwidth_mask)
+
+    # Coefficient bounds: c_k ∈ [-1, 1] ensures A ∈ [1-δ, 1+δ] approximately
+    c0 = zeros(K * M)
+    lower_c = fill(-1.0, K * M)
+    upper_c = fill(1.0, K * M)
+
+    # Nudge strictly inside bounds
+    c0_vec = clamp.(c0, -1.0 + 1e-8, 1.0 - 1e-8)
+
+    reg_kwargs = (λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
+
+    last_breakdown = Ref(Dict{String,Float64}())
+
+    t_start = time()
+    function callback(state)
+        elapsed = time() - t_start
+        bd = last_breakdown[]
+        J_r = get(bd, "J_raman", NaN)
+        J_e = get(bd, "J_energy", NaN)
+        @info @sprintf("  [lowdim %3d/%d] J=%.6f  J_ram=%.4e  J_E=%.4e  (%.1f s)",
+                state.iteration, max_iter, state.value, J_r, J_e, elapsed)
+        return false
+    end
+
+    result = optimize(
+        Optim.only_fg!() do F, G, c_vec
+            J, grad_c, breakdown = cost_and_gradient_lowdim(
+                c_vec, δ_bound, B, uω0_base, fiber, sim, band_mask; reg_kwargs...
+            )
+            last_breakdown[] = breakdown
+            if G !== nothing
+                G .= grad_c
+            end
+            if F !== nothing
+                return J
+            end
+        end,
+        lower_c,
+        upper_c,
+        c0_vec,
+        Fminbox(LBFGS(m=10)),
+        Optim.Options(iterations=max_iter, outer_iterations=max_iter,
+                      f_abstol=1e-6, callback=callback)
+    )
+
+    # Reconstruct final A for energy projection
+    c_opt = reshape(result.minimizer, K, M)
+    A_final = 1.0 .+ δ_bound .* (B * c_opt)
+    project_energy!(A_final, uω0_base)
+
+    return result, last_breakdown[]
+end
+
+"""
+    run_amplitude_optimization_lowdim(; kwargs...)
+
+End-to-end low-dimensional amplitude optimization using DCT parameterization.
+"""
+function run_amplitude_optimization_lowdim(;
+    K=10, max_iter=20, validate=true, save_prefix="results/images/amp_opt_lowdim",
+    δ_bound=0.10,
+    λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
+    kwargs...)
+
+    t_total = time()
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_amplitude_problem(; kwargs...)
+    Nt = sim["Nt"]; M = sim["M"]
+
+    @info "═══ Low-Dim Amplitude Optimization ═══" L=fiber["L"] Nt=Nt K=K δ=δ_bound max_iter=max_iter
+
+    # Optional gradient validation in coefficient space
+    if validate
+        @info "Step 1: Low-dim Gradient Validation"
+        B = build_dct_basis(Nt, K)
+        c_test = 0.1 .* randn(K * M)
+        J, grad_c, _ = cost_and_gradient_lowdim(c_test, δ_bound, B, uω0, fiber, sim, band_mask;
+            λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
+        ε = 1e-5; n_checks = min(3, K * M)
+        max_err = 0.0
+        for idx in rand(1:K*M, n_checks)
+            cp = copy(c_test); cp[idx] += ε
+            cm = copy(c_test); cm[idx] -= ε
+            Jp, _, _ = cost_and_gradient_lowdim(cp, δ_bound, B, uω0, fiber, sim, band_mask;
+                λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
+            Jm, _, _ = cost_and_gradient_lowdim(cm, δ_bound, B, uω0, fiber, sim, band_mask;
+                λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
+            fd = (Jp - Jm) / (2ε)
+            rel_err = abs(grad_c[idx] - fd) / max(abs(grad_c[idx]), abs(fd), 1e-15)
+            max_err = max(max_err, rel_err)
+            @info @sprintf("  c[%d]: adj=%.4e  fd=%.4e  err=%.2e", idx, grad_c[idx], fd, rel_err)
+        end
+        @info @sprintf("  Max relative error: %.2e", max_err)
+    end
+
+    # Optimize
+    @info "Step 2: Low-dim Optimization (K=$K, δ=$δ_bound)"
+    result, breakdown = optimize_spectral_amplitude_lowdim(
+        uω0, fiber, sim, band_mask;
+        K=K, max_iter=max_iter, δ_bound=δ_bound,
+        λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat
+    )
+
+    # Reconstruct A_opt
+    B = build_dct_basis(Nt, K)
+    c_opt = reshape(result.minimizer, K, M)
+    A_opt = 1.0 .+ δ_bound .* (B * c_opt)
+    project_energy!(A_opt, uω0)
+
+    # Solution report
+    print_solution_report(A_opt, uω0, fiber, sim, band_mask, breakdown)
+
+    # Plot
+    @info "Step 3: Plotting"
+    A_before = ones(Nt, M)
+    plot_amplitude_result_v2(A_before, A_opt, uω0, fiber, sim,
+        band_mask, Δf, raman_threshold;
+        save_path="$(save_prefix).png")
+
+    @info "Step 4: Evolution Comparison"
+    uω0_opt = uω0 .* A_opt
+    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
+        label_before="Unmodulated (A=1)", label_after="Lowdim modulated",
+        title="Low-dim pulse evolution (L=$(fiber["L"])m, K=$K)",
+        save_path="$(save_prefix)_evolution.png")
+
+    elapsed = time() - t_total
+    @info @sprintf("═══ Done (%s, %.1f s) — J_final=%.6f ═══", save_prefix, elapsed, result.minimum)
+
+    return result, uω0, fiber, sim, band_mask, Δf
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Forward-adjoint pipeline for amplitude
 # ─────────────────────────────────────────────────────────────────────────────
@@ -212,8 +419,9 @@ end
 """
     optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask; kwargs...)
 
-Optimize spectral amplitude A(ω) using LBFGS with projected gradient (manual clamping)
-for box constraints A ∈ [1 - δ, 1 + δ]. Returns Optim result and the final cost breakdown.
+Optimize spectral amplitude A(ω) using Fminbox(LBFGS) with proper box constraints
+A ∈ [1 - δ, 1 + δ]. After optimization, projects energy to enforce conservation.
+Returns Optim result and the final cost breakdown.
 """
 function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
     A0=nothing, max_iter=50, δ_bound=0.10,
@@ -233,6 +441,14 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
 
     lower_val = 1.0 - δ_bound
     upper_val = 1.0 + δ_bound
+
+    # Fminbox bound vectors
+    lower = fill(lower_val, Nt * M)
+    upper = fill(upper_val, Nt * M)
+
+    # Fminbox requires initial point strictly inside bounds
+    A0_vec = clamp.(vec(A0), lower_val + 1e-8, upper_val - 1e-8)
+
     reg_kwargs = (λ_energy=λ_energy, λ_tikhonov=λ_tikhonov, λ_tv=λ_tv, λ_flat=λ_flat)
 
     last_breakdown = Ref(Dict{String,Float64}())
@@ -252,12 +468,9 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
         return false
     end
 
-    # Use regular LBFGS with manual projection (clamping) instead of Fminbox
+    # Fminbox handles box constraints properly — no manual clamping needed
     result = optimize(
         Optim.only_fg!() do F, G, A_vec
-            # Project back into box constraints
-            clamp!(A_vec, lower_val, upper_val)
-
             A = reshape(A_vec, Nt, M)
             J, grad, breakdown = cost_and_gradient_amplitude(
                 A, uω0_base, fiber, sim, band_mask; reg_kwargs...
@@ -271,10 +484,19 @@ function optimize_spectral_amplitude(uω0_base, fiber, sim, band_mask;
                 return J
             end
         end,
-        vec(A0),
-        LBFGS(m=10),
-        Optim.Options(iterations=max_iter, f_abstol=1e-6, callback=callback)
+        lower,
+        upper,
+        A0_vec,
+        Fminbox(LBFGS(m=10)),
+        Optim.Options(iterations=max_iter, outer_iterations=max_iter,
+                      f_abstol=1e-6, callback=callback)
     )
+
+    # Post-optimization: project energy and re-clamp
+    A_final = reshape(copy(result.minimizer), Nt, M)
+    project_energy!(A_final, uω0_base)
+    clamp!(A_final, lower_val, upper_val)
+    result.minimizer .= vec(A_final)
 
     return result, last_breakdown[]
 end
@@ -472,7 +694,7 @@ End-to-end amplitude optimization:
 6. Plot and save
 """
 function run_amplitude_optimization(;
-    max_iter=20, validate=true, save_prefix="amp_opt",
+    max_iter=20, validate=true, save_prefix="results/images/amp_opt",
     A0=nothing, δ_bound=0.10,
     λ_energy=1.0, λ_tikhonov=0.001, λ_tv=0.0001, λ_flat=0.0,
     kwargs...)
@@ -502,6 +724,14 @@ function run_amplitude_optimization(;
     @debug "$(result)"
 
     A_opt = reshape(result.minimizer, Nt, M)
+
+    # Post-optimization validation
+    lower_val = 1.0 - δ_bound
+    upper_val = 1.0 + δ_bound
+    @assert all(A_opt .>= lower_val - 1e-6) "Box violated: min(A) = $(minimum(A_opt))"
+    @assert all(A_opt .<= upper_val + 1e-6) "Box violated: max(A) = $(maximum(A_opt))"
+    E_dev = abs(sum(A_opt.^2 .* abs2.(uω0)) / sum(abs2.(uω0)) - 1.0)
+    @assert E_dev < 0.05 "Energy deviation $(round(E_dev*100, digits=1))% exceeds 5%"
 
     # Step 5: Solution report
     print_solution_report(A_opt, uω0, fiber, sim, band_mask, breakdown)
@@ -554,37 +784,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
 @info "  Amplitude Optimization — Example Runs"
 @info "═══════════════════════════════════════════"
 
-# Run 1: Moderate power with wide bounds — strong Raman signal
-@info "\n▶ Run 1: Moderate power (L=1m, P=0.15W, δ=0.30)"
+# Run 1: Moderate power, medium bounds (Fminbox + energy projection)
+@info "\n▶ Run 1: L=1m, P=0.15W, δ=0.15 (Fminbox)"
 result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_amplitude_optimization(
     L_fiber=1.0, P_cont=0.15, max_iter=100,
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.30,
-    save_prefix="amp_opt_L1m_P015W_d030"
+    δ_bound=0.15,
+    save_prefix="results/images/amp_opt_L1m_P015W_d015"
 )
 GC.gc()
 
-# Run 2: Zero-regularization baseline — pure Raman minimization
-@info "\n▶ Run 2: Zero-reg baseline (L=1m, P=0.15W, δ=0.30)"
+# Run 2: Smaller bounds comparison
+@info "\n▶ Run 2: L=1m, P=0.15W, δ=0.10 (Fminbox, tighter bounds)"
 result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_amplitude_optimization(
     L_fiber=1.0, P_cont=0.15, max_iter=100,
     time_window=10.0, Nt=2^13, β_order=3,
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.30,
-    λ_energy=0.0, λ_tikhonov=0.0, λ_tv=0.0,
-    save_prefix="amp_opt_L1m_P015W_d030_noreg"
-)
-GC.gc()
-
-# Run 3: Longer fiber — more nonlinear interaction
-@info "\n▶ Run 3: Longer fiber (L=5m, P=0.15W, δ=0.30)"
-result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization(
-    L_fiber=5.0, P_cont=0.15, max_iter=100,
-    time_window=20.0, Nt=2^13, β_order=3,
-    gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
-    δ_bound=0.30,
-    save_prefix="amp_opt_L5m_P015W_d030"
+    δ_bound=0.10,
+    save_prefix="results/images/amp_opt_L1m_P015W_d010"
 )
 GC.gc()
 
@@ -595,7 +813,42 @@ uω0_sw, fiber_sw, sim_sw, band_mask_sw, Δf_sw, _ = setup_amplitude_problem(
     gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40]
 )
 sweep_results = sweep_amplitude_bounds(uω0_sw, fiber_sw, sim_sw, band_mask_sw;
-    δ_values=[0.05, 0.10, 0.15, 0.20, 0.30], max_iter=50)
+    δ_values=[0.05, 0.10, 0.15, 0.20], max_iter=50)
+
+# Low-dimensional DCT parameterization runs
+@info "\n▶ Run 3 (lowdim): L=1m, K=10, δ=0.15"
+result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_amplitude_optimization_lowdim(
+    L_fiber=1.0, P_cont=0.15, max_iter=100,
+    time_window=10.0, Nt=2^13, β_order=3,
+    gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
+    K=10, δ_bound=0.15,
+    save_prefix="results/images/amp_opt_lowdim_L1m_K10_d015"
+)
+GC.gc()
+
+@info "\n▶ Run 4 (lowdim): L=2m, K=10, δ=0.15"
+result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_amplitude_optimization_lowdim(
+    L_fiber=2.0, P_cont=0.15, max_iter=100,
+    time_window=15.0, Nt=2^13, β_order=3,
+    gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
+    K=10, δ_bound=0.15,
+    save_prefix="results/images/amp_opt_lowdim_L2m_K10_d015"
+)
+GC.gc()
+
+# K-sweep: explore DCT truncation order
+@info "\n▶ K-sweep: K ∈ {5, 10, 15, 20} at L=1m, δ=0.15"
+for K_val in [5, 10, 15, 20]
+    @info "  K=$K_val"
+    run_amplitude_optimization_lowdim(
+        L_fiber=1.0, P_cont=0.15, max_iter=50,
+        time_window=10.0, Nt=2^13, β_order=3,
+        gamma_user=0.0013, betas_user=[-2.6e-26, 1.2e-40],
+        K=K_val, δ_bound=0.15, validate=false,
+        save_prefix="results/images/amp_opt_lowdim_L1m_K$(K_val)_d015"
+    )
+    GC.gc()
+end
 
 @info "═══ All runs complete ═══"
 

@@ -209,26 +209,69 @@ function analyze_time_windows(;
     push!(table, "╚═════════════╩════════════════╩════════════════╩══════════╝")
     @info join(table, "\n")
 
-    # Plot overlaid spectra to visualize convergence
+    # Plot spectral difference from largest-window reference
     if plot_spectra && !isempty(all_spectra)
-        fig, ax = subplots(1, 1, figsize=(8, 5))
-        for (i, tw) in enumerate(sort(collect(keys(results))))
+        sorted_windows = sort(collect(keys(results)))
+        ref_tw = sorted_windows[end]
+        ref_spec = results[ref_tw]["spectrum"]
+        ref_spec_dB = 10 .* log10.(max.(ref_spec ./ maximum(ref_spec), 1e-30))
+
+        fig, (ax1, ax2) = subplots(1, 2, figsize=(12, 5))
+
+        # Okabe-Ito derived colors for time window curves
+        tw_colors = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#F0E442", "#56B4E9"]
+
+        # Left: overlaid spectra
+        for (i, tw) in enumerate(sorted_windows)
             r = results[tw]
             spec = r["spectrum"]
-            Δf = r["Δf"]
+            Δf_tw = r["Δf"]
             spec_norm = spec ./ maximum(spec)
             label_str = @sprintf("%.0f ps [%s]", tw, r["status"])
-            ax.plot(Δf, 10 .* log10.(max.(spec_norm, 1e-30)), label=label_str, alpha=0.7)
+            color_i = tw_colors[mod1(i, length(tw_colors))]
+            is_ref = (tw == ref_tw)
+            ax1.plot(Δf_tw, 10 .* log10.(max.(spec_norm, 1e-30)),
+                label=label_str, alpha=is_ref ? 0.9 : 0.5,
+                lw=is_ref ? 2.0 : 1.0, color=color_i)
         end
-        ax.set_xlabel("Δf [THz]")
-        ax.set_ylabel("Normalized power [dB]")
-        ax.set_title("Output spectrum vs time window (L=$(L)m)")
-        ax.set_xlim(-30, 30)
-        ax.set_ylim(-40, 0)
-        ax.legend(fontsize=8)
-        fig.tight_layout()
-        savefig("time_window_analysis_L$(L)m.png", dpi=150)
-        @info "Saved spectrum overlay to time_window_analysis_L$(L)m.png"
+        ax1.set_xlabel("Δf [THz]")
+        ax1.set_ylabel("Normalized power [dB]")
+        ax1.set_title("Output spectrum vs time window (L=$(L)m)")
+        ax1.set_xlim(-30, 30)
+        ax1.set_ylim(-40, 0)
+        ax1.ticklabel_format(useOffset=false)
+        ax1.legend(fontsize=8)
+
+        # Right: difference from reference (largest window)
+        ax2.axhspan(-1, 1, color="green", alpha=0.1, label="±1 dB")
+        for (i, tw) in enumerate(sorted_windows[1:end-1])
+            r = results[tw]
+            spec = r["spectrum"]
+            Δf_tw = r["Δf"]
+            spec_dB = 10 .* log10.(max.(spec ./ maximum(spec), 1e-30))
+            # Interpolate reference onto this grid if needed (different Δf grids)
+            if length(spec_dB) == length(ref_spec_dB)
+                diff_dB = spec_dB .- ref_spec_dB
+            else
+                diff_dB = spec_dB  # fallback: just show spectrum
+            end
+            label_str = @sprintf("%.0f ps", tw)
+            color_i = tw_colors[mod1(i, length(tw_colors))]
+            ax2.plot(Δf_tw, diff_dB, label=label_str, alpha=0.7, color=color_i)
+        end
+        ax2.set_xlabel("Δf [THz]")
+        ax2.set_ylabel("ΔPower [dB] (vs $(Int(ref_tw)) ps ref)")
+        ax2.set_title("Spectral difference from reference")
+        ax2.set_xlim(-30, 30)
+        ax2.ticklabel_format(useOffset=false)
+        ax2.legend(fontsize=8)
+        ax2.axhline(y=0, color="black", ls="--", alpha=0.3)
+
+        fig.text(0.5, 0.01, "Left: output spectra for each time window. Right: difference from largest-window reference.",
+                 ha="center", va="bottom", fontsize=9, style="italic")
+        fig.tight_layout(rect=[0, 0.05, 1, 1])
+        savefig("results/images/time_window_analysis_L$(L)m.png", dpi=150)
+        @info "Saved spectrum overlay to results/images/time_window_analysis_L$(L)m.png"
     end
 
     return results
@@ -261,7 +304,7 @@ function analyze_time_windows_optimized(φ_opt, uω0_ref, fiber_ref, sim_ref, ba
     Nt=sim_ref["Nt"],
     P_cont=0.05,
     plot_results=true,
-    save_prefix="time_window_optimized",
+    save_prefix="results/images/time_window_optimized",
     kwargs...)
 
     # PRECONDITIONS
@@ -361,7 +404,7 @@ Two-panel bar chart for optimized time window analysis:
 
 Status colors: OK=green, WARNING=orange, DANGER=red.
 """
-function plot_time_window_analysis_v2(results; save_prefix="time_window_optimized")
+function plot_time_window_analysis_v2(results; save_prefix="results/images/time_window_optimized")
     windows = sort(collect(keys(results)))
     n = length(windows)
 
@@ -375,7 +418,7 @@ function plot_time_window_analysis_v2(results; save_prefix="time_window_optimize
 
     fig, (ax1, ax2) = subplots(1, 2, figsize=(12, 5))
 
-    # Left panel: J in dB
+    # Left panel: J in dB — zoom y-axis to actual data range
     x = 1:n
     labels = [@sprintf("%.0f", tw) for tw in windows]
     ax1.bar(x, J_dB, color=colors, edgecolor="black", linewidth=0.5)
@@ -384,9 +427,16 @@ function plot_time_window_analysis_v2(results; save_prefix="time_window_optimize
     ax1.set_xlabel("Time window [ps]")
     ax1.set_ylabel("J [dB]")
     ax1.set_title("Raman cost vs time window (optimized phase)")
+    ax1.ticklabel_format(useOffset=false, axis="y")
+    # Zoom y-axis to show actual variation (±0.5 dB padding)
+    if length(J_dB) > 0
+        j_min, j_max = extrema(J_dB)
+        j_pad = max(0.5, (j_max - j_min) * 0.15)
+        ax1.set_ylim(j_min - j_pad, j_max + j_pad)
+    end
     # Add value labels on bars
     for (i, v) in enumerate(J_dB)
-        ax1.text(i, v + 0.3, @sprintf("%.1f", v), ha="center", va="bottom", fontsize=7)
+        ax1.text(i, v + 0.1, @sprintf("%.1f", v), ha="center", va="bottom", fontsize=7)
     end
 
     # Right panel: Edge energy fraction (log scale)
@@ -401,8 +451,24 @@ function plot_time_window_analysis_v2(results; save_prefix="time_window_optimize
     ax2.axhline(y=1e-3, color="orange", ls="--", alpha=0.7, label="WARNING threshold")
     ax2.legend(fontsize=8)
 
-    fig.tight_layout()
-    savefig("$(save_prefix).png", dpi=150)
+    # Color legend using matplotlib patches
+    mpatches = PyPlot.matplotlib.patches
+    legend_patches = [
+        mpatches.Patch(color="#2ecc71", label="OK (edge < 1e-6)"),
+        mpatches.Patch(color="#f39c12", label="WARNING (edge < 1e-3)"),
+        mpatches.Patch(color="#e74c3c", label="DANGER (edge ≥ 1e-3)")
+    ]
+    fig.legend(handles=legend_patches, loc="lower center", ncol=3, fontsize=8,
+               bbox_to_anchor=(0.5, -0.02))
+
+    fig.text(0.5, -0.06,
+             "Time window analysis: how the simulation time window size affects results. " *
+             "Left: Raman suppression cost J (dB) — should converge as window grows; large changes indicate the window is too small. " *
+             "Right: fraction of pulse energy at the window edges (log scale) — high edge energy means pulse power is " *
+             "hitting the boundaries, corrupting the simulation. Green = safe, yellow = marginal, red = unreliable results.",
+             ha="center", va="bottom", fontsize=8, style="italic", wrap=true)
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
+    savefig("$(save_prefix).png", dpi=150, bbox_inches="tight")
     @info "Saved time window analysis plot to $(save_prefix).png"
     return fig
 end
@@ -590,6 +656,13 @@ function multistart_optimization(uω0, fiber, sim, band_mask;
     best_φ = reshape(best_result.minimizer, Nt, M)
     best_J = all_J[best_idx]
 
+    # Boundary check on best result
+    uω0_shaped = @. uω0 * cis(best_φ)
+    fiber_bc = deepcopy(fiber)
+    fiber_bc["zsave"] = [fiber["L"]]
+    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_bc, sim)
+    bc_ok, bc_frac = check_boundary_conditions(sol_bc["ut_z"][end, :, :], sim)
+
     # Statistics
     summary = String[]
     push!(summary, "── Multi-Start Summary ──────────────────────────")
@@ -602,11 +675,14 @@ function multistart_optimization(uω0, fiber, sim, band_mask;
     push!(summary, @sprintf("  Std:    %.4e", std(all_J)))
     push!(summary, @sprintf("  Spread: %.1f dB (worst - best)",
             MultiModeNoise.lin_to_dB(maximum(all_J)) - MultiModeNoise.lin_to_dB(best_J)))
+    bc_str = bc_ok ? "OK ($(round(bc_frac, sigdigits=2)))" :
+                     "DANGER ($(round(bc_frac, sigdigits=2)))"
+    push!(summary, @sprintf("  Boundary: %s", bc_str))
     push!(summary, "─────────────────────────────────────────────────")
     @info join(summary, "\n")
 
     return (best_result=best_result, best_φ=best_φ, best_J=best_J,
-            all_J=all_J, all_results=all_results)
+            all_J=all_J, all_results=all_results, bc_frac=bc_frac)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
