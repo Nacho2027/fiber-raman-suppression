@@ -280,13 +280,17 @@ end
 """
     plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
 
-Standalone 2×2 phase diagnostic figure:
-  (1,1): Unwrapped spectral phase φ(ω) [rad] vs wavelength
-  (1,2): Group delay τ(ω) [fs] vs wavelength
-  (2,1): GDD [fs²] vs wavelength
-  (2,2): Instantaneous frequency [THz offset] vs time
+Standalone 3×2 phase diagnostic figure:
+  (1,1): Wrapped spectral phase φ(ω) [0, 2π] with π-ticks
+  (1,2): Unwrapped spectral phase φ(ω) [rad]
+  (2,1): Group delay τ(ω) [fs]
+  (2,2): GDD [fs²] with percentile-clipped y-axis
+  (3,1): Instantaneous frequency [THz offset] vs time
+  (3,2): (empty)
 
-All spectral quantities are masked where power < -30 dB relative to peak.
+Phase is masked to -40 dB BEFORE unwrapping (BUG-03 fix). All spectral
+quantities are NaN-masked for display where power < -30 dB relative to peak.
+Spectral xlim auto-zooms to signal-bearing region (AXIS-02).
 """
 function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
     f0 = sim["f0"]
@@ -298,13 +302,28 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
     # Spectral power for masking (fftshifted, positive-freq, wavelength-sorted)
     spec_pos = abs2.(fftshift(uω0_base[:, 1]))[pos_mask][sort_idx]
 
-    # Unwrap once on the full fftshifted grid, then derive group delay and GDD
+    # --- BUG-03 fix: mask phase BEFORE unwrapping ---
     φ_shifted = fftshift(φ[:, 1])
-    φ_unwrapped_full = _manual_unwrap(φ_shifted)
+    spec_power_full = abs2.(fftshift(uω0_base[:, 1]))
+    P_peak = maximum(spec_power_full)
+    dB_full = 10 .* log10.(spec_power_full ./ P_peak .+ 1e-30)
+    signal_mask = dB_full .> -40.0  # true where signal is present
 
+    # Zero phase at noise-floor bins before unwrapping
+    # Use 0.0, not NaN — _manual_unwrap requires finite input values
+    φ_premask = copy(φ_shifted)
+    φ_premask[.!signal_mask] .= 0.0
+
+    # Unwrap the pre-masked phase
+    φ_unwrapped_full = _manual_unwrap(φ_premask)
+
+    # Extract positive-frequency, wavelength-sorted slices
     φ_unwrapped = φ_unwrapped_full[pos_mask][sort_idx]
     τ_pos = (_central_diff(φ_unwrapped_full, dω) .* 1e3)[pos_mask][sort_idx]
     gdd_pos = (_second_central_diff(φ_unwrapped_full, dω) .* 1e6)[pos_mask][sort_idx]
+
+    # Wrapped phase (computed from original unmasked phase for display fidelity)
+    φ_wrapped = wrap_phase(φ_shifted[pos_mask][sort_idx])
 
     # Instantaneous frequency from shaped temporal field
     ut_shaped = ifft(uω0_base .* cis.(φ), 1)
@@ -312,19 +331,33 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
 
     λ_raman_onset = C_NM_THZ / (f0 - 13.2)  # 13.2 THz: silica Raman Stokes shift
 
-    # Apply -30dB mask to spectral quantities
+    # Apply -30 dB NaN mask for DISPLAY only (after all derivative computations)
+    φ_wrapped_display = _apply_dB_mask(φ_wrapped, spec_pos)
     φ_masked = _apply_dB_mask(φ_unwrapped, spec_pos)
     τ_masked = _apply_dB_mask(τ_pos, spec_pos)
     gdd_masked = _apply_dB_mask(gdd_pos, spec_pos)
 
-    fig, axs = subplots(2, 2, figsize=(12, 9))
+    # --- AXIS-02: auto-zoom to signal-bearing region ---
+    spec_xlim = _spectral_signal_xlim(spec_pos, λ_nm)
+
+    # --- PHASE-02: 3x2 layout with all 5 phase views ---
+    fig, axs = subplots(3, 2, figsize=(12, 12))
     λ0_nm = C_NM_THZ / f0
 
-    # Spectral panel config: (row, col, data, ylabel, title)
+    # Panel (1,1): Wrapped phase with pi-ticks (PHASE-04)
+    axs[1, 1].plot(λ_nm, φ_wrapped_display, color=COLOR_REF, linewidth=0.8)
+    axs[1, 1].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+    axs[1, 1].set_xlabel("Wavelength [nm]")
+    axs[1, 1].set_title("Wrapped phase φ(ω)")
+    set_phase_yticks!(axs[1, 1])
+    axs[1, 1].set_xlim(spec_xlim...)
+    axs[1, 1].legend(fontsize=8)
+
+    # Remaining spectral panels: (row, col, data, ylabel, title)
     spectral_panels = [
-        (1, 1, φ_masked,   "Spectral phase [rad]", "Unwrapped spectral phase φ(ω)"),
-        (1, 2, τ_masked,   "Group delay [fs]",     "Group delay τ(ω)"),
-        (2, 1, gdd_masked, "GDD [fs²]",            "Group delay dispersion"),
+        (1, 2, φ_masked,   "Spectral phase [rad]", "Unwrapped spectral phase φ(ω)"),
+        (2, 1, τ_masked,   "Group delay [fs]",     "Group delay τ(ω)"),
+        (2, 2, gdd_masked, "GDD [fs²]",            "Group delay dispersion"),
     ]
     for (r, c, data, ylabel, title) in spectral_panels
         axs[r, c].plot(λ_nm, data, color=COLOR_REF, linewidth=0.8)
@@ -332,16 +365,30 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
         axs[r, c].set_xlabel("Wavelength [nm]")
         axs[r, c].set_ylabel(ylabel)
         axs[r, c].set_title(title)
-        axs[r, c].set_xlim(λ0_nm - 300, λ0_nm + 500)
+        axs[r, c].set_xlim(spec_xlim...)
         axs[r, c].legend(fontsize=8)
     end
 
-    axs[2, 2].plot(ts_ps, Δf_inst, color=COLOR_REF, linewidth=0.8)
-    axs[2, 2].set_xlabel("Time [ps]")
-    axs[2, 2].set_ylabel("Δf [THz]")
-    axs[2, 2].set_title("Instantaneous frequency offset")
+    # --- PHASE-03: GDD percentile clipping ---
+    gdd_valid = filter(isfinite, gdd_masked)
+    if length(gdd_valid) > 10
+        gdd_lo = quantile(gdd_valid, 0.02)
+        gdd_hi = quantile(gdd_valid, 0.98)
+        # 5% headroom, minimum ±100 fs² to avoid degenerate zero range
+        margin = max(abs(gdd_hi - gdd_lo) * 0.05, 100.0)
+        axs[2, 2].set_ylim(gdd_lo - margin, gdd_hi + margin)
+    end
+
+    # Panel (3,1): Instantaneous frequency (time domain)
+    axs[3, 1].plot(ts_ps, Δf_inst, color=COLOR_REF, linewidth=0.8)
+    axs[3, 1].set_xlabel("Time [ps]")
+    axs[3, 1].set_ylabel("Δf [THz]")
+    axs[3, 1].set_title("Instantaneous frequency offset")
     t_lims = _auto_time_limits(abs2.(ut_shaped[:, 1]), ts_ps; padding_factor=4.0)
-    axs[2, 2].set_xlim(t_lims...)
+    axs[3, 1].set_xlim(t_lims...)
+
+    # Panel (3,2): empty — hide
+    axs[3, 2].set_visible(false)
 
     fig.tight_layout()
 
