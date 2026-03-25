@@ -609,8 +609,8 @@ function plot_spectrum_comparison(uω_in, uω_out, sim;
     P_out_dB = 10 .* log10.(P_out ./ P_ref .+ 1e-30)
 
     fig, ax = subplots(figsize=figsize)
-    ax.plot(λ_nm, P_in_dB, "b-", label=label_in, alpha=0.7, linewidth=1.2)
-    ax.plot(λ_nm, P_out_dB, "r-", label=label_out, alpha=0.8, linewidth=1.2)
+    ax.plot(λ_nm, P_in_dB, color=COLOR_INPUT, label=label_in, alpha=0.7, linewidth=1.2)
+    ax.plot(λ_nm, P_out_dB, color=COLOR_OUTPUT, label=label_out, alpha=0.8, linewidth=1.2)
 
     # Raman band shading
     if !isnothing(raman_threshold)
@@ -691,8 +691,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         spec_in_dB = 10 .* log10.(spec_in ./ P_ref .+ 1e-30)
         spec_out_dB = 10 .* log10.(spec_out ./ P_ref .+ 1e-30)
 
-        axs[1, col].plot(λ_nm, spec_out_dB, color="darkgreen", label="Output", alpha=0.8, linewidth=1.0)
-        axs[1, col].plot(λ_nm, spec_in_dB, "b--", label="Input", alpha=0.7, linewidth=1.5)
+        axs[1, col].plot(λ_nm, spec_out_dB, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
+        axs[1, col].plot(λ_nm, spec_in_dB, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
 
         # Set xlim BEFORE Raman marker so axvspan clips correctly
         axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
@@ -721,8 +721,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         P_in = abs2.(ut_in[:, 1])
         P_out = abs2.(utf[:, 1])
 
-        axs[2, col].plot(ts_ps, P_out, color="darkgreen", label="Output", alpha=0.8, linewidth=1.0)
-        axs[2, col].plot(ts_ps, P_in, "b--", label="Input", alpha=0.7, linewidth=1.5)
+        axs[2, col].plot(ts_ps, P_out, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
+        axs[2, col].plot(ts_ps, P_in, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
         axs[2, col].set_xlabel("Time [ps]")
         axs[2, col].set_ylabel("Power [W]")
         axs[2, col].set_title("Temporal pulse shape")
@@ -741,8 +741,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         full_range = t_lims[2] - t_lims[1]
         if full_range / max(fwhm_out, 0.01) > 20
             inset = axs[2, col].inset_axes([0.55, 0.45, 0.40, 0.48])
-            inset.plot(ts_ps, P_out, color="darkgreen", linewidth=0.8)
-            inset.plot(ts_ps, P_in, "b--", linewidth=0.8, alpha=0.7)
+            inset.plot(ts_ps, P_out, color=COLOR_OUTPUT, linewidth=0.8)
+            inset.plot(ts_ps, P_in, color=COLOR_INPUT, ls="--", linewidth=0.8, alpha=0.7)
             peak_idx_in = argmax(P_in)
             t_peak = ts_ps[peak_idx_in]
             inset.set_xlim(t_peak - 3fwhm_out, t_peak + 3fwhm_out)
@@ -831,8 +831,8 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         spec_in_dB = 10 .* log10.(spec_in ./ P_ref .+ 1e-30)
         spec_out_dB = 10 .* log10.(spec_out ./ P_ref .+ 1e-30)
 
-        axs[1, col].plot(λ_nm, spec_in_dB, "b-", label="Input", alpha=0.7, linewidth=1.0)
-        axs[1, col].plot(λ_nm, spec_out_dB, "r-", label="Output", alpha=0.8, linewidth=1.0)
+        axs[1, col].plot(λ_nm, spec_in_dB, color=COLOR_INPUT, label="Input", alpha=0.7, linewidth=1.0)
+        axs[1, col].plot(λ_nm, spec_out_dB, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
 
         if any(raman_λ_idx)
             λ_raman = λ_nm[raman_λ_idx]
@@ -856,8 +856,8 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         P_in = abs2.(ut_in[:, 1])
         P_out = abs2.(utf[:, 1])
 
-        axs[2, col].plot(ts_ps, P_in, "b-", label="Input", alpha=0.7, linewidth=1.0)
-        axs[2, col].plot(ts_ps, P_out, "r-", label="Output", alpha=0.8, linewidth=1.0)
+        axs[2, col].plot(ts_ps, P_in, color=COLOR_INPUT, label="Input", alpha=0.7, linewidth=1.0)
+        axs[2, col].plot(ts_ps, P_out, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
         axs[2, col].set_xlabel("Time [ps]")
         axs[2, col].set_ylabel("Power [W]")
         axs[2, col].set_title("Temporal pulse shape")
