@@ -40,7 +40,7 @@
 ### Plot Organization
 
 - [x] **ORG-01**: Merge the two separate evolution PNGs (optimized + unshaped) into a single 4-panel comparison figure (2×2: temporal/spectral × optimized/unshaped)
-- [ ] **ORG-02**: Each run produces 3 output files: opt.png (comparison), opt_phase.png (phase diagnostic), opt_evolution.png (merged evolution)
+- [x] **ORG-02**: Each run produces 3 output files: opt.png (comparison), opt_phase.png (phase diagnostic), opt_evolution.png (merged evolution)
 
 ## v2 Requirements
 
@@ -82,7 +82,7 @@
 | STYLE-02 | Phase 1 | Complete |
 | STYLE-03 | Phase 1 | Pending |
 | ORG-01 | Phase 3 | Complete |
-| ORG-02 | Phase 3 | Pending |
+| ORG-02 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 19 total

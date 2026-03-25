@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Stop Actively Misleading** - Fix confirmed rendering bugs: jet colormap, Raman axvspan bounds, color literal inconsistencies, rcParams mutation (completed 2026-03-25)
 - [ ] **Phase 2: Axis, Normalization, and Phase Correctness** - Shared axis limits, global dB normalization, correct phase representation with masking-before-unwrapping
-- [ ] **Phase 3: Structure, Annotation, and Final Assembly** - Panel builder extraction, metadata annotation on every figure, merged 4-panel evolution figure
+- [x] **Phase 3: Structure, Annotation, and Final Assembly** - Panel builder extraction, metadata annotation on every figure, merged 4-panel evolution figure (completed 2026-03-25)
 
 ## Phase Details
 
@@ -63,7 +63,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Add _add_metadata_block! helper, expand J annotation to show before/after/delta, create plot_merged_evolution 2x2 function, add metadata= kwarg to 3 top-level plotters
-- [ ] 03-02-PLAN.md — Wire metadata construction and plot_merged_evolution into run_optimization (raman) and both run functions (amplitude), enforce 3-file output naming
+- [x] 03-02-PLAN.md — Wire metadata construction and plot_merged_evolution into run_optimization (raman) and both run functions (amplitude), enforce 3-file output naming
 
 ## Progress
 
@@ -74,4 +74,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Stop Actively Misleading | 0/2 | Complete    | 2026-03-25 |
 | 2. Axis, Normalization, and Phase Correctness | 0/2 | In progress | - |
-| 3. Structure, Annotation, and Final Assembly | 1/2 | In Progress|  |
+| 3. Structure, Annotation, and Final Assembly | 2/2 | Complete   | 2026-03-25 |
