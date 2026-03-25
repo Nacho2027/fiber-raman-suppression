@@ -59,7 +59,11 @@ Plans:
   2. Optimization cost J (before and after, in dB) is annotated directly on opt.png
   3. Each run produces exactly 3 output files: opt.png, opt_phase.png, opt_evolution.png — the two separate evolution PNGs no longer exist
   4. opt_evolution.png is a single 2x2 figure showing temporal and spectral evolution for both optimized and unshaped propagation side by side with a shared colorbar
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Add _add_metadata_block! helper, expand J annotation to show before/after/delta, create plot_merged_evolution 2x2 function, add metadata= kwarg to 3 top-level plotters
+- [ ] 03-02-PLAN.md — Wire metadata construction and plot_merged_evolution into run_optimization (raman) and both run functions (amplitude), enforce 3-file output naming
 
 ## Progress
 
@@ -70,4 +74,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Stop Actively Misleading | 0/2 | Complete    | 2026-03-25 |
 | 2. Axis, Normalization, and Phase Correctness | 0/2 | In progress | - |
-| 3. Structure, Annotation, and Final Assembly | 0/TBD | Not started | - |
+| 3. Structure, Annotation, and Final Assembly | 0/2 | Not started | - |
