@@ -20,7 +20,7 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full details.
 
 ### v2.0 Verification & Discovery
 
-- [ ] **Phase 4: Correctness Verification** - Prove the forward solver and adjoint are physically correct before trusting any optimization output
+- [x] **Phase 4: Correctness Verification** - Prove the forward solver and adjoint are physically correct before trusting any optimization output (completed 2026-03-25)
 - [ ] **Phase 5: Result Serialization** - Save structured run data to JLD2/JSON so cross-run comparison has something to load
 - [ ] **Phase 6: Cross-Run Comparison and Pattern Analysis** - Overlay and compare all 5 optimization runs; decompose phase profiles onto physical basis
 - [ ] **Phase 7: Parameter Sweeps** - Systematically explore L x P space and multi-start robustness using verified, serialized infrastructure
@@ -37,10 +37,10 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full details.
   3. A Taylor remainder gradient test produces a log-log residual vs. eps plot with slope ~2, confirming the adjoint gradient is O(eps^2) correct
   4. The cost J returned by spectral_band_cost matches direct numerical integration of the same Raman-band bins to machine precision, confirming mask correctness
   5. A human-readable verification report in `results/raman/validation/` shows PASS/FAIL for each of the four tests with numeric evidence
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 04-01-PLAN.md — Verification skeleton with VERIF-01 (soliton shape) and VERIF-04 (cost cross-check)
-- [ ] 04-02-PLAN.md — VERIF-02 (photon number conservation) and VERIF-03 (Taylor remainder at production grid)
+- [x] 04-02-PLAN.md — VERIF-02 (photon number conservation) and VERIF-03 (Taylor remainder at production grid)
 
 ### Phase 5: Result Serialization
 **Goal**: Every optimization run saves structured metadata and results to disk so subsequent phases can load and compare without re-running simulations
@@ -81,7 +81,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 4. Correctness Verification | 1/2 | In Progress|  |
+| 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
 | 5. Result Serialization | 0/? | Not started | - |
 | 6. Cross-Run Comparison and Pattern Analysis | 0/? | Not started | - |
 | 7. Parameter Sweeps | 0/? | Not started | - |

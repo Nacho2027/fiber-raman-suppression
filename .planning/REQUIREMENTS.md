@@ -10,8 +10,8 @@ Requirements for Verification & Discovery milestone. Each maps to roadmap phases
 ### Verification
 
 - [x] **VERIF-01**: Fundamental soliton (N=1 sech) propagates one soliton period with <2% shape error, confirming NLSE solver correctness
-- [ ] **VERIF-02**: Photon number integral |U(w)|^2/w is conserved to <1% across forward propagation for all standard configs
-- [ ] **VERIF-03**: Taylor remainder test confirms adjoint gradient is O(eps^2) — slope ~2 on log-log residual vs eps plot
+- [x] **VERIF-02**: Photon number integral |U(w)|^2/w is conserved to <1% across forward propagation for all standard configs
+- [x] **VERIF-03**: Taylor remainder test confirms adjoint gradient is O(eps^2) — slope ~2 on log-log residual vs eps plot
 - [x] **VERIF-04**: Cost J from spectral_band_cost matches direct spectral integration to machine precision, confirming mask correctness
 
 ### Cross-Run Infrastructure
@@ -63,8 +63,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | VERIF-01 | Phase 4 | Complete |
-| VERIF-02 | Phase 4 | Pending |
-| VERIF-03 | Phase 4 | Pending |
+| VERIF-02 | Phase 4 | Complete |
+| VERIF-03 | Phase 4 | Complete |
 | VERIF-04 | Phase 4 | Complete |
 | XRUN-01 | Phase 5 | Pending |
 | XRUN-02 | Phase 6 | Pending |

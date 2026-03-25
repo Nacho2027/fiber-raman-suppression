@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-25T21:12:33.921Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-25T21:39:07.467Z"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -45,6 +45,7 @@ Plan: 2 of 2
 
 *Updated after each plan completion*
 | Phase 04 P01 | 3 | 1 tasks | 2 files |
+| Phase 04-correctness-verification P02 | 35 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [Phase 04]: β_order=3 required for SMF28 preset (2 betas): setup_raman_problem enforces length(betas_user) ≤ β_order-1
 - [Phase 04]: VERIF-04 uses atol=1e-12 (machine precision) because both J_func and J_direct paths use identical arithmetic
 - [Phase 04]: verification.jl separate from test_optimization.jl — research-grade at Nt=2^14 vs fast CI at Nt=2^9
+- [Phase 04-correctness-verification]: VERIF-02 FAILs by design: attenuator absorbs energy causing 2.7-49% photon number drift
+- [Phase 04-correctness-verification]: sim['ωs'] is absolute freq (ω₀ included); photon number uses abs.(sim['ωs']) directly
+- [Phase 04-correctness-verification]: VERIF-03 Taylor remainder at Nt=2^14: L=0.1m + epsilons=[1e0,1e-1,1e-2,1e-3]; slopes [2.01,2.07,2.09] confirm adjoint O(eps²)
 
 ### Pending Todos
 
@@ -79,6 +83,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-25T21:12:33.918Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-25T21:39:07.464Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
