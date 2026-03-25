@@ -351,7 +351,8 @@ function plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix=
     ax2.set_xlabel("TOD perturbation [fs³]")
     ax2.set_ylabel("J [dB]")
     ax2.set_title("Sensitivity to cubic chirp (TOD)")
-    ax2.ticklabel_format(useOffset=false, style="plain")
+    # Note: ticklabel_format requires ScalarFormatter, but ax2 uses FormatStrFormatter (line 347)
+    # so we skip it here — the FormatStrFormatter already handles display correctly
     ax2.legend()
 
     fig.tight_layout()
