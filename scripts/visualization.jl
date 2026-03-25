@@ -29,16 +29,18 @@ using Logging
 # 0. Global formatting — publication defaults
 # ─────────────────────────────────────────────────────────────────────────────
 
-PyPlot.matplotlib.rcParams["font.size"] = 11
-PyPlot.matplotlib.rcParams["axes.labelsize"] = 12
-PyPlot.matplotlib.rcParams["axes.titlesize"] = 13
-PyPlot.matplotlib.rcParams["xtick.labelsize"] = 10
-PyPlot.matplotlib.rcParams["ytick.labelsize"] = 10
-PyPlot.matplotlib.rcParams["legend.fontsize"] = 10
-PyPlot.matplotlib.rcParams["figure.dpi"] = 150
-PyPlot.matplotlib.rcParams["savefig.dpi"] = 300
-PyPlot.matplotlib.rcParams["axes.grid"] = true
-PyPlot.matplotlib.rcParams["grid.alpha"] = 0.3
+const _rc = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+_rc["font.size"]          = 11
+_rc["axes.labelsize"]     = 12
+_rc["axes.titlesize"]     = 13
+_rc["xtick.labelsize"]    = 10
+_rc["ytick.labelsize"]    = 10
+_rc["legend.fontsize"]    = 10
+_rc["figure.dpi"]         = 150
+_rc["savefig.dpi"]        = 300
+_rc["savefig.bbox"]       = "tight"
+_rc["axes.grid"]          = true
+_rc["grid.alpha"]         = 0.3
 
 # Physical constants
 const C_NM_THZ = 299792.458  # speed of light in nm·THz
@@ -332,7 +334,7 @@ Color scale is normalized dB relative to global peak.
 function plot_spectral_evolution(sol, sim, fiber;
     mode_idx=1, dB_range=40.0,
     wavelength_limits=nothing,
-    cmap="jet", figsize=(8, 6),
+    cmap="inferno", figsize=(8, 6),
     length_unit=:auto,
     ax=nothing, fig=nothing)
 
@@ -363,6 +365,7 @@ function plot_spectral_evolution(sol, sim, fiber;
     end
     im = ax.pcolormesh(ΛΛ, ZZ, P_dB, shading="nearest", cmap=cmap,
         vmin=-dB_range, vmax=0)
+    ax.grid(false)
 
     ax.set_xlabel("Wavelength [nm]")
     ax.set_ylabel(z_label)
@@ -391,7 +394,7 @@ Color scale in dB (default) or linear.
 function plot_temporal_evolution(sol, sim, fiber;
     mode_idx=1, dB_range=40.0,
     time_limits=nothing,
-    cmap="jet", figsize=(8, 6),
+    cmap="inferno", figsize=(8, 6),
     length_unit=:auto, scale=:dB,
     ax=nothing, fig=nothing)
 
@@ -421,6 +424,7 @@ function plot_temporal_evolution(sol, sim, fiber;
     end
     im = ax.pcolormesh(TT, ZZ, P_plot, shading="nearest", cmap=cmap,
         vmin=vmin, vmax=vmax)
+    ax.grid(false)
 
     ax.set_xlabel("Time [ps]")
     ax.set_ylabel(z_label)
@@ -450,7 +454,7 @@ Top: temporal evolution. Bottom: spectral evolution. Shared colorbar.
 function plot_combined_evolution(sol, sim, fiber;
     mode_idx=1, dB_range=40.0,
     time_limits=nothing, wavelength_limits=nothing,
-    cmap="jet", figsize=(8, 10),
+    cmap="inferno", figsize=(8, 10),
     length_unit=:auto, title=nothing)
 
     fig, axes = subplots(2, 1, figsize=figsize)
@@ -500,7 +504,7 @@ function plot_spectrogram(ut, sim;
     gate_fwhm_ps=0.05, dB_range=40.0,
     domain=:wavelength,
     freq_limits=nothing, time_limits=nothing,
-    cmap="jet", figsize=(8, 6))
+    cmap="inferno", figsize=(8, 6))
 
     Nt = length(ut)
     ts_ps = sim["ts"] .* 1e12
@@ -546,6 +550,7 @@ function plot_spectrogram(ut, sim;
     fig, ax = subplots(figsize=figsize)
     im = ax.pcolormesh(t_axis, y_axis, S_plot, shading="nearest", cmap=cmap,
         vmin=-dB_range, vmax=0)
+    ax.grid(false)
     fig.colorbar(im, ax=ax, label="Intensity [dB]")
     ax.set_xlabel("Time [ps]")
     ax.set_ylabel(y_label)
