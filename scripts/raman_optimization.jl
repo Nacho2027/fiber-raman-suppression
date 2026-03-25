@@ -301,22 +301,57 @@ function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
     return gdd_range, J_gdd, tod_range, J_tod
 end
 
-"""Plot chirp sensitivity curves."""
+"""
+    plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix)
+
+Plot chirp sensitivity curves for GDD and TOD perturbations.
+
+Shows J(GDD) and J(TOD) vs perturbation magnitude, with a dot at the zero-perturbation
+point (not an axhline — which would imply a constant 'optimum' value).
+If GDD curve is monotonic, warns that regularization may be constraining phase freedom.
+"""
 function plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix="chirp_sensitivity")
+    PyPlot.matplotlib.ticker.FormatStrFormatter  # ensure FormatStrFormatter is accessible
+
     fig, (ax1, ax2) = subplots(1, 2, figsize=(10, 4))
 
-    ax1.plot(gdd_range .* 1e3, MultiModeNoise.lin_to_dB.(J_gdd), "b.-")
+    gdd_fs2 = gdd_range .* 1e3  # convert ps² → fs²
+    J_gdd_dB = MultiModeNoise.lin_to_dB.(J_gdd)
+    J_tod_dB = MultiModeNoise.lin_to_dB.(J_tod)
+
+    # Center index for zero-perturbation point
+    center_idx_gdd = div(length(gdd_range) + 1, 2)
+    center_idx_tod = div(length(tod_range) + 1, 2)
+
+    # GDD panel
+    ax1.plot(gdd_fs2, J_gdd_dB, "b.-", linewidth=1.2, markersize=4)
+    # Zero perturbation marker — avoids misleading horizontal 'Optimum' line
+    ax1.plot([gdd_fs2[center_idx_gdd]], [J_gdd_dB[center_idx_gdd]],
+        "ro", markersize=8, label="Zero perturbation")
     ax1.set_xlabel("GDD perturbation [fs²]")
     ax1.set_ylabel("J [dB]")
     ax1.set_title("Sensitivity to quadratic chirp (GDD)")
-    ax1.axhline(y=MultiModeNoise.lin_to_dB(J_gdd[div(length(J_gdd)+1, 2)]), color="r", ls="--", alpha=0.5, label="Optimum")
+    ax1.ticklabel_format(useOffset=false, style="plain")
     ax1.legend()
 
-    ax2.plot(tod_range .* 1e6, MultiModeNoise.lin_to_dB.(J_tod), "r.-")
+    # Detect if GDD curve is monotonic (suggests regularization may be constraining phase freedom)
+    gdd_monotonic = issorted(J_gdd_dB) || issorted(J_gdd_dB, rev=true)
+    if gdd_monotonic
+        @warn "GDD sensitivity curve is monotonic — regularization may be constraining phase freedom"
+        ax1.set_title("GDD sensitivity (monotonic — regularization may be constraining)")
+    end
+
+    # TOD panel with FormatStrFormatter for large-exponent axis labels
+    tod_fs3 = tod_range .* 1e6  # convert ps³ → fs³
+    fmt = PyPlot.matplotlib.ticker.FormatStrFormatter("%.1e")
+    ax2.xaxis.set_major_formatter(fmt)
+    ax2.plot(tod_fs3, J_tod_dB, "r.-", linewidth=1.2, markersize=4)
+    ax2.plot([tod_fs3[center_idx_tod]], [J_tod_dB[center_idx_tod]],
+        "bo", markersize=8, label="Zero perturbation")
     ax2.set_xlabel("TOD perturbation [fs³]")
     ax2.set_ylabel("J [dB]")
     ax2.set_title("Sensitivity to cubic chirp (TOD)")
-    ax2.axhline(y=MultiModeNoise.lin_to_dB(J_tod[div(length(J_tod)+1, 2)]), color="b", ls="--", alpha=0.5, label="Optimum")
+    ax2.ticklabel_format(useOffset=false, style="plain")
     ax2.legend()
 
     fig.tight_layout()
@@ -473,14 +508,16 @@ using Dates
 @info "  Raman Phase Optimization — Heavy-Duty Runs"
 @info "═══════════════════════════════════════════"
 
-# ── Output directory: results/raman/<fiber>/<params>/ ──
-# Each run gets its own folder with all plots inside.
+# ── Output directories ──
+# Primary: results/raman/<fiber>/<params>/ (per-run detailed output)
+# Summary: results/images/ (flat directory for quick-access plots)
 const RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
 function run_dir(fiber, params)
     d = joinpath("results", "raman", fiber, params)
     mkpath(d)
     return d
 end
+mkpath("results/images")  # ensure summary output directory exists
 
 # ── SMF-28 parameters (canonical single-mode fiber at 1550nm) ──
 const SMF28_GAMMA = 1.1e-3        # W⁻¹m⁻¹ (1.1 /W/km)
@@ -499,6 +536,8 @@ result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
     gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
     save_prefix=joinpath(dir1, "opt")
 )
+# Also save to results/images/ for quick access
+cp(joinpath(dir1, "opt.png"), "results/images/raman_opt_L1m_SMF28.png", force=true)
 φ_opt_1 = reshape(result1.minimizer, sim_1["Nt"], sim_1["M"])
 GC.gc()
 
@@ -561,7 +600,7 @@ gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
     gdd_range=range(-2e-2, 2e-2, length=101)
 )
 plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
-    save_prefix=joinpath(dir4, "chirp_sensitivity"))
+    save_prefix="results/images/chirp_sens_HNLF_L5m")
 
 # Phase diagnostics are now generated per-run inside run_optimization
 

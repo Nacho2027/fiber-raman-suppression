@@ -164,6 +164,72 @@ println("\nTest 18: Checking time window overlay improvements...")
 @assert occursin("axhspan(-1, 1", bench_src) "±1 dB band not present"
 println("  ✓ Time window overlay: Okabe-Ito colors, ±1 dB band present")
 
+# Test 19: Mask-before-unwrap recovers known GDD
+println("\nTest 19: mask_before_unwrap recovers known GDD...")
+Nt_test = 2^12
+Dt_test = 0.01  # 10 fs sample interval in ps (Δt units are ps throughout this codebase)
+f0_test = 193.4  # THz (1550 nm center)
+sim_mbu = Dict("Nt" => Nt_test, "Δt" => Dt_test, "M" => 1, "f0" => f0_test,
+               "ts" => collect(range(-Nt_test/2, Nt_test/2 - 1)) .* Dt_test)
+
+# Known GDD: beta2 * L = -21700 fs^2 = -0.0217 ps^2
+GDD_target_fs2 = -21700.0
+GDD_target_ps2 = GDD_target_fs2 * 1e-6  # -0.0217 ps^2
+
+# Build quadratic spectral phase: phi(omega) = 0.5 * GDD * (omega - omega0)^2
+# dw_grid in rad/ps (since Dt_test is in ps)
+dw_grid = 2π .* fftshift(fftfreq(Nt_test, 1 / Dt_test))  # rad/ps, fftshifted
+phi_quadratic = 0.5 .* GDD_target_ps2 .* dw_grid.^2
+
+# Build Gaussian spectral envelope
+spectral_fwhm_thz = 5.0  # THz
+sigma_f = spectral_fwhm_thz / (2 * sqrt(2 * log(2)))
+df_grid = fftshift(fftfreq(Nt_test, 1 / Dt_test))  # THz, fftshifted (1/ps = THz)
+spec_power = exp.(-df_grid.^2 ./ (2 * sigma_f^2))
+
+# Mask: zero phase where power < -40 dB
+P_peak_test = maximum(spec_power)
+dB_test = 10 .* log10.(spec_power ./ P_peak_test .+ 1e-30)
+signal_mask_test = dB_test .> -40.0
+phi_premask = copy(phi_quadratic)
+phi_premask[.!signal_mask_test] .= 0.0
+
+# Unwrap the pre-masked phase
+phi_unwrapped = _manual_unwrap(phi_premask)
+
+# Compute GDD via second derivative: d2phi/domega2 in ps^2, convert to fs^2
+dw_step = dw_grid[2] - dw_grid[1]  # rad/ps
+gdd_recovered = _second_central_diff(phi_unwrapped, dw_step) .* 1e6  # fs^2
+
+# Check GDD at center of signal region (within +/-1 THz of center)
+center_mask = abs.(df_grid) .< 1.0
+gdd_center = gdd_recovered[center_mask .& signal_mask_test]
+gdd_center_valid = filter(isfinite, gdd_center)
+gdd_mean = sum(gdd_center_valid) / length(gdd_center_valid)
+gdd_error = abs(gdd_mean - GDD_target_fs2) / abs(GDD_target_fs2)
+@assert gdd_error < 0.01 "GDD recovery error $(round(gdd_error*100, digits=2))% exceeds 1% threshold (got $(round(gdd_mean, digits=1)) fs^2, expected $GDD_target_fs2 fs^2)"
+println("  ✓ mask_before_unwrap: recovered GDD = $(round(gdd_mean, digits=1)) fs^2 (error $(round(gdd_error*100, digits=3))%)")
+
+# Test 20: _spectral_signal_xlim auto-zoom
+println("\nTest 20: _spectral_signal_xlim auto-zoom...")
+f0_xlim = 193.4
+Nt_xlim = 2^12
+Dt_xlim = 0.01  # 10 fs in ps units (1/ps = THz)
+f_shifted_xlim = f0_xlim .+ fftshift(fftfreq(Nt_xlim, 1 / Dt_xlim))
+lambda_xlim = C_NM_THZ ./ f_shifted_xlim
+sigma_nm = 50.0  # ~100 nm FWHM
+lambda0_nm = C_NM_THZ / f0_xlim
+spec_xlim_test = exp.(-((lambda_xlim .- lambda0_nm) ./ sigma_nm).^2)
+# Only keep positive lambda for realistic test
+spec_xlim_test[lambda_xlim .< 0] .= 0.0
+
+lo, hi = _spectral_signal_xlim(spec_xlim_test, lambda_xlim; threshold_dB=-40.0, padding_nm=80.0)
+@assert lo > 1200.0 "Auto-zoom lo=$lo too wide (should be > 1200 nm)"
+@assert hi < 2000.0 "Auto-zoom hi=$hi too wide (should be < 2000 nm)"
+@assert lo < lambda0_nm "Auto-zoom lo=$lo does not bracket center wavelength"
+@assert hi > lambda0_nm "Auto-zoom hi=$hi does not bracket center wavelength"
+println("  ✓ _spectral_signal_xlim: [$lo, $hi] nm brackets signal around $(round(lambda0_nm, digits=1)) nm")
+
 println("\n" * "="^60)
 println("All smoke tests passed!")
 println("="^60)

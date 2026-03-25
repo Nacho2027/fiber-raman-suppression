@@ -30,7 +30,7 @@ using Logging
 # ─────────────────────────────────────────────────────────────────────────────
 
 const _rc = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-_rc["font.size"]          = 11
+_rc["font.size"]          = 10
 _rc["axes.labelsize"]     = 12
 _rc["axes.titlesize"]     = 13
 _rc["xtick.labelsize"]    = 10
@@ -207,6 +207,40 @@ function _apply_dB_mask(data, power_spectrum; threshold_dB=-30)
 end
 
 """
+    _spectral_signal_xlim(P_spec_fftshifted, lambda_nm_fftshifted;
+                           threshold_dB=-40.0, padding_nm=80.0)
+
+Compute wavelength xlim containing all spectral content above threshold_dB
+relative to peak. Returns (lambda_lo, lambda_hi) in nm.
+Both inputs must be co-indexed in fftshifted order.
+Negative-frequency ghost wavelengths (λ < 0 from FFT artifacts) are filtered out.
+"""
+function _spectral_signal_xlim(P_spec_fftshifted, lambda_nm_fftshifted;
+                                threshold_dB=-40.0, padding_nm=80.0)
+    P_peak = maximum(P_spec_fftshifted)
+    dB = 10 .* log10.(P_spec_fftshifted ./ P_peak .+ 1e-30)
+    above = findall(dB .> threshold_dB)
+    isempty(above) && return (lambda_nm_fftshifted[1], lambda_nm_fftshifted[end])
+    lambda_signal = lambda_nm_fftshifted[above]
+    # Filter out negative-frequency ghost wavelengths (negative lambda from FFT)
+    lambda_pos = filter(>(0), lambda_signal)
+    isempty(lambda_pos) && return (lambda_nm_fftshifted[1], lambda_nm_fftshifted[end])
+    return (minimum(lambda_pos) - padding_nm, maximum(lambda_pos) + padding_nm)
+end
+
+"""
+    add_caption!(fig, caption; fontsize=9, y=0.01)
+
+Add a small-text caption to the bottom of the figure.
+Useful for annotating figure source, run tag, or brief methodology notes.
+"""
+function add_caption!(fig, caption; fontsize=9, y=0.01)
+    fig.text(0.5, y, caption; ha="center", va="bottom",
+             fontsize=fontsize, color="dimgray",
+             transform=fig.transFigure)
+end
+
+"""
     compute_group_delay(φ_shifted, sim)
 
 Compute group delay τ(ω) = dφ/dω in fs from fftshifted spectral phase.
@@ -276,7 +310,7 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
     ut_shaped = ifft(uω0_base .* cis.(φ), 1)
     Δf_inst = compute_instantaneous_frequency(ut_shaped[:, 1], sim)
 
-    λ_raman_onset = C_NM_THZ / (f0 - 13.0)
+    λ_raman_onset = C_NM_THZ / (f0 - 13.2)  # 13.2 THz: silica Raman Stokes shift
 
     # Apply -30dB mask to spectral quantities
     φ_masked = _apply_dB_mask(φ_unwrapped, spec_pos)
@@ -369,12 +403,20 @@ function plot_spectral_evolution(sol, sim, fiber;
 
     ax.set_xlabel("Wavelength [nm]")
     ax.set_ylabel(z_label)
+    ax.set_title("Spectral evolution")
+
+    # Mark pump wavelength and Raman onset
+    # Silica Raman Stokes shift is ~13.2 THz (dominant peak at 440 cm^-1)
+    f_raman = f0 - 13.2  # THz: Raman Stokes onset frequency
+    λ0_nm = C_NM_THZ / f0
+    λ_raman_nm = C_NM_THZ / f_raman
+    ax.axvline(x=λ0_nm, color="white", ls="--", alpha=0.5, linewidth=0.8, label="Pump λ₀")
+    ax.axvline(x=λ_raman_nm, color=COLOR_RAMAN, ls="--", alpha=0.7, linewidth=0.8, label="Raman onset")
 
     if !isnothing(wavelength_limits)
         ax.set_xlim(wavelength_limits...)
     else
         # Default: center ± sensible range based on center wavelength
-        λ0_nm = C_NM_THZ / f0
         ax.set_xlim(λ0_nm - 400, λ0_nm + 700)
     end
 
@@ -465,11 +507,12 @@ function plot_combined_evolution(sol, sim, fiber;
         cmap=cmap, length_unit=length_unit, ax=axes[1], fig=fig)
     ax_t.set_title("Temporal evolution")
 
-    # Bottom: spectral
+    # Bottom: spectral (note: plot_spectral_evolution now adds Raman/pump markers)
     _, ax_s, im_s = plot_spectral_evolution(sol, sim, fiber;
         mode_idx=mode_idx, dB_range=dB_range, wavelength_limits=wavelength_limits,
         cmap=cmap, length_unit=length_unit, ax=axes[2], fig=fig)
     ax_s.set_title("Spectral evolution")
+    ax_s.legend(fontsize=7, loc="upper right")
 
     # Shared colorbar on the right
     fig.subplots_adjust(right=0.88)
@@ -480,6 +523,10 @@ function plot_combined_evolution(sol, sim, fiber;
     if !isnothing(title)
         fig.suptitle(title, fontsize=14, y=0.98)
     end
+
+    # Caption: key nonlinear effects observable in this figure
+    # Soliton self-frequency shift (SSFS) appears as spectral red-drift at long propagation
+    add_caption!(fig, "Spectral evolution — key effects: soliton self-frequency shift (SSFS), Raman Stokes emission")
 
     return fig, axes
 end
@@ -612,22 +659,20 @@ function plot_spectrum_comparison(uω_in, uω_out, sim;
     ax.plot(λ_nm, P_in_dB, color=COLOR_INPUT, label=label_in, alpha=0.7, linewidth=1.2)
     ax.plot(λ_nm, P_out_dB, color=COLOR_OUTPUT, label=label_out, alpha=0.8, linewidth=1.2)
 
-    # Raman band shading
+    # Raman onset marker: axvline at Stokes onset wavelength
     if !isnothing(raman_threshold)
-        Δf_shifted = fftshift(fftfreq(Nt, 1 / Δt))
-        raman_half_bw_thz = 2.5  # ±2.5 THz window around gain peak (~10 THz FWHM silica Raman)
-        raman_idx = abs.(Δf_shifted .- raman_threshold) .< raman_half_bw_thz
-        if any(raman_idx)
-            λ_raman = λ_nm[raman_idx]
-            ax.axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color=COLOR_RAMAN, label="Raman band")
-        end
+        # Raman Stokes onset wavelength from threshold frequency offset
+        f_raman_onset = f0 + raman_threshold  # THz
+        λ_raman_onset_nm = C_NM_THZ / f_raman_onset
+        ax.axvline(x=λ_raman_onset_nm, color=COLOR_RAMAN, ls="--",
+            alpha=0.7, linewidth=1.0, label="Raman onset")
     end
 
     ax.set_xlabel("Wavelength [nm]")
     ax.set_ylabel("Power [dB]")
     ax.set_ylim(-dB_range, 3)
     ax.legend()
+    ax.ticklabel_format(useOffset=false, style="plain", axis="x")
 
     if !isnothing(wavelength_limits)
         ax.set_xlim(wavelength_limits...)
@@ -674,6 +719,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
 
     fig, axs = subplots(3, 2, figsize=figsize)
 
+    J_values = Float64[]  # track J per column for ΔJ annotation
+
     for (col, (φ, label)) in enumerate([(φ_before, "Before"), (φ_after, "After")])
         uω0_shaped = @. uω0_base * cis(φ)
 
@@ -694,15 +741,11 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[1, col].plot(λ_nm, spec_out_dB, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
         axs[1, col].plot(λ_nm, spec_in_dB, color=COLOR_INPUT, ls="--", label="Input", alpha=0.7, linewidth=1.5)
 
-        # Set xlim BEFORE Raman marker so axvspan clips correctly
+        # Set xlim before adding line markers for correct clipping
         axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
         axs[1, col].set_ylim(-60, 3)
 
-        if any(raman_λ_idx)
-            λ_raman = λ_nm[raman_λ_idx]
-            axs[1, col].axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color=COLOR_RAMAN)
-        end
+        # Raman onset line: axvline at Stokes onset wavelength
         λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
         axs[1, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--",
             alpha=0.7, linewidth=1.0, label="Raman onset")
@@ -711,8 +754,10 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[1, col].set_ylabel("Power [dB]")
         axs[1, col].set_title("$label optimization")
         axs[1, col].legend(fontsize=8)
+        axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
         J_val = sum(abs2.(uωf) .* band_mask) / sum(abs2.(uωf))
+        push!(J_values, J_val)
         axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
@@ -769,6 +814,17 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
         axs[3, col].set_title("Group delay τ(ω)")
         axs[3, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.8)
+        axs[3, col].ticklabel_format(useOffset=false, style="plain", axis="x")
+    end
+
+    # ΔJ = J_after - J_before annotation on the "After" spectral panel
+    if length(J_values) == 2
+        ΔJ = J_values[2] - J_values[1]
+        ΔJ_dB = MultiModeNoise.lin_to_dB(J_values[2]) - MultiModeNoise.lin_to_dB(J_values[1])
+        axs[1, 2].annotate(@sprintf("ΔJ = %.4f (%.1f dB improvement)", ΔJ, -ΔJ_dB),
+            xy=(0.05, 0.85), xycoords="axes fraction", va="top", fontsize=9,
+            color=ΔJ < 0 ? "darkgreen" : "darkred",
+            bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
     end
 
     fig.tight_layout()
@@ -834,11 +890,10 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         axs[1, col].plot(λ_nm, spec_in_dB, color=COLOR_INPUT, label="Input", alpha=0.7, linewidth=1.0)
         axs[1, col].plot(λ_nm, spec_out_dB, color=COLOR_OUTPUT, label="Output", alpha=0.8, linewidth=1.0)
 
-        if any(raman_λ_idx)
-            λ_raman = λ_nm[raman_λ_idx]
-            axs[1, col].axvspan(minimum(λ_raman), maximum(λ_raman),
-                alpha=0.12, color=COLOR_RAMAN)
-        end
+        # Raman onset line: axvline at Stokes onset wavelength
+        λ_raman_onset_amp = C_NM_THZ / (f0 + raman_threshold)
+        axs[1, col].axvline(x=λ_raman_onset_amp, color=COLOR_RAMAN, ls="--",
+            alpha=0.7, linewidth=1.0, label="Raman onset")
 
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
@@ -846,6 +901,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         axs[1, col].legend(fontsize=8)
         axs[1, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
         axs[1, col].set_ylim(-60, 3)
+        axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
         J_val = sum(abs2.(uωf) .* band_mask) / sum(abs2.(uωf))
         axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
@@ -882,11 +938,27 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         axs[3, col].set_xlim(λ0_nm - 300, λ0_nm + 500)
         axs[3, col].legend(fontsize=8)
         axs[3, col].set_title("Amplitude profile")
+        axs[3, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
         A_min, A_max = extrema(A[:, 1])
         axs[3, col].annotate(@sprintf("A ∈ [%.3f, %.3f]", A_min, A_max),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
+
+        # Box constraint check: amplitude must stay in [0, 1]
+        # Mark INVALID if box constraints violated (amplitude < 0 or > 1)
+        if A_min < -1e-6 || A_max > 1.0 + 1e-6
+            # INVALID watermark: box constraints violated
+            for r in 1:3
+                axs[r, col].text(0.5, 0.5, "INVALID",
+                    transform=axs[r, col].transAxes,
+                    fontsize=18, color="red", alpha=0.4,
+                    ha="center", va="center", rotation=30,
+                    fontweight="bold",
+                    bbox=Dict("boxstyle" => "round", "facecolor" => "white", "alpha" => 0.2))
+            end
+            @warn "plot_amplitude_result_v2: column $col has box constraints violated (A ∈ [$A_min, $A_max])"
+        end
     end
 
     fig.tight_layout()
@@ -922,9 +994,11 @@ function plot_boundary_diagnostic(sol, sim, fiber; mode_idx=1, edge_fraction=0.0
 
     fig, ax = subplots(figsize=(10, 4))
 
-    # Edge zones
-    ax.axvspan(ts_ps[1], ts_ps[n_edge], alpha=0.2, color="red", label="Edge zone")
-    ax.axvspan(ts_ps[end-n_edge+1], ts_ps[end], alpha=0.2, color="red")
+    # Edge zone markers: fill_between to highlight dangerous edge regions
+    ax.fill_betweenx([1e-30, 10.0], ts_ps[1], ts_ps[n_edge],
+        alpha=0.2, color="red", label="Edge zone")
+    ax.fill_betweenx([1e-30, 10.0], ts_ps[end-n_edge+1], ts_ps[end],
+        alpha=0.2, color="red")
 
     # Power profile
     ax.semilogy(ts_ps, P_norm .+ 1e-30, "b-", linewidth=1.0)
