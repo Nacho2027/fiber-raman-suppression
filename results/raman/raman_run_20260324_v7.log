@@ -1,0 +1,12 @@
+[ Info: ═══════════════════════════════════════════
+[ Info:   Raman Phase Optimization — Heavy-Duty Runs
+[ Info: ═══════════════════════════════════════════
+┌ Info: 
+└ ▶ Run 1: SMF-28 baseline (L=1m, P=0.05W) → results/raman/smf28/L1m_P005W
+User defined fiber params
+[0.0; 0.0; -2.17e-26; 1.2e-40;;]
+[ Info: Gradient Validation
+[ Info: Gradient validation (ε = 1.0e-5)
+┌ Info: Optimization
+│   λ_gdd = 0.0001
+└   λ_boundary = 10.0
