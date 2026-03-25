@@ -47,7 +47,9 @@ Returns (J, ∂J/∂φ).
 """
 function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     uω0_shaped::Union{Nothing,AbstractMatrix}=nothing,
-    uωf_buffer::Union{Nothing,AbstractMatrix}=nothing)
+    uωf_buffer::Union{Nothing,AbstractMatrix}=nothing,
+    λ_gdd=0.0,
+    λ_boundary=0.0)
 
     # PRECONDITIONS
     @assert size(φ) == size(uω0) "φ shape $(size(φ)) ≠ uω0 shape $(size(uω0))"
@@ -83,14 +85,61 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     λ0 = sol_adj(0)
 
     # Chain rule: ∂J/∂φ(ω) = 2 · Re(λ₀*(ω) · i · u₀(ω))
-    # Because δu₀ = i·u₀·δφ, and the adjoint gives δJ = 2·Re(λ₀* · δu₀)
     ∂J_∂φ = 2.0 .* real.(conj.(λ0) .* (1im .* uω0_shaped))
 
-    # POSTCONDITIONS
+    # POSTCONDITIONS on physics cost (before regularization)
     @assert isfinite(J) "cost is not finite: $J"
     @assert all(isfinite, ∂J_∂φ) "gradient contains NaN/Inf"
 
-    return J, ∂J_∂φ
+    J_total = J
+    grad_total = copy(∂J_∂φ)
+
+    # ── GDD penalty: ∫(d²φ/dω²)² dω, scaled by Δω⁻³ for N-independence ──
+    if λ_gdd > 0
+        Nt_φ = size(φ, 1)
+        Δω = 2π / (Nt_φ * sim["Δt"])
+        inv_Δω3 = 1.0 / Δω^3
+        for m in 1:size(φ, 2)
+            for i in 2:(Nt_φ - 1)
+                d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
+                J_total += λ_gdd * inv_Δω3 * d2^2
+                coeff = 2 * λ_gdd * inv_Δω3 * d2
+                grad_total[i-1, m] += coeff
+                grad_total[i, m]   -= 2 * coeff
+                grad_total[i+1, m] += coeff
+            end
+        end
+    end
+
+    # ── Boundary penalty: penalizes energy at FFT window edges of input pulse ──
+    if λ_boundary > 0
+        Nt_b = size(φ, 1)
+        n_edge = max(1, Nt_b ÷ 20)  # 5% on each side
+
+        ut0 = ifft(uω0_shaped, 1)
+
+        mask_edge = zeros(Nt_b, size(φ, 2))
+        mask_edge[1:n_edge, :] .= 1.0
+        mask_edge[end-n_edge+1:end, :] .= 1.0
+
+        E_total_input = max(sum(abs2.(ut0)), eps())
+        E_edges = sum(abs2.(ut0) .* mask_edge)
+        edge_frac = E_edges / E_total_input
+
+        if edge_frac > 1e-8
+            J_total += λ_boundary * edge_frac
+
+            # Gradient: adjoint of IFFT + chain rule through cis(φ)
+            coeff = 2 * λ_boundary / (Nt_b * E_total_input)
+            grad_boundary_ω = coeff .* imag.(conj.(uω0_shaped) .* fft(mask_edge .* ut0, 1))
+            grad_total .+= grad_boundary_ω
+        end
+    end
+
+    @assert isfinite(J_total) "regularized cost is not finite: $J_total"
+    @assert all(isfinite, grad_total) "regularized gradient contains NaN/Inf"
+
+    return J_total, grad_total
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +147,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
-    φ0=nothing, max_iter=50)
+    φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -131,7 +180,8 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
         Optim.only_fg!() do F, G, φ_vec
             φ = reshape(φ_vec, Nt, M)
             J, ∂J_∂φ = cost_and_gradient(φ, uω0_base, fiber, sim, band_mask;
-                uω0_shaped=uω0_shaped, uωf_buffer=uωf_buffer)
+                uω0_shaped=uω0_shaped, uωf_buffer=uωf_buffer,
+                λ_gdd=λ_gdd, λ_boundary=λ_boundary)
             if G !== nothing
                 G .= vec(∂J_∂φ)
             end
@@ -279,18 +329,32 @@ end
 # 9. Run a single optimization for given parameters
 # ─────────────────────────────────────────────────────────────────────────────
 
-function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing, kwargs...)
+function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
+    λ_gdd=:auto, λ_boundary=10.0, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
     Nt = sim["Nt"]; M = sim["M"]
+
+    # Physics-based auto GDD penalty weight
+    if λ_gdd === :auto
+        T0 = 185e-15 / (2 * acosh(sqrt(2)))
+        tw_ps = Nt * sim["Δt"]
+        GDD_max = T0^2 * sqrt(max((0.15 * tw_ps * 1e-12 / T0)^2 - 1, 1.0))
+        J_unshaped, _ = cost_and_gradient(zeros(Nt, M), uω0, fiber, sim, band_mask)
+        λ_gdd_val = J_unshaped / (GDD_max^2 * Nt)
+        @info @sprintf("Auto λ_gdd = %.2e  (GDD_max = %.2e s², J₀ = %.2e)", λ_gdd_val, GDD_max, J_unshaped)
+    else
+        λ_gdd_val = Float64(λ_gdd)
+    end
 
     if validate
         @info "Gradient Validation"
         validate_gradient(uω0, fiber, sim, band_mask; n_checks=3)
     end
 
-    @info "Optimization"
-    result = optimize_spectral_phase(uω0, fiber, sim, band_mask; max_iter=max_iter, φ0=φ0)
+    @info "Optimization" λ_gdd=λ_gdd_val λ_boundary=λ_boundary
+    result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
+        max_iter=max_iter, φ0=φ0, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary)
 
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
@@ -333,6 +397,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     ├─────────────────────────────────────────────────┤
     │  Fiber        L = %.1f m, γ = %.2e W⁻¹m⁻¹
     │  Grid         Nt = %d, time_window = %.1f ps
+    │  Regulariz.   λ_gdd = %.2e, λ_boundary = %.1f
     │  Iterations   %d (%.1f s)
     ├─────────────────────────────────────────────────┤
     │  J (before)   %.4e  (%.1f dB)
@@ -349,6 +414,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         save_prefix,
         fiber["L"], fiber["γ"][1],
         Nt, tw_ps,
+        λ_gdd_val, λ_boundary,
         max_iter, elapsed,
         J_before, MultiModeNoise.lin_to_dB(J_before),
         J_after, MultiModeNoise.lin_to_dB(J_after),
