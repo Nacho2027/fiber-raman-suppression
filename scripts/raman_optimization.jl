@@ -429,16 +429,26 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         @warn "Boundary energy is too high — increase time_window or Nt"
     end
 
-    # ── Plots (no boundary plot) ──
+    # ── Plots ──
     @info "Plotting"
+
+    # 3×2 optimization comparison (spectra, temporal, group delay)
     plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
         save_path="$(save_prefix).png")
 
-    @info "Evolution Plot"
-    propagate_and_plot_evolution(uω0_opt, fiber, sim;
-        title="Optimized pulse evolution (L=$(fiber["L"])m)",
+    # Evolution comparison: unshaped vs optimized (2×2 grid)
+    @info "Evolution Comparison"
+    plot_evolution_comparison(uω0, uω0_opt, fiber, sim;
+        label_before="Unshaped", label_after="Optimized",
+        title="Pulse evolution (L=$(fiber["L"])m)",
         save_path="$(save_prefix)_evolution.png")
+
+    # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
+    @info "Phase Diagnostic"
+    plot_phase_diagnostic(φ_after, uω0, sim;
+        save_path="$(save_prefix)_phase.png")
+    close("all")
 
     return result, uω0, fiber, sim, band_mask, Δf
 end
@@ -554,19 +564,7 @@ gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
 plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
     save_prefix=joinpath(dir4, "chirp_sensitivity"))
 
-# ─── Phase diagnostics for each run ─────────────────────────────────────────
-@info "\n▶ Phase Diagnostics"
-for (label, φ, uω0, sim_i, dir_i) in [
-    ("Run 1", φ_opt_1, uω0_1, sim_1, dir1),
-    ("Run 2", φ_opt_2, uω0_2, sim_2, dir2),
-    ("Run 3", φ_opt_3, uω0_3, sim_3, dir3),
-    ("Run 4", φ_opt_4, uω0_4, sim_4, dir4),
-    ("Run 5", φ_opt_5, uω0_5, sim_5, dir5),
-]
-    @info "  Phase diagnostic: $label"
-    plot_phase_diagnostic(φ, uω0, sim_i; save_path=joinpath(dir_i, "phase_diagnostic.png"))
-    close("all")
-end
+# Phase diagnostics are now generated per-run inside run_optimization
 
 @info "═══ All runs complete ═══"
 @info "Output directory structure:"
