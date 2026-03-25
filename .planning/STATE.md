@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-25T02:51:06.459Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-25T02:59:44.195Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 2 of 2
 *Updated after each plan completion*
 | Phase 01 P02 | 3min | 2 tasks | 1 files |
 | Phase 02-axis-normalization-and-phase-correctness P01 | 17 | 2 tasks | 3 files |
+| Phase 02-axis-normalization-and-phase-correctness P02 | 8 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - [Phase 02-axis-normalization-and-phase-correctness]: BUG-03: use 0.0 not NaN for pre-mask zeroing — _manual_unwrap requires finite input values
 - [Phase 02-axis-normalization-and-phase-correctness]: 3x2 phase diagnostic portrait layout (12x12in); wrapped phase shows original unmasked phase, NaN mask applied after
 - [Phase 02-axis-normalization-and-phase-correctness]: GDD percentile clipping: quantile(gdd_valid, 0.02/0.98) with 5% margin, minimum 100 fs² floor
+- [Phase 02-axis-normalization-and-phase-correctness]: Use _energy_window not _auto_time_limits for amplitude comparison temporal limits — more robust for dispersed pulses
+- [Phase 02-axis-normalization-and-phase-correctness]: plot_spectral_evolution auto-zooms to z=0 input spectrum as reference — stable reference avoids over-expansion from output broadening
 
 ### Pending Todos
 
@@ -76,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25T02:51:06.457Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-25T02:59:44.193Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

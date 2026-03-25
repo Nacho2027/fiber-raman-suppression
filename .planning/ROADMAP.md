@@ -48,7 +48,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Add _spectral_signal_xlim helper, synthetic mask-before-unwrap test, rewrite plot_phase_diagnostic to 3x2 layout with mask-before-unwrap and all 5 phase views
-- [ ] 02-02-PLAN.md — Refactor plot_optimization_result_v2 and plot_amplitude_result_v2 to two-pass with global P_ref and shared axes, apply auto-zoom to standalone functions, mark PHASE-01 complete
+- [x] 02-02-PLAN.md — Refactor plot_optimization_result_v2 and plot_amplitude_result_v2 to two-pass with global P_ref and shared axes, apply auto-zoom to standalone functions, mark PHASE-01 complete
 
 ### Phase 3: Structure, Annotation, and Final Assembly
 **Goal**: Every saved figure is self-documenting and the two evolution PNGs are replaced by one merged comparison figure
