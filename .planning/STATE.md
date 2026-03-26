@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
-stopped_at: Completed 06.1-01-PLAN.md
-last_updated: "2026-03-26T03:49:48.126Z"
+status: Awaiting checkpoint
+stopped_at: "06.1-02-PLAN.md Task 2 (human-verify: all 8 physics insight figures)"
+last_updated: "2026-03-26T03:53:34Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -50,6 +50,7 @@ Plan: 2 of 2
 | Phase 06-cross-run-comparison-and-pattern-analysis P01 | 8 | 2 tasks | 1 files |
 | Phase 06-cross-run-comparison-and-pattern-analysis P02 | 15 | 1 tasks | 1 files |
 | Phase 06.1-physics-insight P01 | 4 | 2 tasks | 5 files |
+| Phase 06.1-physics-insight P02 | 2 | 1 tasks (checkpoint) | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - [Phase 06.1-physics-insight]: Julia using statements must be placed outside include guard — macros need compile-time visibility; moved imports before if !(@isdefined) block
 - [Phase 06.1-physics-insight]: normalize_phase zero-fills noise-floor bins (!signal_mask) to prevent random phase from distorting y-axis in overlays
 - [Phase 06.1-physics-insight]: 98.9-99.9% non-polynomial residual fraction confirmed: optimizer uses complex high-order phase shaping, not GDD/TOD
+- [Phase 06.1-physics-insight Plan02]: Fig 5 uses Option A (no re-propagation): J_before/J_after annotations from JLD2 scalars; input spectrum only (avoids ~2.5 min re-propagation)
+- [Phase 06.1-physics-insight Plan02]: Group delay NaN-masks noise-floor bins (vs zero-fill used for phi_norm) — NaN causes matplotlib to break line rendering cleanly
+- [Phase 06.1-physics-insight Plan02]: Global P_peak_global across all runs normalizes Fig 5 dB scale consistently
 
 ### Pending Todos
 
@@ -102,6 +106,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-26T03:49:48.122Z
-Stopped at: Completed 06.1-01-PLAN.md
+Last session: 2026-03-26T03:53:34Z
+Stopped at: "06.1-02-PLAN.md checkpoint:human-verify (Task 2 of 2) — all 8 insight PNGs generated, awaiting visual approval"
 Resume file: None
