@@ -28,8 +28,8 @@ Requirements for Verification & Discovery milestone. Each maps to roadmap phases
 
 ### Parameter Exploration
 
-- [ ] **SWEEP-01**: L x P parameter sweep runs optimization over a coarse grid and produces J_final heatmap per fiber type
-- [ ] **SWEEP-02**: Multi-start analysis runs optimization from 5-10 random initial phases and reports convergence variance
+- [x] **SWEEP-01**: L x P parameter sweep runs optimization over a coarse grid and produces J_final heatmap per fiber type
+- [x] **SWEEP-02**: Multi-start analysis runs optimization from 5-10 random initial phases and reports convergence variance
 
 ## Future Requirements
 
@@ -72,8 +72,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | XRUN-04 | Phase 6 | Complete |
 | PATT-01 | Phase 6 | Complete |
 | PATT-02 | Phase 6 | Complete |
-| SWEEP-01 | Phase 7 | Pending |
-| SWEEP-02 | Phase 7 | Pending |
+| SWEEP-01 | Phase 7 | Complete |
+| SWEEP-02 | Phase 7 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 12 total
