@@ -17,14 +17,14 @@ Requirements for Verification & Discovery milestone. Each maps to roadmap phases
 ### Cross-Run Infrastructure
 
 - [x] **XRUN-01**: Each optimization run saves structured metadata (fiber params, J values, convergence history, wall time) to JSON
-- [ ] **XRUN-02**: Summary table aggregates all runs showing J_before, J_after, delta-dB, iterations, wall time in one view
-- [ ] **XRUN-03**: Overlay convergence plot shows all runs' J vs iteration on a single figure
-- [ ] **XRUN-04**: Overlay spectral comparison shows all optimized spectra per fiber type on shared axes
+- [x] **XRUN-02**: Summary table aggregates all runs showing J_before, J_after, delta-dB, iterations, wall time in one view
+- [x] **XRUN-03**: Overlay convergence plot shows all runs' J vs iteration on a single figure
+- [x] **XRUN-04**: Overlay spectral comparison shows all optimized spectra per fiber type on shared axes
 
 ### Pattern Detection
 
-- [ ] **PATT-01**: Each optimized phase profile is decomposed onto GDD/TOD polynomial basis with residual fraction reported
-- [ ] **PATT-02**: Soliton number N = sqrt(gamma*P0*T0^2/|beta2|) annotated in metadata and summary table for each run
+- [x] **PATT-01**: Each optimized phase profile is decomposed onto GDD/TOD polynomial basis with residual fraction reported
+- [x] **PATT-02**: Soliton number N = sqrt(gamma*P0*T0^2/|beta2|) annotated in metadata and summary table for each run
 
 ### Parameter Exploration
 
@@ -67,11 +67,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VERIF-03 | Phase 4 | Complete |
 | VERIF-04 | Phase 4 | Complete |
 | XRUN-01 | Phase 5 | Complete |
-| XRUN-02 | Phase 6 | Pending |
-| XRUN-03 | Phase 6 | Pending |
-| XRUN-04 | Phase 6 | Pending |
-| PATT-01 | Phase 6 | Pending |
-| PATT-02 | Phase 6 | Pending |
+| XRUN-02 | Phase 6 | Complete |
+| XRUN-03 | Phase 6 | Complete |
+| XRUN-04 | Phase 6 | Complete |
+| PATT-01 | Phase 6 | Complete |
+| PATT-02 | Phase 6 | Complete |
 | SWEEP-01 | Phase 7 | Pending |
 | SWEEP-02 | Phase 7 | Pending |
 

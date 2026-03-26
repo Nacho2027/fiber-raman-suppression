@@ -75,7 +75,7 @@ Plans:
 **Goal:** Discover what the optimizer is actually doing to suppress Raman scattering by visualizing phi_opt profiles, correlations, and residual structure across 5 existing optimization runs. Produce 8 exploratory figures revealing phase structure, group delay reshaping, and the 99% polynomial-unexplained residual.
 **Requirements**: None (inserted exploratory phase — no mapped requirements)
 **Depends on:** Phase 6
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 06.1-01-PLAN.md — Data loading, phase normalization, Figures 1-4 (phi_opt overlays freq/lambda, detail panels, correlation scatter)
@@ -92,7 +92,11 @@ Plans:
   3. A multi-start analysis runs optimization from 5-10 random initial phases for one canonical config and reports the distribution of J_final values, revealing whether the cost landscape has multiple local minima
   4. Sweep results are saved to `results/raman/sweeps/` with one `_result.jld2` per sweep point and a `sweep_results.jld2` aggregate, enabling re-plotting without re-running
   5. Every sweep point has photon number drift <5%, confirming the time window is adequately sized (no attenuator absorption corrupting results)
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [x] 07-01-PLAN.md — Fix recommended_time_window() with SPM broadening, add do_plots kwarg, update tests
+- [ ] 07-02-PLAN.md — Create run_sweep.jl script and add heatmap/histogram visualization functions
+- [ ] 07-03-PLAN.md — Execute full 36-point sweep + 10-start multi-start, visual verification checkpoint
 **UI hint**: yes
 
 ## Progress Table
@@ -103,4 +107,4 @@ Plans:
 | 5. Result Serialization | 1/1 | Complete   | 2026-03-25 |
 | 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
 | 6.1 Physics Insight | 0/2 | Planned | - |
-| 7. Parameter Sweeps | 0/? | Not started | - |
+| 7. Parameter Sweeps | 1/3 | In Progress | - |

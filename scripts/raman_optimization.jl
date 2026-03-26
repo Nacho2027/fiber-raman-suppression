@@ -368,7 +368,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
-    λ_gdd=:auto, λ_boundary=10.0, fiber_name="Custom", kwargs...)
+    λ_gdd=:auto, λ_boundary=10.0, fiber_name="Custom", do_plots=true, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
 
@@ -569,34 +569,36 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     end
     @info "Updated manifest at $manifest_path ($(length(existing_manifest)) runs)"
 
-    # ── Plots ──
-    @info "Plotting"
+    if do_plots
+        # ── Plots ──
+        @info "Plotting"
 
-    # 3×2 optimization comparison (spectra, temporal, group delay)
-    plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
-        band_mask, Δf, raman_threshold;
-        save_path="$(save_prefix).png", metadata=run_meta)
+        # 3×2 optimization comparison (spectra, temporal, group delay)
+        plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
+            band_mask, Δf, raman_threshold;
+            save_path="$(save_prefix).png", metadata=run_meta)
 
-    # Evolution: solve both via propagate_and_plot_evolution (handles deepcopy + zsave),
-    # then merge into a single 2×2 figure (ORG-01, ORG-02)
-    @info "Evolution Plots"
-    sol_unshaped, fig_tmp1, _ = propagate_and_plot_evolution(uω0, fiber, sim)
-    close(fig_tmp1)
-    sol_opt_evo, fig_tmp2, _ = propagate_and_plot_evolution(uω0_opt, fiber, sim)
-    close(fig_tmp2)
+        # Evolution: solve both via propagate_and_plot_evolution (handles deepcopy + zsave),
+        # then merge into a single 2×2 figure (ORG-01, ORG-02)
+        @info "Evolution Plots"
+        sol_unshaped, fig_tmp1, _ = propagate_and_plot_evolution(uω0, fiber, sim)
+        close(fig_tmp1)
+        sol_opt_evo, fig_tmp2, _ = propagate_and_plot_evolution(uω0_opt, fiber, sim)
+        close(fig_tmp2)
 
-    # Merged 2×2 evolution comparison (replaces two separate _unshaped/_optimized PNGs)
-    fiber_evo = deepcopy(fiber)
-    fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], 101))
-    plot_merged_evolution(sol_opt_evo, sol_unshaped, sim, fiber_evo;
-        metadata=run_meta,
-        save_path="$(save_prefix)_evolution.png")
+        # Merged 2×2 evolution comparison (replaces two separate _unshaped/_optimized PNGs)
+        fiber_evo = deepcopy(fiber)
+        fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], 101))
+        plot_merged_evolution(sol_opt_evo, sol_unshaped, sim, fiber_evo;
+            metadata=run_meta,
+            save_path="$(save_prefix)_evolution.png")
 
-    # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
-    @info "Phase Diagnostic"
-    plot_phase_diagnostic(φ_after, uω0, sim;
-        save_path="$(save_prefix)_phase.png", metadata=run_meta)
-    close("all")
+        # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
+        @info "Phase Diagnostic"
+        plot_phase_diagnostic(φ_after, uω0, sim;
+            save_path="$(save_prefix)_phase.png", metadata=run_meta)
+        close("all")
+    end # do_plots
 
     return result, uω0, fiber, sim, band_mask, Δf
 end
