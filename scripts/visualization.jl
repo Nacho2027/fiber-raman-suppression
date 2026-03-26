@@ -1580,7 +1580,9 @@ function plot_convergence_overlay(runs; save_path=nothing)
     fig, ax = subplots(figsize=(8, 5))
 
     for (i, run) in enumerate(runs)
-        J_dB  = MultiModeNoise.lin_to_dB.(run["convergence_history"])
+        # Convergence history is already in dB — optimize_spectral_phase
+        # returns lin_to_dB(J) to Optim.jl, so f_trace stores dB values
+        J_dB  = run["convergence_history"]
         iters = 0:length(J_dB)-1
         label = "$(run["fiber_name"]) L=$(run["L_m"])m P=$(run["P_cont_W"])W"
         color = COLORS_5_RUNS[mod1(i, length(COLORS_5_RUNS))]
