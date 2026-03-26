@@ -70,6 +70,17 @@ Plans:
 - [ ] 06-02-PLAN.md — Create run_comparison.jl entry point, re-run all 5 configs, produce 4 comparison figures + phase analysis
 **UI hint**: yes
 
+### Phase 06.1: Physics Insight — Visualize optimizer strategy (INSERTED)
+
+**Goal:** Discover what the optimizer is actually doing to suppress Raman scattering by visualizing phi_opt profiles, correlations, and residual structure across 5 existing optimization runs. Produce 8 exploratory figures revealing phase structure, group delay reshaping, and the 99% polynomial-unexplained residual.
+**Requirements**: None (inserted exploratory phase — no mapped requirements)
+**Depends on:** Phase 6
+**Plans:** 2 plans
+
+Plans:
+- [ ] 06.1-01-PLAN.md — Data loading, phase normalization, Figures 1-4 (phi_opt overlays freq/lambda, detail panels, correlation scatter)
+- [ ] 06.1-02-PLAN.md — Figures 5-8 (before/after Raman, group delay, residual overlay, Raman zoom) + visual checkpoint
+
 ### Phase 7: Parameter Sweeps
 **Goal**: The optimization cost J_final is mapped over a coarse L x P grid per fiber type, and multi-start robustness is quantified, enabling identification of favorable operating regimes
 **Depends on**: Phase 6 (sweeps call run_comparison_suite at completion; needs stable comparison infrastructure)
@@ -91,4 +102,5 @@ Plans:
 | 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
 | 5. Result Serialization | 1/1 | Complete   | 2026-03-25 |
 | 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
+| 6.1 Physics Insight | 0/2 | Planned | - |
 | 7. Parameter Sweeps | 0/? | Not started | - |
