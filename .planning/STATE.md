@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Ready to execute
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-26T01:55:18.059Z"
+stopped_at: "Checkpoint: Task 2 human-verify in 06-02-PLAN.md"
+last_updated: "2026-03-26T02:01:56.470Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -48,6 +48,7 @@ Plan: 2 of 2
 | Phase 04-correctness-verification P02 | 35 | 2 tasks | 2 files |
 | Phase 05-result-serialization P01 | 12 | 2 tasks | 3 files |
 | Phase 06-cross-run-comparison-and-pattern-analysis P01 | 8 | 2 tasks | 1 files |
+| Phase 06-cross-run-comparison-and-pattern-analysis P02 | 15 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 05-result-serialization]: JLD2 + JSON3 for result persistence: JLD2 round-trips native Julia types; manifest.json at fixed path for Phase 6 discovery
 - [Phase 05-result-serialization]: Manifest is append-safe (read/update-or-append/write) so sequential runs accumulate without overwriting
 - [Phase 06]: P_cont_W in JLD2 is average continuum power, NOT peak power; compute_soliton_number takes peak power; run_comparison.jl (Plan 02) must compute P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
+- [Phase 06]: RC_ prefix for fiber constants in run_comparison.jl prevents const redefinition errors in Julia REPL sessions
+- [Phase 06]: sim_Dt in JLD2 is picoseconds (sim[Δt] = time_window/Nt in ps); must multiply by 1e-12 before calling decompose_phase_polynomial which expects seconds
 
 ### Pending Todos
 
@@ -90,6 +93,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-26T01:55:18.056Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-26T02:01:43.472Z
+Stopped at: Checkpoint: Task 2 human-verify in 06-02-PLAN.md
 Resume file: None
