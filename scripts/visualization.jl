@@ -1706,4 +1706,154 @@ function plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=not
     return (fig, ax)
 end
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 7: Parameter sweep visualization
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    plot_sweep_heatmap(sweep_results, fiber_name; save_path=nothing)
+
+Produce an inferno-colormap heatmap of J_final [dB] on the (P_cont, L) grid from
+a parameter sweep. Overlays N contour lines at fixed N values (vertical because N
+depends only on P, not L — per Research Pitfall 1). Non-converged points are marked
+with white "X" symbols; window-limited points (photon drift >5%) with white triangles.
+
+# Arguments
+- `sweep_results`: vector of NamedTuples with fields:
+    L_m, P_cont_W, J_after, converged, window_limited, N_sol
+- `fiber_name`: string label for the figure title (e.g. "SMF-28" or "HNLF")
+- `save_path`: file path to save PNG at 300 DPI (nothing = no save)
+
+# Returns
+(fig, ax) — matplotlib Figure and Axes objects (caller can call close(fig))
+"""
+function plot_sweep_heatmap(sweep_results, fiber_name; save_path=nothing)
+    L_vals = sort(unique([r.L_m for r in sweep_results]))
+    P_vals = sort(unique([r.P_cont_W for r in sweep_results]))
+    nL, nP = length(L_vals), length(P_vals)
+
+    J_grid     = fill(NaN, nL, nP)
+    N_grid     = fill(NaN, nL, nP)
+    conv_grid  = fill(false, nL, nP)
+    wlim_grid  = fill(false, nL, nP)
+
+    for r in sweep_results
+        i = findfirst(==(r.L_m), L_vals)
+        j = findfirst(==(r.P_cont_W), P_vals)
+        if isnan(r.J_after)
+            J_grid[i, j] = NaN
+        else
+            J_grid[i, j] = MultiModeNoise.lin_to_dB(r.J_after)
+        end
+        N_grid[i, j]    = r.N_sol
+        conv_grid[i, j] = r.converged
+        wlim_grid[i, j] = r.window_limited
+    end
+
+    fig, ax = subplots(figsize=(8, 6))
+
+    # pcolormesh with center coordinates
+    valid_J = filter(!isnan, J_grid)
+    vmin_val = isempty(valid_J) ? -60.0 : minimum(valid_J)
+    vmax_val = isempty(valid_J) ?   0.0 : maximum(valid_J)
+    pcm = ax.pcolormesh(P_vals, L_vals, J_grid, cmap="inferno",
+                        vmin=vmin_val, vmax=vmax_val)
+    colorbar(pcm, ax=ax, label="J_final [dB]")
+
+    # N contour lines (vertical because N depends only on P, not L — Pitfall 1)
+    if any(.!isnan.(N_grid))
+        try
+            cs = ax.contour(P_vals, L_vals, N_grid,
+                            levels=[1.5, 2.0, 3.0, 5.0, 8.0],
+                            colors="white", linewidths=0.8, alpha=0.7)
+            ax.clabel(cs, fmt="N=%.1f", fontsize=8)
+        catch e
+            @warn "N contour plot failed (too few unique values?)" exception=e
+        end
+    end
+
+    # Markers: non-converged = white X, window-limited = white triangle
+    for i in 1:nL
+        for j in 1:nP
+            if !conv_grid[i, j]
+                ax.plot(P_vals[j], L_vals[i], "wx", markersize=10, markeredgewidth=2)
+            end
+            if wlim_grid[i, j]
+                ax.plot(P_vals[j], L_vals[i], "w^", markersize=8, markeredgewidth=1.5)
+            end
+        end
+    end
+
+    ax.set_xlabel("P_cont [W]")
+    ax.set_ylabel("L [m]")
+    ax.set_title("$fiber_name: Raman suppression J_final (X=not converged, triangle=window-limited)")
+    fig.tight_layout()
+
+    if !isnothing(save_path)
+        savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved sweep heatmap to $save_path"
+    end
+
+    return (fig, ax)
+end
+
+"""
+    plot_multistart_histogram(multistart_results; save_path=nothing)
+
+Visualize the distribution of J_final values across multi-start optimization runs.
+Left panel: histogram of J_final [dB] values.
+Right panel: scatter of J_final vs initial phase sigma, color-coded by convergence.
+
+# Arguments
+- `multistart_results`: vector of NamedTuples with fields:
+    start_idx, sigma, J_final, converged, iterations
+- `save_path`: file path to save PNG at 300 DPI (nothing = no save)
+
+# Returns
+(fig, axes) — matplotlib Figure and array of Axes objects
+"""
+function plot_multistart_histogram(multistart_results; save_path=nothing)
+    J_vals = [MultiModeNoise.lin_to_dB(r.J_final) for r in multistart_results
+              if isfinite(r.J_final) && r.J_final > 0]
+    sigmas = [r.sigma for r in multistart_results]
+    J_all  = [isfinite(r.J_final) && r.J_final > 0 ?
+              MultiModeNoise.lin_to_dB(r.J_final) : NaN for r in multistart_results]
+    conv   = [r.converged for r in multistart_results]
+
+    fig, axes = subplots(1, 2, figsize=(12, 5))
+    ax1, ax2  = axes[1], axes[2]
+
+    # Left: histogram of J_final [dB]
+    if !isempty(J_vals)
+        ax1.hist(J_vals, bins=8, color="#4878CF", edgecolor="white", alpha=0.85)
+    end
+    ax1.set_xlabel("J_final [dB]")
+    ax1.set_ylabel("Count")
+    ax1.set_title("J_final distribution (multi-start)")
+
+    # Right: scatter J_final vs sigma, color-coded by convergence
+    for (i, r) in enumerate(multistart_results)
+        if isfinite(J_all[i])
+            color = conv[i] ? "green" : "red"
+            ax2.scatter(sigmas[i], J_all[i], color=color, s=60, zorder=3)
+        end
+    end
+    # Legend patches
+    converged_patch   = PyPlot.matplotlib.patches.Patch(color="green", label="Converged")
+    unconverged_patch = PyPlot.matplotlib.patches.Patch(color="red",   label="Not converged")
+    ax2.legend(handles=[converged_patch, unconverged_patch], loc="best")
+    ax2.set_xlabel("Initial phase sigma [rad]")
+    ax2.set_ylabel("J_final [dB]")
+    ax2.set_title("Multi-start analysis: SMF-28 L=2m P=0.30W (10 starts)")
+
+    fig.tight_layout()
+
+    if !isnothing(save_path)
+        savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved multistart histogram to $save_path"
+    end
+
+    return (fig, axes)
+end
+
 end # include guard (_VISUALIZATION_JL_LOADED)
