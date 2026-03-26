@@ -11,7 +11,14 @@ Standard plot types following Dudley et al. (2006, Rev. Mod. Phys.):
   6. Boundary condition diagnostic
   7. Optimization convergence
 
-Requires: PyPlot, FFTW, MultiModeNoise (for meshgrid, lin_to_dB, solve_disp_mmf)
+Cross-run comparison functions (Phase 6):
+  - compute_soliton_number: N = sqrt(γ·P₀·T₀²/|β₂|) for sech² pulses
+  - decompose_phase_polynomial: GDD/TOD polynomial decomposition of phi_opt
+  - plot_cross_run_summary_table: matplotlib table PNG of all run metrics
+  - plot_convergence_overlay: J vs iteration overlay for all runs (dB scale)
+  - plot_spectral_overlay: optimized output spectra per fiber type
+
+Requires: PyPlot, FFTW, LinearAlgebra, MultiModeNoise (for meshgrid, lin_to_dB, solve_disp_mmf)
 
 Include guard: safe to include multiple times.
 """
