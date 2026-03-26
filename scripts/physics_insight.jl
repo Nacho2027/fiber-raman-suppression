@@ -10,6 +10,10 @@ Figures produced (all → results/images/):
   2. insight_02_phi_overlay_lambda.png   — phi_opt overlay in wavelength domain (5 runs)
   3. insight_03_phi_detail_panels.png    — per-run detail panels with GDD+TOD polynomial overlay
   4. insight_04_correlation_scatter.png  — N / L / P vs delta_dB correlation scatter
+  5. insight_05_raman_band_before_after.png — input spectra per run with J annotations
+  6. insight_06_group_delay_overlay.png  — group delay d_phi/d_omega overlay (ps vs THz)
+  7. insight_07_residual_overlay.png     — polynomial fit residual (99% unexplained structure)
+  8. insight_08_phase_raman_zoom.png     — phase zoom into [-20, -8] THz near Raman offset
 
 Data source: results/raman/manifest.json + per-run JLD2 files.
 
@@ -404,6 +408,196 @@ close(fig4)
 @info "  Saved → results/images/insight_04_correlation_scatter.png"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Section 7: Figure 5 — Before/After Raman Band Comparison (D-04 item 5)
+# Option A: input spectrum + J annotation (no re-propagation required)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "▶ Generating Figure 5: input spectra with Raman band + J annotations (Option A)"
+
+n_runs5 = length(all_runs)
+fig5, axes5 = subplots(n_runs5, 1; figsize=(14, 4.0 * n_runs5))
+if n_runs5 == 1
+    axes5 = [axes5]
+end
+
+# Global P_peak across all runs for consistent dB normalization
+P_peak_global = maximum(maximum(abs2.(fftshift(vec(run["uomega0"])))) for run in all_runs)
+
+for (i, run) in enumerate(all_runs)
+    ax = axes5[i]
+    df_THz = run["df_THz"]
+
+    # Input power spectrum in dB (relative to global peak)
+    spec_power = abs2.(fftshift(vec(run["uomega0"])))
+    spec_dB = 10.0 .* log10.(spec_power ./ P_peak_global .+ 1e-30)
+
+    ax.plot(df_THz, spec_dB; color=COLOR_INPUT, lw=1.5, label="Input spectrum")
+
+    # Shade Raman band region
+    ax.axvspan(-30.0, -13.2; alpha=0.12, color=COLOR_RAMAN, label="Raman band")
+    ax.axvline(-13.2; color=COLOR_RAMAN, lw=1.0, ls="--")
+
+    # J annotations — convert to dB for display
+    J_before = Float64(run["J_before"])
+    J_after  = Float64(run["J_after"])
+    J_before_dB = 10.0 * log10(J_before + 1e-30)
+    J_after_dB  = 10.0 * log10(J_after  + 1e-30)
+    delta_J_dB  = J_after_dB - J_before_dB
+
+    ann_text = @sprintf("J_before = %.1f dB\nJ_after  = %.1f dB\nΔdB = %.1f dB",
+                        J_before_dB, J_after_dB, delta_J_dB)
+    ax.text(0.98, 0.95, ann_text;
+            transform=ax.transAxes, ha="right", va="top", fontsize=9,
+            bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
+
+    ax.set_title(run_label(run); fontsize=10)
+    ax.set_ylabel("PSD (dB)")
+    ax.set_ylim(-65, 5)
+    ax.axhline(0; color="black", lw=0.5, ls=":")
+    ax.legend(loc="upper left", fontsize=8)
+
+    if i == n_runs5
+        ax.set_xlabel("Frequency offset from carrier (THz)")
+    end
+end
+
+add_caption!(fig5, "Input spectra with Raman band annotated. J values from optimization (no re-propagation).")
+fig5.tight_layout(rect=[0, 0.04, 1, 1], h_pad=2.5)
+fig5.savefig("results/images/insight_05_raman_band_before_after.png"; dpi=300, bbox_inches="tight")
+close(fig5)
+@info "  Saved → results/images/insight_05_raman_band_before_after.png"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section 8: Figure 6 — Group Delay Overlay (D-04 item 6)
+# Group delay = d_phi/d_omega; omega in rad/THz → group delay in ps
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "▶ Generating Figure 6: group delay overlay"
+
+fig6, ax6 = subplots(1, 1; figsize=(12, 6))
+
+for (i, run) in enumerate(all_runs)
+    phi_norm    = run["phi_norm"]
+    df_THz      = run["df_THz"]
+    signal_mask = run["signal_mask"]
+
+    # Angular frequency step in rad/THz
+    dw = 2π * (df_THz[2] - df_THz[1])  # rad/THz
+
+    # Group delay: d_phi/d_omega [rad / (rad/THz)] = THz^-1 = ps
+    gd_ps = _central_diff(phi_norm, dw)
+
+    # Apply signal mask — set noise-floor bins to NaN for clean display
+    gd_ps_masked = copy(gd_ps)
+    gd_ps_masked[.!signal_mask] .= NaN
+
+    ax6.plot(df_THz, gd_ps_masked;
+             color=COLORS_5_RUNS[i], lw=1.5, label=run_label(run))
+end
+
+ax6.axvspan(-30.0, -13.2; alpha=0.08, color=COLOR_RAMAN, label="Raman band")
+ax6.axvline(-13.2; color=COLOR_RAMAN, lw=0.8, ls="--")
+ax6.axhline(0; color="black", lw=0.5, ls=":")
+
+ax6.set_xlabel("Frequency offset from carrier (THz)")
+ax6.set_ylabel("Group delay (ps)")
+ax6.set_title("Group delay d\u03C6/d\u03C9 — temporal reshaping by optimizer")
+ax6.legend(loc="upper left", fontsize=8)
+
+add_caption!(fig6, "Group delay shows how the optimizer redistributes pulse arrival time vs frequency.")
+fig6.tight_layout(rect=[0, 0.04, 1, 1])
+fig6.savefig("results/images/insight_06_group_delay_overlay.png"; dpi=300, bbox_inches="tight")
+close(fig6)
+@info "  Saved → results/images/insight_06_group_delay_overlay.png"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section 9: Figure 7 — Polynomial Fit Residual Overlay (D-04 item 7)
+# THE key figure: shows the 99% unexplained phase structure
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "▶ Generating Figure 7: polynomial fit residual overlay (key insight figure)"
+
+fig7, ax7 = subplots(1, 1; figsize=(12, 6))
+
+for (i, run) in enumerate(all_runs)
+    phi_norm    = run["phi_norm"]
+    df_THz      = run["df_THz"]
+    signal_mask = run["signal_mask"]
+    decomp      = run["decomp"]
+
+    # Reconstruct the polynomial fit on the full fftshifted frequency grid
+    omega_rad_s = 2π .* df_THz .* 1e12     # THz → rad/s
+    gdd_s2 = decomp.gdd_fs2 * 1e-30        # fs² → s²
+    tod_s3 = decomp.tod_fs3 * 1e-45        # fs³ → s³
+    phi_poly = gdd_s2 .* omega_rad_s.^2 ./ 2.0 .+ tod_s3 .* omega_rad_s.^3 ./ 6.0
+
+    # Residual: phi_norm minus polynomial fit
+    residual = phi_norm .- phi_poly
+
+    # Apply signal mask for clean display
+    residual_masked = copy(residual)
+    residual_masked[.!signal_mask] .= NaN
+
+    label_str = run_label(run) * @sprintf(" (res %.1f%%)", decomp.residual_fraction * 100)
+    ax7.plot(df_THz, residual_masked;
+             color=COLORS_5_RUNS[i], lw=1.5, label=label_str)
+end
+
+ax7.axvspan(-30.0, -13.2; alpha=0.08, color=COLOR_RAMAN, label="Raman band")
+ax7.axvline(-13.2; color=COLOR_RAMAN, lw=0.8, ls="--")
+ax7.axhline(0; color="black", lw=0.5, ls=":")
+
+ax7.set_xlabel("Frequency offset from carrier (THz)")
+ax7.set_ylabel("Phase residual (rad)")
+ax7.set_title("Polynomial fit residual — the unexplained phase structure")
+ax7.legend(loc="upper left", fontsize=8)
+
+add_caption!(fig7, "Residual after removing GDD+TOD fit. 98.9-99.9% of phase variance lives here.")
+fig7.tight_layout(rect=[0, 0.04, 1, 1])
+fig7.savefig("results/images/insight_07_residual_overlay.png"; dpi=300, bbox_inches="tight")
+close(fig7)
+@info "  Saved → results/images/insight_07_residual_overlay.png"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section 10: Figure 8 — Phase Structure at Raman Offset Zoom (D-04 item 8)
+# Zoom into [-20, -8] THz to reveal whether optimizer targets 13.2 THz specifically
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "▶ Generating Figure 8: phase structure near Raman band offset (zoom)"
+
+fig8, ax8 = subplots(1, 1; figsize=(12, 6))
+
+for (i, run) in enumerate(all_runs)
+    phi_norm    = run["phi_norm"]
+    df_THz      = run["df_THz"]
+    signal_mask = run["signal_mask"]
+
+    # Extract Raman-band frequency window
+    zoom_mask = (-20.0 .< df_THz .< -8.0) .& signal_mask
+
+    if any(zoom_mask)
+        ax8.plot(df_THz[zoom_mask], phi_norm[zoom_mask];
+                 color=COLORS_5_RUNS[i], lw=1.5, label=run_label(run))
+    end
+end
+
+# Mark the 13.2 THz Raman peak
+ax8.axvline(-13.2; color=COLOR_RAMAN, lw=1.5, ls="--", label="13.2 THz Raman peak")
+ax8.axhline(0; color="black", lw=0.5, ls=":")
+
+ax8.set_xlabel("Frequency offset from carrier (THz)")
+ax8.set_ylabel("Normalized phase (rad)")
+ax8.set_title("Phase structure near Raman band offset")
+ax8.set_xlim(-20, -8)
+ax8.legend(loc="upper left", fontsize=8)
+
+add_caption!(fig8, "Zoom into [-20, -8] THz showing phase behavior at the 13.2 THz Raman shift.")
+fig8.tight_layout(rect=[0, 0.04, 1, 1])
+fig8.savefig("results/images/insight_08_phase_raman_zoom.png"; dpi=300, bbox_inches="tight")
+close(fig8)
+@info "  Saved → results/images/insight_08_phase_raman_zoom.png"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -415,6 +609,10 @@ close(fig4)
 │  Fig 2: results/images/insight_02_phi_overlay_lambda.png
 │  Fig 3: results/images/insight_03_phi_detail_panels.png
 │  Fig 4: results/images/insight_04_correlation_scatter.png
+│  Fig 5: results/images/insight_05_raman_band_before_after.png
+│  Fig 6: results/images/insight_06_group_delay_overlay.png
+│  Fig 7: results/images/insight_07_residual_overlay.png
+│  Fig 8: results/images/insight_08_phase_raman_zoom.png
 └──────────────────────────────────────────────────────────────────────────────
 """
 
