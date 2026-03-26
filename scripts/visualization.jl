@@ -24,6 +24,7 @@ using FFTW
 using Statistics
 using Printf
 using Logging
+using LinearAlgebra: norm
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 0. Global formatting — publication defaults
@@ -50,6 +51,15 @@ const COLOR_INPUT  = "#0072B2"  # blue
 const COLOR_OUTPUT = "#D55E00"  # vermillion
 const COLOR_RAMAN  = "#CC79A7"  # reddish purple
 const COLOR_REF    = "#000000"  # black
+
+# 5-run comparison palette (Okabe-Ito extended, colorblind-safe) — per D-03
+const COLORS_5_RUNS = [
+    "#0072B2",   # blue       — Run 1
+    "#E69F00",   # orange     — Run 2
+    "#009E73",   # green      — Run 3
+    "#CC79A7",   # pink       — Run 4
+    "#56B4E9",   # sky blue   — Run 5
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Phase wrapping utilities
@@ -1353,6 +1363,338 @@ function propagate_and_plot_evolution(uω0_shaped, fiber, sim;
     end
 
     return sol, fig, axes
+end
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. Cross-run comparison: soliton number, phase decomposition, summary table
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    compute_soliton_number(gamma_Wm, P0_W, fwhm_fs, beta2_s2m) -> Float64
+
+Compute the soliton number N for a pulse propagating in a fiber.
+
+Formula: N = sqrt(γ · P₀ · T₀² / |β₂|)
+where T₀ = FWHM / (2 · acosh(√2)) for sech² pulse assumption.
+acosh(√2) ≈ 0.8814 — standard result for sech² FWHM-to-T₀ conversion.
+
+# Arguments
+- `gamma_Wm`:   Float64, nonlinear coefficient [W⁻¹ m⁻¹]
+- `P0_W`:       Float64, peak power [W]
+- `fwhm_fs`:    Float64, pulse FWHM [fs] — converted to seconds internally via × 1e-15
+- `beta2_s2m`:  Float64, group-velocity dispersion β₂ [s²/m]
+
+# Returns
+Float64 soliton number N ≥ 0 (NaN-safe via max(N_sq, 0.0) before sqrt).
+
+# Reference
+Agrawal, "Nonlinear Fiber Optics", Chapter 5.
+"""
+function compute_soliton_number(gamma_Wm, P0_W, fwhm_fs, beta2_s2m)
+    # T0 = FWHM / (2 * acosh(sqrt(2))) for sech^2 pulse
+    # acosh(sqrt(2)) ≈ 0.8814
+    T0_s = (fwhm_fs * 1e-15) / (2.0 * acosh(sqrt(2.0)))
+    N_sq = gamma_Wm * P0_W * T0_s^2 / abs(beta2_s2m)
+    return sqrt(max(N_sq, 0.0))
+end
+
+"""
+    decompose_phase_polynomial(phi_opt, uomega0, sim_Dt, Nt) -> NamedTuple
+
+Decompose an optimized spectral phase profile onto a GDD/TOD polynomial basis
+in the signal-bearing spectral region, and report the residual fraction.
+
+GDD (group delay dispersion) = d²φ/dω² [fs²] quantifies quadratic chirp.
+TOD (third-order dispersion) = d³φ/dω³ [fs³] quantifies cubic chirp.
+A small residual_fraction (<0.2) indicates the optimizer found a physically
+interpretable polynomial chirp. A large residual suggests non-polynomial
+phase structure worth investigating.
+
+Algorithm:
+1. Build signal-band mask at -40 dB spectral power threshold (matches BUG-03 convention).
+2. Remove global offset and linear group-delay term (CRITICAL: L-BFGS finds the
+   nearest minimum from zero-phase init, so different runs may differ by a constant
+   or linear term even if the physics is the same).
+3. Fit 2nd+3rd order polynomial (GDD/TOD basis) to detrended phase via least-squares.
+4. Convert coefficients to fs² / fs³ and compute residual fraction.
+
+# Arguments
+- `phi_opt`:  Matrix{Float64} of shape (Nt, M) — optimal phase; uses mode 1 ([:, 1])
+- `uomega0`:  Matrix{ComplexF64} of shape (Nt, M) — input field; used for signal mask
+- `sim_Dt`:   Float64 — simulation time step Δt [s] (= sim["Δt"] × 1e-12)
+- `Nt`:       Int — number of frequency grid points
+
+# Returns
+NamedTuple with fields:
+- `gdd_fs2`:           Float64, GDD coefficient [fs²]
+- `tod_fs3`:           Float64, TOD coefficient [fs³]
+- `residual_fraction`: Float64, norm(residual) / norm(detrended_phase) ∈ [0, 1]
+"""
+function decompose_phase_polynomial(phi_opt, uomega0, sim_Dt, Nt)
+    # --- Step 1: Build signal-band mask at -40 dB threshold ---
+    spec_power = abs2.(fftshift(uomega0[:, 1]))
+    P_peak = maximum(spec_power)
+    dB = 10.0 .* log10.(spec_power ./ P_peak .+ 1e-30)
+    signal_mask = dB .> -40.0
+
+    # --- Step 2: Angular frequency grid (fftshifted), in rad/s ---
+    # sim_Dt is Δt in seconds; fftfreq returns cycles/s → multiply by 2π for rad/s
+    ω_shifted = 2π .* fftshift(fftfreq(Nt, 1.0 / sim_Dt))  # rad/s
+
+    # --- Step 3: Extract signal-band phase ---
+    phi_shifted = fftshift(phi_opt[:, 1])
+    phi_signal  = phi_shifted[signal_mask]
+    ω_signal    = ω_shifted[signal_mask]
+
+    # --- Step 4: Remove global offset and linear group-delay term ---
+    # Fit phi ≈ a0 + a1·ω (constant + group delay), then subtract
+    A_linear      = hcat(ones(length(ω_signal)), ω_signal)
+    coeffs_linear = A_linear \ phi_signal
+    phi_detrended = phi_signal .- (coeffs_linear[1] .+ coeffs_linear[2] .* ω_signal)
+
+    # --- Step 5: Fit 2nd+3rd order polynomial to detrended phase ---
+    # phi_detrended ≈ β₂_eff · ω²/2 + β₃_eff · ω³/6
+    # where β₂_eff = GDD [rad·s²] and β₃_eff = TOD [rad·s³]
+    A_poly      = hcat(ω_signal.^2 ./ 2.0, ω_signal.^3 ./ 6.0)
+    coeffs_poly = A_poly \ phi_detrended
+
+    # --- Step 6: Convert to physical units ---
+    # GDD: rad·s² → fs²:  1 s² = 1e30 fs²
+    # TOD: rad·s³ → fs³:  1 s³ = 1e45 fs³
+    gdd_fs2 = coeffs_poly[1] * 1e30
+    tod_fs3 = coeffs_poly[2] * 1e45
+
+    # --- Step 7: Residual fraction ---
+    phi_poly_fit       = A_poly * coeffs_poly
+    residual_fraction  = norm(phi_detrended .- phi_poly_fit) / (norm(phi_detrended) + 1e-30)
+
+    return (gdd_fs2=gdd_fs2, tod_fs3=tod_fs3, residual_fraction=residual_fraction)
+end
+
+"""
+    plot_cross_run_summary_table(runs; save_path=nothing) -> (fig, ax)
+
+Render a presentation-ready PNG summary table of cross-run optimization results
+via matplotlib `ax.table()`.
+
+Columns: Fiber | L (m) | P (W) | J_before (dB) | J_after (dB) | ΔdB | Iter. | Time (s) | N
+
+Each row corresponds to one optimization run. `runs` must be a Vector of Dicts
+where each Dict contains the JLD2 fields plus `soliton_number_N` (pre-computed
+by the caller via `compute_soliton_number`).
+
+A footnote below the table warns that J values are not directly comparable across
+runs with different grids (heterogeneous Nt / time_window — see Research Pitfall 2).
+
+# Arguments
+- `runs`:       Vector{Dict} — each Dict has keys from the JLD2 result file
+                plus `soliton_number_N` (Float64)
+- `save_path`:  String or nothing — if provided, saves to this path at 300 DPI
+
+# Returns
+`(fig, ax)` tuple (matplotlib figure and axes objects).
+"""
+function plot_cross_run_summary_table(runs; save_path=nothing)
+    # --- Column headers ---
+    columns = ["Fiber", "L (m)", "P (W)", "J_before (dB)", "J_after (dB)",
+               "ΔdB", "Iter.", "Time (s)", "N"]
+
+    # --- Build cell text from each run ---
+    cell_text = Vector{Vector{String}}()
+    for run in runs
+        J_before_dB = 10.0 * log10(max(run["J_before"], 1e-30))
+        J_after_dB  = 10.0 * log10(max(run["J_after"],  1e-30))
+        row = [
+            string(run["fiber_name"]),
+            @sprintf("%.1f",  run["L_m"]),
+            @sprintf("%.2f",  run["P_cont_W"]),
+            @sprintf("%.1f",  J_before_dB),
+            @sprintf("%.1f",  J_after_dB),
+            @sprintf("%.1f",  run["delta_J_dB"]),
+            string(run["iterations"]),
+            @sprintf("%.1f",  run["wall_time_s"]),
+            @sprintf("%.2f",  run["soliton_number_N"]),
+        ]
+        push!(cell_text, row)
+    end
+
+    # --- Create figure ---
+    fig, ax = subplots(figsize=(14, 3))
+    ax.axis("off")
+
+    # --- Render table ---
+    table = ax.table(cellText=cell_text, colLabels=columns,
+                     loc="center", cellLoc="center")
+    table.auto_set_font_size(false)
+    table.set_fontsize(10)
+    table.scale(1, 1.8)
+
+    # --- Title and footnote ---
+    fig.suptitle("Cross-Run Optimization Summary", fontsize=14,
+                 fontweight="bold", y=0.95)
+    fig.text(0.5, 0.02,
+        "Note: J values use run-specific band masks (Nt/time_window vary across runs).",
+        ha="center", fontsize=8, style="italic")
+
+    # --- Save ---
+    if !isnothing(save_path)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved summary table to $save_path"
+    end
+
+    return (fig, ax)
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. Cross-run comparison: convergence overlay and spectral overlay
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    plot_convergence_overlay(runs; save_path=nothing) -> (fig, ax)
+
+Overlay J vs iteration for all optimization runs on a single figure.
+
+Converts the stored linear J convergence history to dB for readability.
+Each run is plotted with a distinct color from `COLORS_5_RUNS` (Okabe-Ito
+extended palette, colorblind-safe). Labels show fiber type, length, and power
+so the figure is self-contained for presentation.
+
+# Arguments
+- `runs`:      Vector{Dict} — each Dict must contain:
+                 `convergence_history` (Vector{Float64}, linear J values),
+                 `fiber_name`, `L_m`, `P_cont_W`
+- `save_path`: String or nothing — if provided, saves to this path at 300 DPI
+
+# Returns
+`(fig, ax)` tuple.
+"""
+function plot_convergence_overlay(runs; save_path=nothing)
+    fig, ax = subplots(figsize=(8, 5))
+
+    for (i, run) in enumerate(runs)
+        J_dB  = MultiModeNoise.lin_to_dB.(run["convergence_history"])
+        iters = 0:length(J_dB)-1
+        label = "$(run["fiber_name"]) L=$(run["L_m"])m P=$(run["P_cont_W"])W"
+        color = COLORS_5_RUNS[mod1(i, length(COLORS_5_RUNS))]
+        ax.plot(iters, J_dB, color=color, label=label, lw=1.5)
+    end
+
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Raman band fraction J [dB]")
+    ax.set_title("Convergence: All Optimization Runs")
+    ax.legend(loc="best", fontsize=9)
+
+    if !isnothing(save_path)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved convergence overlay to $save_path"
+    end
+
+    return (fig, ax)
+end
+
+"""
+    plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=nothing) -> (fig, ax)
+
+Overlay optimized OUTPUT spectra for runs of the same fiber type on shared dB axes.
+
+Each run's shaped input field is re-propagated through the reconstructed fiber to
+obtain the optimized output spectrum. Spectra are normalized in dB relative to
+their own peak (enabling cross-run shape comparison on a shared scale).
+
+Each run uses its native frequency grid — no interpolation to a common grid.
+The shared x-axis limits are set from the first run's signal extent (via
+`_spectral_signal_xlim`) expanded by 50 nm on each side for context.
+
+# Arguments
+- `runs_fiber_group`: Vector{Dict} for runs of ONE fiber type (e.g., all SMF-28
+                      or all HNLF). Each Dict contains JLD2 fields:
+                      `uomega0`, `phi_opt`, `L_m`, `P_cont_W`, `gamma`, `betas`,
+                      `Nt`, `time_window_ps`, `lambda0_nm`, `delta_J_dB`, plus
+                      `sim_Dt` and `sim_omega0`.
+- `fiber_type_label`: String for the figure title (e.g., "SMF-28" or "HNLF")
+- `save_path`:        String or nothing — if provided, saves to this path at 300 DPI
+
+# Returns
+`(fig, ax)` tuple.
+"""
+function plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=nothing)
+    fig, ax = subplots(figsize=(10, 6))
+
+    xlim_min = nothing
+    xlim_max = nothing
+
+    for (i, run) in enumerate(runs_fiber_group)
+        Nt           = run["Nt"]
+        time_win_ps  = run["time_window_ps"]
+        lambda0_nm   = run["lambda0_nm"]
+        lambda0_m    = lambda0_nm * 1e-9
+        gamma        = run["gamma"]
+        betas        = run["betas"]
+        L_m          = run["L_m"]
+
+        # --- Reconstruct sim and fiber from JLD2 scalars ---
+        # beta_order=3 per Phase 4 decision; M=1 for SMF
+        sim_r = MultiModeNoise.get_disp_sim_params(lambda0_m, 1, Nt, time_win_ps, 3)
+
+        # Fallback for empty betas (Pitfall 5): use fiber-name-specific defaults
+        betas_use = if isempty(betas)
+            run["fiber_name"] == "SMF-28" ? [-2.17e-26, 1.2e-40] : [-0.5e-26, 1.0e-40]
+        else
+            betas
+        end
+
+        fiber_r = MultiModeNoise.get_disp_fiber_params_user_defined(
+            L_m, sim_r; gamma_user=gamma, betas_user=betas_use)
+        fiber_r["zsave"] = [0.0, L_m]
+
+        # --- Apply optimal phase and propagate ---
+        uomega0_shaped = @. run["uomega0"] * cis(run["phi_opt"])
+        sol = MultiModeNoise.solve_disp_mmf(uomega0_shaped, fiber_r, sim_r)
+        uomega_out = sol["uω_z"][end, :, :]
+
+        # --- Compute output power spectrum (fftshifted) ---
+        spec_out = abs2.(fftshift(uomega_out[:, 1]))
+
+        # --- Wavelength grid for this run ---
+        # sim_r["f0"] is center frequency in THz; sim_r["Δt"] is time step in ps
+        f0_THz    = sim_r["f0"]
+        Dt_ps     = sim_r["Δt"]
+        f_shifted = f0_THz .+ fftshift(fftfreq(Nt, 1.0 / Dt_ps))  # THz
+        lambda_nm = C_NM_THZ ./ f_shifted                           # nm
+
+        # --- dB spectrum normalized to peak ---
+        dB = 10.0 .* log10.(spec_out ./ maximum(spec_out) .+ 1e-30)
+
+        # --- Determine shared x-limits from first run ---
+        if i == 1
+            # Use existing helper; pass fftshifted spectrum and wavelength grid
+            (lmin, lmax) = _spectral_signal_xlim(spec_out, lambda_nm; threshold_dB=-40.0)
+            xlim_min = lmin - 50.0
+            xlim_max = lmax + 50.0
+        end
+
+        label = "L=$(L_m)m P=$(run["P_cont_W"])W ($(round(run["delta_J_dB"], digits=1)) dB)"
+        color = COLORS_5_RUNS[mod1(i, length(COLORS_5_RUNS))]
+        ax.plot(lambda_nm, dB, color=color, label=label, lw=1.2)
+    end
+
+    # --- Axis formatting ---
+    if !isnothing(xlim_min) && !isnothing(xlim_max)
+        ax.set_xlim(xlim_min, xlim_max)
+    end
+    ax.set_ylim(-60, 5)
+    ax.set_xlabel("Wavelength [nm]")
+    ax.set_ylabel("Spectral power [dB]")
+    ax.set_title("Optimized Output Spectra: $fiber_type_label")
+    ax.legend(loc="best", fontsize=9)
+
+    if !isnothing(save_path)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved spectral overlay to $save_path"
+    end
+
+    return (fig, ax)
 end
 
 end # include guard (_VISUALIZATION_JL_LOADED)
