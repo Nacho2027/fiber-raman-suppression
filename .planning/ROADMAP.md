@@ -75,10 +75,10 @@ Plans:
 **Goal:** Discover what the optimizer is actually doing to suppress Raman scattering by visualizing phi_opt profiles, correlations, and residual structure across 5 existing optimization runs. Produce 8 exploratory figures revealing phase structure, group delay reshaping, and the 99% polynomial-unexplained residual.
 **Requirements**: None (inserted exploratory phase — no mapped requirements)
 **Depends on:** Phase 6
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 06.1-01-PLAN.md — Data loading, phase normalization, Figures 1-4 (phi_opt overlays freq/lambda, detail panels, correlation scatter)
+- [x] 06.1-01-PLAN.md — Data loading, phase normalization, Figures 1-4 (phi_opt overlays freq/lambda, detail panels, correlation scatter)
 - [ ] 06.1-02-PLAN.md — Figures 5-8 (before/after Raman, group delay, residual overlay, Raman zoom) + visual checkpoint
 
 ### Phase 7: Parameter Sweeps

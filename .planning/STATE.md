@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Ready to execute
-stopped_at: "Checkpoint: Task 2 human-verify in 06-02-PLAN.md"
-last_updated: "2026-03-26T02:01:56.470Z"
+stopped_at: Completed 06.1-01-PLAN.md
+last_updated: "2026-03-26T03:49:48.126Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 06 — cross-run-comparison-and-pattern-analysis
+**Current focus:** Phase 06.1 — physics-insight
 
 ## Current Position
 
-Phase: 06 (cross-run-comparison-and-pattern-analysis) — EXECUTING
+Phase: 06.1 (physics-insight) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -49,6 +49,7 @@ Plan: 2 of 2
 | Phase 05-result-serialization P01 | 12 | 2 tasks | 3 files |
 | Phase 06-cross-run-comparison-and-pattern-analysis P01 | 8 | 2 tasks | 1 files |
 | Phase 06-cross-run-comparison-and-pattern-analysis P02 | 15 | 1 tasks | 1 files |
+| Phase 06.1-physics-insight P01 | 4 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Recent decisions affecting current work:
 - [Phase 06]: P_cont_W in JLD2 is average continuum power, NOT peak power; compute_soliton_number takes peak power; run_comparison.jl (Plan 02) must compute P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
 - [Phase 06]: RC_ prefix for fiber constants in run_comparison.jl prevents const redefinition errors in Julia REPL sessions
 - [Phase 06]: sim_Dt in JLD2 is picoseconds (sim[Δt] = time_window/Nt in ps); must multiply by 1e-12 before calling decompose_phase_polynomial which expects seconds
+- [Phase 06.1-physics-insight]: Julia using statements must be placed outside include guard — macros need compile-time visibility; moved imports before if !(@isdefined) block
+- [Phase 06.1-physics-insight]: normalize_phase zero-fills noise-floor bins (!signal_mask) to prevent random phase from distorting y-axis in overlays
+- [Phase 06.1-physics-insight]: 98.9-99.9% non-polynomial residual fraction confirmed: optimizer uses complex high-order phase shaping, not GDD/TOD
 
 ### Pending Todos
 
@@ -83,6 +87,11 @@ Recent decisions affecting current work:
 - Phase 5 start: Find exact location in raman_optimization.jl where `push!(cost_history, ...)` should be added to the callback
 - Phase 7 CRITICAL: `recommended_time_window()` has NO power dependence — only accounts for linear dispersive walk-off. SPM broadening at high power pushes energy into the attenuator, causing 38-49% photon number loss for high-P/long-L configs. The function MUST be extended with a power-aware correction OR sweeps must use generous fixed windows (safety_factor=4-5x) with Nt scaled to maintain resolution. Without this fix, high-P sweep points will have artificially low Raman cost J because attenuator absorbs energy before it reaches the Raman band.
 - Phase 7 start: Run `recommended_time_window()` for extreme sweep points (L=0.5m/high-P and L=5m/low-P) to verify a single fixed time_window covers all sweep points
+
+### Roadmap Evolution
+
+- Phase 6.1 inserted after Phase 6: Physics Insight — visualize optimizer strategy (φ_opt overlays, N vs ΔdB correlation, polynomial fit residual visualization) (URGENT)
+  - Motivation: Phase 6 produced infrastructure (summary table, convergence overlay, spectral overlays) but no physics insight. Phase decomposition showed 99% residual — optimizer uses complex non-polynomial phase structure. Need to understand and visualize what the optimizer is actually doing.
 
 ### Blockers/Concerns
 
@@ -93,6 +102,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-26T02:01:43.472Z
-Stopped at: Checkpoint: Task 2 human-verify in 06-02-PLAN.md
+Last session: 2026-03-26T03:49:48.122Z
+Stopped at: Completed 06.1-01-PLAN.md
 Resume file: None
