@@ -64,9 +64,9 @@ Plans:
   3. A single overlay spectral figure shows all optimized output spectra per fiber type on shared dB axes, enabling direct comparison of Raman suppression depth
   4. Each optimal phase profile is projected onto GDD and TOD polynomial basis, and the residual fraction (unexplained by polynomial terms) is reported in the summary
   5. The soliton number N = sqrt(gamma*P0*T0^2/|beta2|) is recorded in the metadata for each run and appears in the summary table
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 06-01-PLAN.md — Add cross-run visualization functions to visualization.jl (soliton number, phase decomposition, summary table, convergence overlay, spectral overlay)
+- [x] 06-01-PLAN.md — Add cross-run visualization functions to visualization.jl (soliton number, phase decomposition, summary table, convergence overlay, spectral overlay)
 - [ ] 06-02-PLAN.md — Create run_comparison.jl entry point, re-run all 5 configs, produce 4 comparison figures + phase analysis
 **UI hint**: yes
 
@@ -90,5 +90,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
 | 5. Result Serialization | 1/1 | Complete   | 2026-03-25 |
-| 6. Cross-Run Comparison and Pattern Analysis | 0/2 | Planned | - |
+| 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
 | 7. Parameter Sweeps | 0/? | Not started | - |
