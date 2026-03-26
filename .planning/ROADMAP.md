@@ -108,3 +108,13 @@ Plans:
 | 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
 | 6.1 Physics Insight | 0/2 | Planned | - |
 | 7. Parameter Sweeps | 2/3 | In Progress|  |
+
+### Phase 07.1: Grid Resolution Fix (INSERTED)
+
+**Goal:** Fix Nt floor (2^13 minimum), reduce max_iter to 30, drop L=10m from SMF-28 grid, clean stale sweep results. Corrected grid: 32 points (4x4 SMF-28 + 4x4 HNLF) + 10-start multi-start.
+**Requirements**: Derived from Phase 7 SWEEP-01, SWEEP-02
+**Depends on:** Phase 7
+**Plans:** 1/1 plans complete (code changes done; sweep re-run is a manual step)
+
+Plans:
+- [x] 07.1-01-PLAN.md — Fix run_sweep.jl (Nt floor, max_iter, drop L=10m), clean stale results

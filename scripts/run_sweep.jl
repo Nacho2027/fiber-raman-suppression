@@ -2,7 +2,7 @@
 Phase 7: Parameter Sweep — L×P Grid and Multi-Start Robustness Analysis
 
 Runs L-BFGS Raman suppression optimization over a coarse grid of fiber lengths
-and launch powers for both SMF-28 (20 points: 5×4) and HNLF (16 points: 4×4).
+and launch powers for both SMF-28 (16 points: 4×4) and HNLF (16 points: 4×4).
 Then performs a 10-start multi-start robustness analysis on SMF-28 L=2m P=0.30W.
 
 Contents:
@@ -52,13 +52,14 @@ const SW_PULSE_FWHM_FS = 185.0             # fs (for compute_soliton_number)
 const SW_PULSE_REP_RATE = 80.5e6           # Hz (80.5 MHz rep rate)
 const SW_SWEEP_DIR     = joinpath("results", "raman", "sweeps")
 const SW_IMAGES_DIR    = joinpath("results", "images")
+const SW_NT_FLOOR      = 2^13                     # minimum Nt for optimization quality
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Section 2: Fiber grid definitions (D-02: SMF-28 5×4=20 pts, HNLF 4×4=16 pts)
+# Section 2: Fiber grid definitions (SMF-28 4×4=16 pts, HNLF 4×4=16 pts)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# SMF-28: 5 lengths × 4 powers = 20 points
-const SW_SMF28_L     = [0.5, 1.0, 2.0, 5.0, 10.0]   # m
+# SMF-28: 4 lengths × 4 powers = 16 points
+const SW_SMF28_L     = [0.5, 1.0, 2.0, 5.0]           # m
 const SW_SMF28_P     = [0.05, 0.10, 0.20, 0.30]       # W (average continuous power)
 const SW_SMF28_GAMMA = 1.1e-3                           # W⁻¹m⁻¹
 const SW_SMF28_BETAS = [-2.17e-26, 1.2e-40]            # β₂ [s²/m], β₃ [s³/m]
@@ -142,7 +143,7 @@ Run Raman suppression optimization over every (L, P) grid point for one fiber ty
 Each point:
   1. Computes SPM-aware time window via recommended_time_window()
   2. Computes Nt via nt_for_window()
-  3. Calls run_optimization(do_plots=false, validate=false, max_iter=100)
+  3. Calls run_optimization(do_plots=false, validate=false, max_iter=30)
   4. Computes photon number drift (D-01) and flags window_limited if >5%
   5. Records full scalar summary as a NamedTuple
 
@@ -173,7 +174,7 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
                 gamma=fiber_gamma,
                 P_peak=P_peak,
                 safety_factor=safety)
-            Nt = nt_for_window(time_window)
+            Nt = max(nt_for_window(time_window), SW_NT_FLOOR)
 
             # Soliton number (does NOT depend on L — Pitfall 1)
             N_sol = compute_soliton_number(fiber_gamma, P_peak, SW_PULSE_FWHM_FS, fiber_betas[1])
@@ -194,7 +195,7 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
                     P_cont         = P_cont,
                     Nt             = Nt,
                     time_window    = Float64(time_window),
-                    max_iter       = 100,
+                    max_iter       = 30,
                     validate       = false,
                     do_plots       = false,
                     fiber_name     = fiber_label,
@@ -338,7 +339,7 @@ Aggregate saved to results/raman/sweeps/multistart_L2m_P030W.jld2.
 Vector of NamedTuples with fields:
   start_idx, sigma, J_final, converged, iterations, result_file
 """
-function run_multistart(; n_starts::Int=10, max_iter::Int=100)
+function run_multistart(; n_starts::Int=10, max_iter::Int=30)
     L_fiber  = 2.0
     P_cont   = 0.30
     P_peak   = compute_peak_power(P_cont)
@@ -349,7 +350,7 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=100)
         gamma       = SW_SMF28_GAMMA,
         P_peak      = P_peak,
         safety_factor = 3.0)
-    Nt = nt_for_window(time_window)
+    Nt = max(nt_for_window(time_window), SW_NT_FLOOR)
 
     @info @sprintf("Multi-start config: SMF-28 L=%.1fm P=%.2fW, tw=%dps, Nt=%d",
         L_fiber, P_cont, time_window, Nt)

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Ready to execute
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-26T05:49:38.389Z"
+stopped_at: Completed 07.1-01-PLAN.md (code changes done; sweep re-run pending)
+last_updated: "2026-03-26T12:55:00.000Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 07 — parameter-sweeps
+**Current focus:** Phase 07.1 — grid resolution fix (code done, sweep re-run pending)
 
 ## Current Position
 
-Phase: 07 (parameter-sweeps) — EXECUTING
-Plan: 2 of 3
+Phase: 07.1 (grid-resolution-fix) — CODE COMPLETE, SWEEP PENDING
+Plan: 1 of 1 (code changes done; user must kick off sweep)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: 2 of 3
 | Phase 06.1-physics-insight P01 | 4 | 2 tasks | 5 files |
 | Phase 06.1-physics-insight P02 | 2 | 1 tasks (checkpoint) | 5 files |
 | Phase 07-parameter-sweeps P02 | 217 | 2 tasks | 2 files |
+| Phase 07.1-grid-resolution-fix P01 | - | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 07-parameter-sweeps]: SW_ prefix for all constants in run_sweep.jl to prevent Julia const redefinition errors when script is re-included in REPL
 - [Phase 07-parameter-sweeps]: N contour lines are vertical in L×P heatmap — N=sqrt(γP_peak T₀²/|β₂|) is independent of L (Research Pitfall 1)
 - [Phase 07-parameter-sweeps]: safety_factor=3.0 when phi_NL>20 — higher-order effects undermine first-order SPM estimate for extreme sweep points
+- [Phase 07.1]: SW_NT_FLOOR=2^13 (8192) minimum Nt in run_sweep.jl — nt_for_window() returns minimum for temporal resolution, sweep needs floor for optimization quality
+- [Phase 07.1]: max_iter=30 for sweep/multistart (was 100) — convergence plateau by iteration 30-40 per Phase 6 evidence
+- [Phase 07.1]: L=10m dropped from SMF-28 grid — 4x4=16 + 4x4=16 = 32 total sweep points
 
 ### Pending Todos
 
@@ -110,6 +114,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-26T05:49:38.385Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-26T12:55:00.000Z
+Stopped at: Completed 07.1-01-PLAN.md (code changes done; sweep re-run pending)
 Resume file: None
+Next action: User kicks off `julia --project scripts/run_sweep.jl` (est. 3-8 hours)
