@@ -186,6 +186,77 @@ end
 end
 
 # ═══════════════════════════════════════════════════
+# UNIT TESTS: recommended_time_window SPM correction
+# ═══════════════════════════════════════════════════
+
+@testset "recommended_time_window SPM correction" begin
+    @testset "SPM broadening increases window for dominant nonlinear regime" begin
+        # Choose parameters where SPM term exceeds the Raman walk-off term.
+        # Condition: gamma * P_peak * L > Δω_raman = 2π * 13e12 ≈ 8.17e13 rad/s
+        # Use gamma=1.0 (W⁻¹m⁻¹), P_peak=1e14 W, L=1.0m:
+        #   gamma * P_peak * L = 1e14 >> 8.17e13 = Δω_raman
+        #   so spm_ps >> walk_off_ps
+        tw_spm = recommended_time_window(1.0; beta2=2e-26, gamma=1.0, P_peak=1e14)
+        tw_base = recommended_time_window(1.0; beta2=2e-26)
+        @test tw_spm > tw_base
+    end
+
+    @testset "backward compatibility: no gamma/P_peak = same result" begin
+        tw_new = recommended_time_window(1.0)
+        tw_old = recommended_time_window(1.0)  # should be identical
+        @test tw_new == tw_old
+    end
+
+    @testset "zero gamma yields same as no-SPM call" begin
+        tw_zero = recommended_time_window(1.5; beta2=2e-26, gamma=0.0, P_peak=1000.0)
+        tw_base = recommended_time_window(1.5; beta2=2e-26)
+        @test tw_zero == tw_base
+    end
+
+    @testset "zero P_peak yields same as no-SPM call" begin
+        tw_zero = recommended_time_window(1.5; beta2=2e-26, gamma=1.1e-3, P_peak=0.0)
+        tw_base = recommended_time_window(1.5; beta2=2e-26)
+        @test tw_zero == tw_base
+    end
+end
+
+# ═══════════════════════════════════════════════════
+# UNIT TESTS: nt_for_window
+# ═══════════════════════════════════════════════════
+
+@testset "nt_for_window" begin
+    @testset "returns power of 2" begin
+        for tw in [1, 5, 10, 20, 50, 100]
+            nt = nt_for_window(tw)
+            @test ispow2(nt)
+        end
+    end
+
+    @testset "minimum useful size for small window" begin
+        nt = nt_for_window(1)
+        @test nt ≥ 128
+    end
+
+    @testset "large window requires large Nt" begin
+        nt = nt_for_window(100)
+        @test nt ≥ 2^14
+    end
+
+    @testset "nt_for_window(5) is correct power-of-2" begin
+        # dt_min=0.0105ps, tw=5ps → nt_min=ceil(5/0.0105)=477 → next pow2 = 512 = 2^9
+        # Actually 5/0.0105 = 476.19 → ceil = 477 → next pow2 = 512
+        nt = nt_for_window(5)
+        @test nt == 512
+    end
+
+    @testset "nt_for_window(20) is correct power-of-2" begin
+        # dt_min=0.0105ps, tw=20ps → nt_min=ceil(20/0.0105)=1905 → next pow2 = 2048
+        nt = nt_for_window(20)
+        @test nt == 2048
+    end
+end
+
+# ═══════════════════════════════════════════════════
 # UNIT TESTS: check_boundary_conditions
 # ═══════════════════════════════════════════════════
 
@@ -304,6 +375,14 @@ end
     @testset "recommended_time_window" begin
         @test_throws AssertionError recommended_time_window(-1.0)
         @test_throws AssertionError recommended_time_window(1.0; safety_factor=-1.0)
+        # negative gamma/P_peak should not crash (defaults to 0 SPM contribution)
+        # but negative beta2 is still an error
+        @test_throws AssertionError recommended_time_window(1.0; beta2=-1e-26)
+    end
+
+    @testset "nt_for_window contract" begin
+        @test_throws AssertionError nt_for_window(-1.0)
+        @test_throws AssertionError nt_for_window(0.0)
     end
 
     @testset "cost_and_gradient shape mismatch" begin
