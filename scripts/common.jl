@@ -345,13 +345,17 @@ function setup_raman_problem(;
     @assert gamma_user > 0 "nonlinear coefficient must be positive"
     @assert length(betas_user) ≥ 1 "need at least β₂"
 
-    # SPM-corrected time window recommendation: compute P_peak from average power
+    # SPM-corrected time window: auto-override if too small to prevent attenuator absorption.
     # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
     _P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
     tw_rec = recommended_time_window(L_fiber;
         beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=_P_peak)
     if time_window < tw_rec
-        @warn "time_window=$time_window ps may be too small for L=$L_fiber m (recommend ≥ $tw_rec ps)"
+        Nt_rec = nt_for_window(tw_rec)
+        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
+            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
+        time_window = tw_rec
+        Nt = max(Nt, Nt_rec)
     end
 
     sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
@@ -420,13 +424,17 @@ function setup_amplitude_problem(;
     @assert gamma_user > 0 "nonlinear coefficient must be positive"
     @assert length(betas_user) ≥ 1 "need at least β₂"
 
-    # SPM-corrected time window recommendation: compute P_peak from average power
+    # SPM-corrected time window: auto-override if too small to prevent attenuator absorption.
     # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
     _P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
     tw_rec = recommended_time_window(L_fiber;
         beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=_P_peak)
     if time_window < tw_rec
-        @warn "time_window=$time_window ps may be too small for L=$L_fiber m (recommend ≥ $tw_rec ps)"
+        Nt_rec = nt_for_window(tw_rec)
+        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
+            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
+        time_window = tw_rec
+        Nt = max(Nt, Nt_rec)
     end
 
     sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
