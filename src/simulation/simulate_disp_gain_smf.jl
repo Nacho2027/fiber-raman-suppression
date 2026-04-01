@@ -1,21 +1,31 @@
 """
-    disp_gain_smf!(dũω, ũω, p, z)
+    disp_gain_smf!(dũω, ũω, p, z)
 
-Right-hand side of the ODE governing the evolution of pulses in multimode fibers,
-including Kerr and Raman nonlinearities as well as self-steepening, plus a spectral
-linear gain term `gω`.
+ODE right-hand side for single-mode fiber propagation with spectral gain, extending
+`disp_mmf!` with a linear gain term. Written in the interaction picture.
 
-The equation is written in the interaction picture to separate the fast linear
-(disperive) and slow nonlinear dynamics.
+The equation adds gain to the GMMNLSE:
+    dũ/dz = i·exp(-iDz)·[selfsteep ⊙ IFFT(η_Kerr + η_Raman)] + 0.5·gω·ũ
+
+The gain term `0.5·gω·ũ` represents single-pass amplification where gω [1/m] is the
+power gain coefficient per unit length. The factor 0.5 converts power gain to field
+gain (since power ∝ |field|²). The gain profile is updated at each z-step via
+`compute_gain!`.
+
+# Arguments
+- `dũω`: output derivative, shape (Nt, M), mutated in-place
+- `ũω`: current state in interaction picture, shape (Nt, M)
+- `p`: parameter tuple from `get_p_disp_gain_smf`
+- `z`: propagation position [m]
 """
-function disp_gain_smf!(dũω, ũω, p, z)
+function disp_gain_smf!(dũω, ũω, p, z)
     selfsteep, Dω, γ, hRω, one_m_fR, attenuator, gain_template, gω, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
     @. exp_D_p = cis(Dω * z)
     @. exp_D_m = cis(-Dω * z)
 
-    @. uω = exp_D_p * ũω  #  dispersion applied
+    @. uω = exp_D_p * ũω
 
-    compute_gain!(gω, uω, gain_template)  # update gain profile based on current uω
+    compute_gain!(gω, uω, gain_template)
 
     fft_plan_M! * uω
     @. ut = attenuator * uω
@@ -42,17 +52,22 @@ function disp_gain_smf!(dũω, ũω, p, z)
     ifft_plan_M! * ηt
     ηt .*= selfsteep
 
-    # applied gain as well 
-    @. dũω = 1im * exp_D_m * ηt + 0.5 * gω * ũω
+    # Nonlinear + gain: 0.5 factor converts power gain gω to field gain
+    @. dũω = 1im * exp_D_m * ηt + 0.5 * gω * ũω
 end
 
 """
     compute_gain!(gω, uω, gain_template)
 
-Placeholder gain model.
+Placeholder gain model: copies `gain_template` into `gω` regardless of the field state.
 
-Currently returns a constant (or provided template) gain for every frequency and mode.
-Replace this function body with a spectrum-dependent model, e.g. `compute_gain(uω)`.
+For spectrum-dependent gain (e.g., YDFA), see `compute_gain` in `simulate_disp_gain_mmf.jl`
+which dispatches on `YDFAParams` and computes gain from rate equations.
+
+# Arguments
+- `gω`: output gain array, shape (Nt, M), mutated in-place [1/m]
+- `uω`: current field in frequency domain (unused in placeholder)
+- `gain_template`: scalar or array to copy into gω
 """
 function compute_gain!(gω, uω, gain_template)
     if gain_template isa Number
@@ -65,9 +80,22 @@ end
 
 
 """
-    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gω, Nt, M, attenuator)
+    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gain_template, Nt, M, attenuator) -> Tuple
 
-Create the tuple of parameters necessary to call `disp_gain_smf!`.
+Pre-allocate parameters for `disp_gain_smf!`, extending `get_p_disp_mmf` with a
+`gain_template` and `gω` work array.
+
+# Arguments
+- `ωs`: angular frequency grid [rad/s], length Nt
+- `ω0`: center angular frequency [rad/s]
+- `Dω`: dispersion operator, shape (Nt, M)
+- `γ`: nonlinearity tensor, shape (M, M, M, M) [W⁻¹ m⁻¹]
+- `hRω`: Raman response in frequency domain, shape (Nt, M, M)
+- `one_m_fR`: (1 - fR), fractional Kerr weight
+- `gain_template`: gain profile to copy into `gω` at each step [1/m], scalar or array
+- `Nt`: number of temporal grid points
+- `M`: number of spatial modes
+- `attenuator`: time-domain window to suppress boundary artifacts, shape (Nt, M)
 """
 function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gain_template, Nt, M, attenuator)
     selfsteep = fftshift(ωs / ω0)
@@ -100,9 +128,22 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gain_template, N
 end
 
 """
-    get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim)
+    get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim) -> (ut0, uω0)
 
-Create the initial pulse for gain-enabled propagation.
+Create the initial pulse for gain-enabled propagation. Identical to `get_initial_state`
+in `simulate_disp_mmf.jl` -- see that function for full documentation.
+
+# Arguments
+- `u0_modes`: relative mode amplitudes, length M
+- `P_cont`: continuous-wave (average) power [W]
+- `fwhm`: pulse full-width at half-maximum [s]
+- `rep_rate`: laser repetition rate [Hz]
+- `pulse_form`: `"gauss"` or `"sech_sq"`
+- `sim`: simulation parameter dict (uses `"M"`, `"Nt"`, `"ts"`)
+
+# Returns
+- `ut0`: initial field in time domain, shape (Nt, M)
+- `uω0`: initial field in frequency domain (via `ifft`), shape (Nt, M)
 """
 function get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim)
     M, Nt, ts = sim["M"], sim["Nt"], sim["ts"]
@@ -124,15 +165,22 @@ function get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form
 end
 
 """
-    solve_disp_gain_smf(uω0, fiber, sim)
+    solve_disp_gain_smf(uω0, fiber, sim) -> Dict
 
-Solve the gain-augmented dispersive smf propagation problem.
+Solve gain-augmented single-mode fiber propagation from z=0 to z=L.
 
-If `fiber["gω"]` is not provided, a zero gain profile is used by default.
-Gain is applied as exp(±0.5*gω*z), separate from Dω.
+Uses `fiber["gω"]` as the gain profile if present, otherwise defaults to zero gain.
+Solver: Tsit5 at reltol=1e-5.
+
+# Arguments
+- `uω0`: initial field in frequency domain, shape (Nt, M)
+- `fiber`: fiber parameter dict (uses `"Dω"`, `"γ"`, `"hRω"`, `"one_m_fR"`, `"L"`, `"zsave"`, optionally `"gω"`)
+- `sim`: simulation parameter dict (uses `"ωs"`, `"ω0"`, `"Nt"`, `"M"`, `"attenuator"`)
+
+# Returns
+Dict with `"ode_sol"`, and optionally `"uω_z"`, `"ut_z"` at saved z positions.
 """
 function solve_disp_gain_smf(uω0, fiber, sim)
-    # gω = haskey(fiber, "gω") ? fiber["gω"] : zeros(sim["Nt"], sim["M"])
     gain_template = haskey(fiber, "gω") && !isnothing(fiber["gω"]) ? fiber["gω"] : 0.0
 
     p_disp_gain_smf = get_p_disp_gain_smf(sim["ωs"], sim["ω0"], fiber["Dω"], fiber["γ"], fiber["hRω"], fiber["one_m_fR"],

@@ -1,38 +1,51 @@
 """
-    disp_gain_smf!(dũω, ũω, p, z)
+    disp_gain_smf!(dũ, ũ, p, z)
 
-Right-hand side of the ODE governing the evolution of pulses in multimode fibers,
-including Kerr and Raman nonlinearities as well as self-steepening, plus a spectral
-linear gain term `gω`.
+ODE right-hand side for fiber propagation with pump-dependent gain (co-propagating
+pump model). The state vector ũ = [Pp; ũω] concatenates the pump power Pp (scalar)
+with the signal field ũω (shape Nt×M) in the interaction picture.
 
-The equation is written in the interaction picture to separate the fast linear
-(disperive) and slow nonlinear dynamics.
+Extends `disp_mmf!` with:
+- Pump evolution: dPp/dz = gP · Pp (exponential pump growth/depletion)
+- Signal gain: 0.5·gω·ũω added to the nonlinear signal equation
+
+The gain profile gω and pump gain gP are computed at each z-step by `compute_gain`,
+which dispatches on the gain model type (constant or YDFA rate equations).
+
+# Arguments
+- `dũ`: output derivative, length 1+Nt*M (first element is pump, rest is signal)
+- `ũ`: current state [Pp; ũω]
+- `p`: parameter tuple from `get_p_disp_gain_smf` (MMF version)
+- `z`: propagation position [m]
 """
-function disp_gain_smf!(dũ, ũ, p, z)
+function disp_gain_smf!(dũ, ũ, p, z)
 
     selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
 
-    Pp = ũ[1]  # Pump
-    ũω = ũ[2:end]  # Signal modes
+    Pp = ũ[1]  # Pump power (scalar, co-propagating)
+    ũω = ũ[2:end]  # Signal field in interaction picture
 
     @. exp_D_p = cis(Dω * z)
     @. exp_D_m = cis(-Dω * z)
 
-    @. uω = exp_D_p * ũω
+    @. uω = exp_D_p * ũω
 
-    gω, gP = compute_gain(uω, pGain, Pp)  # gω is updated in place, gP is returned since float
+    # Update gain profile based on current field and pump power
+    gω, gP = compute_gain(uω, pGain, Pp)
 
     fft_plan_M! * uω
     @. ut = attenuator * uω
     @. v = real(ut)
     @. w = imag(ut)
 
+    # Kerr nonlinearity
     @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t, k] * v[t, l] + w[t, k] * w[t, l])
     @tullio αK[t, i] = δKt[t, i, j] * v[t, j]
     @tullio βK[t, i] = δKt[t, i, j] * w[t, j]
     @. ηKt = αK + 1im * βK
     @. ηKt *= one_m_fR
 
+    # Raman nonlinearity
     @. δKt_cplx = ComplexF64(δKt, 0.0)
     fft_plan_MM! * δKt_cplx
     @. hRω_δRω = hRω * δKt_cplx
@@ -47,20 +60,17 @@ function disp_gain_smf!(dũ, ũ, p, z)
     ifft_plan_M! * ηt
     ηt .*= selfsteep
 
-    # @. dũω = 1im * p.exp_D_m * p.ηt + 0.5 * p.gω * ũω
-
-    dũ[1] = gP * Pp  # Pump is undepleted in this model
-    @. dũ[2:end] = 1im * exp_D_m * ηt + 0.5 * gω * ũω
+    # Pump equation and signal equation with gain
+    dũ[1] = gP * Pp  # Pump: exponential growth/depletion
+    @. dũ[2:end] = 1im * exp_D_m * ηt + 0.5 * gω * ũω  # Signal: nonlinearity + gain
 
 end
 
 """
-    compute_gain!(gω, uω, pGain)
+    compute_gain(uω, pGain::Number, Pp) -> (gω, gP)
 
-Placeholder gain model.
-
-Currently returns a constant (or provided template) gain for every frequency and mode.
-Replace this function body with a spectrum-dependent model, e.g. `compute_gain(uω)`.
+Constant gain model (placeholder): returns uniform gain `pGain` at all frequencies
+and gP=-1 as a placeholder pump gain. Used when `fiber["gain_parameters"]` is a number.
 """
 function compute_gain(uω, pGain::Number, Pp)
     gω = fill(pGain, size(uω))  # Linear Gain
@@ -68,12 +78,24 @@ function compute_gain(uω, pGain::Number, Pp)
     return gω, gP
 end
 
+"""
+    compute_gain(uω, pGain::YDFAParams, Pp) -> (gω, gP)
+
+YDFA gain model: computes spectral gain from Yb-doped fiber rate equations.
+Converts the FFT-convention field to physical PSD [W/Hz], calls `calculate_gain_YDFA`
+for the population inversion and spectral gain, then reshapes back to FFT order
+via `ifftshift`.
+
+# Returns
+- `gω`: spectral gain profile [1/m], shape matching uω
+- `gP`: pump power gain [1/m] (negative = pump absorption)
+"""
 function compute_gain(uω, pGain::YDFAParams, Pp)
 
     Ps_vec = psd_from_uω(uω, pGain)  # W/Hz on fs grid
     gω_vec, gP = calculate_gain_YDFA(Pp, Ps_vec, pGain)
 
-    gω_shifted = ifftshift(gω_vec)  # You have to shift since uω is in the fft convention
+    gω_shifted = ifftshift(gω_vec)  # Shift back to FFT convention (DC at index 1)
 
     gω = reshape(gω_shifted, size(uω))
 
@@ -82,9 +104,23 @@ end
 
 
 """
-    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, gω, Nt, M, attenuator)
+    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator) -> Tuple
 
-Create the tuple of parameters necessary to call `disp_gain_smf!`.
+Pre-allocate parameters for the pump+signal `disp_gain_smf!` ODE. Extends the
+standard `get_p_disp_mmf` tuple with gain model `pGain`, gain work array `gω`,
+and pump gain scalar `gP`.
+
+# Arguments
+- `ωs`: angular frequency grid [rad/s], length Nt
+- `ω0`: center angular frequency [rad/s]
+- `Dω`: dispersion operator, shape (Nt, M)
+- `γ`: nonlinearity tensor, shape (M, M, M, M) [W⁻¹ m⁻¹]
+- `hRω`: Raman response in frequency domain, shape (Nt, M, M)
+- `one_m_fR`: (1 - fR), fractional Kerr weight
+- `pGain`: gain model -- a `Number` for constant gain or `YDFAParams` for rate-equation gain
+- `Nt`: number of temporal grid points
+- `M`: number of spatial modes
+- `attenuator`: time-domain window to suppress boundary artifacts, shape (Nt, M)
 """
 function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator)
     selfsteep = fftshift(ωs / ω0)
@@ -118,9 +154,22 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, at
 end
 
 """
-    get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim)
+    get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim) -> (ut0, uω0)
 
-Create the initial pulse for gain-enabled propagation.
+Create the initial signal pulse for gain-enabled propagation. Identical to
+`get_initial_state` in `simulate_disp_mmf.jl`.
+
+# Arguments
+- `u0_modes`: relative mode amplitudes, length M
+- `P_cont`: continuous-wave (average) power [W]
+- `fwhm`: pulse full-width at half-maximum [s]
+- `rep_rate`: laser repetition rate [Hz]
+- `pulse_form`: `"gauss"` or `"sech_sq"`
+- `sim`: simulation parameter dict (uses `"M"`, `"Nt"`, `"ts"`)
+
+# Returns
+- `ut0`: initial field in time domain, shape (Nt, M)
+- `uω0`: initial field in frequency domain (via `ifft`), shape (Nt, M)
 """
 function get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim)
     M, Nt, ts = sim["M"], sim["Nt"], sim["ts"]
@@ -142,12 +191,19 @@ function get_initial_state_gain_smf(u0_modes, P_cont, fwhm, rep_rate, pulse_form
 end
 
 """
-    solve_disp_gain_smf(uω0, fiber, sim)
+    solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0) -> Dict
 
-Solve the gain-augmented dispersive smf propagation problem.
+Solve pump+signal propagation from z=0 to z=L. Enforces M=1 (single-mode only in
+this version — the pump coupling model assumes a single signal mode).
 
-If `fiber["gω"]` is not provided, a zero gain profile is used by default.
-Gain is applied as exp(±0.5*gω*z), separate from Dω.
+# Arguments
+- `uω0`: initial signal field, shape (Nt, 1)
+- `fiber`: fiber parameter dict (uses `fiber["gain_parameters"]` for gain model)
+- `sim`: simulation parameter dict
+- `pump_power`: initial co-propagating pump power [W] (default 0.0)
+
+# Returns
+Dict with `"ode_sol"`, and optionally `"uω_z"`, `"ut_z"`, `"Ppz"` (pump power along z).
 """
 function solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0)
 

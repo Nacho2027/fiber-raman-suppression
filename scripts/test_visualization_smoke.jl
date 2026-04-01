@@ -1,8 +1,28 @@
 """
-Smoke test: generate PNGs with synthetic data to verify visualization changes.
-Tests all modified visualization functions without requiring MultiModeNoise propagation.
+test_visualization_smoke.jl: Smoke test for visualization functions with synthetic data
 
-Run: julia scripts/test_visualization_smoke.jl
+Validates all plotting helpers and source-level conventions without running
+any fiber propagation. Uses a mock MultiModeNoise module so visualization.jl
+can be loaded standalone. Checks cover function behavior (group delay, captions,
+metadata blocks, merged evolution layout) and source-level invariants (no jet
+colormap, inferno default, Okabe-Ito constants, dB clipping, etc.).
+
+Contents:
+  - Tests 1-3:   Module loading, constants, rcParams, compute_group_delay, add_caption!
+  - Tests 4-12:  Source-level pattern assertions (colormap, axvspan, dB clipping, etc.)
+  - Tests 13-18: Cross-file checks on raman_optimization.jl, amplitude_optimization.jl,
+                 benchmark_optimization.jl save paths and chirp sensitivity fixes
+  - Tests 19-21: mask_before_unwrap GDD recovery, _spectral_signal_xlim auto-zoom,
+                 global P_ref normalization
+  - Tests 22-25: _add_metadata_block!, expanded J annotation, plot_merged_evolution
+
+Usage:
+  julia --project scripts/test_visualization_smoke.jl
+
+Depends on:
+  - scripts/visualization.jl (all plotting functions under test)
+  - scripts/raman_optimization.jl, scripts/amplitude_optimization.jl,
+    scripts/benchmark_optimization.jl (read as source text for pattern checks)
 """
 ENV["MPLBACKEND"] = "Agg"
 using PyPlot, FFTW, Printf

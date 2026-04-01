@@ -1,7 +1,27 @@
 """
-Wrapper script to run benchmark_optimization.jl functions.
-The example code in benchmark_optimization.jl is commented out,
-so this script calls the functions explicitly.
+run_benchmarks.jl: Execute the full benchmark and advanced optimization suite
+
+Calls every function exported by benchmark_optimization.jl with production
+parameters on SMF-28 fiber (gamma=0.0013, beta2=-2.6e-26). Each section
+runs independently with GC between stages to keep memory in check.
+
+Contents:
+  - 3a: Grid size benchmark (Nt = 2^10..2^14, 3 iters each)
+  - 3b: Reference optimization (15 iters) + time window analysis (5..30 ps)
+  - 3c: Continuation method (L ladder 0.1..5.0 m)
+  - 3d: Multi-start optimization (10 starts, 30 iters)
+  - 3e: Parallel gradient validation (10 finite-difference checks)
+  - 3f: Performance notes summary
+
+Usage:
+  julia --project scripts/run_benchmarks.jl
+
+Depends on:
+  - scripts/benchmark_optimization.jl (benchmark_grid_sizes, run_optimization,
+    analyze_time_windows_optimized, run_continuation, multistart_optimization,
+    validate_gradient_parallel, print_performance_notes)
+  - scripts/common.jl (setup_raman_problem, FIBER_PRESETS)
+  - scripts/visualization.jl (plot_time_window_analysis_v2)
 """
 
 include("benchmark_optimization.jl")
