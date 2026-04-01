@@ -108,6 +108,7 @@ Plans:
 | 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
 | 6.1 Physics Insight | 0/2 | Planned | - |
 | 7. Parameter Sweeps | 2/3 | In Progress|  |
+| 8. Sweep Point Reporting | 0/1 | Planned | - |
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
@@ -118,3 +119,17 @@ Plans:
 
 Plans:
 - [x] 07.1-01-PLAN.md — Fix run_sweep.jl (Nt floor, max_iter, drop L=10m), clean stale results
+
+### Phase 8: Sweep Point Reporting
+
+**Goal:** Generate human-readable per-point outputs (report card figure + markdown summary) for every sweep configuration, plus sweep-level ranked summary tables. Post-hoc script reads JLD2 files — no re-running optimization.
+**Depends on:** Phase 7 (needs sweep JLD2 files to exist)
+**Requirements**: Derived from SWEEP-01 (results must be interpretable)
+**Success Criteria** (what must be TRUE):
+  1. Each per-point directory has a single 4-panel report card PNG (spectral, phase 3-view, convergence, metrics)
+  2. Each per-point directory has a `report.md` with YAML frontmatter + human-readable metrics
+  3. A `SWEEP_REPORT.md` in `results/raman/sweeps/` ranks all points by suppression quality with key metrics
+  4. `scripts/generate_sweep_reports.jl` regenerates all outputs from JLD2 without re-running optimization
+**Plans:** 1/1
+Plans:
+- [ ] 08-01-PLAN.md — Create generate_sweep_reports.jl with report card figure + markdown summaries

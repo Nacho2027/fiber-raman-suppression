@@ -204,6 +204,7 @@ end
 
 Return the angular frequency step dω [rad/ps] for the fftshifted grid.
 """
+"""Compute the angular frequency step Δω [rad/ps] from the simulation grid."""
 function _spectral_omega_step(sim)
     Δf_grid = fftshift(fftfreq(sim["Nt"], 1 / sim["Δt"]))
     return 2π * (Δf_grid[2] - Δf_grid[1])
@@ -1562,14 +1563,14 @@ end
 
 Overlay J vs iteration for all optimization runs on a single figure.
 
-Converts the stored linear J convergence history to dB for readability.
+Plots the stored convergence history (already in dB) directly.
 Each run is plotted with a distinct color from `COLORS_5_RUNS` (Okabe-Ito
 extended palette, colorblind-safe). Labels show fiber type, length, and power
 so the figure is self-contained for presentation.
 
 # Arguments
 - `runs`:      Vector{Dict} — each Dict must contain:
-                 `convergence_history` (Vector{Float64}, linear J values),
+                 `convergence_history` (Vector{Float64}, J values in dB),
                  `fiber_name`, `L_m`, `P_cont_W`
 - `save_path`: String or nothing — if provided, saves to this path at 300 DPI
 
@@ -1580,8 +1581,8 @@ function plot_convergence_overlay(runs; save_path=nothing)
     fig, ax = subplots(figsize=(8, 5))
 
     for (i, run) in enumerate(runs)
-        # Convergence history is already in dB — optimize_spectral_phase
-        # returns lin_to_dB(J) to Optim.jl, so f_trace stores dB values
+        # Convergence history stored in dB (converted from linear f_trace
+        # in run_optimization before saving to JLD2)
         J_dB  = run["convergence_history"]
         iters = 0:length(J_dB)-1
         label = "$(run["fiber_name"]) L=$(run["L_m"])m P=$(run["P_cont_W"])W"
@@ -1854,6 +1855,216 @@ function plot_multistart_histogram(multistart_results; save_path=nothing)
     end
 
     return (fig, axes)
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 18. Sweep report card — single 4-panel figure per sweep point
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    plot_sweep_report_card(data; save_path=nothing)
+
+Generate a compact 2×2 report card figure for a single sweep point.
+
+Panels:
+  (1,1) Input spectrum in dB with Raman band highlighted
+  (1,2) Optimized phase: wrapped, unwrapped, group delay (3 subpanels stacked)
+  (2,1) Convergence trace J(iteration) in dB
+  (2,2) Key metrics text box
+
+# Arguments
+- `data`: Dict or NamedTuple loaded from per-point JLD2 with keys:
+    phi_opt, uomega0, band_mask, sim_Dt, sim_omega0,
+    convergence_history, J_before, J_after, converged, iterations,
+    fiber_name, L_m, P_cont_W, Nt, time_window_ps,
+    grad_norm, E_conservation, bc_input_frac, bc_output_frac
+- `save_path`: optional PNG path
+
+# Returns
+(fig, axs)
+"""
+function plot_sweep_report_card(data; save_path=nothing)
+    # --- Extract data ---
+    φ       = data["phi_opt"]
+    uω0     = data["uomega0"]
+    bm      = data["band_mask"]
+    Δt_ps   = data["sim_Dt"]
+    ω0      = data["sim_omega0"]
+    hist    = data["convergence_history"]
+    J_bef   = data["J_before"]
+    J_aft   = data["J_after"]
+    conv    = data["converged"]
+    iters   = data["iterations"]
+    fname   = data["fiber_name"]
+    L_m     = data["L_m"]
+    P_W     = data["P_cont_W"]
+    Nt      = data["Nt"]
+    tw_ps   = data["time_window_ps"]
+
+    # Reconstruct minimal sim dict for helper functions.
+    # ω0 is stored in rad/ps (= 2π × f0_THz). Δt is in ps.
+    fs = collect(FFTW.fftfreq(Nt, 1.0 / Δt_ps))  # THz (1/ps = THz)
+    f0 = ω0 / (2π)                                 # rad/ps → THz
+    ωs = 2π .* (fs .+ f0)                          # absolute angular freq [rad/ps]
+    ts = collect(range(-Nt÷2, Nt÷2-1)) .* Δt_ps .* 1e-12  # seconds
+    sim_mini = Dict{String, Any}(
+        "Nt" => Nt, "Δt" => Δt_ps, "f0" => f0,
+        "fs" => fs, "ωs" => ωs, "ω0" => ω0, "ts" => ts,
+    )
+
+    # Frequency → wavelength mapping
+    λ_nm, pos_mask, sort_idx = _freq_to_wavelength(sim_mini)
+    dω = _spectral_omega_step(sim_mini)
+
+    # Spectral power (fftshifted, positive-freq, wavelength-sorted)
+    spec_full = abs2.(fftshift(uω0[:, 1]))
+    spec_pos  = spec_full[pos_mask][sort_idx]
+    P_peak_spec = maximum(spec_full)
+    dB_full   = 10 .* log10.(spec_full ./ P_peak_spec .+ 1e-30)
+    signal_mask = dB_full .> -40.0
+
+    # Raman band mask (fftshifted, positive-freq, wavelength-sorted)
+    bm_shifted = fftshift(bm)
+    bm_pos     = bm_shifted[pos_mask][sort_idx]
+
+    # Input spectrum in dB (positive-freq, wavelength-sorted)
+    spec_dB = 10 .* log10.(spec_pos ./ maximum(spec_pos) .+ 1e-30)
+    spec_xlim = _spectral_signal_xlim(spec_pos, λ_nm)
+
+    # Phase processing (same logic as plot_phase_diagnostic)
+    φ_shifted = fftshift(φ[:, 1])
+    φ_premask = copy(φ_shifted)
+    φ_premask[.!signal_mask] .= 0.0
+    φ_unwrapped_full = _manual_unwrap(φ_premask)
+    φ_unwrapped = φ_unwrapped_full[pos_mask][sort_idx]
+    τ_pos = (_central_diff(φ_unwrapped_full, dω) .* 1e3)[pos_mask][sort_idx]  # fs
+
+    φ_wrapped = wrap_phase(φ_shifted[pos_mask][sort_idx])
+    φ_wrapped_disp = _apply_dB_mask(φ_wrapped, spec_pos)
+    φ_masked = _apply_dB_mask(φ_unwrapped, spec_pos)
+    τ_masked = _apply_dB_mask(τ_pos, spec_pos)
+
+    λ_raman_onset = C_NM_THZ / (f0 - 13.2)
+
+    # Quality label
+    J_dB = MultiModeNoise.lin_to_dB(J_aft)
+    quality = J_dB < -40 ? "EXCELLENT" : J_dB < -30 ? "GOOD" : J_dB < -20 ? "ACCEPTABLE" : "POOR"
+
+    # --- Figure: 3×2 subplot layout ---
+    # Layout:
+    #   (1) Input spectrum        (2) Wrapped phase
+    #   (3) Convergence           (4) Unwrapped phase
+    #   (5) Metrics text box      (6) Group delay
+    fig, axs = subplots(3, 2, figsize=(14, 11))
+    fig.subplots_adjust(hspace=0.45, wspace=0.35)
+
+    # (1) Input spectrum — top-left
+    ax1 = axs[1, 1]
+    ax1.plot(λ_nm, spec_dB, color=COLOR_INPUT, linewidth=0.8, label="Input spectrum")
+    λ_band = λ_nm[bm_pos]
+    if length(λ_band) > 0
+        ax1.axvspan(minimum(λ_band), maximum(λ_band),
+            alpha=0.15, color=COLOR_RAMAN, label="Raman band")
+    end
+    ax1.axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, linewidth=0.8)
+    ax1.set_xlabel("Wavelength [nm]")
+    ax1.set_ylabel("Power spectral density [dB]")
+    ax1.set_title("Input spectrum")
+    ax1.set_xlim(spec_xlim...)
+    ax1.set_ylim(-60, 3)
+    ax1.legend(fontsize=8, loc="upper right")
+
+    # (3) Convergence — middle-left
+    ax3 = axs[2, 1]
+    if length(hist) > 0
+        ax3.plot(1:length(hist), hist, "k-o", markersize=3, linewidth=1.2)
+        ax3.set_ylabel("J [dB]")
+    end
+    ax3.set_xlabel("Iteration")
+    ax3.set_title("Convergence")
+    ax3.grid(true, alpha=0.3)
+
+    # (5) Metrics text box — bottom-left
+    ax4 = axs[3, 1]
+    ax4.set_axis_off()
+
+    # (2) Wrapped phase — top-right
+    ax_wrap = axs[1, 2]
+    ax_wrap.plot(λ_nm, φ_wrapped_disp, color=COLOR_REF, linewidth=0.6)
+    ax_wrap.axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.6)
+    ax_wrap.set_ylabel("φ [rad]")
+    ax_wrap.set_title("Wrapped phase φ(ω)", fontsize=10)
+    set_phase_yticks!(ax_wrap)
+    ax_wrap.set_xlim(spec_xlim...)
+
+    # (4) Unwrapped phase — middle-right
+    ax_unw = axs[2, 2]
+    ax_unw.plot(λ_nm, φ_masked, color=COLOR_REF, linewidth=0.6)
+    ax_unw.axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.6)
+    ax_unw.set_ylabel("φ [rad]")
+    ax_unw.set_title("Unwrapped phase", fontsize=10)
+    ax_unw.set_xlim(spec_xlim...)
+
+    # (6) Group delay — bottom-right
+    ax_gd = axs[3, 2]
+    ax_gd.plot(λ_nm, τ_masked, color=COLOR_REF, linewidth=0.6)
+    ax_gd.axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.6)
+    ax_gd.set_xlabel("Wavelength [nm]")
+    ax_gd.set_ylabel("τ [fs]")
+    ax_gd.set_title("Group delay τ(ω)", fontsize=10)
+    ax_gd.set_xlim(spec_xlim...)
+
+    # Build metrics text
+    J_bef_dB = MultiModeNoise.lin_to_dB(J_bef)
+    grad_norm = haskey(data, "grad_norm") ? data["grad_norm"] : NaN
+    E_cons = haskey(data, "E_conservation") ? data["E_conservation"] : NaN
+    bc_in  = haskey(data, "bc_input_frac") ? data["bc_input_frac"] : NaN
+    bc_out = haskey(data, "bc_output_frac") ? data["bc_output_frac"] : NaN
+    wall_s = haskey(data, "wall_time_s") ? data["wall_time_s"] : NaN
+
+    metrics_text = @sprintf("""
+    %s — L = %.1f m, P = %.3f W
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Suppression:    %s
+    J before:       %.2f dB
+    J after:        %.2f dB
+    ΔJ:             %.2f dB
+
+    Converged:      %s
+    Iterations:     %d
+    ‖∇J‖:           %.2e
+
+    Grid:           Nt = %d
+    Time window:    %d ps
+    E conservation: %.4f
+    BC input:       %.2e
+    BC output:      %.2e
+    Wall time:      %.1f s
+    """,
+        fname, L_m, P_W,
+        quality,
+        J_bef_dB, J_dB, J_dB - J_bef_dB,
+        conv ? "Yes" : "No", iters, grad_norm,
+        Nt, round(Int, tw_ps),
+        E_cons, bc_in, bc_out, wall_s)
+
+    ax4.text(0.05, 0.95, metrics_text, transform=ax4.transAxes,
+        fontsize=10, verticalalignment="top", fontfamily="monospace",
+        bbox=Dict("boxstyle" => "round,pad=0.5", "facecolor" => "wheat", "alpha" => 0.5))
+
+    fig.suptitle(@sprintf("%s  L=%.1fm  P=%.3fW  →  J=%.1f dB  [%s]",
+        fname, L_m, P_W, J_dB, quality), fontsize=14, fontweight="bold")
+
+    fig.subplots_adjust(top=0.93)
+
+    if !isnothing(save_path)
+        savefig(save_path, dpi=300, bbox_inches="tight")
+        @info "Saved report card to $save_path"
+    end
+
+    return (fig, nothing)
 end
 
 end # include guard (_VISUALIZATION_JL_LOADED)
