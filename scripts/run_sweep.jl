@@ -60,13 +60,13 @@ const SW_NT_FLOOR      = 2^13                     # minimum Nt for optimization 
 
 # SMF-28: 4 lengths × 4 powers = 16 points
 const SW_SMF28_L     = [0.5, 1.0, 2.0, 5.0]           # m
-const SW_SMF28_P     = [0.05, 0.10, 0.20, 0.30]       # W (average continuous power)
+const SW_SMF28_P     = [0.05, 0.10, 0.20]              # W (average continuous power) — P=0.30 dropped: 3+ hours per point at Nt=8192
 const SW_SMF28_GAMMA = 1.1e-3                           # W⁻¹m⁻¹
 const SW_SMF28_BETAS = [-2.17e-26, 1.2e-40]            # β₂ [s²/m], β₃ [s³/m]
 
 # HNLF: 4 lengths × 4 powers = 16 points
 const SW_HNLF_L      = [0.5, 1.0, 2.0, 5.0]           # m
-const SW_HNLF_P      = [0.005, 0.010, 0.030, 0.050]   # W
+const SW_HNLF_P      = [0.005, 0.010, 0.030]           # W — P=0.050 dropped: extreme nonlinearity at Nt=8192
 const SW_HNLF_GAMMA  = 10.0e-3                          # W⁻¹m⁻¹
 const SW_HNLF_BETAS  = [-0.5e-26, 1.0e-40]             # β₂ [s²/m], β₃ [s³/m]
 
@@ -195,7 +195,7 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
                     P_cont         = P_cont,
                     Nt             = Nt,
                     time_window    = Float64(time_window),
-                    max_iter       = 30,
+                    max_iter       = 60,
                     validate       = false,
                     do_plots       = false,
                     fiber_name     = fiber_label,
@@ -211,11 +211,13 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
 
                 converged  = Optim.converged(result)
                 iterations = Optim.iterations(result)
-                J_after    = 10.0^(Optim.minimum(result) / 10.0)
+                J_after    = Optim.minimum(result)  # now linear (dB/linear fix)
                 grad_norm  = norm(Optim.minimizer(result))  # proxy; actual is in JLD2
 
-                @info @sprintf("    → J_after=%.1f dB, converged=%s, drift=%.1f%%, wlim=%s",
-                    MultiModeNoise.lin_to_dB(J_after), converged, drift_pct, window_limited)
+                J_dB = MultiModeNoise.lin_to_dB(J_after)
+                quality = J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
+                @info @sprintf("    → J_after=%.1f dB [%s], converged=%s, drift=%.1f%%, wlim=%s",
+                    J_dB, quality, converged, drift_pct, window_limited)
 
                 push!(sweep_results, (
                     L_m             = L,
@@ -339,9 +341,9 @@ Aggregate saved to results/raman/sweeps/multistart_L2m_P030W.jld2.
 Vector of NamedTuples with fields:
   start_idx, sigma, J_final, converged, iterations, result_file
 """
-function run_multistart(; n_starts::Int=10, max_iter::Int=30)
+function run_multistart(; n_starts::Int=10, max_iter::Int=60)
     L_fiber  = 2.0
-    P_cont   = 0.30
+    P_cont   = 0.20  # was 0.30 — too slow at Nt=8192; P=0.20 still has N≈2.6 (nontrivial)
     P_peak   = compute_peak_power(P_cont)
 
     # SPM-corrected time window for this config (phi_NL ~ 39 → safety_factor=3)
@@ -407,7 +409,7 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=30)
                 φ0          = phi0_list[i],
             )
 
-            J_final    = 10.0^(Optim.minimum(result) / 10.0)
+            J_final    = Optim.minimum(result)  # now linear (dB/linear fix)
             converged  = Optim.converged(result)
             iterations = Optim.iterations(result)
 
@@ -507,22 +509,50 @@ if abspath(PROGRAM_FILE) == @__FILE__
     PyPlot.close("all")
 
     # ── 5. Summary log ──────────────────────────────────────────────────────
-    n_smf28_converged = count(r -> r.converged,       smf28_results)
-    n_hnlf_converged  = count(r -> r.converged,       hnlf_results)
-    n_smf28_wlim      = count(r -> r.window_limited,  smf28_results)
-    n_hnlf_wlim       = count(r -> r.window_limited,  hnlf_results)
-    n_ms_converged    = count(r -> r.converged,        ms_results)
 
+    # Helper: classify suppression quality from J_after (linear scale)
+    function _suppression_quality(J_lin)
+        isnan(J_lin) && return "crashed"
+        J_dB = MultiModeNoise.lin_to_dB(J_lin)
+        J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
+    end
+
+    for (label, results) in [("SMF-28", smf28_results), ("HNLF", hnlf_results)]
+        n_total = length(results)
+        n_conv  = count(r -> r.converged, results)
+        n_wlim  = count(r -> r.window_limited, results)
+        valid   = filter(r -> !isnan(r.J_after), results)
+        n_exc   = count(r -> _suppression_quality(r.J_after) == "excellent", valid)
+        n_good  = count(r -> _suppression_quality(r.J_after) in ("excellent", "good"), valid)
+        n_poor  = count(r -> _suppression_quality(r.J_after) == "poor", valid)
+        best_dB = isempty(valid) ? NaN : minimum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
+        worst_dB= isempty(valid) ? NaN : maximum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
+
+        @info @sprintf("""
+        ┌─── %s (%d points) ────────────────────────────┐
+        │  Converged:    %2d/%2d (formal gradient criterion)   │
+        │  Suppression:  %2d/%2d ≤ -30 dB  (%d excellent)      │
+        │  Poor (>-20dB): %2d/%2d                              │
+        │  Window-limited: %2d/%2d                             │
+        │  Best: %.1f dB   Worst: %.1f dB                     │
+        └───────────────────────────────────────────────────┘""",
+            label, n_total,
+            n_conv, n_total,
+            n_good, n_total, n_exc,
+            n_poor, n_total,
+            n_wlim, n_total,
+            best_dB, worst_dB)
+    end
+
+    n_ms_converged = count(r -> r.converged, ms_results)
+    ms_valid = filter(r -> !isnan(r.J_final), ms_results)
+    ms_good  = count(r -> MultiModeNoise.lin_to_dB(r.J_final) < -30, ms_valid)
     @info @sprintf("""
-    ╔═══════════════════════════════════════════════════════╗
-    ║  SWEEP COMPLETE                                       ║
-    ╠═══════════════════════════════════════════════════════╣
-    ║  SMF-28: %2d/%2d converged, %2d window-limited          ║
-    ║  HNLF:   %2d/%2d converged, %2d window-limited          ║
-    ║  Multi-start: %2d/%2d converged                         ║
-    ╚═══════════════════════════════════════════════════════╝""",
-        n_smf28_converged, length(smf28_results), n_smf28_wlim,
-        n_hnlf_converged,  length(hnlf_results),  n_hnlf_wlim,
-        n_ms_converged,    length(ms_results))
+    ┌─── Multi-start (%d starts) ───────────────────────┐
+    │  Converged: %2d/%2d   Suppression ≤-30dB: %2d/%2d     │
+    └───────────────────────────────────────────────────┘""",
+        length(ms_results),
+        n_ms_converged, length(ms_results),
+        ms_good, length(ms_valid))
 
 end # abspath(PROGRAM_FILE) == @__FILE__

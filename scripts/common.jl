@@ -169,27 +169,31 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
-    recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27, gamma=0.0, P_peak=0.0)
+    recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27, gamma=0.0, P_peak=0.0, pulse_fwhm=185e-15)
 
 Compute safe time window [ps] from dispersive walk-off plus SPM spectral broadening
 for single-mode fibers. Uses |β₂| and Raman shift of 13 THz for the linear walk-off
 term, and adds the SPM-induced temporal broadening when gamma and P_peak are provided.
 Returns at least 5 ps to avoid degenerate grids for short fibers.
 
-The SPM broadening term: Δt_SPM = |β₂| × L × (γ × P_peak × L) × 1e12 ps
-This corrects the power-blind behavior identified in Phase 4 (VERIF-02), where
-high-power configs lose 38–49% photon energy to the attenuator.
+SPM broadening: φ_NL = γ × P0 × L gives the nonlinear phase (radians), not a
+frequency. The actual spectral broadening for sech² is δω ≈ 0.86 × φ_NL / T0
+(Agrawal, Ch. 4), where T0 = FWHM/1.763. The temporal spread from this broadened
+spectrum propagating through GVD is Δt_SPM = |β₂| × L × δω.
 
 # Keyword arguments
 - `safety_factor`: multiplicative safety margin (default 2.0)
 - `beta2`: absolute value of β₂ in s²/m (default 20e-27, approximately SMF-28)
 - `gamma`: nonlinear coefficient in W⁻¹m⁻¹ (default 0.0 = no SPM correction)
 - `P_peak`: peak pulse power in W (default 0.0 = no SPM correction)
+- `pulse_fwhm`: pulse FWHM duration in seconds (default 185e-15 for 185 fs sech²)
 """
-function recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27, gamma=0.0, P_peak=0.0)
+function recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27,
+                                  gamma=0.0, P_peak=0.0, pulse_fwhm=185e-15)
     @assert L_fiber > 0 "fiber length must be positive, got $L_fiber"
     @assert safety_factor > 0 "safety factor must be positive"
     @assert beta2 > 0 "beta2 must be positive (pass absolute value)"
+    @assert pulse_fwhm > 0 "pulse_fwhm must be positive"
 
     Δω_raman = 2π * 13e12
     walk_off_ps = beta2 * L_fiber * Δω_raman * 1e12
@@ -197,10 +201,13 @@ function recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27, gamma
 
     # SPM-induced spectral broadening causes additional temporal walkout.
     # Only active when both gamma > 0 and P_peak > 0 (backward-compatible defaults).
+    # φ_NL = γ × P0 × L is nonlinear phase (radians); convert to frequency via T0.
     spm_ps = 0.0
     if gamma > 0 && P_peak > 0
-        Δω_SPM = gamma * P_peak * L_fiber           # nonlinear phase bandwidth [rad/s]
-        spm_ps = beta2 * L_fiber * Δω_SPM * 1e12    # resulting temporal spread [ps]
+        T0 = pulse_fwhm / 1.763              # sech² half-duration [s]
+        φ_NL = gamma * P_peak * L_fiber       # nonlinear phase [rad]
+        δω_SPM = 0.86 * φ_NL / T0            # SPM spectral broadening [rad/s]
+        spm_ps = beta2 * L_fiber * δω_SPM * 1e12   # GVD temporal spread [ps]
     end
 
     total_ps = walk_off_ps + spm_ps + pulse_extent

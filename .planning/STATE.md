@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Ready to execute
-stopped_at: Completed 07.1-01-PLAN.md (code changes done; sweep re-run pending)
-last_updated: "2026-03-26T12:55:00.000Z"
+stopped_at: Documentation overhaul complete; sweep running; cleanup in progress
+last_updated: "2026-03-26T18:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -23,8 +23,9 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 ## Current Position
 
-Phase: 07.1 (grid-resolution-fix) — CODE COMPLETE, SWEEP PENDING
-Plan: 1 of 1 (code changes done; user must kick off sweep)
+Phase: 07.1 (grid-resolution-fix) — CODE COMPLETE, SWEEP RUNNING
+Plan: 1 of 1 (sweep running in background)
+Side work: Comprehensive documentation overhaul of src/ layer + codebase cleanup
 
 ## Performance Metrics
 
@@ -82,6 +83,10 @@ Recent decisions affecting current work:
 - [Phase 06.1-physics-insight]: Julia using statements must be placed outside include guard — macros need compile-time visibility; moved imports before if !(@isdefined) block
 - [Phase 06.1-physics-insight]: normalize_phase zero-fills noise-floor bins (!signal_mask) to prevent random phase from distorting y-axis in overlays
 - [Phase 06.1-physics-insight]: 98.9-99.9% non-polynomial residual fraction confirmed: optimizer uses complex high-order phase shaping, not GDD/TOD
+- [Phase 07]: Sweep max_iter=30 (not 100) — convergence plots show plateau by iter 30. Sweep maps the landscape, doesn't need last-decimal precision. Re-run individual points at max_iter=100+ for publication-quality results.
+- [Phase 07.1]: Nt floor = 2^13 (8192). nt_for_window() returns 1024-4096 which is too coarse for meaningful optimization. Low Nt = fewer spectral phase degrees of freedom = worse suppression.
+- [Phase 07]: Two-pass visualization: sweep with do_plots=false (fast heatmaps), then full plots for ~6-8 interesting points identified from the heatmap. Avoids 96 PNGs that dilute attention.
+- [CRITICAL — external fix 2026-03-26]: optimize_spectral_phase was returning lin_to_dB(J) to L-BFGS instead of linear J. This corrupted L-BFGS Hessian approximation and Wolfe line search (dB-scale objective paired with linear-scale gradient). Fixed by another agent in raman_optimization.jl line 191. f_abstol changed from 1e-6 (dB scale) to 1e-10 (linear scale). Convergence history now stored as linear values converted to dB post-optimization. ALL prior optimization results used the broken optimizer — phase profiles are valid but convergence behavior was degraded. Current sweep (running) uses old code. Must re-run sweep + production configs with fix.
 - [Phase 06.1-physics-insight Plan02]: Fig 5 uses Option A (no re-propagation): J_before/J_after annotations from JLD2 scalars; input spectrum only (avoids ~2.5 min re-propagation)
 - [Phase 06.1-physics-insight Plan02]: Group delay NaN-masks noise-floor bins (vs zero-fill used for phi_norm) — NaN causes matplotlib to break line rendering cleanly
 - [Phase 06.1-physics-insight Plan02]: Global P_peak_global across all runs normalizes Fig 5 dB scale consistently
@@ -91,6 +96,8 @@ Recent decisions affecting current work:
 - [Phase 07.1]: SW_NT_FLOOR=2^13 (8192) minimum Nt in run_sweep.jl — nt_for_window() returns minimum for temporal resolution, sweep needs floor for optimization quality
 - [Phase 07.1]: max_iter=30 for sweep/multistart (was 100) — convergence plateau by iteration 30-40 per Phase 6 evidence
 - [Phase 07.1]: L=10m dropped from SMF-28 grid — 4x4=16 + 4x4=16 = 32 total sweep points
+- [Documentation overhaul 2026-03-26]: All src/ functions documented with physics descriptions. Fixed: copy-paste adjoint docstring, "multimode" label on SMF files, "disperive" typo, stray println debug statements, misleading "silicon" comment (→ fused silica), duplicate FiniteDifferences import. CRLF→LF in 6 src files. Module docstring added. compute_noise_map_modem marked broken (empty @tullio, undefined vars).
+- [Adjoint tolerance change 2026-03-26]: Changed Vern9/reltol=1e-10 → Tsit5/reltol=1e-8 in solve_adjoint_disp_mmf. All tests pass. Taylor remainder slopes: 2.00, 1.98 (perfect O(ε²)). Gradient FD agreement: 5/5 pass. Expected ~1.5-2x adjoint speedup.
 
 ### Pending Todos
 
@@ -99,22 +106,32 @@ Recent decisions affecting current work:
 - Phase 5 start: Find exact location in raman_optimization.jl where `push!(cost_history, ...)` should be added to the callback
 - Phase 7 CRITICAL: `recommended_time_window()` has NO power dependence — only accounts for linear dispersive walk-off. SPM broadening at high power pushes energy into the attenuator, causing 38-49% photon number loss for high-P/long-L configs. The function MUST be extended with a power-aware correction OR sweeps must use generous fixed windows (safety_factor=4-5x) with Nt scaled to maintain resolution. Without this fix, high-P sweep points will have artificially low Raman cost J because attenuator absorbs energy before it reaches the Raman band.
 - Phase 7 start: Run `recommended_time_window()` for extreme sweep points (L=0.5m/high-P and L=5m/low-P) to verify a single fixed time_window covers all sweep points
+- AFTER CURRENT SWEEP: Re-run full sweep with dB/linear fix (raman_optimization.jl line 191). Current sweep = baseline with broken optimizer. Compare old vs new convergence rates — the improvement itself is a publishable result.
+- AFTER CURRENT SWEEP: Re-run 5 production configs (run_comparison.jl) with fix — Phase 6 JLD2 files have dB convergence history, new runs will have linear. Update plot_convergence_overlay to handle both or regenerate all.
+- AFTER CURRENT SWEEP: Re-run Phase 6.1 physics_insight.jl — phase profiles (phi_opt) may change significantly with correct optimizer. The 99% non-polynomial residual finding needs re-verification.
 
 ### Roadmap Evolution
 
 - Phase 6.1 inserted after Phase 6: Physics Insight — visualize optimizer strategy (φ_opt overlays, N vs ΔdB correlation, polynomial fit residual visualization) (URGENT)
   - Motivation: Phase 6 produced infrastructure (summary table, convergence overlay, spectral overlays) but no physics insight. Phase decomposition showed 99% residual — optimizer uses complex non-polynomial phase structure. Need to understand and visualize what the optimizer is actually doing.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260331-gh0 | Fix sweep methodology: time window formula, max_iter, convergence reporting | 2026-03-31 | pending | [260331-gh0](./quick/260331-gh0-fix-sweep-methodology-time-window-formul/) |
+
 ### Blockers/Concerns
 
 - [v1.0 flag]: _manual_unwrap behavior on arrays with leading/trailing zeros needs verification
 - [v1.0 flag]: Validate 60 dB vs 40 dB evolution floor against real run data
 - [v2.0 risk]: Phase 4 is a strict gate — if a physics bug is found, Phases 5-7 must wait for the fix before proceeding
-- [Phase 4 finding — CRITICAL for Phase 7]: recommended_time_window() is power-blind. Photon number drift: 2.7% (low-P) → 49% (long fiber). High-power sweep points will produce misleading J values unless time_window is sized for nonlinear broadening, not just linear walk-off. See verification report results/raman/validation/verification_20260325_173537.md for quantitative evidence.
+- [CRITICAL — 2026-03-26]: dB/linear mismatch fix invalidates all prior optimization results. Current sweep (running) uses old code. After sweep completes: (1) re-run sweep with fix as comparison, (2) re-run 5 production configs, (3) re-verify Phase 6.1 physics insight findings. The before/after comparison of convergence rates is itself scientifically interesting.
+- [RESOLVED — 2026-03-31]: recommended_time_window() SPM formula fixed. Bug: γ×P×L gives φ_NL (radians), not Δω (rad/s). Fix: δω = 0.86 × φ_NL / T0 per Agrawal Ch. 4. SMF-28 L=5m P=0.20W window: 29 ps → ~202 ps. Sweep must be re-run.
 
 ## Session Continuity
 
-Last session: 2026-03-26T12:55:00.000Z
-Stopped at: Completed 07.1-01-PLAN.md (code changes done; sweep re-run pending)
+Last session: 2026-03-31
+Stopped at: Fixed sweep methodology (time window formula, max_iter, reporting)
 Resume file: None
-Next action: User kicks off `julia --project scripts/run_sweep.jl` (est. 3-8 hours)
+Next action: Re-run sweep with `julia --project scripts/run_sweep.jl` to get corrected results
