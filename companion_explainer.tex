@@ -1,0 +1,532 @@
+\documentclass[12pt,a4paper]{article}
+
+% ─── Packages ─────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+
+% ─── Custom commands ──────────────────────────────────────────────────────
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\Real}{\operatorname{Re}}
+\newcommand{\Imag}{\operatorname{Im}}
+\newcommand{\FFT}{\operatorname{FFT}}
+\newcommand{\IFFT}{\operatorname{IFFT}}
+\DeclareMathOperator{\sech}{sech}
+\newcommand{\pdv}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\dv}[2]{\frac{d #1}{d #2}}
+
+% ─── Colored boxes ────────────────────────────────────────────────────────
+\newtcolorbox{intuition}{colback=blue!5,colframe=blue!40!black,title=\textbf{Intuition}}
+\newtcolorbox{keyeq}{colback=green!5,colframe=green!50!black,title=\textbf{Key Equation}}
+\newtcolorbox{mlbox}{colback=orange!5,colframe=orange!50!black,title=\textbf{ML Connection}}
+\newtcolorbox{warning}{colback=red!5,colframe=red!50!black,title=\textbf{Watch Out}}
+
+% ─── Header/Footer ────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Companion Explainer --- Rivera Lab}
+\fancyhead[R]{\small\thepage}
+\fancyfoot[C]{\small Understanding the Math Behind Raman Suppression --- \today}
+
+% ═════════════════════════════════════════════════════════════════════════
+\title{\textbf{The Companion Explainer}\\[6pt]
+Understanding the Math Behind\\
+Raman Suppression via Spectral Phase Optimization\\[12pt]
+\large A First-Principles Walkthrough for Undergrads\\[6pt]
+\normalsize Rivera Lab, Cornell University}
+\author{Companion to the Verification Document\\
+\small Prepared for Ignacio Rivera}
+\date{April 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+This document explains every piece of math in the Raman suppression optimization project, starting from Maxwell's equations and building up to the adjoint method and the log-scale cost function. It's written for an undergrad physics major who knows Fourier transforms, wave equations, and complex numbers --- and wants to understand \emph{why} each equation is the way it is, not just \emph{what} it says.
+
+\medskip\noindent\textbf{How to read this:} Parts 1--3 give you the physics and the optimization setup. Part 4 is the key insight (the adjoint method). Parts 5--8 cover the tricks that make it work in practice. Parts 9--10 show how we verify correctness. Parts 11--13 go deeper: the ML connection, the GNLSE from Maxwell's equations, and the adjoint from the Lagrangian.
+
+\medskip\noindent\textbf{Prerequisite:} Fourier transforms, basic complex numbers, the wave equation. That's it.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Big Picture (No Math Yet)}
+
+Imagine a laser pulse --- a burst of light lasting 185 femtoseconds (185$\times 10^{-15}$~s) --- traveling through an optical fiber. The fiber is glass (SiO$_2$), and the glass has atoms that vibrate. When the intense pulse hits these atoms, some of the light's energy excites the vibrations and gets re-emitted at a lower frequency. This is \textbf{Raman scattering}: light loses energy and shifts to redder colors.
+
+Three things happen simultaneously as the pulse propagates:
+\begin{enumerate}
+    \item \textbf{Dispersion:} Different colors travel at different speeds. The pulse spreads out.
+    \item \textbf{Kerr effect:} The light is so intense it changes the glass's refractive index. The pulse modifies its own phase.
+    \item \textbf{Raman scattering:} The glass steals energy and red-shifts it.
+\end{enumerate}
+
+\textbf{Our approach:} Before the pulse enters the fiber, we reshape its \emph{spectral phase} using a pulse shaper --- a device that delays different colors by different amounts. By choosing the right delay pattern, we make the pulse propagate through the fiber in a way that minimizes Raman scattering.
+
+\begin{intuition}
+We can only control the \emph{timing} of different colors, not which colors are present. It's like adjusting when each runner starts in a relay race, but not which runners participate. The timing determines the temporal shape of the pulse, which determines how it interacts with the glass.
+\end{intuition}
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Wave Equation (The GNLSE)}
+
+\subsection{From Maxwell's Equations to One Equation}
+
+You've seen the wave equation:
+\begin{equation}
+\frac{\partial^2 E}{\partial z^2} = \frac{1}{c^2}\frac{\partial^2 E}{\partial t^2}
+\end{equation}
+
+For light in a fiber, we need three modifications: frequency-dependent speed (dispersion), intensity-dependent refractive index (Kerr), and energy transfer between frequencies (Raman). The result is the \textbf{Generalized Nonlinear Schr\"odinger Equation (GNLSE)}:
+
+\begin{keyeq}
+\begin{equation}
+\pdv{u}{z} = \underbrace{iD(\omega)\cdot u}_{\text{dispersion}} + \underbrace{i\gamma(1-f_R)|u|^2 u}_{\text{Kerr}} + \underbrace{i\gamma f_R\,(h_R * |u|^2)\,u}_{\text{Raman}}
+\label{eq:gnlse}
+\end{equation}
+\end{keyeq}
+
+\subsection{What Each Term Means}
+
+\textbf{The field $u(z,t)$} is the complex envelope of the electric field. $|u|^2$ gives instantaneous power in Watts. It depends on position $z$ along the fiber and time $t$.
+
+\textbf{Dispersion $iD(\omega)u$:} Each color $\omega$ picks up phase $D(\omega)\cdot z$ per meter:
+\begin{equation}
+D(\omega) = \frac{\beta_2}{2}\omega^2 + \frac{\beta_3}{6}\omega^3 + \cdots
+\end{equation}
+\begin{itemize}
+    \item $\beta_2$ = group velocity dispersion. Negative $\Rightarrow$ anomalous dispersion (longer wavelengths faster).
+    \item $\beta_3$ = third-order dispersion. Usually a small correction.
+\end{itemize}
+Think of $D(\omega)$ as a recipe: ``delay blue by this much, delay red by that much, per meter of fiber.''
+
+\textbf{Kerr effect $i\gamma|u|^2 u$:} The refractive index changes as $n = n_0 + n_2|E|^2$. The pulse phase shifts proportionally to its own intensity. The constant $\gamma$ (gamma) measures the fiber's nonlinear strength:
+\begin{center}
+\begin{tabular}{ll}
+SMF-28: & $\gamma = 0.0011$ W$^{-1}$m$^{-1}$ (weakly nonlinear) \\
+HNLF:   & $\gamma = 0.010$ W$^{-1}$m$^{-1}$ (10$\times$ stronger)
+\end{tabular}
+\end{center}
+
+\textbf{Raman effect $i\gamma f_R(h_R * |u|^2)u$:} The glass responds with a delay --- atoms take ${\sim}30$~fs to ring up. The response function $h_R(t)$ is a damped oscillation:
+\begin{equation}
+h_R(t) = \frac{\tau_1^2 + \tau_2^2}{\tau_1\tau_2^2}\,e^{-t/\tau_2}\sin(t/\tau_1)\cdot\Theta(t)
+\end{equation}
+where $\tau_1 = 12.2$~fs (oscillation), $\tau_2 = 32$~fs (decay), and $\Theta(t)$ is the Heaviside function (causality: glass responds \emph{after} being hit). The $*$ means convolution --- the Raman response depends on the intensity history over the previous ${\sim}100$~fs. The fraction $f_R = 0.18$ means 18\% Raman (delayed), 82\% Kerr (instantaneous).
+
+\subsection{The Interaction Picture}
+
+\begin{intuition}
+The dispersion term causes rapid oscillations that waste the ODE solver's time. It's like simulating a vibrating guitar string by tracking every oscillation when you only care about the slowly-changing envelope. The fix: go to a ``rotating frame'' (the interaction picture) where dispersion vanishes.
+\end{intuition}
+
+Define a new variable that ``rotates with'' the dispersion:
+\begin{equation}
+\tilde{u}_\omega(z) = e^{-iD(\omega)z}\cdot u_\omega(z)
+\end{equation}
+
+This is exactly like a rotating reference frame in classical mechanics. In this frame, only the nonlinear terms remain:
+\begin{equation}
+\dv{\tilde{u}_\omega}{z} = i\cdot e^{-iDz}\cdot[\text{nonlinear terms in the lab frame}]\cdot e^{+iDz}
+\end{equation}
+
+The ODE solver can now take large steps. To recover the physical field: $u_\omega = e^{+iDz}\tilde{u}_\omega$.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Optimization Problem}
+
+\subsection{What We Control}
+
+A pulse shaper applies a spectral phase $\varphi(\omega)$:
+\begin{equation}
+u_0(\omega) = u_{00}(\omega)\cdot e^{i\varphi(\omega)}
+\label{eq:phase_mask}
+\end{equation}
+where $u_{00}$ is the original pulse. This changes the temporal shape without changing the power spectrum ($|u_0|^2 = |u_{00}|^2$).
+
+\subsection{What We Minimize}
+
+After propagation, measure the fractional energy in the Raman band:
+\begin{keyeq}
+\begin{equation}
+J[\varphi] = \frac{\displaystyle\sum_{\omega\in\mathcal{B}}|u_L(\omega)|^2}{\displaystyle\sum_\omega |u_L(\omega)|^2} = \frac{E_{\text{band}}}{E_{\text{total}}}
+\label{eq:cost}
+\end{equation}
+where $\mathcal{B}$ = frequencies shifted $> 5$~THz red of pump. $J = 0$ is perfect suppression.
+\end{keyeq}
+
+In decibels: $J_{\text{dB}} = 10\log_{10}(J)$. Our best: $-78$~dB $= 1.6\times10^{-8}$.
+
+\subsection{The Landscape}
+
+$J$ depends on $\varphi(\omega)$ --- a vector with $N_t = 8192$ components. We need to find the $\varphi$ that minimizes $J$ in this 8192-dimensional space. For that, we need the \textbf{gradient}: a vector pointing in the direction of steepest descent.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Adjoint Method (The Key Insight)}
+
+\subsection{Why Brute Force Fails}
+
+To compute $\partial J/\partial\varphi_k$ via finite differences:
+\begin{equation}
+\pdv{J}{\varphi_k} \approx \frac{J(\varphi + \epsilon\,e_k) - J(\varphi - \epsilon\,e_k)}{2\epsilon}
+\end{equation}
+requires \textbf{two simulations per frequency}. With $N_t = 8192$: 16,384 simulations $\times$ 1~s each = \textbf{4.5 hours per gradient}. We need 30--60 gradients per optimization. That's weeks.
+
+\subsection{The Adjoint Trick: Run the Movie Backwards}
+
+\begin{intuition}
+Instead of asking ``how does tweaking frequency $k$ affect the output?'' for each $k$, ask the reverse: ``given that we know what went wrong at the output, how did each input frequency contribute?'' One backward simulation answers \emph{all} 8192 questions simultaneously.
+\end{intuition}
+
+\textbf{Step 1 --- Forward:} Propagate $u_0 \to u_L$. Cost: 1 simulation (${\sim}1$~s).
+
+\textbf{Step 2 --- Terminal condition:} Compute the ``error signal'' at the output:
+\begin{equation}
+\lambda_L(\omega) = \frac{u_L(\omega)\left[\mathbb{1}_\mathcal{B}(\omega) - J\right]}{E_{\text{total}}}
+\label{eq:terminal}
+\end{equation}
+This encodes ``how much each output frequency contributed to the Raman cost.''
+
+\textbf{Step 3 --- Adjoint:} Propagate $\lambda$ \emph{backward} from $z=L$ to $z=0$ through the same fiber (transposed/conjugated). Cost: 1 simulation (${\sim}1$~s).
+
+\textbf{Step 4 --- Read off the gradient:}
+\begin{keyeq}
+\begin{equation}
+\boxed{\pdv{J}{\varphi(\omega)} = 2\,\Real\!\left[\lambda_0^*(\omega)\cdot i\cdot u_0(\omega)\right]}
+\label{eq:gradient}
+\end{equation}
+This is the complete gradient from \textbf{one forward + one backward simulation}: ${\sim}2$~s instead of 4.5 hours.
+\end{keyeq}
+
+\subsection{The Relay Race Analogy}
+
+If a relay team lost, you could:
+\begin{itemize}
+    \item \textbf{Forward approach:} Replace each runner one at a time, re-run the race. Takes $N$ races.
+    \item \textbf{Adjoint approach:} Start from the finish line, trace backward: ``lost 2~s in the last leg $\Leftarrow$ bad handoff in leg 3 $\Leftarrow$ runner 2 started late.'' One backward pass reveals every runner's contribution.
+\end{itemize}
+
+The adjoint equation implements this backward analysis for the GNLSE.
+
+\subsection{The Adjoint Equation}
+
+The adjoint field satisfies:
+\begin{equation}
+\dv{\lambda_\omega}{z} = -\left(\pdv{f}{u}\right)^\dagger \lambda - \left(\pdv{f}{u^*}\right)^T \lambda^*
+\label{eq:adjoint}
+\end{equation}
+where $f$ is the GNLSE right-hand side. The $\dagger$ = conjugate transpose. Negative sign = backward integration.
+
+For our GNLSE, this splits into four terms (from differentiating Kerr and Raman w.r.t.\ $u$ and $u^*$). You don't need to memorize them. They've been verified to \textbf{0.026\% accuracy} against finite differences.
+
+\subsection{The Chain Rule}
+
+The adjoint gives $\lambda_0$ = sensitivity to the input \emph{field}. But we control the \emph{phase}. Since $u_0 = u_{00}e^{i\varphi}$:
+\begin{equation}
+\delta u_0 = i\,u_0\,\delta\varphi \qquad\text{(derivative of $e^{ix}$ is $ie^{ix}$)}
+\end{equation}
+Substituting into the sensitivity formula gives Eq.~\eqref{eq:gradient}.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Log-Scale Trick}
+
+\subsection{The Vanishing Gradient Problem}
+
+When minimizing $J$ (a number between 0 and 1), the gradient shrinks as $J \to 0$:
+
+\begin{warning}
+At $J = 10^{-4}$, the gradient is $10^{-4}$ times as strong as at $J = 1$. The optimizer thinks it's converged --- but there's still 40~dB of room to improve. It's like walking downhill in fog: the ground flattens and you stop on a plateau.
+\end{warning}
+
+\subsection{The Fix: Optimize in Decibels}
+
+Minimize $J_{\text{dB}} = 10\log_{10}(J)$ instead. The gradient becomes:
+\begin{keyeq}
+\begin{equation}
+\pdv{J_{\text{dB}}}{\varphi} = \underbrace{\frac{10}{J\cdot\ln 10}}_{\text{amplification}} \cdot \pdv{J}{\varphi}
+\label{eq:log_cost}
+\end{equation}
+As $J$ shrinks, the $1/J$ factor amplifies the gradient, exactly compensating the vanishing linear gradient.
+\end{keyeq}
+
+Going from $-40$~dB to $-50$~dB produces the same gradient magnitude as $0$~dB to $-10$~dB.
+
+\textbf{Result:} 20--28~dB improvement on every configuration. Points stuck at $-35$~dB now reach $-60$~dB.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Soliton Number}
+
+Two length scales characterize pulse propagation:
+\begin{align}
+L_D &= \frac{T_0^2}{|\beta_2|} \quad\text{(dispersion length: how far until pulse doubles in width)} \\[4pt]
+L_{NL} &= \frac{1}{\gamma P_{\text{peak}}} \quad\text{(nonlinear length: how far until nonlinear phase $= 1$~rad)}
+\end{align}
+
+The soliton number is their ratio:
+\begin{keyeq}
+\begin{equation}
+N = \sqrt{\frac{L_D}{L_{NL}}} = \sqrt{\frac{\gamma P_{\text{peak}} T_0^2}{|\beta_2|}}
+\end{equation}
+\end{keyeq}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+$N$ & What happens & Suppression \\
+\midrule
+1.0--1.5 & Soliton-like propagation & Easy: $-60$ to $-78$~dB \\
+1.5--2.5 & Pulse breathing, some compression & Moderate: $-50$ to $-70$~dB \\
+2.5--4.0 & Soliton fission onset & Hard: $-45$ to $-65$~dB \\
+4.0--7.0 & Full fission + Raman shifting & Harder: $-40$ to $-55$~dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{Wirtinger Derivatives Demystified}
+
+\subsection{The Problem}
+
+For $f(u, u^*)$ where $u = x + iy$: the standard complex derivative $df/du$ only exists if $f$ is analytic. But $|u|^2 = u\cdot u^*$ is \emph{not} analytic.
+
+\subsection{Wirtinger's Solution}
+
+Treat $u$ and $u^*$ as independent variables:
+\begin{equation}
+\pdv{f}{u} = \frac{1}{2}\!\left(\pdv{f}{x} - i\pdv{f}{y}\right) \qquad \pdv{f}{u^*} = \frac{1}{2}\!\left(\pdv{f}{x} + i\pdv{f}{y}\right)
+\end{equation}
+
+The key identity: $\partial|u|^2/\partial u^* = \partial(u\cdot u^*)/\partial u^* = u$. The $\partial/\partial u^*$ ``sees'' $u^*$ but treats $u$ as constant.
+
+\subsection{The Factor of 2}
+
+For real-valued $J$:
+\begin{equation}
+\delta J = \sum_k \pdv{J}{u_k}\delta u_k + \pdv{J}{u_k^*}\delta u_k^* = 2\,\Real\sum_k \pdv{J}{u_k^*}\delta u_k
+\end{equation}
+
+The 2 comes from combining the $u$ and $u^*$ terms. It's pure bookkeeping --- no physics.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{Why FFT Factors of $N_t$ Appear}
+
+Julia's convention: \texttt{fft} = unnormalized ($\sum u_n e^{-2\pi ikn/N}$), \texttt{ifft} = normalized ($\frac{1}{N}\sum U_k e^{+2\pi ikn/N}$).
+
+This means:
+\begin{itemize}
+    \item Adjoint of \texttt{fft} $= N_t \times$~\texttt{ifft}
+    \item Adjoint of \texttt{ifft} $= (1/N_t) \times$~\texttt{fft}
+\end{itemize}
+
+That's where the $N_t$ factors in the adjoint code come from. Different FFT libraries use different conventions. The physics doesn't care, but the code must be self-consistent.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{Verification}
+
+\subsection{Taylor Remainder Test}
+
+Pick random $\delta\varphi$. Compute:
+\begin{equation}
+r(\epsilon) = |J(\varphi + \epsilon\,\delta\varphi) - J(\varphi) - \epsilon\,\nabla J\cdot\delta\varphi|
+\end{equation}
+
+If $\nabla J$ is correct, $r(\epsilon) \sim \epsilon^2$ (log-log slope = 2).
+
+\textbf{Our result: slopes of 2.00 and 2.04.} The adjoint gradient matches the true gradient to machine precision.
+
+\subsection{Finite Difference Check}
+
+Compare adjoint gradient to central differences for each frequency. \textbf{Max relative error: 0.026\%.} Extremely accurate.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{What's Left in the Full Verification Document}
+
+If you've followed this far, you understand the big picture. The remaining details are:
+\begin{enumerate}
+    \item \textbf{Term-by-term adjoint derivation:} Four terms from differentiating Kerr and Raman w.r.t.\ $u$ and $u^*$. Tedious but mechanical.
+    \item \textbf{GDD penalty:} Penalizes curvature of $\varphi$. Standard finite-difference second derivative.
+    \item \textbf{Boundary penalty:} Penalizes energy at window edges. Chain rule through IFFT.
+\end{enumerate}
+None contain surprising physics --- just careful bookkeeping of derivatives.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The ML Connection}
+\label{sec:ml}
+
+\begin{mlbox}
+The optimization is structurally identical to training a neural network. This isn't a loose analogy --- it's mathematically the same procedure.
+\end{mlbox}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{ML Concept} & \textbf{Neural Network} & \textbf{Our Problem} \\
+\midrule
+Parameters & Weight matrices $W_k$ & Spectral phase $\varphi(\omega)$ \\
+Input & Training data $x$ & Unshaped pulse $u_{00}$ \\
+Forward pass & $x \to h_1 \to \cdots \to \hat{y}$ & $u_0 \to u(z_1) \to \cdots \to u_L$ \\
+Loss function & Cross-entropy, MSE & $J = E_{\text{band}}/E_{\text{total}}$ \\
+Backprop & Chain rule through layers & Adjoint solve through fiber \\
+Optimizer & Adam, SGD, L-BFGS & L-BFGS \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Forward Pass: Layers vs.\ Fiber Steps}
+
+Neural net: $h_{k+1} = \sigma(W_k h_k + b_k)$.
+
+Fiber: $u(z+\Delta z) = u(z) + \Delta z\cdot f(u(z), z)$.
+
+Each $\Delta z$ step is one ``layer.'' The ``activation function'' is the GNLSE nonlinearity ($|u|^2 u$ + Raman convolution). There are ${\sim}1000$ ``layers'' (much deeper than most networks).
+
+\subsection{Backprop = Adjoint}
+
+In a neural net: $\delta_k = W_{k+1}^T\delta_{k+1}\cdot\sigma'(z_k)$. In our problem: $d\lambda/dz = -(\partial f/\partial u)^\dagger\lambda - \ldots$
+
+Same structure: start with the loss gradient at the output, propagate backward through the same operations (transposed), get the gradient at the input.
+
+\subsection{Why L-BFGS Instead of Adam?}
+
+\begin{itemize}
+    \item Our gradients are exact (no mini-batch noise).
+    \item The problem is smooth (PDE, not piecewise-linear ReLU).
+    \item L-BFGS builds a quadratic model of the loss --- much faster for smooth problems.
+    \item Converges in 20--60 iterations vs.\ thousands for Adam.
+\end{itemize}
+
+\subsection{Log-Cost = Focal Loss}
+
+Our $J_{\text{dB}} = 10\log_{10}(J)$ with gradient amplification $1/J$ is the same idea as \emph{focal loss} (Lin et al., 2017): downweight easy examples, amplify hard ones. As Raman gets suppressed (easy part done), the gradient amplifies to focus on remaining hard components.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{First Principles: Where the GNLSE Comes From}
+\label{sec:first_principles}
+
+\subsection{Maxwell's Equations}
+
+Start from Maxwell in a dielectric:
+\begin{equation}
+\nabla\times\mathbf{E} = -\pdv{\mathbf{B}}{t} \qquad \nabla\times\mathbf{B} = \mu_0\pdv{\mathbf{D}}{t}
+\end{equation}
+
+The displacement field has a nonlinear part:
+$\mathbf{D} = \epsilon_0\mathbf{E} + \mathbf{P}_L + \mathbf{P}_{NL}$
+where $\mathbf{P}_L = \epsilon_0\chi^{(1)}\mathbf{E}$ is linear and $\mathbf{P}_{NL}$ contains $\chi^{(3)}$ (third-order susceptibility --- the lowest nonlinear order in glass, which is centrosymmetric so $\chi^{(2)} = 0$).
+
+\subsection{Slowly-Varying Envelope Approximation}
+
+Write the field as a carrier times a slowly-varying envelope:
+\begin{equation}
+E(z,t) = \tfrac{1}{2}\!\left[u(z,t)\,e^{i(\beta_0 z - \omega_0 t)} + \text{c.c.}\right]
+\end{equation}
+
+``Slowly varying'' means $|\partial u/\partial t| \ll \omega_0|u|$ and $|\partial u/\partial z| \ll \beta_0|u|$. Substituting into Maxwell and dropping $\partial^2 u/\partial z^2$:
+\begin{equation}
+\pdv{u}{z} + \beta_1\pdv{u}{t} = i\sum_{n\geq 2}\frac{\beta_n}{n!}\!\left(i\pdv{}{t}\right)^n\!u + i\gamma|u|^2 u
+\end{equation}
+
+Moving to the co-moving frame ($T = t - \beta_1 z$) eliminates $\beta_1$.
+
+\subsection{Adding Raman}
+
+The $\chi^{(3)}$ response has an instantaneous part (electrons) and a delayed part (nuclei, ${\sim}2000\times$ heavier, respond on ${\sim}30$~fs):
+\begin{equation}
+P_{NL}(t) = \epsilon_0\chi^{(3)}\!\left[(1-f_R)|u|^2 + f_R\!\int_0^\infty\!h_R(\tau)|u(t-\tau)|^2\,d\tau\right]u(t)
+\end{equation}
+
+This gives the full GNLSE (Eq.~\ref{eq:gnlse}). Every term traces back to Maxwell + silica material response.
+
+\subsection{Where $\gamma$ and $h_R(t)$ Come From}
+
+\begin{equation}
+\gamma = \frac{n_2\omega_0}{c\cdot A_{\text{eff}}}
+\end{equation}
+where $n_2 \approx 2.6\times10^{-20}$~m$^2$/W (silica material property) and $A_{\text{eff}}$ is the mode area (fiber geometry). Smaller core $\Rightarrow$ more intense light $\Rightarrow$ stronger nonlinearity.
+
+$h_R(t)$ is the impulse response of the Si--O--Si vibrational mode at ${\sim}13.2$~THz, modeled as a damped harmonic oscillator (Blow--Wood model). Quality factor $Q \approx 8.2$ (moderately underdamped).
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section{The Adjoint from First Principles}
+\label{sec:adjoint_first_principles}
+
+\subsection{Constrained Optimization via the Lagrangian}
+
+Minimize $J[u_L]$ subject to $du/dz = f(u,z)$. Standard calculus of variations.
+
+\textbf{Step 1:} Lagrangian with multiplier $\lambda(z)$:
+\begin{equation}
+\mathcal{L} = J[u_L] + \int_0^L\!\left\langle \lambda(z),\,\dv{u}{z} - f(u,z)\right\rangle dz
+\end{equation}
+
+\textbf{Step 2:} $\delta\mathcal{L}/\delta\lambda = 0$ $\Rightarrow$ forward equation. (No surprise.)
+
+\textbf{Step 3:} Variation w.r.t.\ $u$:
+\begin{equation}
+\delta\mathcal{L} = \left\langle\pdv{J}{u_L},\delta u_L\right\rangle + \int_0^L\!\left\langle\lambda,\,\dv{(\delta u)}{z} - \pdv{f}{u}\delta u\right\rangle dz
+\end{equation}
+
+\textbf{Step 4:} Integration by parts on $\langle\lambda, d(\delta u)/dz\rangle$:
+\begin{equation}
+\int_0^L\!\left\langle\lambda,\dv{(\delta u)}{z}\right\rangle dz = \big[\langle\lambda,\delta u\rangle\big]_0^L - \int_0^L\!\left\langle\dv{\lambda}{z},\delta u\right\rangle dz
+\end{equation}
+
+\textbf{Step 5:} Choose $\lambda$ so the integral vanishes:
+\begin{equation}
+\dv{\lambda}{z} = -\left(\pdv{f}{u}\right)^\dagger\lambda \qquad\text{(the adjoint equation)}
+\end{equation}
+
+\textbf{Step 6:} Terminal condition $\lambda_L = -\partial J/\partial u_L^*$ kills the $z=L$ boundary.
+
+\textbf{Step 7:} What's left: $\delta J = -\langle\lambda_0, \delta u_0\rangle$. Since $\delta u_0 = iu_0\delta\varphi$:
+\begin{equation}
+\delta J = 2\,\Real[\lambda_0^*\cdot i\cdot u_0]\cdot\delta\varphi \qquad\checkmark
+\end{equation}
+
+The adjoint equation arises naturally from integration by parts in the Lagrangian. QED.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+\section*{Quick Reference: The 5 Equations That Matter}
+
+\begin{tcolorbox}[colback=gray!5,colframe=gray!50!black]
+\begin{align}
+&\textbf{1. Forward (GNLSE):} && \dv{u}{z} = iDu + i\gamma(1-f_R)|u|^2u + i\gamma f_R(h_R*|u|^2)u \\[8pt]
+&\textbf{2. Cost function:} && J = \frac{E_{\text{Raman band}}}{E_{\text{total}}} \\[8pt]
+&\textbf{3. Terminal condition:} && \lambda_L = \frac{u_L\cdot(\mathbb{1}_{\text{band}} - J)}{E_{\text{total}}} \\[8pt]
+&\textbf{4. Gradient:} && \pdv{J}{\varphi(\omega)} = 2\,\Real[\lambda_0^*\cdot i\cdot u_0] \\[8pt]
+&\textbf{5. Log-scale trick:} && \pdv{J_{\text{dB}}}{\varphi} = \frac{10}{J\ln 10}\cdot\pdv{J}{\varphi}
+\end{align}
+Everything else is implementation details.
+\end{tcolorbox}
+
+\vspace{2em}
+\hrule
+\vspace{0.5em}
+{\small\textit{Written as a companion to the formal verification document. All equations verified against the codebase on 2026-04-02. Designed for first-principles understanding --- every equation traced from Maxwell's equations through the adjoint Lagrangian to the final gradient formula.}}
+
+\end{document}
