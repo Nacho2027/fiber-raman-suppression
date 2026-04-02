@@ -335,24 +335,36 @@ This gives us information about $H$ without computing it directly. After several
 % ─── Secant condition diagram ────────────────────────────────────────────
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=1.0]
-    % Curve (cost function along a 1D slice)
-    \draw[thick, gray] plot[smooth, domain=-0.5:4.5] (\x, {0.3*(\x-2)*(\x-2) + 0.5});
+\begin{tikzpicture}[scale=1.3]
+    % Curve (cost function along a 1D slice) — wider parabola
+    \draw[thick, gray!70] plot[smooth, domain=-1:6] (\x, {0.15*(\x-2.5)*(\x-2.5) + 0.8});
 
-    % Points
-    \filldraw[blue!70!black] (1.0, 0.8) circle (3pt) node[above left, font=\small] {$\varphi_k$};
-    \filldraw[blue!70!black] (3.0, 0.8) circle (3pt) node[above right, font=\small] {$\varphi_{k+1}$};
+    % Points on the curve
+    \filldraw[blue!70!black] (1.0, 1.14) circle (2.5pt);
+    \filldraw[blue!70!black] (4.0, 1.14) circle (2.5pt);
 
-    % Gradient arrows (tangent lines)
-    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (1.0, 0.8) -- (0.2, 1.28) node[left, font=\scriptsize] {$\nabla J_k$};
-    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (3.0, 0.8) -- (3.8, 1.28) node[right, font=\scriptsize] {$\nabla J_{k+1}$};
+    % Point labels — well separated from arrows
+    \node[blue!70!black, font=\small, above] at (1.0, 1.5) {$\varphi_k$};
+    \node[blue!70!black, font=\small, above] at (4.0, 1.5) {$\varphi_{k+1}$};
 
-    % Delta phi and delta g
-    \draw[thick, green!50!black, <->] (1.0, 0.3) -- (3.0, 0.3) node[midway, below, font=\small] {$\Delta\varphi = \varphi_{k+1} - \varphi_k$};
-    \draw[thick, orange!70!black, <->] (4.3, 0.5) -- (4.3, 1.5) node[midway, right, font=\small, align=left] {$\Delta g = \nabla J_{k+1}$\\$\quad\;\; - \nabla J_k$};
+    % Gradient arrows (tangent directions, pointing away from curve)
+    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (1.0, 1.14) -- (0.0, 1.59)
+        node[above left, font=\scriptsize] {$\nabla J_k$};
+    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (4.0, 1.14) -- (5.0, 1.59)
+        node[above right, font=\scriptsize] {$\nabla J_{k+1}$};
 
-    % Secant condition label
-    \node[font=\small, align=center] at (2.0, -0.5) {The gradient changed by $\Delta g$ when we moved by $\Delta\varphi$\\$\Rightarrow$ $H \approx \Delta g / \Delta\varphi$ (secant condition)};
+    % Delta phi (below curve)
+    \draw[thick, green!50!black, <->] (1.0, 0.3) -- (4.0, 0.3)
+        node[midway, below, font=\small] {$\Delta\varphi = \varphi_{k+1} - \varphi_k$};
+
+    % Delta g (right side, well separated)
+    \draw[thick, orange!70!black, <->] (5.8, 0.8) -- (5.8, 1.7);
+    \node[orange!70!black, font=\small, right] at (5.9, 1.25) {$\Delta g = \nabla J_{k+1} - \nabla J_k$};
+
+    % Secant condition label (below, with breathing room)
+    \node[font=\small, align=center, text=gray!70!black] at (2.5, -0.3)
+        {Gradient changed by $\Delta g$ when we moved by $\Delta\varphi$
+         \quad$\Rightarrow$\quad $H \approx \Delta g / \Delta\varphi$};
 \end{tikzpicture}
 \caption{The quasi-Newton idea: observe how the gradient changes between steps. The ratio $\Delta g / \Delta\varphi$ gives information about the Hessian (curvature) without computing it directly.}
 \label{fig:secant}
@@ -444,36 +456,39 @@ The line search is like Goldilocks: the step must be long enough to make real pr
 % ─── Line search diagram ────────────────────────────────────────────────
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=1.0]
+\begin{tikzpicture}[scale=1.2]
     % J(alpha) curve
-    \draw[thick, black] plot[smooth, domain=0:5] (\x, {3 - 2.5*\x + 0.8*\x*\x - 0.06*\x*\x*\x});
-    \node[font=\small] at (5.3, 2.5) {$J(\varphi + \alpha d)$};
+    \draw[thick, black] plot[smooth, domain=0:5.5] (\x, {3 - 2.2*\x + 0.65*\x*\x - 0.045*\x*\x*\x});
+    \node[font=\small] at (5.8, 2.8) {$J(\varphi + \alpha d)$};
 
     % Axes
-    \draw[->] (-0.3, 0) -- (5.5, 0) node[right, font=\small] {step size $\alpha$};
-    \draw[->] (0, -0.3) -- (0, 3.5) node[above, font=\small] {$J$};
+    \draw[->] (-0.3, 0) -- (6.2, 0) node[right, font=\small] {step size $\alpha$};
+    \draw[->] (0, -0.8) -- (0, 3.5) node[above, font=\small] {$J$};
 
     % Starting point
     \filldraw[blue!70!black] (0, 3) circle (2pt) node[left, font=\small] {$J(\varphi)$};
 
     % Sufficient decrease line (Wolfe 1)
-    \draw[dashed, red!60!black] (0, 3) -- (5, 0.5) node[right, font=\scriptsize] {Wolfe 1 bound};
+    \draw[dashed, red!60!black] (0, 3) -- (5.5, 0.25) node[right, font=\scriptsize] {Wolfe 1};
 
-    % Too short region
-    \fill[red!10] (0, 0) rectangle (0.8, -0.5);
-    \node[font=\scriptsize, red!60!black] at (0.4, -0.35) {too short};
+    % Regions below x-axis with more room
+    \fill[red!10] (0, -0.15) rectangle (1.0, -0.55);
+    \node[font=\scriptsize, red!60!black] at (0.5, -0.35) {too short};
 
-    % Too long region
-    \fill[red!10] (3.5, 0) rectangle (5, -0.5);
-    \node[font=\scriptsize, red!60!black] at (4.25, -0.35) {too long};
+    \fill[green!15] (1.0, -0.15) rectangle (4.0, -0.55);
+    \node[font=\scriptsize, green!50!black] at (2.5, -0.35) {acceptable (Wolfe zone)};
 
-    % Goldilocks region
-    \fill[green!15] (0.8, 0) rectangle (3.5, -0.5);
-    \node[font=\scriptsize, green!50!black] at (2.15, -0.35) {acceptable (Wolfe)};
+    \fill[red!10] (4.0, -0.15) rectangle (5.8, -0.55);
+    \node[font=\scriptsize, red!60!black] at (4.9, -0.35) {too long};
+
+    % Separator ticks
+    \draw[gray] (1.0, -0.1) -- (1.0, -0.6);
+    \draw[gray] (4.0, -0.1) -- (4.0, -0.6);
 
     % Chosen alpha
-    \draw[thick, green!50!black, dashed] (1.8, 0) -- (1.8, 1.05);
-    \filldraw[green!50!black] (1.8, 1.05) circle (3pt) node[above right, font=\small] {chosen $\alpha^*$};
+    \draw[thick, green!50!black, dashed] (2.0, 0) -- (2.0, 0.95);
+    \filldraw[green!50!black] (2.0, 0.95) circle (2.5pt);
+    \node[green!50!black, font=\small, above right] at (2.1, 0.95) {chosen $\alpha^*$};
 \end{tikzpicture}
 \caption{The line search finds a step size $\alpha^*$ in the ``Goldilocks zone'' (green): large enough to make real progress (below the Wolfe~1 line), but not so large that we overshoot past the minimum.}
 \label{fig:linesearch}
