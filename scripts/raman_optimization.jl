@@ -51,7 +51,8 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     uω0_shaped::Union{Nothing,AbstractMatrix}=nothing,
     uωf_buffer::Union{Nothing,AbstractMatrix}=nothing,
     λ_gdd=0.0,
-    λ_boundary=0.0)
+    λ_boundary=0.0,
+    log_cost::Bool=false)
 
     # PRECONDITIONS
     @assert size(φ) == size(uω0) "φ shape $(size(φ)) ≠ uω0 shape $(size(uω0))"
@@ -93,8 +94,20 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     @assert isfinite(J) "cost is not finite: $J"
     @assert all(isfinite, ∂J_∂φ) "gradient contains NaN/Inf"
 
-    J_total = J
-    grad_total = copy(∂J_∂φ)
+    # Log-scale cost: J_dB = 10·log10(J), gradient scaled by chain rule.
+    # Keeps gradient O(1) as J→0, preventing L-BFGS stall at deep suppression.
+    if log_cost
+        J_clamped = max(J, 1e-15)
+        J_phys = 10.0 * log10(J_clamped)
+        log_scale = 10.0 / (J_clamped * log(10.0))
+        ∂J_∂φ_scaled = ∂J_∂φ .* log_scale
+    else
+        J_phys = J
+        ∂J_∂φ_scaled = ∂J_∂φ
+    end
+
+    J_total = J_phys
+    grad_total = copy(∂J_∂φ_scaled)
 
     # ── GDD penalty: ∫(d²φ/dω²)² dω, scaled by Δω⁻³ for N-independence ──
     if λ_gdd > 0
@@ -149,7 +162,8 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
-    φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false)
+    φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false,
+    log_cost::Bool=false)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -172,28 +186,32 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
 
     # Callback for monitoring
     function callback(state)
-        @debug @sprintf("Iter %3d: J = %.6f (%.2f dB)",
-            state.iteration, 10^(state.value / 10), state.value)
+        @debug @sprintf("Iter %3d: J = %.6e (%.2f dB)",
+            state.iteration, state.value, MultiModeNoise.lin_to_dB(state.value))
         return false
     end
 
     # Optim.jl interface: combined cost + gradient
+    # NOTE: Both cost and gradient must be on the same scale for L-BFGS.
+    # log_cost=true: cost in dB, gradient scaled by chain rule — keeps ∇J ~ O(1)
+    # log_cost=false: cost and gradient both linear (legacy behavior)
+    f_tol = log_cost ? 0.01 : 1e-10  # 0.01 dB vs 1e-10 linear
     result = optimize(
         Optim.only_fg!() do F, G, φ_vec
             φ = reshape(φ_vec, Nt, M)
             J, ∂J_∂φ = cost_and_gradient(φ, uω0_base, fiber, sim, band_mask;
                 uω0_shaped=uω0_shaped, uωf_buffer=uωf_buffer,
-                λ_gdd=λ_gdd, λ_boundary=λ_boundary)
+                λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
             if G !== nothing
                 G .= vec(∂J_∂φ)
             end
             if F !== nothing
-                return MultiModeNoise.lin_to_dB(J)
+                return J
             end
         end,
         vec(φ0),
         LBFGS(),
-        Optim.Options(iterations=max_iter, f_abstol=1e-6, callback=callback, store_trace=store_trace)
+        Optim.Options(iterations=max_iter, f_abstol=f_tol, callback=callback, store_trace=store_trace)
     )
 
     return result
@@ -368,7 +386,8 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
-    λ_gdd=:auto, λ_boundary=10.0, fiber_name="Custom", do_plots=true, kwargs...)
+    λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
+    log_cost::Bool=true, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
 
@@ -403,7 +422,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     @info "Optimization" λ_gdd=λ_gdd_val λ_boundary=λ_boundary
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
         max_iter=max_iter, φ0=φ0, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
-        store_trace=true)
+        store_trace=true, log_cost=log_cost)
 
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
@@ -480,7 +499,12 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     # ── Result serialization (XRUN-01) ──
     jld2_path = "$(save_prefix)_result.jld2"
-    convergence_history = Optim.f_trace(result)
+    # Store convergence history in dB. If log_cost=true, f_trace is already dB.
+    if log_cost
+        convergence_history = collect(Optim.f_trace(result))
+    else
+        convergence_history = MultiModeNoise.lin_to_dB.(Optim.f_trace(result))
+    end
     @info "Saving results to $jld2_path"
     jldsave(jld2_path;
         # Run identification
