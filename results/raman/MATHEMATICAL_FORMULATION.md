@@ -1,5 +1,7 @@
 # Mathematical Formulation: Raman Suppression via Spectral Phase Optimization
 
+**Version 2** — Updated 2026-03-26. Line numbers and code references reverified against current codebase. Added Section 5.5 (time window / grid sizing). All equations remain unchanged from v1; only code reference locations and new infrastructure documentation updated.
+
 ## Task for Analytical Verification
 
 This document contains the complete mathematical formulation of our Raman suppression optimization system. Every equation maps to a specific line of code. The goal is to analytically verify that:
@@ -25,7 +27,7 @@ $$
 
 where $\tilde{u}_\omega(z)$ is the field in the **interaction picture**: $\tilde{u}_\omega = e^{-i D(\omega) z} \, u_\omega$.
 
-**Code reference**: `src/simulation/simulate_disp_mmf.jl`, function `disp_mmf!` (lines 12-45)
+**Code reference**: `src/simulation/simulate_disp_mmf.jl`, function `disp_mmf!` (lines 25-61)
 
 ### 1.2 Dispersion Operator
 
@@ -35,7 +37,7 @@ $$
 
 where $\omega = 2\pi \Delta f$ is angular frequency offset from the carrier, and $\beta_n$ are the Taylor expansion coefficients of the propagation constant.
 
-**Implemented as** (helpers.jl line 88):
+**Implemented as** (helpers.jl line 181, in `get_disp_fiber_params_user_defined`):
 ```julia
 Dω = hcat([(2π * fftfreq(Nt, 1/Δt) * 1e12)^n / factorial(n) for n in 0:β_order]...) * βn_ω
 ```
@@ -54,12 +56,13 @@ $$
 
 For M modes, the overlap tensor $\gamma_{ijkl}$ generalizes this, but for M=1 it reduces to a scalar $\gamma$.
 
-**Code reference**: `disp_mmf!` lines 25-29:
+**Code reference**: `disp_mmf!` lines 39-43:
 ```julia
 @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t,k]*v[t,l] + w[t,k]*w[t,l])
 @tullio αK[t, i] = δKt[t, i, j] * v[t, j]
 @tullio βK[t, i] = δKt[t, i, j] * w[t, j]
-ηKt = (αK + im*βK) * (1 - f_R)
+@. ηKt = αK + 1im * βK
+@. ηKt *= one_m_fR
 ```
 
 where $v = \text{Re}(u)$, $w = \text{Im}(u)$, so $\delta_K = \gamma |u|^2$ and $\eta_K = \delta_K \cdot u \cdot (1 - f_R)$.
@@ -82,7 +85,7 @@ $$
 
 with $\Theta(t)$ the Heaviside step function.
 
-**Implemented in frequency domain** (convolution → multiplication): `disp_mmf!` lines 31-39:
+**Implemented in frequency domain** (convolution → multiplication): `disp_mmf!` lines 46-54:
 ```julia
 hRω_δRω = hRω * FFT(δK)       # multiplication in freq domain = convolution in time
 δR = real(IFFT(hRω_δRω))       # back to time domain
@@ -94,7 +97,7 @@ hRω_δRω = hRω * FFT(δK)       # multiplication in freq domain = convolution
 - $\tau_1 = 12.2$ fs
 - $\tau_2 = 32$ fs
 
-**Code reference** (helpers.jl lines 83-84):
+**Code reference** (helpers.jl lines 104-105 in `get_disp_fiber_params`, or lines 176-177 in `get_disp_fiber_params_user_defined`):
 ```julia
 hRt = fR * Δt * 1e3 * (τ1² + τ2²)/(τ1 * τ2²) * exp.(-ts*1e15/τ2) .* sin.(ts*1e15/τ1) .* (sign.(ts) .+ 1)/2
 hRω = fft(hRt)
@@ -110,7 +113,7 @@ $$
 
 where $\omega_0 = 2\pi f_0$ is the carrier angular frequency.
 
-**Code reference**: `disp_mmf!` line 43:
+**Code reference**: `disp_mmf!` line 59:
 ```julia
 ηt .*= selfsteep   # where selfsteep = fftshift(ωs / ω0)
 ```
@@ -144,9 +147,9 @@ $$
 
 where $u_{00}(\omega)$ is the unmodified input pulse spectrum.
 
-**Code reference** (raman_optimization.jl line 58):
+**Code reference** (raman_optimization.jl lines 62-64):
 ```julia
-uω0_shaped = uω0 * cis(φ)    # cis(x) = exp(ix)
+uω0_shaped = @. uω0 * cis(φ)    # cis(x) = exp(ix)
 ```
 
 ### 2.2 Cost Function
@@ -162,7 +165,7 @@ where $u_L(\omega)$ is the output field at $z = L$, and $\mathcal{B}$ is the Ram
 - $J = 0$ means no energy in the Raman band (perfect suppression)
 - $J = 1$ means all energy in the Raman band
 
-**Code reference** (common.jl lines 61-77):
+**Code reference** (common.jl lines 259-262, in `spectral_band_cost`):
 ```julia
 E_band = sum(abs2.(uωf[band_mask, :]))
 E_total = sum(abs2.(uωf))
@@ -189,7 +192,7 @@ For $\omega \notin \mathcal{B}$: numerator derivative is 0, denominator derivati
 
 Combining: $\lambda_L(\omega) = u_L(\omega) (\mathbb{1}_\mathcal{B}(\omega) - J) / E_{\text{total}}$.
 
-**Code reference** (common.jl line 70):
+**Code reference** (common.jl line 262):
 ```julia
 dJ = uωf .* (band_mask .- J) ./ E_total
 ```
@@ -295,7 +298,7 @@ $$
 \boxed{\frac{\partial J}{\partial \varphi(\omega)} = 2 \, \text{Re}\!\left[ \lambda_0^*(\omega) \cdot i \, u_0(\omega) \right]}
 $$
 
-**Code reference** (raman_optimization.jl line 87):
+**Code reference** (raman_optimization.jl line 90):
 ```julia
 ∂J_∂φ = 2.0 .* real.(conj.(λ0) .* (1im .* uω0_shaped))
 ```
@@ -350,6 +353,40 @@ where:
 - $P_{\text{peak}} \approx P_{\text{cont}} / (\text{FWHM} \times f_{\text{rep}})$
 
 **Default parameters**: FWHM = 185 fs, $f_{\text{rep}} = 80.5$ MHz, $\lambda_0 = 1550$ nm.
+
+### 5.5 Time Window and Grid Sizing
+
+Two utility functions (common.jl lines 189-234) automate safe time window and grid selection:
+
+**`recommended_time_window(L_fiber; safety_factor, beta2, gamma, P_peak)`** (line 189):
+
+Computes a safe time window [ps] from dispersive walk-off plus SPM-induced broadening:
+
+$$
+T_{\text{walk-off}} = |\beta_2| \cdot L \cdot \Delta\omega_{\text{Raman}} \cdot 10^{12} \quad \text{[ps]}
+$$
+
+where $\Delta\omega_{\text{Raman}} = 2\pi \times 13 \text{ THz}$ is the Raman frequency shift. When $\gamma > 0$ and $P_{\text{peak}} > 0$, SPM broadening is added:
+
+$$
+T_{\text{SPM}} = |\beta_2| \cdot L \cdot (\gamma \cdot P_{\text{peak}} \cdot L) \cdot 10^{12} \quad \text{[ps]}
+$$
+
+The total safe window is:
+
+$$
+T_{\text{window}} = \lceil \text{safety\_factor} \times (T_{\text{walk-off}} + T_{\text{SPM}} + 0.5) \rceil \quad \text{[ps, minimum 5]}
+$$
+
+**`nt_for_window(time_window_ps; dt_min_ps=0.0105)`** (line 226):
+
+Returns the smallest power-of-2 $N_t$ that maintains temporal resolution $\Delta t \leq \text{dt\_min}$:
+
+$$
+N_t = 2^{\lceil \log_2(T_{\text{window}} / \Delta t_{\text{min}}) \rceil}
+$$
+
+Default $\Delta t_{\text{min}} = 0.0105$ ps $\approx 10.5$ fs, sufficient for resolving $\sim$100 fs pulses with $\geq 10$ points per FWHM.
 
 ---
 
@@ -411,6 +448,20 @@ A fundamental soliton should propagate indefinitely without changing shape (in t
 | Multi-start convergence (3 random starts, 10 iter each) | spread < 3 dB | **1.52 dB** | PASS |
 | Determinism: identical inputs → identical outputs | bitwise identical | yes | PASS |
 | Monotonicity: longer fiber → more Raman | $J(0.5\text{m}) > J(0.1\text{m})$ | $7.35 \times 10^{-4} > 7.55 \times 10^{-5}$ | PASS |
+
+### 7.4 Known Issue Fixed: dB/Linear Scale Mismatch (v2)
+
+**Issue**: Prior to v2, `optimize_spectral_phase` returned `10*log10(J)` (dB) to L-BFGS while the gradient `∂J/∂φ` remained in linear scale. L-BFGS expects the gradient of the function being minimized. The correct gradient of the dB cost would be:
+
+$$
+\frac{\partial J_{\text{dB}}}{\partial \varphi} = \frac{10}{\ln 10} \cdot \frac{1}{J} \cdot \frac{\partial J}{\partial \varphi}
+$$
+
+The missing scale factor $10/(J \ln 10)$ grows as $J \to 0$ (near the optimum), corrupting the L-BFGS inverse Hessian approximation and Wolfe line search. This likely contributed to the low convergence rates observed in production sweeps.
+
+**Fix applied (2026-03-26)**: The optimizer now receives linear $J$ directly. The convergence trace is converted to dB after optimization for storage and visualization. The `f_abstol` tolerance was updated from `1e-6` (appropriate for dB scale) to `1e-10` (appropriate for linear scale).
+
+**Impact on validation results**: The gradient tests (Section 7.2) are unaffected — they test `cost_and_gradient` directly, not the optimizer interface. The optimization tests (Section 7.3) should be re-run with the corrected optimizer to verify improved convergence.
 
 ---
 
