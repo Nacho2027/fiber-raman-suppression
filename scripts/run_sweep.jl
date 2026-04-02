@@ -211,8 +211,11 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
 
                 converged  = Optim.converged(result)
                 iterations = Optim.iterations(result)
-                J_after    = Optim.minimum(result)  # now linear (dB/linear fix)
-                grad_norm  = norm(Optim.minimizer(result))  # proxy; actual is in JLD2
+                # J_after in linear scale from the saved JLD2 (run_optimization always
+                # stores linear J regardless of log_cost setting)
+                jld2_data  = load(save_prefix * "_result.jld2")
+                J_after    = jld2_data["J_after"]
+                grad_norm  = jld2_data["grad_norm"]
 
                 J_dB = MultiModeNoise.lin_to_dB(J_after)
                 quality = J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
@@ -409,9 +412,11 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=60)
                 φ0          = phi0_list[i],
             )
 
-            J_final    = Optim.minimum(result)  # now linear (dB/linear fix)
             converged  = Optim.converged(result)
             iterations = Optim.iterations(result)
+            # Read linear J from JLD2 (always linear regardless of log_cost)
+            jld2_data  = load(save_prefix * "_result.jld2")
+            J_final    = jld2_data["J_after"]
 
             @info @sprintf("    → J_final=%.1f dB, converged=%s, iters=%d",
                 MultiModeNoise.lin_to_dB(J_final), converged, iterations)

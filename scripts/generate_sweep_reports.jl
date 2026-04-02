@@ -325,15 +325,18 @@ minimize energy transfer into the Raman-shifted frequency band.
 |-------|-------|--------|-----------|
 """
         for r in ms_results
-            J_dB = isnan(r.J_final) ? NaN : MultiModeNoise.lin_to_dB(r.J_final)
+            # J_final may be linear (>0) or already dB (<0) depending on log_cost setting
+            J_raw = r.J_final
+            J_dB = isnan(J_raw) ? NaN : (J_raw < 0 ? J_raw : MultiModeNoise.lin_to_dB(J_raw))
             md *= @sprintf("| %d | %.1f | %.1f | %s |\n",
                 r.start_idx, r.sigma, J_dB, r.converged ? "Yes" : "No")
         end
 
-        valid_J = [r.J_final for r in ms_results if !isnan(r.J_final)]
-        if length(valid_J) > 0
-            best_ms = MultiModeNoise.lin_to_dB(minimum(valid_J))
-            worst_ms = MultiModeNoise.lin_to_dB(maximum(valid_J))
+        valid_J_dB = [let j=r.J_final; isnan(j) ? NaN : (j < 0 ? j : MultiModeNoise.lin_to_dB(j)) end
+                      for r in ms_results if !isnan(r.J_final)]
+        if length(valid_J_dB) > 0
+            best_ms = minimum(valid_J_dB)
+            worst_ms = maximum(valid_J_dB)
             spread = worst_ms - best_ms
             md *= @sprintf("\n**Spread:** %.1f dB (best: %.1f dB, worst: %.1f dB)\n",
                 spread, best_ms, worst_ms)
