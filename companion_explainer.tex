@@ -254,6 +254,159 @@ $J$ depends on $\varphi(\omega)$ --- a vector with $N_t = 8192$ components. We n
 
 
 % ═════════════════════════════════════════════════════════════════════════
+\section{How Optimization Works: From Gradient Descent to L-BFGS}
+
+This section builds up the optimization algorithm from first principles. If you've taken multivariable calculus, you already know the core ideas.
+
+\subsection{Gradient Descent: The Simplest Method}
+
+You're standing on a hilly landscape in fog. You can't see far, but you can feel the slope under your feet. The obvious strategy: take a step in the downhill direction.
+
+Mathematically, if $\varphi$ is your current position (the spectral phase vector) and $\nabla J$ is the gradient (the ``slope'' in each direction), then:
+\begin{equation}
+\varphi_{\text{new}} = \varphi_{\text{old}} - \alpha\,\nabla J
+\label{eq:gd}
+\end{equation}
+where $\alpha > 0$ is the \textbf{step size} (or ``learning rate'' in ML). This is gradient descent.
+
+\begin{warning}
+\textbf{The step size problem.} If $\alpha$ is too large, you overshoot the minimum and bounce around. If too small, convergence takes forever. Worse: different directions may need different step sizes. Imagine a long, narrow valley --- you need large steps along the valley floor but tiny steps perpendicular to it. Gradient descent with a single $\alpha$ zig-zags, wasting most of its effort.
+\end{warning}
+
+% ─── Gradient descent zig-zag diagram ─────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.2]
+    % Elliptical contours
+    \foreach \r in {0.5, 1.0, 1.5, 2.0, 2.5} {
+        \draw[gray!40] (0,0) ellipse ({\r*2} and {\r*0.6});
+    }
+    % Gradient descent path (zig-zag)
+    \draw[thick, red!70!black, -{Stealth[length=2mm]}] (3.5, 1.2) -- (1.0, -0.3);
+    \draw[thick, red!70!black, -{Stealth[length=2mm]}] (1.0, -0.3) -- (2.5, 0.15);
+    \draw[thick, red!70!black, -{Stealth[length=2mm]}] (2.5, 0.15) -- (0.8, -0.1);
+    \draw[thick, red!70!black, -{Stealth[length=2mm]}] (0.8, -0.1) -- (1.5, 0.02);
+    \draw[thick, red!70!black, -{Stealth[length=2mm]}] (1.5, 0.02) -- (0.4, -0.02);
+    \node[red!70!black, font=\small] at (3.5, 1.6) {Gradient descent};
+
+    % Newton's method path (direct)
+    \draw[thick, blue!70!black, -{Stealth[length=2mm]}] (-3.5, -0.9) -- (-1.2, -0.15);
+    \draw[thick, blue!70!black, -{Stealth[length=2mm]}] (-1.2, -0.15) -- (-0.1, -0.01);
+    \node[blue!70!black, font=\small] at (-3.5, -1.3) {Newton's method};
+
+    % Minimum
+    \filldraw[black] (0,0) circle (2pt) node[below right, font=\small] {minimum};
+\end{tikzpicture}
+\caption{In an elongated valley, gradient descent (red) zig-zags because the gradient always points perpendicular to the contours, not toward the minimum. Newton's method (blue) accounts for curvature and heads straight for the minimum.}
+\label{fig:zigzag}
+\end{figure}
+
+\subsection{Newton's Method: Using Curvature Information}
+
+The fix for zig-zagging: use \textbf{curvature} (second-derivative information) to adapt the step size in each direction automatically. Taylor-expand $J$ to second order around the current $\varphi$:
+\begin{equation}
+J(\varphi + \delta\varphi) \approx J(\varphi) + \nabla J \cdot \delta\varphi + \frac{1}{2}\,\delta\varphi^T\!\cdot H\cdot\delta\varphi
+\end{equation}
+where $H = \nabla^2 J$ is the \textbf{Hessian matrix} (the matrix of second derivatives, $H_{ij} = \partial^2 J / \partial\varphi_i\partial\varphi_j$).
+
+Setting the derivative of this quadratic to zero gives the Newton step:
+\begin{equation}
+\delta\varphi = -H^{-1}\nabla J
+\label{eq:newton}
+\end{equation}
+
+\begin{intuition}
+Compare to gradient descent (Eq.~\ref{eq:gd}): Newton replaces the scalar step size $\alpha$ with the \emph{inverse Hessian} $H^{-1}$. This is a matrix that automatically scales the step differently in each direction. In the narrow valley direction, $H$ has a large eigenvalue (high curvature), so $H^{-1}$ gives a small step. In the long valley direction, $H$ has a small eigenvalue, so $H^{-1}$ gives a large step. Result: you walk straight to the minimum.
+\end{intuition}
+
+\textbf{The problem:} $H$ is an $N_t \times N_t$ matrix. With $N_t = 8192$: $H$ has $67$ million entries. Computing $H$ requires $N_t$ gradient evaluations. Inverting it costs $O(N_t^3)$. For $N_t = 8192$, this is completely infeasible.
+
+\subsection{Quasi-Newton: Approximate the Hessian from Gradient History}
+
+Key insight: we don't need the exact Hessian. We can \emph{approximate} it by observing how the gradient changes from step to step.
+
+If the gradient changed by $\Delta g = \nabla J_{\text{new}} - \nabla J_{\text{old}}$ when we moved by $\Delta\varphi = \varphi_{\text{new}} - \varphi_{\text{old}}$, then by definition:
+\begin{equation}
+H\cdot\Delta\varphi \approx \Delta g \qquad\text{(the ``secant condition'')}
+\end{equation}
+
+This gives us information about $H$ without computing it directly. After several steps, we accumulate enough $(\Delta\varphi, \Delta g)$ pairs to build a decent approximation.
+
+\subsection{BFGS: The Best Quasi-Newton Update}
+
+The BFGS update (Broyden--Fletcher--Goldfarb--Shanno, 1970) is a specific formula for updating the Hessian approximation $B_k$ at each step using the secant condition. It maintains two properties:
+\begin{enumerate}
+    \item $B_k$ is symmetric positive-definite (so the search direction is always downhill)
+    \item $B_k$ satisfies the secant condition $B_k \Delta\varphi = \Delta g$ for the most recent step
+\end{enumerate}
+
+The update formula (you don't need to memorize this):
+\begin{equation}
+B_{k+1} = B_k - \frac{B_k\,\Delta\varphi\,\Delta\varphi^T\!B_k}{\Delta\varphi^T\!B_k\,\Delta\varphi} + \frac{\Delta g\,\Delta g^T}{\Delta g^T\Delta\varphi}
+\end{equation}
+
+In practice, we work with the \emph{inverse} Hessian approximation $B_k^{-1}$ directly (to avoid solving a linear system at each step).
+
+\subsection{L-BFGS: The ``Limited Memory'' Version We Actually Use}
+
+\textbf{Problem with BFGS:} Storing $B_k^{-1}$ requires $N_t^2$ memory. For $N_t = 8192$: 512~MB per matrix. Not terrible, but wasteful.
+
+\textbf{L-BFGS solution:} Don't store $B_k^{-1}$ explicitly. Instead, store only the last $m$ pairs $\{(\Delta\varphi_i, \Delta g_i)\}_{i=k-m}^{k-1}$ (typically $m = 10$). When you need $B_k^{-1}\nabla J$ (the search direction), compute it on-the-fly using a clever two-loop recursion that only touches the stored pairs.
+
+\textbf{Memory:} $O(m \cdot N_t)$ instead of $O(N_t^2)$. For $m = 10$, $N_t = 8192$: 640~KB vs.\ 512~MB.
+
+\textbf{Cost per iteration:} One gradient evaluation (forward + adjoint $\approx 2$~s) plus $O(m \cdot N_t)$ linear algebra ($\approx 0.001$~s). The gradient dominates.
+
+\begin{keyeq}
+\textbf{The L-BFGS algorithm:}
+\begin{enumerate}[leftmargin=*]
+    \item Start with initial phase $\varphi_0$ (usually zeros)
+    \item Compute gradient $\nabla J$ via forward + adjoint solve ($\sim$2~s)
+    \item Compute search direction $d = -B_k^{-1}\nabla J$ using stored $(\Delta\varphi, \Delta g)$ pairs
+    \item \textbf{Line search:} Find step size $\alpha$ satisfying the Wolfe conditions (sufficient decrease + curvature condition). This requires 1--3 additional forward evaluations.
+    \item Update: $\varphi_{k+1} = \varphi_k + \alpha\,d$
+    \item Store $(\Delta\varphi, \Delta g)$ pair; discard oldest if $> m$ pairs stored
+    \item Repeat until $|\nabla J| < \text{tolerance}$ or iteration limit reached
+\end{enumerate}
+\end{keyeq}
+
+\subsection{The Line Search: Picking the Step Size}
+
+Even with a good direction $d$, we need to choose how far to step. Too far $\to$ overshoot. Too short $\to$ wasted iteration.
+
+The \textbf{Wolfe conditions} define an acceptable step size $\alpha$:
+\begin{align}
+\text{Sufficient decrease:} \quad & J(\varphi + \alpha d) \leq J(\varphi) + c_1\,\alpha\,\nabla J \cdot d \label{eq:wolfe1}\\
+\text{Curvature condition:} \quad & \nabla J(\varphi + \alpha d)\cdot d \geq c_2\,\nabla J \cdot d \label{eq:wolfe2}
+\end{align}
+with $0 < c_1 < c_2 < 1$ (typically $c_1 = 10^{-4}$, $c_2 = 0.9$).
+
+Condition~\eqref{eq:wolfe1} says: ``the cost must decrease by at least a fraction $c_1$ of what we predicted.'' Condition~\eqref{eq:wolfe2} says: ``the gradient in the search direction must have flattened out enough'' (we're not stopping on a steep slope).
+
+\begin{intuition}
+The line search is like Goldilocks: the step must be long enough to make real progress (Wolfe 1) but not so long that we're climbing back up (Wolfe 2). In practice, the line search algorithm (Hager--Zhang in our code) uses cubic interpolation to find an acceptable $\alpha$ in 1--3 function evaluations.
+\end{intuition}
+
+\subsection{Why L-BFGS Is Perfect for Our Problem}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Our problem} & \textbf{Why L-BFGS wins} \\
+\midrule
+Dimension & $N_t = 8192$ & Too large for Newton ($N_t^2$ memory) \\
+Gradient cost & 2~s (forward + adjoint) & Dominates; L-BFGS adds negligible overhead \\
+Smoothness & PDE-based, $C^\infty$ & Quasi-Newton shines on smooth problems \\
+Stochasticity & None (exact gradients) & No need for Adam/SGD robustness \\
+Convergence & 20--60 iterations & Superlinear once Hessian approx is good \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In our runs, L-BFGS typically converges in 20--60 iterations $\times$ 2~s/iteration = \textbf{40~s to 2~min}. Gradient descent would take thousands of iterations for the same result.
+
+
+% ═════════════════════════════════════════════════════════════════════════
 \section{The Adjoint Method (The Key Insight)}
 
 \subsection{Why Brute Force Fails}
