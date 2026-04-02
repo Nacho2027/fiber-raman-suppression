@@ -11,7 +11,14 @@
 \usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{tikz}
 \usepackage{tcolorbox}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,decorations.pathreplacing,calc}
+
+% Path to presentation figures
+\graphicspath{{results/images/presentation/}}
 
 % ─── Custom commands ──────────────────────────────────────────────────────
 \newcommand{\abs}[1]{\left|#1\right|}
@@ -80,6 +87,48 @@ We can only control the \emph{timing} of different colors, not which colors are 
 \end{intuition}
 
 
+% ─── Pipeline diagram ─────────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 1.8cm,
+    box/.style={rectangle, draw, rounded corners, minimum width=2.8cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=3mm]}, thick},
+    label/.style={font=\scriptsize\itshape, text=gray}
+]
+% Forward path (top)
+\node[box, fill=blue!10] (pulse) {Unshaped\\Pulse $u_{00}$};
+\node[box, fill=orange!15, right=of pulse] (shaper) {Pulse Shaper\\$e^{i\varphi(\omega)}$};
+\node[box, fill=green!10, right=of shaper] (fiber) {Fiber\\GNLSE solve\\$z: 0 \to L$};
+\node[box, fill=red!10, right=of fiber] (cost) {Cost\\$J = E_{\text{band}}/E_{\text{total}}$};
+
+\draw[arrow, blue!60!black] (pulse) -- (shaper);
+\draw[arrow, blue!60!black] (shaper) -- node[above, label] {$u_0 = u_{00}e^{i\varphi}$} (fiber);
+\draw[arrow, blue!60!black] (fiber) -- node[above, label] {$u_L$} (cost);
+
+% Backward path (bottom)
+\node[box, fill=red!10, below=2cm of cost] (terminal) {Terminal cond.\\$\lambda_L = \frac{u_L(\mathbb{1}_\mathcal{B} - J)}{E_{\text{total}}}$};
+\node[box, fill=green!10, below=2cm of fiber] (adjoint) {Adjoint\\solve backward\\$z: L \to 0$};
+\node[box, fill=orange!15, below=2cm of shaper] (gradient) {Gradient\\$\frac{\partial J}{\partial\varphi} = 2\text{Re}[\lambda_0^* \cdot i \cdot u_0]$};
+\node[box, fill=purple!10, below=2cm of pulse] (update) {L-BFGS\\Update $\varphi$};
+
+\draw[arrow, red!60!black] (cost) -- node[right, label] {compute $\lambda_L$} (terminal);
+\draw[arrow, red!60!black] (terminal) -- (adjoint);
+\draw[arrow, red!60!black] (adjoint) -- node[above, label] {$\lambda_0$} (gradient);
+\draw[arrow, red!60!black] (gradient) -- (update);
+
+% Loop back
+\draw[arrow, purple!60!black, thick, dashed] (update.north) -- (shaper.south) node[midway, left, label] {repeat 30--60$\times$};
+
+% Labels
+\node[above=0.3cm of fiber, font=\small\bfseries, blue!60!black] {FORWARD};
+\node[below=0.3cm of adjoint, font=\small\bfseries, red!60!black] {BACKWARD (ADJOINT)};
+\end{tikzpicture}
+\caption{The optimization pipeline. Blue arrows: forward propagation computes the cost. Red arrows: adjoint propagation computes the gradient. Purple dashed: L-BFGS updates the phase and repeats. One full cycle takes ${\sim}2$~seconds.}
+\label{fig:pipeline}
+\end{figure}
+
+
 % ═════════════════════════════════════════════════════════════════════════
 \section{The Wave Equation (The GNLSE)}
 
@@ -144,6 +193,34 @@ This is exactly like a rotating reference frame in classical mechanics. In this 
 \end{equation}
 
 The ODE solver can now take large steps. To recover the physical field: $u_\omega = e^{+iDz}\tilde{u}_\omega$.
+
+
+% ─── Interaction picture diagram ─────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={rectangle, draw, rounded corners, minimum width=3cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick}
+]
+% Lab frame
+\node[box, fill=blue!10] (lab) {Lab frame: $u_\omega(z)$};
+\node[below=0.3cm of lab, font=\scriptsize, text=gray] {Fast oscillations from dispersion};
+
+% Transform
+\node[box, fill=green!10, right=4cm of lab] (ip) {Interaction picture: $\tilde{u}_\omega(z)$};
+\node[below=0.3cm of ip, font=\scriptsize, text=gray] {Only slow nonlinear evolution};
+
+% Arrows
+\draw[arrow, blue!60!black] (lab) -- node[above, font=\small] {$\times\, e^{-iD(\omega)z}$} (ip);
+\draw[arrow, red!60!black] ([yshift=-0.8cm]ip.west) -- node[below, font=\small] {$\times\, e^{+iD(\omega)z}$} ([yshift=-0.8cm]lab.east);
+
+% Analogy
+\node[below=1.8cm of $(lab)!0.5!(ip)$, font=\small\itshape, text=gray, align=center] {Like a rotating reference frame in mechanics:\\remove the fast rotation, see the slow dynamics};
+\end{tikzpicture}
+\caption{The interaction picture removes fast dispersive oscillations, letting the ODE solver take larger steps. Transform to lab frame when you need the physical field.}
+\label{fig:interaction_picture}
+\end{figure}
 
 
 % ═════════════════════════════════════════════════════════════════════════
@@ -269,6 +346,14 @@ Going from $-40$~dB to $-50$~dB produces the same gradient magnitude as $0$~dB t
 
 \textbf{Result:} 20--28~dB improvement on every configuration. Points stuck at $-35$~dB now reach $-60$~dB.
 
+% ─── Log-cost comparison figure ────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig3_linear_vs_log_cost.png}
+\caption{Impact of the log-scale cost function on every SMF-28 sweep point. Orange bars: old linear cost (stuck at $-35$ to $-58$~dB). Blue bars: new log cost ($-37$ to $-78$~dB). Green numbers show improvement in dB. The last three points (L=5m) previously crashed with NaN.}
+\label{fig:log_cost}
+\end{figure}
+
 
 % ═════════════════════════════════════════════════════════════════════════
 \section{The Soliton Number}
@@ -298,6 +383,40 @@ $N$ & What happens & Suppression \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+% ─── Soliton regime TikZ ────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    regime/.style={rectangle, draw, rounded corners, minimum width=2.7cm, minimum height=1.4cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=2.5mm]}, thick}
+]
+\node[regime, fill=green!15] (low) at (0,0) {$N < 1.5$\\Soliton-like\\Easy};
+\node[regime, fill=yellow!20] (mid) at (4,0) {$1.5$--$2.5$\\Breathing\\Moderate};
+\node[regime, fill=orange!20] (high) at (8,0) {$2.5$--$4$\\Fission\\Hard};
+\node[regime, fill=red!15] (ext) at (12,0) {$N > 4$\\Full fission\\Harder};
+
+\draw[arrow] (low) -- (mid);
+\draw[arrow] (mid) -- (high);
+\draw[arrow] (high) -- (ext);
+
+\node[above=0.3cm of $(low)!0.5!(ext)$, font=\bfseries] {Increasing nonlinearity $\longrightarrow$};
+\node[below=0.2cm of low, font=\scriptsize, text=green!50!black] {$-60$ to $-78$~dB};
+\node[below=0.2cm of mid, font=\scriptsize, text=yellow!50!black] {$-50$ to $-70$~dB};
+\node[below=0.2cm of high, font=\scriptsize, text=orange!50!black] {$-45$ to $-65$~dB};
+\node[below=0.2cm of ext, font=\scriptsize, text=red!50!black] {$-40$ to $-55$~dB};
+\end{tikzpicture}
+\caption{Soliton number regimes. Higher $N$ = stronger nonlinear dynamics = harder to suppress Raman. But the log-cost optimizer achieves $>40$~dB even at $N = 6.3$.}
+\label{fig:soliton_regimes}
+\end{figure}
+
+% ─── N vs J scatter (real data) ─────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig2_nsol_vs_J.png}
+\caption{Suppression vs.\ soliton number for all 24 sweep points. Color = fiber length (darker = shorter). Circles = SMF-28, squares = HNLF. The vertical spread at each $N$ comes from different fiber lengths --- fiber length, not $N$, is the dominant factor.}
+\label{fig:nsol_scatter}
+\end{figure}
 
 
 % ═════════════════════════════════════════════════════════════════════════
@@ -378,6 +497,56 @@ None contain surprising physics --- just careful bookkeeping of derivatives.
 \begin{mlbox}
 The optimization is structurally identical to training a neural network. This isn't a loose analogy --- it's mathematically the same procedure.
 \end{mlbox}
+
+% ─── ML vs Physics pipeline diagram ─────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.2cm,
+    layer/.style={rectangle, draw, rounded corners=2pt, minimum width=1.2cm, minimum height=0.7cm, align=center, font=\scriptsize},
+    arrow/.style={-{Stealth[length=2mm]}, thick},
+    label/.style={font=\scriptsize\itshape, text=gray}
+]
+% Neural network (top)
+\node[font=\small\bfseries, blue!60!black] (nn_label) at (0, 2.5) {Neural Network};
+\node[layer, fill=blue!10] (x) at (-5, 1.5) {$x$\\input};
+\node[layer, fill=blue!15] (h1) at (-3, 1.5) {$h_1$\\layer 1};
+\node[layer, fill=blue!20] (h2) at (-1, 1.5) {$h_2$\\layer 2};
+\node[layer, fill=blue!15] (dots) at (1, 1.5) {$\cdots$};
+\node[layer, fill=blue!25] (y) at (3, 1.5) {$\hat{y}$\\output};
+\node[layer, fill=red!15] (loss) at (5, 1.5) {$\mathcal{L}$\\loss};
+
+\draw[arrow, blue!50] (x) -- (h1);
+\draw[arrow, blue!50] (h1) -- (h2);
+\draw[arrow, blue!50] (h2) -- (dots);
+\draw[arrow, blue!50] (dots) -- (y);
+\draw[arrow, blue!50] (y) -- (loss);
+
+% Fiber propagation (bottom)
+\node[font=\small\bfseries, green!50!black] (fiber_label) at (0, -0.5) {Fiber Propagation};
+\node[layer, fill=green!10] (u0) at (-5, -1.5) {$u_0$\\input};
+\node[layer, fill=green!15] (uz1) at (-3, -1.5) {$u(z_1)$\\step 1};
+\node[layer, fill=green!20] (uz2) at (-1, -1.5) {$u(z_2)$\\step 2};
+\node[layer, fill=green!15] (dots2) at (1, -1.5) {$\cdots$};
+\node[layer, fill=green!25] (uL) at (3, -1.5) {$u_L$\\output};
+\node[layer, fill=red!15] (J) at (5, -1.5) {$J$\\cost};
+
+\draw[arrow, green!50!black] (u0) -- (uz1);
+\draw[arrow, green!50!black] (uz1) -- (uz2);
+\draw[arrow, green!50!black] (uz2) -- (dots2);
+\draw[arrow, green!50!black] (dots2) -- (uL);
+\draw[arrow, green!50!black] (uL) -- (J);
+
+% Equivalence arrows
+\draw[<->, dashed, gray] (x.south) -- (u0.north) node[midway, left, label] {};
+\draw[<->, dashed, gray] (loss.south) -- (J.north);
+
+% Backward labels
+\node[below=0.3cm of J, font=\scriptsize, red!60!black] {$\leftarrow$ adjoint $= $ backprop $\leftarrow$};
+\end{tikzpicture}
+\caption{Structural equivalence between neural network training and fiber optimization. Each ODE solver step in the fiber is analogous to one layer in a neural network. Backpropagation through layers $=$ adjoint propagation through the fiber.}
+\label{fig:ml_analogy}
+\end{figure}
 
 \begin{center}
 \begin{tabular}{lll}
@@ -508,6 +677,45 @@ Minimize $J[u_L]$ subject to $du/dz = f(u,z)$. Standard calculus of variations.
 \end{equation}
 
 The adjoint equation arises naturally from integration by parts in the Lagrangian. QED.
+
+
+% ═════════════════════════════════════════════════════════════════════════
+% ═════════════════════════════════════════════════════════════════════════
+\section{Results: What Does Suppression Look Like?}
+
+These figures show actual results from our optimization sweep.
+
+% ─── Evolution color map ─────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evolution_smf28_L2m_P02W.png}
+\caption{\textbf{The money figure.} Pulse propagation through 2~m of SMF-28 at 0.20~W. \textbf{Left:} optimized pulse --- spectrum stays confined, Raman band (past the dashed line) is dark. \textbf{Right:} unshaped pulse --- clear soliton fission at $z \approx 0.5$~m and bright Raman sidelobe growing past 1600~nm. The optimizer found a phase that prevents the soliton compression that triggers Raman.}
+\label{fig:evolution}
+\end{figure}
+
+% ─── Heatmaps ────────────────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig1_heatmaps.png}
+\caption{Full parameter sweep: Raman suppression across 24 configurations. Darker purple = better suppression. Each cell shows J in dB; asterisk = not formally converged. The dominant trend is top-to-bottom (fiber length), not left-to-right (power).}
+\label{fig:heatmaps}
+\end{figure}
+
+% ─── Multistart ──────────────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{fig4_multistart_comparison.png}
+\caption{Robustness test: 10 optimizations from different random initial phases. \textbf{Left (old):} linear cost --- 0/10 converged, 28.6~dB spread. \textbf{Right (new):} log cost --- 10/10 converged, 10.9~dB spread. The apparent ``multiple local minima'' were an artifact of vanishing gradients, not true landscape complexity.}
+\label{fig:multistart}
+\end{figure}
+
+% ─── Long fiber evolution ────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evolution_smf28_L5m_P01W.png}
+\caption{Pushing the limits: 5~m of SMF-28 at 0.10~W. The unshaped pulse (right) shows massive spectral broadening by $z = 1$~m. The optimized pulse (left) keeps the spectrum contained through 5~m, though some leakage appears past $z = 3$~m --- this is where the input phase's influence starts to fade.}
+\label{fig:evolution_5m}
+\end{figure}
 
 
 % ═════════════════════════════════════════════════════════════════════════
