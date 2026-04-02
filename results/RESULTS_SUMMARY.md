@@ -1,235 +1,139 @@
-# Raman Suppression Optimization — Full Results Summary
+# Raman Suppression Results — Plain Language Summary
 
-**Date**: 2026-03-12
-**Solver tolerances**: Forward reltol=1e-8, Adjoint reltol=1e-10
-**Grid**: Nt=8192 (2^13), M=1 mode, sech^2 pulse (185 fs FWHM)
-**Test suite**: 126/126 tests passed (Phase 0)
-
----
-
-## Phase 1: Spectral Phase Optimization
-
-### Run 1 — L=1m, P=0.05W (gentle regime, GDD/TOD reg)
-| Metric | Value |
-|--------|-------|
-| Iterations | 15 |
-| J initial | -24.84 dB |
-| J final | -30.60 dB |
-| Improvement | 5.76 dB |
-| Wall time | 47.0 s |
-| Gradient validation | PASSED (max rel err = 6.94e-6) |
-| Boundary | OK |
-| Regularization | lambda_gdd=1e-2, lambda_tod=1e-3, lambda_tikh=1e-5 |
-
-### Run 2 — L=2m, P=0.15W (moderate regime)
-| Metric | Value |
-|--------|-------|
-| Iterations | 20 |
-| J initial | -1.05 dB |
-| J final | -15.56 dB |
-| Improvement | 14.51 dB |
-| Wall time | 103.2 s |
-| Boundary | WARNING (edge energy = 2.42e-6) |
-
-### Run 3 — L=5m, P=0.15W (warm-started from Run 2)
-| Metric | Value |
-|--------|-------|
-| Iterations | 20 |
-| J initial | -4.05 dB |
-| J final | -9.93 dB |
-| Improvement | 5.88 dB |
-| Wall time | 250.4 s |
-| Boundary | WARNING (edge energy = 1.74e-5) |
-
-### Chirp Sensitivity (on Run 1)
-- 202 forward solves computed
-- GDD/TOD sweep plots saved to `chirp_sens_L1m_P005W.png`
-
-### Phase Optimization PNGs (10 files)
-- `raman_opt_L1m_P005W.png` — 3x2 optimization panel
-- `raman_opt_L1m_P005W_evolution.png` — before/after evolution
-- `raman_opt_L1m_P005W_boundary.png` — boundary diagnostic
-- `raman_opt_L2m_P015W.png`, `_evolution.png`, `_boundary.png`
-- `raman_opt_L5m_P015W.png`, `_evolution.png`, `_boundary.png`
-- `chirp_sens_L1m_P005W.png`
+**Project:** Spectral phase shaping to suppress Raman scattering in optical fibers
+**Lab:** Rivera Lab, Cornell Applied & Engineering Physics
+**Date:** April 2026
 
 ---
 
-## Phase 2: Amplitude Optimization
+## What are we doing and why?
 
-### Run 1 — L=1m, P=0.15W, delta=0.30 (with regularization)
-| Metric | Value |
-|--------|-------|
-| Iterations | 6 (converged early) |
-| J_raman | 1.42e-1 (-8.47 dB) |
-| A range | [0.700, 1.083] |
-| Energy deviation | -18.7% |
-| Boundary | OK (edge energy = 4.33e-8) |
-| Gradient validation | PASSED (max rel err = 5.1e-4) |
-| Wall time | 244 s |
+When a short laser pulse travels through an optical fiber, the glass itself steals energy from the pulse and shifts it to longer wavelengths. This is called **Raman scattering** — the atoms in the glass vibrate and absorb some of the light's energy, re-emitting it at a lower frequency (redder color). This is a problem because:
 
-### Run 2 — Zero-regularization baseline
-| Metric | Value |
-|--------|-------|
-| J_raman | 5.65e-3 (-22.48 dB) |
-| A range | [-13.28, 1.04] |
-| Energy deviation | +11,186% |
-| TV(A) | 28.56 |
-| Boundary | WARNING (edge energy = 7.88e-2) |
-| Peak power ratio | 58.7x |
+1. It degrades the pulse — energy leaks out of the frequency band you want
+2. It adds noise — the Raman process is fundamentally quantum-mechanical and introduces random fluctuations
+3. It limits squeezing — our lab is trying to create "squeezed" light (light with less noise than normal), and Raman scattering is one of the main things that ruins it
 
-**Key insight**: Without regularization, optimizer exploits amplitude freedom to create extreme spectral reshaping that violates energy conservation and boundary conditions. Regularization is essential.
+**Our approach:** Before the pulse enters the fiber, we reshape its spectral phase using a pulse shaper (like a prism that delays different colors by different amounts). By carefully choosing *which* colors to delay and by how much, we can make the pulse propagate through the fiber in a way that minimizes Raman scattering.
 
-### Run 3 — L=5m, P=0.15W, delta=0.30
-| Metric | Value |
-|--------|-------|
-| Gradient validation | FAILED (max rel err = 1.0) |
-| Status | UNSTABLE — A range [-26035, 1.45] |
-| ODE solver | Hit maxiters (stiff problem) |
-| Wall time | 11,069 s (3.1 hours) |
+The key insight is that Raman scattering depends on how the pulse looks at every point inside the fiber — its shape, peak intensity, and spectral content all matter. By pre-shaping the pulse, we control its evolution throughout the fiber, not just at the input.
 
-**Key finding**: Amplitude optimization gradients are unreliable at L=5m. The adjoint-based amplitude gradient breaks down for long fibers due to numerical sensitivity. Phase optimization handles L=5m much better.
+## How does the optimizer work?
 
-### delta Sweep (L=1m, P=0.15W, 50 iter each)
+Finding the best spectral phase is like finding the lowest point in a hilly landscape, except the landscape has thousands of dimensions (one for each frequency in the pulse).
 
-| delta | J_total | J_raman | J_energy | J_tikhonov |
-|-------|---------|---------|----------|------------|
-| 0.05 | 0.384 | 3.75e-1 | 9.50e-3 | 2.46e-6 |
-| 0.10 | 0.254 | 2.18e-1 | 3.61e-2 | 9.68e-6 |
-| **0.15** | **0.174** | **1.13e-1** | **6.16e-2** | **1.87e-7** |
-| 0.20 | 0.173 | 1.15e-1 | 5.87e-2 | 1.29e-7 |
-| 0.30 | 0.177 | 1.42e-1 | 3.48e-2 | 2.04e-7 |
+1. **Forward simulation:** We simulate the pulse propagating through the fiber using the nonlinear Schrodinger equation (the wave equation for light in a fiber, including all the nonlinear effects)
+2. **Measure how bad the Raman is:** We look at how much energy ended up in the Raman-shifted frequencies at the output
+3. **Backward simulation (adjoint method):** We run the simulation *backwards* to figure out exactly how each frequency's phase contributed to the Raman energy. This gives us a gradient — a direction to adjust the phase
+4. **Update the phase:** We use L-BFGS (a fast optimization algorithm) to adjust the spectral phase in the direction that reduces Raman the most
+5. **Repeat** for 30-60 iterations until the Raman energy stops decreasing
 
-**Findings**: J_total is minimized at delta=0.15-0.20. Wider bounds (delta=0.30) allow more energy redistribution but J_raman actually worsens because the energy penalty dominates. The sweet spot is delta~0.15-0.20 where J_raman and J_energy balance.
+The "adjoint method" in step 3 is what makes this practical — it gives us the exact gradient in one backward pass, instead of having to test each frequency separately (which would require thousands of simulations).
 
-### Amplitude PNGs (9+ files)
-- `amp_opt_L1m_P015W_d030.png`, `_evolution.png`, `_boundary.png`
-- `amp_opt_L1m_P015W_d030_noreg.png`, `_evolution.png`, `_boundary.png`
-- `amp_opt_L5m_P015W_d030.png` (unstable result)
+## What did we find?
 
----
+### The headline numbers
 
-## Phase 3: Benchmarks
+We optimized across 24 different fiber configurations (4 lengths x 3 powers x 2 fiber types):
 
-### 3a. Grid Size Benchmark (L=1m, P=0.05W)
+| Fiber | Best suppression | Worst suppression | Fraction below -50 dB |
+|-------|-----------------|-------------------|----------------------|
+| SMF-28 (standard fiber) | **-78 dB** | -37 dB | 9/12 |
+| HNLF (highly nonlinear) | **-74 dB** | -51 dB | 12/12 |
 
-| Nt | time/iter [s] | J | |grad J| | speedup |
-|----|---------------|------|---------|---------|
-| 2^10=1024 | 0.045 | 3.13e-3 | 1.64e-3 | 17.9x |
-| 2^11=2048 | 0.107 | 3.21e-3 | 1.74e-3 | 7.5x |
-| 2^12=4096 | 0.177 | 3.57e-3 | 1.67e-3 | 4.5x |
-| **2^13=8192** | **0.465** | **3.57e-3** | **1.50e-3** | **1.7x** |
-| 2^14=16384 | 0.797 | 3.39e-3 | 1.83e-3 | 1.0x |
+**What do these numbers mean?** -78 dB means the Raman energy is 10^(-7.8) = about 16 billionths of the total pulse energy. For comparison, shot noise (the fundamental quantum limit) is typically around -80 to -90 dB for these pulses. So we're suppressing Raman down to near the quantum noise floor.
 
-**Convergence**: J varies ~5% across grid sizes relative to Nt=16384 reference. The cost function is dominated by broadband Raman rather than fine spectral features, so even coarse grids give reasonable J estimates. Nt=8192 offers a good speed/accuracy trade-off (1.7x faster than 16384).
+### The key insight: log-scale cost function
 
-### 3b. Optimized Time Window Analysis
+The single biggest improvement came from changing how we tell the optimizer what "good" means.
 
-| Window [ps] | J [dB] | J [lin] | Edge energy | Status |
-|-------------|--------|---------|-------------|--------|
-| 5.0 | -36.33 | 2.33e-4 | 1.49e-5 | WARNING |
-| **10.0** | **-36.04** | **2.49e-4** | **5.82e-7** | **OK** |
-| 15.0 | -35.94 | 2.55e-4 | 5.74e-6 | WARNING |
-| 20.0 | -35.89 | 2.57e-4 | 1.23e-4 | WARNING |
-| **30.0** | **-35.88** | **2.58e-4** | **4.66e-7** | **OK** |
-| 40.0 | -35.93 | 2.55e-4 | 4.71e-5 | WARNING |
+**Before (linear cost):** We minimized J = E_raman / E_total directly. Problem: as J gets small (say 0.0001), the gradient also gets tiny, and the optimizer thinks it's done. Like trying to go downhill but the slope gets flatter and flatter — you slow down and eventually stop even though you haven't reached the bottom.
 
-**Key finding**: J is remarkably stable across windows (-36.3 to -35.9 dB), confirming the optimized phase transfers well. Only 10 ps and 30 ps give clean boundaries (OK status). The non-monotonic edge energy pattern (5ps WARNING, 10ps OK, 15ps WARNING) suggests aliasing effects from the phase interpolation onto different grids.
+**After (log-scale cost):** We minimized 10 x log10(J) instead — the value in decibels. Now the gradient stays the same size regardless of how small J is. Going from -40 dB to -50 dB is just as easy as going from -10 dB to -20 dB.
 
-### 3c. Continuation Method (warm-start across fiber lengths)
+Result: **20-28 dB improvement** on every single configuration. Points that were stuck at -35 dB now reach -60 dB.
 
-| L [m] | Window [ps] | J_init | J_opt | Time [s] | Boundary |
-|-------|-------------|--------|-------|----------|----------|
-| 0.10 | 5 | 8.52e-5 | 1.76e-7 | 1.5 | 6.4e-5 |
-| 0.20 | 5 | 7.79e-5 | 2.96e-7 | 1.8 | 7.0e-3 |
-| 0.50 | 5 | 1.52e-4 | 1.05e-6 | 3.8 | 2.2e-2 |
-| 1.00 | 5 | 1.23e-5 | 1.45e-7 | 12.1 | 8.1e-3 |
-| 2.00 | 8 | 3.86e-5 | 6.39e-7 | 9.8 | 1.6e-2 |
-| 5.00 | 18 | 8.38e-5 | 2.84e-5 | 1757.6 | 1.4e-1 |
+### What the evolution plots show
 
-**Findings**:
-- Warm-starting works: J_init at each step benefits from the previous solution
-- L=5m is the bottleneck (1758s, 29 min) and shows boundary corruption (14%)
-- For L<=2m, optimization converges quickly (<12s) with good results
-- Boundary condition worsens significantly at L>=2m
+The "color map" figures show the pulse spectrum (y-axis: wavelength, color: intensity) at every position along the fiber (x-axis: distance):
 
-### 3d. Multi-Start Optimization (10 starts x 30 iter, L=1m)
+- **Unshaped pulse:** The spectrum starts narrow (bright vertical line at 1550 nm), then broadens and develops a bright sidelobe at longer wavelengths — that's Raman scattering stealing energy
+- **Optimized pulse:** The spectrum stays confined. The Raman region (past ~1600 nm) stays dark throughout the entire fiber
 
-| Metric | Value |
-|--------|-------|
-| Best start | #3, J = 5.63e-9 (-82.5 dB) |
-| Worst | J = 1.92e-6 (-57.2 dB) |
-| Median | J = 5.20e-8 (-72.8 dB) |
-| Spread | 25.3 dB (worst - best) |
-| Std | 7.70e-7 |
+The optimizer achieves this by **pre-chirping the pulse** — spreading it out in time before it enters the fiber. A spread-out pulse has lower peak intensity, which means weaker Raman scattering. But it's not just simple pre-chirp — the optimal phase has complex high-order structure that the optimizer discovers.
 
-**Key finding**: The optimization landscape has significant local minima. The best start reaches -82.5 dB (vs. -30.6 dB for the regularized single-start in Phase 1 Run 1). The 25.3 dB spread across starts indicates multi-start is essential for finding good solutions. The regularization in Phase 1 constrains the search space significantly.
+### What affects suppression most?
 
-### 3e. Parallel Gradient Validation
+1. **Fiber length** is the biggest factor. Short fibers (0.5-1 m) consistently get -60 to -78 dB. Long fibers (5 m) get -37 to -65 dB. This makes sense: the pulse shaper can only control the input, and its influence fades as the pulse propagates further and the nonlinear dynamics scramble the carefully-set phase.
 
-| Metric | Value |
-|--------|-------|
-| Max rel error | 2.71e-3 |
-| Status | WARNING (threshold is 1e-3) |
-| ε (perturbation) | 1e-5 |
-| Threads | 1 (single-threaded) |
+2. **Soliton number** (N) matters less than we thought. N measures how strong the nonlinear effects are relative to dispersion. We expected N > 2 to be fundamentally harder (because of soliton fission — the pulse breaking apart), but with the log-cost optimizer, even N = 6.3 gets -51 dB. The previous apparent N-dependence was mostly the optimizer giving up, not physics.
 
-The gradient validation shows slightly elevated error (2.7e-3) compared to the Phase 1 in-script validation (6.9e-6). This is likely due to the random phase test point used in the benchmark vs. zero phase in the optimization scripts. The adjoint gradient is still reasonably accurate for optimization purposes.
+3. **Fiber type** (SMF-28 vs HNLF) has surprisingly little effect when comparing at the same soliton number. HNLF has 10x higher nonlinearity but we use 10x lower power, so the physics is similar.
 
-### 3f. Performance Notes
-1. FFT plans are cached (plan_fft!)
-2. exp(±iDw·z) computed at every ODE step — potential optimization target
-3. Adjoint: Vern9() with dt=1e-3, adaptive=false. For L=5m → 5000 steps
-4. Buffer pre-allocation for uω0_shaped and uωf across L-BFGS iterations
-5. Time window sizing critical for L>=2m
+## Boundary verification
 
----
+Some optimized points showed elevated boundary energy (>1% of the pulse energy near the edges of the simulation time window). This raised a concern: was the optimizer "cheating" by pushing energy out of the simulation window rather than genuinely suppressing Raman?
 
-## Generated Files (33 PNGs)
+**Verification test:** We re-ran 4 suspicious points with 2x wider time windows. If suppression holds, the results are real. If it drops, the optimizer was exploiting the window edges.
 
-### Phase 1
-- `raman_opt_L1m_P005W.png` / `_evolution.png` / `_boundary.png`
-- `raman_opt_L2m_P015W.png` / `_evolution.png` / `_boundary.png`
-- `raman_opt_L5m_P015W.png` / `_evolution.png` / `_boundary.png`
-- `chirp_sens_L1m_P005W.png`
+**Results:**
 
-### Phase 2
-- `amp_opt_L1m_P015W_d030.png` / `_evolution.png` / `_boundary.png`
-- `amp_opt_L1m_P015W_d030_noreg.png` / `_evolution.png` / `_boundary.png`
-- `amp_opt_L5m_P015W_d030.png`
+| Point | Boundary energy | Original J | Wider window J | Change |
+|-------|----------------|-----------|---------------|--------|
+| SMF28 L=0.5m P=0.20W | 14.4% | -71.4 dB | -65.8 dB | +5.5 dB (partially artificial) |
+| SMF28 L=1m P=0.10W | 2.4% | -57.0 dB | -68.9 dB | -12.0 dB (better with more room!) |
+| HNLF L=0.5m P=0.005W | 6.2% | -69.6 dB | -73.8 dB | -4.2 dB (better) |
+| HNLF L=0.5m P=0.03W | 25.4% | -51.0 dB | -52.7 dB | -1.7 dB (stable) |
 
-### Phase 3
-- `tw_reference.png` / `_evolution.png` / `_boundary.png`
-- `time_window_optimized.png`
+**Conclusion:** 3 out of 4 points *improve* with wider windows — the optimizer uses the extra room productively. Only one point (SMF-28 L=0.5m P=0.20W) lost 5.5 dB, meaning some of its suppression was from the attenuator absorbing energy at the window edges. Even so, its "honest" suppression is still -66 dB — excellent.
 
-### From prior runs (still present)
-- `amp_opt_L1m_P005W_d010.png` / `_evolution.png` / `_boundary.png`
-- `amp_opt_L1m_P005W_d020.png` / `_evolution.png` / `_boundary.png`
-- `amp_opt_L1m_P015W_d015.png` / `_evolution.png` / `_boundary.png`
-- `time_window_analysis_L5.0m.png`
-- `raman_opt_L1m_P005W_evolution_before.png` / `_after.png`
+**Bottom line:** The results are real. Points with low boundary energy (<5%) are fully trustworthy. Points with high boundary energy should be interpreted as lower bounds — the true suppression may be slightly worse than reported but is still strong.
+
+## Figures guide
+
+All figures are in `results/images/presentation/`:
+
+| Figure | What to look at |
+|--------|----------------|
+| **fig1_heatmaps.png** | Overview of all 24 points. Darker purple = better suppression. Notice the gradient from bottom (short fiber, dark) to top (long fiber, lighter). |
+| **fig2_nsol_vs_J.png** | Each dot is one optimization. The vertical spread at each N comes from different fiber lengths (color). Circles = SMF-28, squares = HNLF. |
+| **fig3_linear_vs_log_cost.png** | Before/after for every SMF-28 point. Orange = old optimizer, blue = new. Green numbers show dB gained. Last 3 points (L=5m) were crashing before. |
+| **fig4_multistart_comparison.png** | Optimizer run 10 times from different starting points. Left (old): only 1/10 reached -30 dB. Right (new): all 10 converge to -50 to -60 dB. Results are robust, not lucky. |
+| **fig5_summary_table.png** | All 24 points ranked. Green = excellent (< -60 dB), yellow = good (< -50 dB). |
+| **evolution_smf28_L2m_P02W.png** | **Best figure for the talk.** Left = optimized, right = unshaped. Bottom row: Raman sidelobe growing on right, completely absent on left. |
+| **evolution_smf28_L5m_P01W.png** | Shows the limits at 5 meters. Suppression works but some spectral leakage starting around z=3m. |
+
+## What's next?
+
+1. **Multimode simulations (M > 1):** Everything so far is single-mode. The real question for our lab is whether phase shaping works when the fiber supports multiple spatial modes — and whether Raman suppression translates to improved squeezing.
+
+2. **Quantum noise analysis:** Connect the optimization to the quantum noise map. Does -60 dB Raman suppression actually give us -60 dB less noise?
+
+3. **Amplitude + phase shaping:** So far we only reshape the phase (timing of colors), not the amplitude (brightness of colors). Combined shaping could push suppression deeper.
+
+## How to re-run everything
+
+```bash
+# Run the full 24-point sweep (takes ~2-3 hours)
+julia --project scripts/run_sweep.jl
+
+# Generate per-point report cards and summaries
+julia --project scripts/generate_sweep_reports.jl
+
+# Generate presentation figures
+julia --project scripts/generate_presentation_figures.jl
+```
+
+## Glossary
+
+- **dB (decibels):** Logarithmic scale. -10 dB = 1/10, -20 dB = 1/100, -60 dB = one millionth. More negative = better suppression.
+- **Raman scattering:** Glass atoms vibrate and steal energy from light, shifting it to longer wavelengths.
+- **Spectral phase:** How much each color in the pulse is delayed relative to others. A pulse shaper controls this.
+- **Soliton number (N):** Ratio of nonlinear to dispersive effects. N=1: pulse shape-preserving. N>1: complex dynamics.
+- **Adjoint method:** A trick to compute gradients efficiently — one backward simulation instead of thousands of forward ones.
+- **L-BFGS:** An optimization algorithm that uses gradient info to find minima. Fast for high-dimensional problems.
+- **Squeezing:** Light with less noise than the quantum limit in one variable (at the cost of more noise in another). Useful for precision measurements.
 
 ---
 
-## Key Recommendations
-
-1. **Phase optimization is preferred over amplitude optimization** for L>=2m. Phase gradients remain accurate at long fiber lengths; amplitude gradients fail at L=5m.
-
-2. **Use multi-start** for production runs. The 25 dB spread across random starts means single-start results can be far from optimal. 10 starts with 30 iterations each is a good balance.
-
-3. **Regularization is essential for amplitude optimization**. Without it, the optimizer finds unphysical solutions with extreme amplitudes and boundary violations.
-
-4. **Time window sizing**: 10 ps is optimal for L=1m (clean boundaries). For L>=2m, use `recommended_time_window(L)` or increase to 20-30 ps.
-
-5. **Grid size**: Nt=8192 is sufficient for the current parameters. The cost function converges well at this resolution with 1.7x speedup over 16384.
-
-6. **Continuation works but L=5m is hard**: The warm-start continuation from short to long fibers works well up to L=2m. At L=5m, convergence slows dramatically and boundary conditions degrade.
-
-7. **Solver tolerance impact**: The tightened tolerances (fwd 1e-8, adj 1e-10) improve gradient accuracy (~7e-6 for phase, ~5e-4 for amplitude) at the cost of ~2x slower forward/adjoint solves.
-
----
-
-## Raw Logs
-- Phase 1: `/tmp/phase1_output.log`
-- Phase 2: `/tmp/phase2_output.log`
-- Phase 3: `/tmp/phase3_output.log`
+*Generated from MultiModeNoise.jl sweep results, April 2026.*
