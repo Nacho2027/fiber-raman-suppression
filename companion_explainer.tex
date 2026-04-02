@@ -332,6 +332,32 @@ H\cdot\Delta\varphi \approx \Delta g \qquad\text{(the ``secant condition'')}
 
 This gives us information about $H$ without computing it directly. After several steps, we accumulate enough $(\Delta\varphi, \Delta g)$ pairs to build a decent approximation.
 
+% ─── Secant condition diagram ────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    % Curve (cost function along a 1D slice)
+    \draw[thick, gray] plot[smooth, domain=-0.5:4.5] (\x, {0.3*(\x-2)*(\x-2) + 0.5});
+
+    % Points
+    \filldraw[blue!70!black] (1.0, 0.8) circle (3pt) node[above left, font=\small] {$\varphi_k$};
+    \filldraw[blue!70!black] (3.0, 0.8) circle (3pt) node[above right, font=\small] {$\varphi_{k+1}$};
+
+    % Gradient arrows (tangent lines)
+    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (1.0, 0.8) -- (0.2, 1.28) node[left, font=\scriptsize] {$\nabla J_k$};
+    \draw[thick, red!70!black, -{Stealth[length=2.5mm]}] (3.0, 0.8) -- (3.8, 1.28) node[right, font=\scriptsize] {$\nabla J_{k+1}$};
+
+    % Delta phi and delta g
+    \draw[thick, green!50!black, <->] (1.0, 0.3) -- (3.0, 0.3) node[midway, below, font=\small] {$\Delta\varphi = \varphi_{k+1} - \varphi_k$};
+    \draw[thick, orange!70!black, <->] (4.3, 0.5) -- (4.3, 1.5) node[midway, right, font=\small, align=left] {$\Delta g = \nabla J_{k+1}$\\$\quad\;\; - \nabla J_k$};
+
+    % Secant condition label
+    \node[font=\small, align=center] at (2.0, -0.5) {The gradient changed by $\Delta g$ when we moved by $\Delta\varphi$\\$\Rightarrow$ $H \approx \Delta g / \Delta\varphi$ (secant condition)};
+\end{tikzpicture}
+\caption{The quasi-Newton idea: observe how the gradient changes between steps. The ratio $\Delta g / \Delta\varphi$ gives information about the Hessian (curvature) without computing it directly.}
+\label{fig:secant}
+\end{figure}
+
 \subsection{BFGS: The Best Quasi-Newton Update}
 
 The BFGS update (Broyden--Fletcher--Goldfarb--Shanno, 1970) is a specific formula for updating the Hessian approximation $B_k$ at each step using the secant condition. It maintains two properties:
@@ -356,6 +382,34 @@ In practice, we work with the \emph{inverse} Hessian approximation $B_k^{-1}$ di
 \textbf{Memory:} $O(m \cdot N_t)$ instead of $O(N_t^2)$. For $m = 10$, $N_t = 8192$: 640~KB vs.\ 512~MB.
 
 \textbf{Cost per iteration:} One gradient evaluation (forward + adjoint $\approx 2$~s) plus $O(m \cdot N_t)$ linear algebra ($\approx 0.001$~s). The gradient dominates.
+
+% ─── Memory comparison diagram ───────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    bar/.style={draw, minimum height=0.6cm, anchor=west, font=\small},
+]
+    % Labels
+    \node[font=\small\bfseries, anchor=east] at (-0.2, 2.4) {Newton};
+    \node[font=\small\bfseries, anchor=east] at (-0.2, 1.2) {BFGS};
+    \node[font=\small\bfseries, anchor=east] at (-0.2, 0.0) {L-BFGS};
+
+    % Bars (log scale visual)
+    \node[bar, fill=red!40, minimum width=10cm] at (0, 2.4) {};
+    \node[font=\scriptsize, anchor=west] at (10.2, 2.4) {512 GB (store full $H$)};
+
+    \node[bar, fill=orange!40, minimum width=5cm] at (0, 1.2) {};
+    \node[font=\scriptsize, anchor=west] at (5.2, 1.2) {512 MB (store $B^{-1}$)};
+
+    \node[bar, fill=green!40, minimum width=0.6cm] at (0, 0.0) {};
+    \node[font=\scriptsize, anchor=west] at (0.8, 0.0) {640 KB (store 10 pairs)};
+
+    % Scale note
+    \node[font=\scriptsize\itshape, text=gray] at (5, -0.7) {For $N_t = 8192$. Scale is approximate (logarithmic).};
+\end{tikzpicture}
+\caption{Memory comparison for $N_t = 8192$. Newton stores the full Hessian. BFGS stores an approximation. L-BFGS stores only 10 vector pairs --- nearly 1000$\times$ less memory than BFGS.}
+\label{fig:memory}
+\end{figure}
 
 \begin{keyeq}
 \textbf{The L-BFGS algorithm:}
@@ -386,6 +440,44 @@ Condition~\eqref{eq:wolfe1} says: ``the cost must decrease by at least a fractio
 \begin{intuition}
 The line search is like Goldilocks: the step must be long enough to make real progress (Wolfe 1) but not so long that we're climbing back up (Wolfe 2). In practice, the line search algorithm (Hager--Zhang in our code) uses cubic interpolation to find an acceptable $\alpha$ in 1--3 function evaluations.
 \end{intuition}
+
+% ─── Line search diagram ────────────────────────────────────────────────
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    % J(alpha) curve
+    \draw[thick, black] plot[smooth, domain=0:5] (\x, {3 - 2.5*\x + 0.8*\x*\x - 0.06*\x*\x*\x});
+    \node[font=\small] at (5.3, 2.5) {$J(\varphi + \alpha d)$};
+
+    % Axes
+    \draw[->] (-0.3, 0) -- (5.5, 0) node[right, font=\small] {step size $\alpha$};
+    \draw[->] (0, -0.3) -- (0, 3.5) node[above, font=\small] {$J$};
+
+    % Starting point
+    \filldraw[blue!70!black] (0, 3) circle (2pt) node[left, font=\small] {$J(\varphi)$};
+
+    % Sufficient decrease line (Wolfe 1)
+    \draw[dashed, red!60!black] (0, 3) -- (5, 0.5) node[right, font=\scriptsize] {Wolfe 1 bound};
+
+    % Too short region
+    \fill[red!10] (0, 0) rectangle (0.8, -0.5);
+    \node[font=\scriptsize, red!60!black] at (0.4, -0.35) {too short};
+
+    % Too long region
+    \fill[red!10] (3.5, 0) rectangle (5, -0.5);
+    \node[font=\scriptsize, red!60!black] at (4.25, -0.35) {too long};
+
+    % Goldilocks region
+    \fill[green!15] (0.8, 0) rectangle (3.5, -0.5);
+    \node[font=\scriptsize, green!50!black] at (2.15, -0.35) {acceptable (Wolfe)};
+
+    % Chosen alpha
+    \draw[thick, green!50!black, dashed] (1.8, 0) -- (1.8, 1.05);
+    \filldraw[green!50!black] (1.8, 1.05) circle (3pt) node[above right, font=\small] {chosen $\alpha^*$};
+\end{tikzpicture}
+\caption{The line search finds a step size $\alpha^*$ in the ``Goldilocks zone'' (green): large enough to make real progress (below the Wolfe~1 line), but not so large that we overshoot past the minimum.}
+\label{fig:linesearch}
+\end{figure}
 
 \subsection{Why L-BFGS Is Perfect for Our Problem}
 
