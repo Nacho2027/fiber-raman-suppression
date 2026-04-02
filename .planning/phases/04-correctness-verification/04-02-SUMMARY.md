@@ -145,3 +145,12 @@ None — all results are real physics measurements.
 ---
 *Phase: 04-correctness-verification*
 *Completed: 2026-03-25*
+
+## Self-Check: PASSED
+
+- FOUND: scripts/verification.jl (modified)
+- FOUND: results/raman/validation/verification_20260325_173537.md (created)
+- FOUND: .planning/phases/04-correctness-verification/04-02-SUMMARY.md (created)
+- FOUND commit 5c68343: feat(04-02): add VERIF-02 photon number conservation and VERIF-03 Taylor remainder
+- FOUND commit 7507dcd: chore(04-02): add final verification report to validation directory
+- FOUND commit f5da186: docs(04-02): complete plan metadata

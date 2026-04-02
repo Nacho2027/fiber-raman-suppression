@@ -106,9 +106,10 @@ Plans:
 | 4. Correctness Verification | 2/2 | Complete   | 2026-03-25 |
 | 5. Result Serialization | 1/1 | Complete   | 2026-03-25 |
 | 6. Cross-Run Comparison and Pattern Analysis | 1/2 | In Progress|  |
-| 6.1 Physics Insight | 0/2 | Planned | - |
-| 7. Parameter Sweeps | 2/3 | In Progress|  |
-| 8. Sweep Point Reporting | 0/1 | Planned | - |
+| 6.1 Physics Insight | 1/2 | Partial | - |
+| 7. Parameter Sweeps | 2/3 | Code Complete | - |
+| 7.1 Grid Resolution Fix | 1/1 | Complete | 2026-03-31 |
+| 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 

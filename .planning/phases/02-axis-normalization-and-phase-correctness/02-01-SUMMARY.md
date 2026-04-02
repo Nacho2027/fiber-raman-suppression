@@ -176,6 +176,15 @@ Each task was committed atomically:
 
 None — all panels display real computed data. No hardcoded placeholder values.
 
+## Self-Check: PASSED
+
+- FOUND: scripts/visualization.jl
+- FOUND: scripts/test_visualization_smoke.jl
+- FOUND: .planning/phases/02-axis-normalization-and-phase-correctness/02-01-SUMMARY.md
+- FOUND: d017cfa (feat: add _spectral_signal_xlim helper)
+- FOUND: cba239f (feat: rewrite plot_phase_diagnostic)
+- FOUND: f03883f (docs: complete plan metadata)
+
 ---
 *Phase: 02-axis-normalization-and-phase-correctness*
 *Completed: 2026-03-25*

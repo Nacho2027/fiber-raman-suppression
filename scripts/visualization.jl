@@ -202,9 +202,8 @@ end
 """
     _spectral_omega_step(sim)
 
-Return the angular frequency step dω [rad/ps] for the fftshifted grid.
+Compute the angular frequency step Δω [rad/ps] from the fftshifted grid.
 """
-"""Compute the angular frequency step Δω [rad/ps] from the simulation grid."""
 function _spectral_omega_step(sim)
     Δf_grid = fftshift(fftfreq(sim["Nt"], 1 / sim["Δt"]))
     return 2π * (Δf_grid[2] - Δf_grid[1])

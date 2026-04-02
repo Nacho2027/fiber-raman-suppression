@@ -1,3 +1,21 @@
+"""
+    MultiModeNoise
+
+Julia package for simulating nonlinear pulse propagation in single-mode and multimode
+optical fibers, with support for:
+
+- **Kerr + Raman nonlinearity** in the interaction picture (split-step via ODE solver)
+- **Adjoint-based sensitivity analysis** for gradient computation (spectral phase optimization)
+- **YDFA gain modeling** (Yb-doped fiber amplifier via rate equations)
+- **Quantum noise analysis** (shot noise, excess noise decomposition via mode overlaps)
+- **GRIN fiber mode solving** (graded-index eigenvalue problem)
+
+The primary use case is Raman suppression optimization: finding spectral phase profiles
+that minimize energy transfer to Raman-shifted frequencies during fiber propagation.
+
+See `scripts/raman_optimization.jl` for the main optimization entry point and
+`scripts/common.jl` for fiber presets and problem setup utilities.
+"""
 module MultiModeNoise
 
 using Tullio
@@ -10,7 +28,6 @@ using LinearAlgebra
 using FFTW
 using LoopVectorization
 using PyPlot
-using FiniteDifferences
 using Interpolations
 
 include("gain_simulation/gain.jl")

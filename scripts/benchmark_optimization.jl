@@ -531,7 +531,7 @@ function run_continuation(;
         wall_time = time() - t0
 
         φ_opt = reshape(result.minimizer, Nt, M)
-        J_opt = 10^(result.minimum / 10)  # convert from dB back to linear
+        J_opt = result.minimum  # optimize_spectral_phase now returns linear J
 
         # Check boundaries
         uω0_shaped = @. uω0 * cis(φ_opt)
@@ -640,7 +640,7 @@ function multistart_optimization(uω0, fiber, sim, band_mask;
         result_i = optimize_spectral_phase(uω0_local, fiber_local, sim, band_mask;
             φ0=φ0_all[i], max_iter=max_iter)
 
-        J_i = 10^(result_i.minimum / 10)  # convert dB → linear
+        J_i = result_i.minimum  # optimize_spectral_phase now returns linear J
         all_results[i] = result_i
         all_J[i] = J_i
 

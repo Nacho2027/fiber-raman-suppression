@@ -503,7 +503,7 @@ end
 
     # Run optimizer for a few iterations
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask; max_iter=10)
-    J_final = 10^(Optim.minimum(result) / 10)
+    J_final = Optim.minimum(result)  # optimize_spectral_phase now returns linear J
 
     # Optimization should reduce cost
     @test J_final ≤ J0

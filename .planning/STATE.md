@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: In progress
-stopped_at: Phase 8 complete; sweep re-run pending with corrected time window
+stopped_at: Sweep analysis complete; next steps discussion pending
 last_updated: "2026-03-31"
 progress:
   total_phases: 8
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -19,13 +19,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Re-run sweep with corrected time window formula, then generate fresh reports.
+**Current focus:** Results complete. Next: multimode (M>1) simulations for quantum noise analysis.
 
 ## Current Position
 
 Phase 8 (Sweep Point Reporting) — COMPLETE
-Phase 7 / 07.1 (Parameter Sweeps) — CODE COMPLETE, sweep re-run pending
-Next: Re-run `julia --project scripts/run_sweep.jl` then `julia --project scripts/generate_sweep_reports.jl`
+Phase 7 / 07.1 (Parameter Sweeps) — CODE COMPLETE, sweep executed with log-scale cost
+Next: Multimode (M>1) simulations for quantum noise analysis
 
 ## Phase Status
 
@@ -37,7 +37,7 @@ Next: Re-run `julia --project scripts/run_sweep.jl` then `julia --project script
 | 6.1 Physics Insight | Partial | 1/2 | Plan 02 (Figs 5-8) not run |
 | 7. Parameter Sweeps | Code complete | 2/3 | Plan 03 (execution + verification) pending re-run |
 | 7.1 Grid Resolution Fix | Complete | 1/1 | Nt floor, max_iter, L=10m dropped |
-| 8. Sweep Point Reporting | Complete | 1/1 | generate_sweep_reports.jl working on existing data |
+| 8. Sweep Point Reporting | Complete | 1/1 | generate_sweep_reports.jl working; log-scale cost 20-28 dB improvement |
 
 ## Execution History
 
@@ -94,16 +94,25 @@ Both fixes require re-running the sweep to get valid results.
 
 ### Pending Actions
 
-- [ ] Re-run sweep: `julia --project scripts/run_sweep.jl` (with corrected time windows)
-- [ ] Re-generate reports: `julia --project scripts/generate_sweep_reports.jl`
+- [ ] Re-run sweep with fixed aggregate JLD2 (current sweep_results.jld2 may have stale entries)
+- [ ] Multimode M>1 exploration — extend propagation to few-mode fibers for quantum noise analysis
 - [ ] Re-run 5 production configs via run_comparison.jl (Phase 6 Plan 02)
-- [ ] Re-run physics_insight.jl (Phase 6.1 Plan 02) — phase profiles may change
+- [ ] Re-run physics_insight.jl (Phase 6.1 Plan 02) — phase profiles may change with log-scale cost
 - [ ] Compare old vs new convergence rates (dB/linear fix — publishable result)
+
+### Accumulated Context — Key Decisions
+
+- Log-scale cost `10*log10(J)` with gradient `10/(J*ln10)` gives 20-28 dB improvement across sweep
+- Raman response `exp(-t/tau2)` overflows for `t<0` when `time_window > 45ps` — clamped to `max(t,0)`
+- Auto-sizing time_window/Nt in setup functions prevents silent attenuator absorption
+- lambda_boundary reduced 10.0 to 1.0 (correct time windows make heavy penalty counterproductive)
+- Rivera Lab context: internal research group, plots for lab meetings/advisor reviews, exploratory physics discovery mindset
 
 ### Resolved Issues
 
 - [RESOLVED 2026-03-31] recommended_time_window() SPM formula: δω = 0.86 × φ_NL / T0
-- [RESOLVED 2026-03-26] dB/linear mismatch in optimize_spectral_phase
+- [RESOLVED 2026-03-31] Raman response overflow for large time windows (clamp to max(t,0))
+- [RESOLVED 2026-03-31] dB/linear mismatch fully resolved with log-scale cost function
 - [RESOLVED 2026-03-26] Adjoint tolerance: Vern9/1e-10 → Tsit5/1e-8 (O(ε²) verified)
 
 ### Open Concerns
@@ -114,5 +123,5 @@ Both fixes require re-running the sweep to get valid results.
 ## Session Continuity
 
 Last session: 2026-03-31
-Stopped at: Phase 8 complete; documentation update in progress
-Next action: Re-run sweep with corrected formula, then generate fresh reports
+Stopped at: Sweep analysis complete, next steps discussion pending
+Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
