@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
-stopped_at: Completed 10-02-PLAN.md (phase ablation experiments)
-last_updated: "2026-04-03T02:50:04.583Z"
+status: Phase complete — ready for verification
+stopped_at: "Completed 10-01-PLAN.md: z-resolved propagation diagnostics"
+last_updated: "2026-04-03T02:55:30.529Z"
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -112,6 +112,9 @@ Both fixes require re-running the sweep to get valid results.
 - Rivera Lab context: internal research group, plots for lab meetings/advisor reviews, exploratory physics discovery mindset
 - [Phase 10]: beta_order=3 required for FIBER_PRESETS with 2 betas; sweep scripts confirmed this — must be explicit in pab_load_config
 - [Phase 10]: Phase ablation shows phi_opt requires sub-THz spectral alignment and exact amplitude (±25% degrades HNLF by 30 dB); mechanism is amplitude-sensitive nonlinear interference across full spectral bandwidth
+- [Phase 10-propagation-resolved-physics]: β_order=3 required in setup_raman_problem when using fiber presets with 2 betas (β₂+β₃)
+- [Phase 10-propagation-resolved-physics]: @sprintf with string concatenation (* operator) fails in Julia 1.12 macroexpand at docstring-bind time — use single literal format strings only
+- [Phase 10-propagation-resolved-physics]: Optimal phase prevents Raman onset entirely in 5 of 6 configs; long-fiber SMF-28 5m shows critical breakdown at z=0.20m (4% of fiber)
 
 ### Roadmap Evolution
 
@@ -131,6 +134,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:50:04.580Z
-Stopped at: Completed 10-02-PLAN.md (phase ablation experiments)
+Last session: 2026-04-03T02:55:30.526Z
+Stopped at: Completed 10-01-PLAN.md: z-resolved propagation diagnostics
 Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
