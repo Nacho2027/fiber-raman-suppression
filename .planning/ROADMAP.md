@@ -140,8 +140,8 @@ Plans:
   5. All new simulations save z-resolved data to JLD2 for future analysis
 **Plans:** 2 plans
 Plans:
-- [ ] 10-01-PLAN.md — Z-resolved propagation diagnostics: modify forward solver to save intermediate z-snapshots, compute Raman band energy along z, visualize evolution for shaped vs unshaped pulses
-- [ ] 10-02-PLAN.md — Phase ablation & perturbation studies: frequency-band zeroing, scaling, truncation experiments; robustness characterization; new mechanism hypotheses
+- [ ] 10-01-PLAN.md — Z-resolved propagation diagnostics: re-propagate 6 configs with zsave, compute Raman band energy J(z) along fiber, spectral/temporal evolution heatmaps, N_sol regime comparison
+- [ ] 10-02-PLAN.md — Phase ablation & perturbation studies: 10-band frequency zeroing with super-Gaussian windows, cumulative ablation, global scaling robustness, spectral shift sensitivity
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
