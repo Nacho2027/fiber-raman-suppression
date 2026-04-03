@@ -124,7 +124,7 @@ Plans:
   3. Group delay profiles (d(phi)/d(omega)) before and after optimization are visualized, showing how the optimizer reshapes temporal pulse structure
   4. Literature-grounded physical mechanisms are identified and tested against the data (e.g., temporal walk-off compensation, Raman gain bandwidth avoidance, soliton fission delay)
   5. A clear answer to "universal vs arbitrary": either an analytical prediction of optimal phase from fiber parameters, or evidence that the landscape has many equivalent minima with no shared structure
-**Plans:** 2 plans
+**Plans:** 2/2 plans
 Plans:
 - [ ] 09-01-PLAN.md — Phase decomposition (polynomial orders 2-6), residual PSD analysis, cross-sweep phi_opt overlay, explained variance analysis
 - [ ] 09-02-PLAN.md — Temporal intensity profiles, Raman overlap integral, group delay visualization, mechanism attribution verdict
@@ -154,7 +154,7 @@ Plans:
   3. Phase 10 H1-H4 tested with quantitative evidence: each hypothesis receives a verdict (confirmed/rejected/inconclusive) with supporting data
   4. Long-fiber degradation mechanism identified: the SMF-28 5m breakdown at z=0.20m is explained (fiber length vs optimization horizon, accumulated phase error, or Nt-limited spectral resolution)
   5. Paper-ready findings document synthesizing Phases 9+10+11 into a coherent narrative with all open questions resolved or explicitly deferred to multimode
-**Plans:** 2 plans
+**Plans:** 2/2 plans
 Plans:
 - [ ] 11-01-PLAN.md — Multi-start z-dynamics (10 re-propagations with zsave), spectral divergence analysis, J(z) trajectory clustering, z-resolved comparison of structurally different solutions
 - [ ] 11-02-PLAN.md — H1-H4 hypothesis testing, long-fiber degradation investigation, synthesis findings document merging Phases 9+10+11
