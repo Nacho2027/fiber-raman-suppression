@@ -112,7 +112,7 @@ Plans:
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
 | 10. Propagation-Resolved Physics | 2/2 | Complete    | 2026-04-03 |
-| 11. Classical Physics Completion | 0/2 | Planned | — |
+| 11. Classical Physics Completion | 1/2 | In Progress|  |
 
 ### Phase 9: Physics of Raman Suppression
 **Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
@@ -154,9 +154,9 @@ Plans:
   3. Phase 10 H1-H4 tested with quantitative evidence: each hypothesis receives a verdict (confirmed/rejected/inconclusive) with supporting data
   4. Long-fiber degradation mechanism identified: the SMF-28 5m breakdown at z=0.20m is explained (fiber length vs optimization horizon, accumulated phase error, or Nt-limited spectral resolution)
   5. Paper-ready findings document synthesizing Phases 9+10+11 into a coherent narrative with all open questions resolved or explicitly deferred to multimode
-**Plans:** 2/2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 11-01-PLAN.md — Multi-start z-dynamics (10 re-propagations with zsave), spectral divergence analysis, J(z) trajectory clustering, z-resolved comparison of structurally different solutions
+- [x] 11-01-PLAN.md — Multi-start z-dynamics (10 re-propagations with zsave), spectral divergence analysis, J(z) trajectory clustering, z-resolved comparison of structurally different solutions
 - [ ] 11-02-PLAN.md — H1-H4 hypothesis testing, long-fiber degradation investigation, synthesis findings document merging Phases 9+10+11
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)

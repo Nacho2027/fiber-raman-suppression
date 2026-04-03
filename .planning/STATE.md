@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Phase complete — ready for verification
-stopped_at: "Completed 10-01-PLAN.md: z-resolved propagation diagnostics"
-last_updated: "2026-04-03T02:55:30.529Z"
+status: Ready to execute
+stopped_at: "Completed 11-01-PLAN.md: multi-start z-dynamics, spectral divergence, H1/H2 formalization"
+last_updated: "2026-04-03T05:40:05.966Z"
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 7
-  total_plans: 15
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 15
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 10 — propagation-resolved-physics
+**Current focus:** Phase 11 — classical-physics-completion
 
 ## Current Position
 
-Phase: 10 (propagation-resolved-physics) — EXECUTING
+Phase: 11 (classical-physics-completion) — EXECUTING
 Plan: 2 of 2
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
@@ -115,6 +115,8 @@ Both fixes require re-running the sweep to get valid results.
 - [Phase 10-propagation-resolved-physics]: β_order=3 required in setup_raman_problem when using fiber presets with 2 betas (β₂+β₃)
 - [Phase 10-propagation-resolved-physics]: @sprintf with string concatenation (* operator) fails in Julia 1.12 macroexpand at docstring-bind time — use single literal format strings only
 - [Phase 10-propagation-resolved-physics]: Optimal phase prevents Raman onset entirely in 5 of 6 configs; long-fiber SMF-28 5m shows critical breakdown at z=0.20m (4% of fiber)
+- [Phase 11-classical-physics-completion]: J(z) trajectories mean correlation 0.621 vs phi_opt structural similarity 0.091 — fiber physics dominates z-dynamics, not phase shape
+- [Phase 11-classical-physics-completion]: Spectral divergence appears at ~2% of fiber length across all 6 configs; H1 overlap 30%; H2 tolerance 0.329 THz (2.5% of Raman BW)
 
 ### Roadmap Evolution
 
@@ -134,6 +136,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-03T02:55:30.526Z
-Stopped at: Completed 10-01-PLAN.md: z-resolved propagation diagnostics
+Last session: 2026-04-03T05:40:05.963Z
+Stopped at: Completed 11-01-PLAN.md: multi-start z-dynamics, spectral divergence, H1/H2 formalization
 Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
