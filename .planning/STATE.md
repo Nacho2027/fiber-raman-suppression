@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
-stopped_at: "Completed 11-01-PLAN.md: multi-start z-dynamics, spectral divergence, H1/H2 formalization"
-last_updated: "2026-04-03T05:40:05.966Z"
+status: Phase complete — ready for verification
+stopped_at: "Completed 11-02-PLAN.md: H3/H4 verdicts, long-fiber degradation, CLASSICAL_RAMAN_SUPPRESSION_FINDINGS.md"
+last_updated: "2026-04-03T06:27:32.610Z"
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -117,6 +117,8 @@ Both fixes require re-running the sweep to get valid results.
 - [Phase 10-propagation-resolved-physics]: Optimal phase prevents Raman onset entirely in 5 of 6 configs; long-fiber SMF-28 5m shows critical breakdown at z=0.20m (4% of fiber)
 - [Phase 11-classical-physics-completion]: J(z) trajectories mean correlation 0.621 vs phi_opt structural similarity 0.091 — fiber physics dominates z-dynamics, not phase shape
 - [Phase 11-classical-physics-completion]: Spectral divergence appears at ~2% of fiber length across all 6 configs; H1 overlap 30%; H2 tolerance 0.329 THz (2.5% of Raman BW)
+- [Phase 11-classical-physics-completion]: H3 CONFIRMED: amplitude-sensitive nonlinear interference — 3dB envelope is single point at alpha=1.0; CPA model ruled out
+- [Phase 11-classical-physics-completion]: Suppression horizon: L_50dB ≈ 3.33 m at P=0.2W for SMF-28; 5m degradation is landscape-limited, not resolution or convergence
 
 ### Roadmap Evolution
 
@@ -136,6 +138,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-03T05:40:05.963Z
-Stopped at: Completed 11-01-PLAN.md: multi-start z-dynamics, spectral divergence, H1/H2 formalization
+Last session: 2026-04-03T06:27:32.608Z
+Stopped at: Completed 11-02-PLAN.md: H3/H4 verdicts, long-fiber degradation, CLASSICAL_RAMAN_SUPPRESSION_FINDINGS.md
 Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
