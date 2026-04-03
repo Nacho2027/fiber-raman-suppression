@@ -110,6 +110,22 @@ Plans:
 | 7. Parameter Sweeps | 2/3 | Code Complete | - |
 | 7.1 Grid Resolution Fix | 1/1 | Complete | 2026-03-31 |
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
+| 9. Physics of Raman Suppression | 0/2 | Planned | — |
+
+### Phase 9: Physics of Raman Suppression
+**Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
+**Depends on**: Phase 7 (needs sweep JLD2 results), Phase 6.1 (builds on partial physics insight work)
+**Requirements**: Derived from research direction — no mapped requirements
+**Success Criteria** (what must be TRUE):
+  1. Optimal phi_opt profiles across all 24 sweep points are projected onto a physical basis (polynomial chirp: GDD, TOD, FOD; sinusoidal modulation) and the explained variance fraction is reported for each
+  2. Structural similarity of optimal phases is quantified across fiber parameters (L, P, N_sol, fiber type) — revealing whether phases cluster, scale predictably, or are uncorrelated
+  3. Group delay profiles (d(phi)/d(omega)) before and after optimization are visualized, showing how the optimizer reshapes temporal pulse structure
+  4. Literature-grounded physical mechanisms are identified and tested against the data (e.g., temporal walk-off compensation, Raman gain bandwidth avoidance, soliton fission delay)
+  5. A clear answer to "universal vs arbitrary": either an analytical prediction of optimal phase from fiber parameters, or evidence that the landscape has many equivalent minima with no shared structure
+**Plans:** 2 plans
+Plans:
+- [ ] 09-01-PLAN.md — Phase decomposition (polynomial orders 2-6), residual PSD analysis, cross-sweep phi_opt overlay, explained variance analysis
+- [ ] 09-02-PLAN.md — Temporal intensity profiles, Raman overlap integral, group delay visualization, mechanism attribution verdict
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
