@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: In progress
-stopped_at: Sweep analysis complete; next steps discussion pending
-last_updated: "2026-03-31"
+status: Ready to execute
+stopped_at: Completed 10-02-PLAN.md (phase ablation experiments)
+last_updated: "2026-04-03T02:50:04.583Z"
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 6
-  total_plans: 13
-  completed_plans: 12
+  total_plans: 15
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,12 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Results complete. Next: multimode (M>1) simulations for quantum noise analysis.
+**Current focus:** Phase 10 — propagation-resolved-physics
 
 ## Current Position
 
+Phase: 10 (propagation-resolved-physics) — EXECUTING
+Plan: 2 of 2
 Phase 8 (Sweep Point Reporting) — COMPLETE
-Phase 7 / 07.1 (Parameter Sweeps) — CODE COMPLETE, sweep executed with log-scale cost
+Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
 
 ## Phase Status
@@ -76,6 +78,7 @@ These are essential for any code that reconstructs simulation state from saved d
 ### Script Constant Prefixes
 
 Julia `const` cannot be redefined in REPL. Each script uses a unique prefix to avoid collisions:
+
 - `RC_` — run_comparison.jl
 - `SW_` — run_sweep.jl
 - `SR_` — generate_sweep_reports.jl
@@ -107,6 +110,12 @@ Both fixes require re-running the sweep to get valid results.
 - Auto-sizing time_window/Nt in setup functions prevents silent attenuator absorption
 - lambda_boundary reduced 10.0 to 1.0 (correct time windows make heavy penalty counterproductive)
 - Rivera Lab context: internal research group, plots for lab meetings/advisor reviews, exploratory physics discovery mindset
+- [Phase 10]: beta_order=3 required for FIBER_PRESETS with 2 betas; sweep scripts confirmed this — must be explicit in pab_load_config
+- [Phase 10]: Phase ablation shows phi_opt requires sub-THz spectral alignment and exact amplitude (±25% degrades HNLF by 30 dB); mechanism is amplitude-sensitive nonlinear interference across full spectral bandwidth
+
+### Roadmap Evolution
+
+- Phase 9 added: Physics of Raman Suppression — understand universal vs arbitrary phase structure
 
 ### Resolved Issues
 
@@ -122,6 +131,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-03-31
-Stopped at: Sweep analysis complete, next steps discussion pending
+Last session: 2026-04-03T02:50:04.580Z
+Stopped at: Completed 10-02-PLAN.md (phase ablation experiments)
 Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2

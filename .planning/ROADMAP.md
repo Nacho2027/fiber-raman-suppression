@@ -111,7 +111,7 @@ Plans:
 | 7.1 Grid Resolution Fix | 1/1 | Complete | 2026-03-31 |
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
-| 10. Propagation-Resolved Physics | 0/2 | Planned | — |
+| 10. Propagation-Resolved Physics | 1/2 | In Progress|  |
 
 ### Phase 9: Physics of Raman Suppression
 **Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
@@ -138,10 +138,10 @@ Plans:
   3. Perturbation robustness is quantified: how much can phi_opt be scaled, shifted, or truncated before suppression degrades by 3 dB?
   4. At least one NEW hypothesis about the suppression mechanism emerges from z-resolved data that was not accessible from Phase 9's input/output-only analysis
   5. All new simulations save z-resolved data to JLD2 for future analysis
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 10-01-PLAN.md — Z-resolved propagation diagnostics: re-propagate 6 configs with zsave, compute Raman band energy J(z) along fiber, spectral/temporal evolution heatmaps, N_sol regime comparison
-- [ ] 10-02-PLAN.md — Phase ablation & perturbation studies: 10-band frequency zeroing with super-Gaussian windows, cumulative ablation, global scaling robustness, spectral shift sensitivity
+- [x] 10-02-PLAN.md — Phase ablation & perturbation studies: 10-band frequency zeroing with super-Gaussian windows, cumulative ablation, global scaling robustness, spectral shift sensitivity
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
