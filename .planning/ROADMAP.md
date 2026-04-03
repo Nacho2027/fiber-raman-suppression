@@ -110,7 +110,8 @@ Plans:
 | 7. Parameter Sweeps | 2/3 | Code Complete | - |
 | 7.1 Grid Resolution Fix | 1/1 | Complete | 2026-03-31 |
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
-| 9. Physics of Raman Suppression | 0/2 | Planned | — |
+| 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
+| 10. Propagation-Resolved Physics | 0/2 | Planned | — |
 
 ### Phase 9: Physics of Raman Suppression
 **Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
@@ -126,6 +127,21 @@ Plans:
 Plans:
 - [ ] 09-01-PLAN.md — Phase decomposition (polynomial orders 2-6), residual PSD analysis, cross-sweep phi_opt overlay, explained variance analysis
 - [ ] 09-02-PLAN.md — Temporal intensity profiles, Raman overlap integral, group delay visualization, mechanism attribution verdict
+
+### Phase 10: Propagation-Resolved Physics & Phase Ablation
+**Goal**: Understand the 84% of Raman suppression that Phase 9 attributed to "configuration-specific nonlinear interference" by running NEW simulations with z-resolved diagnostics and spectral phase ablation experiments. Track where Raman energy builds up along the fiber, determine which frequency components of phi_opt matter most, and test robustness of optimal phases to parameter perturbations.
+**Depends on**: Phase 9 (needs Phase 9 findings and sweep data)
+**Requirements**: Derived from Phase 9 deferred hypothesis H5 and open questions
+**Success Criteria** (what must be TRUE):
+  1. Z-resolved Raman energy evolution is computed for at least 6 representative configurations (3 SMF-28 + 3 HNLF) with and without optimal phase, showing WHERE Raman energy builds up or is suppressed along the fiber
+  2. Spectral phase ablation experiments reveal which frequency bands of phi_opt contribute most to suppression — zeroing out different bands and measuring suppression loss
+  3. Perturbation robustness is quantified: how much can phi_opt be scaled, shifted, or truncated before suppression degrades by 3 dB?
+  4. At least one NEW hypothesis about the suppression mechanism emerges from z-resolved data that was not accessible from Phase 9's input/output-only analysis
+  5. All new simulations save z-resolved data to JLD2 for future analysis
+**Plans:** 2 plans
+Plans:
+- [ ] 10-01-PLAN.md — Z-resolved propagation diagnostics: modify forward solver to save intermediate z-snapshots, compute Raman band energy along z, visualize evolution for shaped vs unshaped pulses
+- [ ] 10-02-PLAN.md — Phase ablation & perturbation studies: frequency-band zeroing, scaling, truncation experiments; robustness characterization; new mechanism hypotheses
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
