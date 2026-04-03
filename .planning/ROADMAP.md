@@ -111,7 +111,8 @@ Plans:
 | 7.1 Grid Resolution Fix | 1/1 | Complete | 2026-03-31 |
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
-| 10. Propagation-Resolved Physics | 2/2 | Complete   | 2026-04-03 |
+| 10. Propagation-Resolved Physics | 2/2 | Complete    | 2026-04-03 |
+| 11. Classical Physics Completion | 0/2 | Planned | — |
 
 ### Phase 9: Physics of Raman Suppression
 **Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
@@ -142,6 +143,21 @@ Plans:
 Plans:
 - [x] 10-01-PLAN.md — Z-resolved propagation diagnostics: re-propagate 6 configs with zsave, compute Raman band energy J(z) along fiber, spectral/temporal evolution heatmaps, N_sol regime comparison
 - [x] 10-02-PLAN.md — Phase ablation & perturbation studies: 10-band frequency zeroing with super-Gaussian windows, cumulative ablation, global scaling robustness, spectral shift sensitivity
+
+### Phase 11: Classical Physics Completion — Deep Mechanism Analysis & Multi-Start Z-Dynamics
+**Goal**: Complete the classical Raman suppression physics story by testing Phase 10's new hypotheses (H1-H4), analyzing z-resolved dynamics of the 10 multi-start solutions (do structurally different phi_opt profiles create similar J(z) curves?), identifying the critical z-position where shaped/unshaped spectral evolution diverges, and exploring whether the long-fiber suppression breakdown (SMF-28 5m) can be overcome with higher Nt or modified optimization. Produce paper-ready analysis closing all open classical physics questions.
+**Depends on**: Phase 10 (needs z-resolved JLD2 data and ablation findings)
+**Requirements**: Derived from Phase 10 hypotheses H1-H4 and open questions
+**Success Criteria** (what must be TRUE):
+  1. Multi-start z-dynamics: all 10 multi-start phi_opt profiles re-propagated with z-saves, revealing whether structurally different solutions (correlation 0.109) produce similar or divergent J(z) evolution
+  2. Spectral divergence point: for each of the 6 Phase 10 configs, the z-position where shaped and unshaped spectral evolution first qualitatively differ is identified and reported
+  3. Phase 10 H1-H4 tested with quantitative evidence: each hypothesis receives a verdict (confirmed/rejected/inconclusive) with supporting data
+  4. Long-fiber degradation mechanism identified: the SMF-28 5m breakdown at z=0.20m is explained (fiber length vs optimization horizon, accumulated phase error, or Nt-limited spectral resolution)
+  5. Paper-ready findings document synthesizing Phases 9+10+11 into a coherent narrative with all open questions resolved or explicitly deferred to multimode
+**Plans:** 2 plans
+Plans:
+- [ ] 11-01-PLAN.md — Multi-start z-dynamics (10 re-propagations with zsave), spectral divergence analysis, J(z) trajectory clustering, z-resolved comparison of structurally different solutions
+- [ ] 11-02-PLAN.md — H1-H4 hypothesis testing, long-fiber degradation investigation, synthesis findings document merging Phases 9+10+11
 
 ### Phase 07.1: Grid Resolution Fix (INSERTED)
 
