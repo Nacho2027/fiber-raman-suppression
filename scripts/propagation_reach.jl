@@ -295,15 +295,31 @@ function pr_repropagate_at_length(
     @info @sprintf("Setting up %s L=%.0fm: Nt=%d, time_window=%.0fps, P=%.3fW",
         fiber_type, L_target, Nt_target, tw_target, P_cont)
 
-    # Build target grid with explicit Nt and time_window
-    uω0, fiber, sim, band_mask, Δf, _ = setup_raman_problem(
-        L_fiber     = L_target,
-        P_cont      = P_cont,
-        Nt          = Nt_target,
-        time_window = tw_target,
-        β_order     = 3,          # required: presets have 2 betas (β₂ + β₃)
-        fiber_preset = preset,
+    # Build target grid directly via MultiModeNoise internals to bypass auto-sizing.
+    # setup_raman_problem auto-sizes when time_window < recommended_time_window(L).
+    # At L=30m SMF-28, recommended=4276ps > 500ps cap, so we cannot use the wrapper.
+    # We replicate the wrapper logic here with explicit, fixed parameters.
+    fp = FIBER_PRESETS[preset]
+    β_order = 3    # required: presets have 2 betas (β₂ + β₃)
+    M = 1
+    λ0 = 1550e-9
+    pulse_fwhm     = 185e-15
+    pulse_rep_rate = PR_REP_RATE
+    pulse_shape    = "sech_sq"
+    raman_threshold = -5.0
+
+    sim      = MultiModeNoise.get_disp_sim_params(λ0, M, Nt_target, tw_target, β_order)
+    fiber    = MultiModeNoise.get_disp_fiber_params_user_defined(
+        L_target, sim; fR=fp.fR, gamma_user=fp.gamma, betas_user=fp.betas
     )
+    u0_modes = ones(M) / √M
+    _, uω0   = MultiModeNoise.get_initial_state(
+        u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
+    )
+    Δf_fft   = fftfreq(Nt_target, 1.0 / sim["Δt"])
+    band_mask = Δf_fft .< raman_threshold
+
+    @info @sprintf("Grid: sim[Nt]=%d, sim[Δt]=%.4eps", sim["Nt"], sim["Δt"])
 
     # Interpolate phi_opt to new frequency grid (T-12-01 mitigation: physical freq axis)
     if Nt_target == Nt_stored && tw_target == tw_stored
