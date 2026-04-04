@@ -164,6 +164,16 @@ None — all J(z) data is real propagation output, not hardcoded or placeholder 
 - Key physics established: SMF-28 long reach (>56 dB at 15x opt horizon), HNLF short reach (<3 dB at 10x opt horizon)
 - bc_frac=1.0 for shaped SMF-28 runs should be investigated in Plan 02 — either expand time window further or interpret as confirmed temporal spreading physics
 
+## Self-Check: PASSED
+
+- scripts/propagation_reach.jl: FOUND
+- results/raman/phase12/ (12 JLD2 files): FOUND
+- results/images/physics_12_01_long_fiber_Jz.png: FOUND
+- results/images/physics_12_02_spectral_evolution_long.png: FOUND
+- results/images/physics_12_03_shaped_vs_flat_benefit.png: FOUND
+- Commit aa90f64 (Task 1): FOUND
+- Commit 337dcde (Task 2): FOUND
+
 ---
 *Phase: 12-suppression-reach*
 *Completed: 2026-04-04*
