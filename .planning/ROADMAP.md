@@ -113,7 +113,7 @@ Plans:
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
 | 10. Propagation-Resolved Physics | 2/2 | Complete    | 2026-04-03 |
 | 11. Classical Physics Completion | 2/2 | Complete    | 2026-04-03 |
-| 12. Suppression Reach & Long-Fiber Behavior | 0/2 | Planned | — |
+| 12. Suppression Reach & Long-Fiber Behavior | 1/2 | In Progress|  |
 
 ### Phase 12: Suppression Reach & Long-Fiber Behavior
 **Goal**: Characterize the finite reach of spectral phase Raman suppression by propagating short-fiber-optimized phases through much longer fibers (10m, 30m+) and mapping how the suppression horizon scales with fiber parameters. Determine whether the optimizer's phase still provides benefit over flat phase at distances far beyond the optimization length, and explore whether segmented or iterative optimization could extend the reach.
@@ -125,9 +125,9 @@ Plans:
   3. Suppression horizon L_XdB mapped as a function of at least 2 parameters (power P and soliton number N_sol) for both fiber types
   4. At least one approach to extending suppression reach tested (e.g., segmented optimization where phi_opt is re-optimized at intermediate z-points, or higher Nt for finer spectral control)
   5. Corrected physical narrative: all findings documents accurately describe the finite reach without overclaiming
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 12-01-PLAN.md — Long-fiber propagation: take existing phi_opt from 0.5m and 2m optimizations, propagate through 10m and 30m fibers with 100 z-saves, compare shaped vs flat phase, map J(z) evolution beyond optimization horizon
+- [x] 12-01-PLAN.md — Long-fiber propagation: take existing phi_opt from 0.5m and 2m optimizations, propagate through 10m and 30m fibers with 100 z-saves, compare shaped vs flat phase, map J(z) evolution beyond optimization horizon
 - [ ] 12-02-PLAN.md — Suppression horizon mapping and reach extension: sweep L_XdB vs (P, N_sol), test segmented optimization concept, produce corrected narrative
 
 ### Phase 9: Physics of Raman Suppression

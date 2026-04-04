@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Phase complete — ready for verification
-stopped_at: "Completed 11-02-PLAN.md: H3/H4 verdicts, long-fiber degradation, CLASSICAL_RAMAN_SUPPRESSION_FINDINGS.md"
-last_updated: "2026-04-03T06:27:32.610Z"
+status: Ready to execute
+stopped_at: "Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures"
+last_updated: "2026-04-04T20:56:54.571Z"
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 8
-  total_plans: 17
-  completed_plans: 16
+  total_plans: 19
+  completed_plans: 17
+  percent: 89
 ---
 
 # Project State
@@ -19,11 +20,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 11 — classical-physics-completion
+**Current focus:** Phase 12 — suppression-reach
 
 ## Current Position
 
-Phase: 11 (classical-physics-completion) — EXECUTING
+Phase: 12 (suppression-reach) — EXECUTING
 Plan: 2 of 2
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
@@ -119,6 +120,8 @@ Both fixes require re-running the sweep to get valid results.
 - [Phase 11-classical-physics-completion]: Spectral divergence appears at ~2% of fiber length across all 6 configs; H1 overlap 30%; H2 tolerance 0.329 THz (2.5% of Raman BW)
 - [Phase 11-classical-physics-completion]: H3 CONFIRMED: amplitude-sensitive nonlinear interference — 3dB envelope is single point at alpha=1.0; CPA model ruled out
 - [Phase 11-classical-physics-completion]: Suppression horizon: L_50dB ≈ 3.33 m at P=0.2W for SMF-28; 5m degradation is landscape-limited, not resolution or convergence
+- [Phase 12-suppression-reach]: Bypass setup_raman_problem auto-sizing via direct MultiModeNoise calls for L>=10m — the wrapper always overrides explicit Nt/tw at long distances
+- [Phase 12-suppression-reach]: SMF-28 phi@2m maintains -57 dB Raman suppression at L=30m (15x opt horizon); HNLF reach collapses to <3 dB by z=15m — fiber-type-dependent suppression reach confirmed
 
 ### Roadmap Evolution
 
@@ -138,6 +141,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-03T06:27:32.608Z
-Stopped at: Completed 11-02-PLAN.md: H3/H4 verdicts, long-fiber degradation, CLASSICAL_RAMAN_SUPPRESSION_FINDINGS.md
+Last session: 2026-04-04T20:56:54.564Z
+Stopped at: Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures
 Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
