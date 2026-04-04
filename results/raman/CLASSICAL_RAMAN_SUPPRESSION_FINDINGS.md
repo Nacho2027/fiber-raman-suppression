@@ -18,8 +18,11 @@ phase decomposition (Phase 9), z-resolved propagation diagnostics (Phase 10), an
 multi-start landscape characterization (Phase 11) — we tested four mechanistic hypotheses
 (H1–H4) about the suppression mechanism. The central finding is that Raman suppression
 operates via amplitude-sensitive nonlinear interference: the optimizer constructs a phase
-profile with sub-THz spectral precision that prevents Raman onset within the first 2% of
-fiber length, and any deviation in amplitude (±25%) or spectral alignment (±0.33 THz)
+profile with sub-THz spectral precision that delays or suppresses Raman energy transfer
+along the fiber. For short fibers (L ≤ 1m), Raman onset is prevented entirely; for longer
+fibers, the shaped pulse's designed trajectory degrades as accumulated nonlinear effects
+push the field away from the optimal evolution, and suppression weakens (L_50dB ≈ 3.33 m
+for SMF-28 at P=0.2W). Any deviation in amplitude (±25%) or spectral alignment (±0.33 THz)
 degrades suppression by >13 dB in SMF-28 and >29 dB in HNLF. The mechanism is
 structured (specific spectral features matter) but complex (no low-order analytical
 formula predicts the optimal phase). Multiple distinct solution families exist in the
@@ -161,10 +164,16 @@ energy accumulates and how φ_opt prevents it:
 | HNLF   L=1m   P=0.01W  | 3.6 | −69.8 | −2.4  | > L (prevented) |
 | HNLF   L=0.5m P=0.03W  | 6.3 | −51.0 | −2.5  | > L (prevented) |
 
-In 5 of 6 configurations, the optimal phase prevents Raman onset entirely — J(z) stays
-below 2×J(z=0) throughout the fiber. The 5m SMF-28 case is the exception: Raman onset
-occurs at z=0.204 m (4.1% of fiber length) and suppression degrades to only −36.8 dB
-vs −77.6 dB at L=0.5m (same fiber, same N_sol).
+In 5 of 6 configurations (all with L ≤ 1m), J(z) stays below 2×J(z=0) throughout the
+fiber using our onset threshold. However, this reflects the short fiber lengths tested,
+not a fundamental property of the mechanism. Multi-start z-dynamics at L=2m (Phase 11)
+show that some solutions allow mid-fiber Raman buildup before recovering at the output —
+a rise-and-recover pattern rather than prevention. The suppression has a finite reach:
+as the pulse propagates, accumulated nonlinear effects push it off the optimizer's
+designed trajectory and Raman transfer resumes. The 5m SMF-28 case demonstrates this
+clearly: Raman onset occurs at z=0.204 m (4.1% of fiber length) and suppression degrades
+to only −36.8 dB vs −71.4 dB at L=0.5m. The suppression horizon is L_50dB ≈ 3.33 m
+for SMF-28 at P=0.2W.
 
 ### 2.3 Hypothesis Verdicts (Phases 10–11)
 
@@ -379,11 +388,15 @@ See figures: `results/images/physics_11_08_5m_reopt_result.png` and
 
 Synthesizing all four hypothesis verdicts and the z-dynamics findings:
 
-The optimizer creates a spectral phase that prevents Raman onset within the first ~2% of
-fiber length. This works via **amplitude-sensitive nonlinear interference**: the shaped
-input field has specific frequency-dependent phase relationships that, after initial
-nonlinear phase accumulation, result in destructive interference at the frequencies that
-would otherwise seed stimulated Raman scattering.
+The optimizer creates a spectral phase that delays and suppresses Raman energy transfer
+along the fiber. For short fibers (L ≤ 1m), this effectively prevents Raman onset
+entirely. For longer fibers, the suppression has a finite reach — accumulated nonlinear
+effects eventually push the pulse off the optimizer's designed trajectory, and Raman
+transfer resumes (L_50dB ≈ 3.33 m for SMF-28 at P=0.2W). The mechanism is
+**amplitude-sensitive nonlinear interference**: the shaped input field has specific
+frequency-dependent phase relationships that, after initial nonlinear phase accumulation,
+result in destructive interference at the frequencies that would otherwise seed stimulated
+Raman scattering.
 
 The mechanism requires:
 

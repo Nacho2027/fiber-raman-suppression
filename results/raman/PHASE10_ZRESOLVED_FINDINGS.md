@@ -27,11 +27,11 @@ Phase 9 found that 84% of Raman suppression arises from "configuration-specific 
 
 ### SMF-28 N=1.3 (N_sol = 1.3, L = 0.5m)
 - **Unshaped:** Raman onset at z = 0.082 m (16.3% of fiber length)
-- **Shaped:** Raman onset not reached within fiber (effective suppression).
+- **Shaped:** Raman onset not reached within this fiber length (L ≤ 1m). Does not imply onset is prevented at longer lengths — suppression has finite reach.
 
 ### SMF-28 N=2.6 (N_sol = 2.6, L = 0.5m)
 - **Unshaped:** Raman onset at z = 0.020 m (4.1% of fiber length)
-- **Shaped:** Raman onset not reached within fiber (effective suppression).
+- **Shaped:** Raman onset not reached within this fiber length (L ≤ 1m). Does not imply onset is prevented at longer lengths — suppression has finite reach.
 
 ### SMF-28 N=2.6 (5m) (N_sol = 2.6, L = 5.0m)
 - **Unshaped:** Raman onset at z = 0.102 m (2.0% of fiber length)
@@ -39,15 +39,15 @@ Phase 9 found that 84% of Raman suppression arises from "configuration-specific 
 
 ### HNLF N=2.6 (N_sol = 2.6, L = 1.0m)
 - **Unshaped:** Raman onset at z = 0.061 m (6.1% of fiber length)
-- **Shaped:** Raman onset not reached within fiber (effective suppression).
+- **Shaped:** Raman onset not reached within this fiber length (L ≤ 1m). Does not imply onset is prevented at longer lengths — suppression has finite reach.
 
 ### HNLF N=3.6 (N_sol = 3.6, L = 1.0m)
 - **Unshaped:** Raman onset at z = 0.041 m (4.1% of fiber length)
-- **Shaped:** Raman onset not reached within fiber (effective suppression).
+- **Shaped:** Raman onset not reached within this fiber length (L ≤ 1m). Does not imply onset is prevented at longer lengths — suppression has finite reach.
 
 ### HNLF N=6.3 (N_sol = 6.3, L = 0.5m)
 - **Unshaped:** Raman onset at z = 0.010 m (2.0% of fiber length)
-- **Shaped:** Raman onset not reached within fiber (effective suppression).
+- **Shaped:** Raman onset not reached within this fiber length (L ≤ 1m). Does not imply onset is prevented at longer lengths — suppression has finite reach.
 
 ## 4. N_sol Regime Observations
 
