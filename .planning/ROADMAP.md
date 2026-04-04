@@ -112,7 +112,23 @@ Plans:
 | 8. Sweep Point Reporting | 1/1 | Complete | 2026-03-31 |
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
 | 10. Propagation-Resolved Physics | 2/2 | Complete    | 2026-04-03 |
-| 11. Classical Physics Completion | 2/2 | Complete   | 2026-04-03 |
+| 11. Classical Physics Completion | 2/2 | Complete    | 2026-04-03 |
+| 12. Suppression Reach & Long-Fiber Behavior | 0/2 | Planned | — |
+
+### Phase 12: Suppression Reach & Long-Fiber Behavior
+**Goal**: Characterize the finite reach of spectral phase Raman suppression by propagating short-fiber-optimized phases through much longer fibers (10m, 30m+) and mapping how the suppression horizon scales with fiber parameters. Determine whether the optimizer's phase still provides benefit over flat phase at distances far beyond the optimization length, and explore whether segmented or iterative optimization could extend the reach.
+**Depends on**: Phase 11 (needs multi-start z-data, suppression horizon baseline)
+**Requirements**: Derived from Phase 11 findings and user correction of overclaimed suppression reach
+**Success Criteria** (what must be TRUE):
+  1. Short-fiber phi_opt (optimized at L=0.5m, 2m) propagated through L=10m and L=30m fibers with z-resolved diagnostics, showing J(z) evolution far beyond the optimization horizon
+  2. Comparison of shaped vs flat phase at long distances quantified — does phi_opt still help at 10x, 60x the optimization length?
+  3. Suppression horizon L_XdB mapped as a function of at least 2 parameters (power P and soliton number N_sol) for both fiber types
+  4. At least one approach to extending suppression reach tested (e.g., segmented optimization where phi_opt is re-optimized at intermediate z-points, or higher Nt for finer spectral control)
+  5. Corrected physical narrative: all findings documents accurately describe the finite reach without overclaiming
+**Plans:** 2 plans
+Plans:
+- [ ] 12-01-PLAN.md — Long-fiber propagation: take existing phi_opt from 0.5m and 2m optimizations, propagate through 10m and 30m fibers with 100 z-saves, compare shaped vs flat phase, map J(z) evolution beyond optimization horizon
+- [ ] 12-02-PLAN.md — Suppression horizon mapping and reach extension: sweep L_XdB vs (P, N_sol), test segmented optimization concept, produce corrected narrative
 
 ### Phase 9: Physics of Raman Suppression
 **Goal**: Understand WHY the optimizer's spectral phase patterns suppress Raman scattering — determine whether optimal phases have universal physical structure (predictable from fiber parameters) or are arbitrary inverse-design solutions with no interpretable pattern. Produce a physics-grounded explanation suitable for a paper section.
