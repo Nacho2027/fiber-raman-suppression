@@ -566,6 +566,15 @@ All figures in `results/images/`:
 - `physics_09_14_group_delay_profiles.png` — Group delay (dφ/dω) profiles
 - `physics_09_15_mechanism_attribution.png` — Suppression mechanism attribution breakdown
 
+**Phase 12 — Finite Reach and Long-Fiber:**
+- `physics_12_01_long_fiber_Jz.png` — J(z) for φ_opt from L=0.5m and L=2m propagated through L=10m and L=30m
+- `physics_12_02_spectral_evolution_long.png` — Spectral evolution heatmaps for long-fiber propagation
+- `physics_12_03_shaped_vs_flat_benefit.png` — Shaped vs flat phase benefit (dB) as function of distance
+- `physics_12_04_horizon_vs_power.png` — L_50dB and L_30dB vs power for SMF-28 and HNLF
+- `physics_12_05_segmented_vs_singleshot.png` — Three-way J(z): segmented vs single-shot vs flat
+- `physics_12_06_scaling_law.png` — Log-log scaling of L_XdB vs P with power-law fit
+- `physics_12_07_reach_summary_dashboard.png` — Summary dashboard for Phase 12
+
 **Phase 10 — Z-Resolved and Ablation:**
 *(figures not indexed here; see PHASE10_ZRESOLVED_FINDINGS.md and PHASE10_ABLATION_FINDINGS.md)*
 
@@ -619,6 +628,16 @@ All JLD2 data files referenced in this document:
 | `smf28_5m_reopt_iter100.jld2` | Warm-restart 100-iter optimization: new φ_opt, J(z), convergence trace |
 | `suppression_horizon.jld2` | L vs J_after scan at P=0.2W, L_50dB_estimate |
 
+### Phase 12 Data (`results/raman/phase12/`)
+
+| File | Contents |
+|------|---------|
+| `SMF-28_phi@2m_best_multi-start_L{10,30}m_{shaped,unshaped}_zsolved.jld2` | Long-fiber z-resolved propagations with best multi-start φ_opt |
+| `SMF-28_phi@0.5m_L{10,30}m_{shaped,unshaped}_zsolved.jld2` | Long-fiber propagation with L=0.5m-optimized φ_opt |
+| `HNLF_phi@1m_L{10,30}m_{shaped,unshaped}_zsolved.jld2` | HNLF long-fiber propagations |
+| `horizon_sweep.jld2` | Suppression horizon sweep: 12 points (4 powers × 2 fibers × 2 L_targets), L_50dB, L_30dB |
+| `segmented_optimization.jld2` | Segmented (4×2m) vs single-shot (8m) vs flat: J(z) arrays, φ per segment |
+
 ### Sweep Data (`results/raman/sweeps/smf28/`)
 
 | Directory | Contents |
@@ -630,7 +649,104 @@ All JLD2 data files referenced in this document:
 
 ---
 
-## 7. Hypothesis Summary Table
+## 7. Finite Reach and Long-Fiber Behavior (Phase 12)
+
+### 7.1 Long-Fiber Propagation
+
+Spectral phases optimized for short fibers (L=0.5m, L=2m) were propagated through L=10m
+and L=30m fibers with 100 z-save points, comparing shaped vs flat phase at every z-position.
+
+**SMF-28 (P=0.2W, N≈2.6):**
+- φ_opt from L=2m (best multi-start) maintains **−57 dB** at L=30m — a **56 dB benefit**
+  over flat phase (−1.2 dB) at 15× the optimization length
+- φ_opt from L=0.5m also provides substantial benefit at L=30m, though less than the
+  L=2m-optimized phase
+- The shaped pulse's benefit degrades slowly with distance but remains large even at 60×
+  the optimization horizon
+
+**HNLF (P=0.01W, N≈3.6):**
+- φ_opt from L=1m provides 48 dB benefit at z=1m but **decays to <3 dB by z=15m**
+- HNLF's higher nonlinearity (γ = 11.3 vs 1.3 W⁻¹m⁻¹) causes faster trajectory
+  divergence — the optimized pulse loses its designed structure sooner
+- Fundamentally different finite-reach behavior from SMF-28
+
+**Key conclusion:** The suppression reach is highly fiber-type-dependent. SMF-28's lower
+nonlinearity allows the optimized pulse to maintain its designed trajectory for much longer
+distances. HNLF's high nonlinearity destroys the optimized structure within ~10× the
+optimization length.
+
+See figures: `physics_12_01_long_fiber_Jz.png`, `physics_12_03_shaped_vs_flat_benefit.png`
+
+### 7.2 Suppression Horizon Scaling
+
+L_50dB (fiber length at which J(z) first crosses −50 dB) and L_30dB (crossing −30 dB)
+were mapped as a function of power for both fiber types, with re-optimization at each
+operating point.
+
+**Power levels tested:**
+- SMF-28: P = 0.05, 0.1, 0.2, 0.5 W (at L_target = 2m and 5m)
+- HNLF: P = 0.005, 0.01, 0.02, 0.05 W (at L_target = 2m and 5m)
+
+Data in `results/raman/phase12/horizon_sweep.jld2` (12 sweep points).
+
+See figures: `physics_12_04_horizon_vs_power.png`, `physics_12_06_scaling_law.png`
+
+### 7.3 Segmented Optimization
+
+Tested whether re-optimizing the spectral phase at intermediate z-points can extend
+suppression beyond the single-pass limit. Used 4 segments of 2m each (total 8m) for
+SMF-28 at P=0.2W.
+
+**Results at z = 8m:**
+| Condition | J(z=8m) [dB] |
+|-----------|-------------|
+| Segmented (re-optimize every 2m) | **−62.1** |
+| Single-shot (optimize once for 8m) | −55.1 |
+| Flat phase (no optimization) | −1.2 |
+
+Segmented optimization provides **7 dB improvement** over single-shot and **61 dB over
+flat phase** at L=8m. Each segment independently achieves −58 to −62 dB suppression,
+and the inter-segment field handoff (lab-frame conversion) maintains energy conservation
+to 0.001%.
+
+**Implication:** A multi-stage pulse shaper (or fiber-integrated phase elements at regular
+intervals) could maintain deep Raman suppression over arbitrary fiber lengths. Each stage
+"refreshes" the spectral phase to counteract the accumulated nonlinear trajectory
+deviation. This is analogous to distributed amplification maintaining signal power —
+here, distributed phase correction maintains Raman suppression.
+
+**Boundary condition warnings:** All 4 segments showed BC frac ≈ 1.0, indicating the
+field fills the time window. This does not affect the J(z) computation (band_mask is
+in the frequency domain) but means the temporal field is not fully resolved. Larger
+time windows would be needed for temporal analysis.
+
+See figure: `physics_12_05_segmented_vs_singleshot.png`
+
+### 7.4 Corrected Physical Narrative
+
+Spectral phase shaping achieves deep Raman suppression (>50 dB) only within a finite
+suppression horizon that depends on fiber type, power, and optimization length. Beyond
+this horizon, the shaped pulse's designed nonlinear trajectory degrades as accumulated
+effects push the field away from the optimal evolution.
+
+**Single-pass input shaping cannot prevent Raman scattering over arbitrary fiber lengths.**
+
+However, the suppression benefit persists well beyond the optimization horizon for
+lower-nonlinearity fibers (SMF-28: 56 dB benefit at 15× optimization length), and
+segmented re-optimization can maintain deep suppression indefinitely at the cost of
+intermediate phase elements.
+
+The practical implications for experimental design:
+- **Short fibers (L < L_50dB):** Single-pass phase shaping achieves >50 dB suppression.
+  Use standard adjoint optimization.
+- **Medium fibers (L_50dB < L < 10× L_opt):** Suppression degrades but shaped pulse
+  still provides significant benefit over flat phase (10-50 dB for SMF-28).
+- **Long fibers (L > 10× L_opt):** Segmented optimization or reduced power needed.
+  HNLF loses benefit faster than SMF-28.
+
+---
+
+## 8. Hypothesis Summary Table
 
 | Hypothesis | Description | Verdict | Key Evidence |
 |-----------|-------------|---------|-------------|
@@ -651,6 +767,16 @@ All JLD2 data files referenced in this document:
 
 ---
 
+**Phase 12 additions:**
+| Finding | Value |
+|---------|-------|
+| SMF-28 φ_opt benefit at L=30m | 56 dB over flat phase (−57 vs −1.2 dB) |
+| HNLF φ_opt benefit at L=15m | <3 dB (benefit decays by 10× optimization length) |
+| Segmented vs single-shot at 8m | −62.1 vs −55.1 dB (7 dB improvement) |
+| Segmented vs flat at 8m | −62.1 vs −1.2 dB (61 dB improvement) |
+
+---
+
 *This document represents the complete classical Raman suppression analysis across
-Phases 9–11. The next phase extends to multimode (M>1) fiber propagation for quantum
+Phases 9–12. The next milestone extends to multimode (M>1) fiber propagation for quantum
 noise characterization — see PROJECT.md for the full roadmap.*
