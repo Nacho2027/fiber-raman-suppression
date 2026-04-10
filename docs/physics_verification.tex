@@ -251,4 +251,50 @@ $\phi_\text{NL}$, L209 divides by $T_0$ to get Eq.~(\ref{eq:domega_spm}), L210
 applies Eq.~(\ref{eq:dt_spm}), and L213--214 sums walk-off plus SPM with a
 safety factor of 2.
 
+\section{Verification of the adjoint gradient via Taylor remainder}
+
+A correct gradient $\nabla J$ satisfies Taylor's theorem
+\begin{equation}
+  J(\varphi + \epsilon\,\delta\varphi)
+  \;=\; J(\varphi) + \epsilon\,\langle \nabla J,\,\delta\varphi\rangle
+        + \tfrac{1}{2}\,\epsilon^2\,\langle H\,\delta\varphi,\,\delta\varphi\rangle
+        + O(\epsilon^3),
+  \label{eq:taylor_expansion}
+\end{equation}
+where $H$ is the Hessian of $J$ at $\varphi$. Subtracting the linear
+approximation gives the \emph{Taylor remainder}
+\begin{equation}
+  R(\epsilon) \;\equiv\;
+  \bigl|\,J(\varphi + \epsilon\,\delta\varphi) - J(\varphi)
+        - \epsilon\,\langle \nabla J,\,\delta\varphi\rangle\,\bigr|
+  \;=\; \tfrac{1}{2}\,\epsilon^2\,|\langle H\,\delta\varphi,\,\delta\varphi\rangle|
+        + O(\epsilon^3).
+  \label{eq:taylor_remainder}
+\end{equation}
+So $R(\epsilon) \propto \epsilon^2$ as $\epsilon \to 0$, and
+$\log R$ versus $\log \epsilon$ has slope exactly $2$ if $\nabla J$ is correct.
+
+If instead the numerical gradient has a bias,
+$\nabla J_\text{num} = \nabla J + b$, then
+\begin{equation}
+  R_\text{num}(\epsilon)
+  \;=\; \bigl|\epsilon\,\langle b,\,\delta\varphi\rangle
+        + \tfrac{1}{2}\epsilon^2\,\langle H\delta\varphi,\delta\varphi\rangle
+        + \cdots\bigr|,
+  \label{eq:taylor_biased}
+\end{equation}
+and the $\epsilon$ term dominates at small $\epsilon$, producing a log-log
+slope of $1$ instead of $2$. This converts the qualitative question ``is my
+adjoint correct?'' into a quantitative measurement of a single number.
+
+\paragraph{Implementation.} At $N_t = 2^{14}$, $L_\text{fiber} = 0.1\,\mathrm{m}$,
+we evaluate $R(\epsilon)$ for $\epsilon \in \{10^0, 10^{-1}, 10^{-2}, 10^{-3}\}$
+against a randomly drawn unit-norm direction $\delta\varphi$, using
+\texttt{cost\_and\_gradient} from \texttt{scripts/raman\_optimization.jl} L50
+for both the linear term (one forward+adjoint solve) and each perturbed forward
+solve. Code: \texttt{scripts/verification.jl} L271--330. Measured slopes
+between consecutive $\epsilon$ pairs: $2.01$, $2.07$, $2.09$ — all within the
+acceptance band $[1.4, 2.6]$, confirming the hand-derived adjoint of Section~2
+has no first-order bias.
+
 \end{document}
