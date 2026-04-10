@@ -1,851 +1,262 @@
-\documentclass[11pt,letterpaper]{article}
-
-% Page layout
-\usepackage[letterpaper,margin=1in]{geometry}
-\usepackage{parskip}
-
-% Math
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
 \usepackage{physics}
-\usepackage{bm}
-
-% Code listings for line-number references
-\usepackage{listings}
-\usepackage{xcolor}
-\lstset{
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  frame=single,
-  backgroundcolor=\color{gray!8},
-  keywordstyle=\color{blue!70!black}\bfseries,
-  commentstyle=\color{green!40!black}\itshape,
-  stringstyle=\color{red!60!black},
-  numbers=left,
-  numberstyle=\tiny\color{gray},
-  numbersep=5pt,
-  tabsize=2,
-  showstringspaces=false,
-  language=Python,
-}
-
-% Typography
-\usepackage{microtype}
+\usepackage{parskip}
 \usepackage[hidelinks]{hyperref}
-\usepackage{enumitem}
 
-% Custom environments
-\usepackage[most]{tcolorbox}
-\newtcolorbox{verifybox}[1][]{
-  colback=blue!5,
-  colframe=blue!50!black,
-  boxrule=0.8pt,
-  arc=2pt,
-  left=6pt,right=6pt,top=4pt,bottom=4pt,
-  title={#1}
-}
+\title{Physics Derivations for Fiber Raman Suppression}
+\author{}
+\date{}
 
-\newcommand{\code}[1]{\texttt{\small #1}}
-\newcommand{\file}[1]{\texttt{\small\color{blue!60!black}#1}}
-\newcommand{\line}[1]{\texttt{\small L#1}}
-
-\title{\bfseries Physics Verification Document \\[0.3em]
-  \large Equations to Verify for the Fiber Raman Suppression Project}
-\author{For the physics review}
-\date{\today}
+\newcommand{\uhat}{\hat{u}}
+\newcommand{\utilde}{\tilde{u}}
 
 \begin{document}
-
 \maketitle
 
-\begin{verifybox}[How to read this document]
-Each section states a physics equation we use, cites where it comes from in the
-standard literature, and points to the exact file and line number where it is
-implemented in code. The intent is to let you verify, by eye, that the code
-and the physics agree. Only physics equations are included here --- optimization
-and machine-learning material is in a separate document.
-\end{verifybox}
-
-\tableofcontents
-\vspace{1em}
-\hrule
-
-\section{Notation and Conventions}
-
-\begin{itemize}[leftmargin=*]
-\item $u(z,t)$: slowly-varying electric field envelope in the co-moving frame, units $\sqrt{\mathrm{W}}$. Depends on propagation distance $z$ and retarded time $t$.
-\item $\hat{u}(z,\omega)$: Fourier transform of $u(z,t)$ in time, units $\sqrt{\mathrm{W}}\cdot\mathrm{s}$.
-\item $\tilde{u}(z,\omega)$: interaction-picture field, related to $\hat{u}$ by a dispersive phase (\S\ref{sec:interaction}).
-\item $\omega_0 = 2\pi c / \lambda_0$: carrier angular frequency. For $\lambda_0 = 1550\,\mathrm{nm}$, $\omega_0 \approx 1.216 \times 10^{15}\,\mathrm{rad/s}$.
-\item $\beta_n = \left.\dd[n]{\beta}{\omega}\right|_{\omega_0}$: $n$-th order dispersion coefficient of the propagation constant $\beta(\omega)$ about $\omega_0$.
-\item $\gamma$: effective nonlinear coefficient, units $\mathrm{W}^{-1}\mathrm{m}^{-1}$.
-\item $f_R$: fractional Raman contribution (dimensionless), $f_R = 0.18$ for silica.
-\item $h_R(t)$: Raman response function, units $\mathrm{s}^{-1}$, causal ($h_R(t)=0$ for $t<0$).
-\item $\mathcal{F}$, $\mathcal{F}^{-1}$: forward and inverse Fourier transforms in time.
-\item $\ast$: temporal convolution.
-\end{itemize}
-
-\textbf{Code convention:} the code uses an inverted FFT sign convention. Specifically
-$\hat{u} = \mathcal{F}^{-1}[u]$, so $u = \mathcal{F}[\hat{u}]$ in the code. This does
-not change any physical equation --- it only affects where you write \code{fft} vs.\
-\code{ifft}. Throughout this document, physics equations are written in the standard
-convention; the code-convention note is only relevant when comparing the two.
-
-\section{The Generalized Nonlinear Schr\"{o}dinger Equation}
-\label{sec:gnlse}
-
-\subsection{Lab-frame form}
-
-The field envelope $u(z,t)$ propagates through a lossless single-mode fiber according
-to the generalized nonlinear Schr\"{o}dinger equation (GNLSE) with dispersion, Kerr
-nonlinearity, Raman response, and self-steepening. In the frequency domain it reads:
-\begin{equation}
-  \pdv{\hat{u}(z,\omega)}{z}
-  = iD(\omega)\,\hat{u}(z,\omega)
-  + i\gamma\,\frac{\omega}{\omega_0}\,
-    \mathcal{F}\!\left[
-      (1-f_R)\,|u|^2\,u \;+\; f_R\,\bigl(h_R \ast |u|^2\bigr)\,u
-    \right].
-  \label{eq:gnlse_lab}
-\end{equation}
-
-This is Agrawal, \textit{Nonlinear Fiber Optics} 6th ed., Eq.~(2.3.36), specialized
-to the single-mode case. The left-hand side is the rate of change of the complex
-spectrum along the fiber. The right-hand side has two pieces:
-\begin{enumerate}[leftmargin=*]
-\item \textbf{Linear dispersion} $iD(\omega)\hat{u}$, where
-\begin{equation}
-  D(\omega) \;=\; \sum_{n \ge 2} \frac{\beta_n}{n!}\,(\omega - \omega_0)^n,
-  \label{eq:D_of_omega}
-\end{equation}
-excluding $\beta_0$ (absolute phase, unphysical) and $\beta_1$ (group velocity,
-absorbed into the co-moving frame).
-
-\item \textbf{Nonlinear response} with two sub-pieces: an instantaneous Kerr term
-$(1-f_R)\,|u|^2 u$ and a delayed Raman term $f_R\,(h_R \ast |u|^2)\,u$, both scaled
-by $\gamma$ and by the self-steepening factor $\omega/\omega_0$.
-\end{enumerate}
-
-\begin{verifybox}[Please verify]
-(a) The dispersion operator excludes $\beta_0$ and $\beta_1$. \\
-(b) The nonlinear response is Kerr$+$Raman with $f_R=0.18$ splitting. \\
-(c) The self-steepening prefactor is $\omega/\omega_0$, not $(1+\omega/\omega_0)$.
-This is equivalent to Agrawal's form under the carrier-absorbing transformation
-and is the convention used throughout the code.
-\end{verifybox}
-
-\subsection{Interaction-picture form (what the code actually integrates)}
-\label{sec:interaction}
-
-The dispersion term $iD(\omega)\hat{u}$ is stiff: it produces rapid phase oscillations
-that force the ODE solver to take tiny steps. We remove it analytically via the
-interaction-picture transformation:
-\begin{equation}
-  \tilde{u}(z,\omega) \;=\; e^{-iD(\omega)\,z}\,\hat{u}(z,\omega).
-  \label{eq:ip_transform}
-\end{equation}
-
-Substituting into Eq.~\eqref{eq:gnlse_lab} and simplifying, the linear term cancels
-and we are left with the reduced ODE that the code integrates:
-\begin{equation}
-  \boxed{\;
-    \dv{\tilde{u}(z,\omega)}{z}
-    \;=\; i\,e^{-iD(\omega)\,z}\,\frac{\omega}{\omega_0}\,
-      \mathcal{F}\!\left[
-        \gamma\,(1-f_R)\,|u|^2 u
-        \;+\; \gamma\,\bigl(h_R \ast |u|^2\bigr)\,u
-      \right]\;}
-  \label{eq:gnlse_ip}
-\end{equation}
-where $u(z,t)$ inside the brackets is the time-domain \emph{lab-frame} field,
-reconstructed from $\tilde{u}$ via
-\begin{equation}
-  u(z,t) \;=\; \mathcal{F}^{-1}\!\Bigl[\,e^{+iD(\omega)\,z}\,\tilde{u}(z,\omega)\,\Bigr].
-  \label{eq:ip_inverse}
-\end{equation}
-
-\paragraph{Why the interaction picture helps.} The linear dispersion causes frequency
-components to acquire phase at the rate $D(\omega)$. For typical SMF-28 over 1\,m
-of propagation, $D(\omega)L \sim 100$ radians at the edge of the signal band. A
-direct integrator would need thousands of sub-steps to resolve this phase. In the
-interaction picture, the linear phase is handled analytically by
-Eq.~\eqref{eq:ip_inverse}, and the solver only needs to resolve the much slower
-nonlinear dynamics --- typically hundreds of steps per meter instead of millions.
-
-\subsection{Code implementation}
-
-The reduced ODE Eq.~\eqref{eq:gnlse_ip} is the right-hand side of the ODE solver.
-The function is \code{disp\_mmf!} in \file{src/simulation/simulate\_disp\_mmf.jl},
-lines 25--61.
-
-\begin{lstlisting}[caption={\file{src/simulation/simulate\_disp\_mmf.jl} L25--L61},firstnumber=25]
-function disp_mmf!(dũω, ũω, p, z)
-    selfsteep, Dω, γ, hRω, one_m_fR, attenuator, ..., = p
-
-    @. exp_D_p = cis(Dω * z)                        # L28:  e^{+iDz}
-    @. exp_D_m = cis(-Dω * z)                       # L29:  e^{-iDz}
-
-    @. uω = exp_D_p * ũω                            # L31:  lab frame (Eq. 4)
-
-    fft_plan_M! * uω                                # L33:  -> time domain
-    @. ut = attenuator * uω                         # L34:  boundary window
-    @. v = real(ut)
-    @. w = imag(ut)
-
-    # Kerr: η_K = (1-fR) γ |u|^2 u
-    @tullio δKt[t,i,j] = γ[i,j,k,l]*(v[t,k]*v[t,l] + w[t,k]*w[t,l])   # L39
-    @tullio αK[t,i] = δKt[t,i,j] * v[t,j]           # L40
-    @tullio βK[t,i] = δKt[t,i,j] * w[t,j]           # L41
-    @. ηKt = αK + 1im * βK                          # L42
-    @. ηKt *= one_m_fR                              # L43:  (1-fR) factor
-
-    # Raman: η_R = γ (h_R * |u|^2) u
-    @. δKt_cplx = ComplexF64(δKt, 0.0)              # L46
-    fft_plan_MM! * δKt_cplx                         # L47:  -> freq for convolution
-    @. hRω_δRω = hRω * δKt_cplx                     # L48:  freq-domain convolution
-    ifft_plan_MM! * hRω_δRω                         # L49:  -> back to time
-    fftshift!(hR_conv_δR, hRω_δRω, 1)               # L50
-    @. δRt = real(hR_conv_δR)
-    @tullio αR[t,i] = δRt[t,i,j] * v[t,j]           # L52
-    @tullio βR[t,i] = δRt[t,i,j] * w[t,j]           # L53
-    @. ηRt = αR + 1im * βR
-
-    @. ηt = ηKt + ηRt                               # L57:  Kerr + Raman
-    ifft_plan_M! * ηt                               # L58:  -> freq
-    ηt .*= selfsteep                                # L59:  ω/ω₀ factor
-    @. dũω = 1im * exp_D_m * ηt                     # L60:  i * e^{-iDz} * (...)
-end
-\end{lstlisting}
-
-Line-by-line correspondence:
-\begin{itemize}[leftmargin=*]
-\item \line{28--29}: the two phase factors $e^{\pm iDz}$ from Eqs.~\eqref{eq:ip_transform}, \eqref{eq:ip_inverse}.
-\item \line{31}: inverse interaction-picture transform, Eq.~\eqref{eq:ip_inverse} in the frequency domain.
-\item \line{33}: FFT to time to evaluate the nonlinear response pointwise.
-\item \line{39}: Kerr operator $\delta_K = \gamma\,|u|^2$ via the contraction $\gamma_{ijkl}(v_k v_l + w_k w_l)$ with $v = \Re u$, $w = \Im u$.
-\item \line{43}: factor $(1-f_R)$ on the Kerr term (this is the $(1-f_R)$ in Eq.~\eqref{eq:gnlse_ip}).
-\item \line{48}: frequency-domain Raman convolution $\widehat{h_R}\cdot\widehat{|u|^2}$, which becomes $h_R\ast|u|^2$ in time.
-\item \line{59}: self-steepening factor $\omega/\omega_0$ (the array \code{selfsteep} is built once at setup from $\omega_s/\omega_0$).
-\item \line{60}: the overall factor $i\,e^{-iDz}$ of Eq.~\eqref{eq:gnlse_ip}.
-\end{itemize}
-
-\begin{verifybox}[Please verify]
-Does the sequence of operations on lines 28--60 correctly assemble
-Eq.~\eqref{eq:gnlse_ip}? The key points are: (i) the lab-frame field on line 31
-is exactly Eq.~\eqref{eq:ip_inverse}, (ii) the Kerr factor on line 43 is $(1-f_R)$
-with no additional scaling, (iii) the Raman convolution on line 48 is in
-frequency domain, (iv) the self-steepening on line 59 uses $\omega/\omega_0$, and
-(v) the final $i\,e^{-iDz}$ on line 60 closes the loop back to the
-interaction-picture derivative.
-\end{verifybox}
-
-\section{Dispersion Operator}
-\label{sec:dispersion}
-
-The dispersion operator $D(\omega)$ is the Taylor expansion of the propagation
-constant $\beta(\omega)$ about $\omega_0$, with $\beta_0$ and $\beta_1$ removed:
-\begin{equation}
-  D(\omega)
-  \;=\; \beta(\omega) - \beta(\omega_0) - \beta_1\,(\omega - \omega_0)
-  \;=\; \sum_{n=2}^{N_\beta}\frac{\beta_n}{n!}\,(\omega - \omega_0)^n.
-  \label{eq:D_taylor}
-\end{equation}
-In the code, we set $\Omega \equiv \omega - \omega_0$ and work with the FFT-domain
-angular frequency grid $\Omega = 2\pi\,\Delta f$.
-
-\paragraph{Fiber parameters used.} The two presets are defined in
-\file{scripts/common.jl}, lines 47--76:
-\begin{center}\small
-\begin{tabular}{lcc}
-\toprule
-Preset & $\gamma$ [W$^{-1}$m$^{-1}$] & $\beta_2$, $\beta_3$ [SI] \\
-\midrule
-\code{:SMF28}  & $1.1 \times 10^{-3}$  & $(-2.17\times 10^{-26},\;1.2\times 10^{-40})$ \\
-\code{:HNLF}   & $1.0 \times 10^{-2}$  & $(-5.0\times 10^{-27},\;1.0\times 10^{-40})$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Operator construction.} The dispersion operator is built once at setup in
-\code{get\_disp\_fiber\_params\_user\_defined}, \file{src/helpers/helpers.jl},
-lines 161--193. Line 187 is the operative line:
-\begin{lstlisting}[caption={\file{src/helpers/helpers.jl} L185--L188},firstnumber=185]
-β_tail = vcat(collect(betas_user), zeros(β_order-1 - length(betas_user)))
-βn_ω   = reshape(vcat([0.0, 0.0], β_tail), :, 1)        # [0, 0, β₂, β₃, ...]
-Dω     = hcat([(2π*fftfreq(Nt, 1/Δt)*1e12).^n / factorial(n)
-                 for n in 0:β_order]...) * βn_ω
-\end{lstlisting}
-The two leading zeros are $\beta_0$ and $\beta_1$ respectively. The tail is
-$[\beta_2,\beta_3,\ldots]$. The Vandermonde-style matrix multiplication is exactly
-the sum in Eq.~\eqref{eq:D_taylor} evaluated at every grid point $\Omega_k$.
-
-\begin{verifybox}[Please verify]
-(a) The leading two entries of \code{$\beta$n\_\omega$} are zero
-(co-moving frame, no absolute phase). \\
-(b) The third entry is $\beta_2$ with the sign from Table above. \\
-(c) The frequency grid used is $(\omega - \omega_0) = 2\pi\,\Delta f$, i.e.\ \emph{offset} from the carrier.
-\end{verifybox}
-
-\section{Raman Response Function}
-\label{sec:raman}
-
-The delayed Raman response is modeled by the Blow--Wood single-oscillator form
-(Agrawal Eq.~2.3.40):
-\begin{equation}
-  h_R(t) \;=\; \frac{\tau_1^2 + \tau_2^2}{\tau_1\,\tau_2^2}\,
-               e^{-t/\tau_2}\,\sin\!\left(\frac{t}{\tau_1}\right)\,\Theta(t),
-  \label{eq:hR_blow_wood}
-\end{equation}
-where $\Theta(t)$ is the Heaviside step function (enforcing causality: the glass
-cannot respond before the excitation arrives), and the time constants for fused
-silica are
-\begin{equation}
-  \tau_1 = 12.2\,\mathrm{fs}, \qquad \tau_2 = 32\,\mathrm{fs}.
-\end{equation}
-The factor $(\tau_1^2+\tau_2^2)/(\tau_1\tau_2^2)$ is a normalization such that
-$\int_0^\infty h_R(t)\,dt = 1$.
-
-\paragraph{Code implementation.} \file{src/helpers/helpers.jl}, lines 181--183
-(for user-defined single-mode fibers; there is a structurally identical copy at
-L106--L108 for the GRIN path):
-\begin{lstlisting}[caption={\file{src/helpers/helpers.jl} L181--L183},firstnumber=181]
-ts_pos = max.(ts, 0.0)
-hRt = fR * Δt * 1e3 * (τ1^2 + τ2^2) / (τ1 * τ2^2) .*
-      exp.(-ts_pos * 1e15 / τ2) .* sin.(ts_pos * 1e15 / τ1) .*
-      (sign.(ts) .+ 1) / 2
-hRω = fft(hRt)
-\end{lstlisting}
-
-Two things to notice:
-\begin{itemize}[leftmargin=*]
-\item The factor \code{(sign(ts) + 1)/2} is the Heaviside step $\Theta(t)$. It equals $1$ for $t>0$, $0$ for $t<0$, and $1/2$ at $t=0$.
-\item The \code{max(ts, 0.0)} on line 181 is a numerical-stability guard, not physics. Without it, the \code{exp(-t/$\tau_2$)} factor would overflow \code{Float64} for negative $t$ (where $e^{|t|/\tau_2}$ diverges) even though the Heaviside would then multiply it by zero. Pre-clamping $t$ to $\max(t,0)$ makes the intermediate quantity finite. The result is mathematically identical to Eq.~\eqref{eq:hR_blow_wood}.
-\end{itemize}
-
-\begin{verifybox}[Please verify]
-(a) The Blow--Wood form matches your expectation for $h_R(t)$ in silica. \\
-(b) The Heaviside factor is correctly present (causality). \\
-(c) The $\max(t,0)$ clamp is a numerical artifact only; it does not change
-any non-zero value of $h_R$.
-\end{verifybox}
-
-\section{Initial Pulse Shape}
-\label{sec:initial_pulse}
-
-All simulations use a sech$^2$ pulse at $\lambda_0 = 1550\,\mathrm{nm}$ with
-$\mathrm{FWHM} = 185\,\mathrm{fs}$. The time-domain envelope is
-\begin{equation}
-  u(0,t) \;=\; \sqrt{P_\text{peak}}\,\sech\!\left(\frac{t}{T_0}\right),
-  \qquad T_0 = \frac{\mathrm{FWHM}}{1.7627},
-  \label{eq:sech_pulse}
-\end{equation}
-where $1.7627 = 2\,\operatorname{arcosh}\sqrt{2}$. The intensity
-$|u|^2 = P_\text{peak}\sech^2(t/T_0)$ has the desired full-width at half-maximum.
-
-The simulation works with average power $P_\text{cont}$ (easier to specify
-experimentally). The conversion is
-\begin{equation}
-  P_\text{peak} \;=\; 0.881374 \times \frac{P_\text{cont}}{\mathrm{FWHM}\,\cdot\,f_\text{rep}},
-  \label{eq:peak_power}
-\end{equation}
-where $0.881374 = \int_{-\infty}^\infty \sech^2(x)\,dx \,/\,(2\,\operatorname{arcosh}\sqrt{2})$
-is the sech$^2$ shape factor for converting peak-to-average.
-
-\paragraph{Code implementation.} \file{src/simulation/simulate\_disp\_mmf.jl},
-lines 135--152:
-\begin{lstlisting}[caption={\file{src/simulation/simulate\_disp\_mmf.jl} L142--L150},firstnumber=142]
-elseif pulse_form == "sech_sq"
-    τ = fwhm / 1.7627                                      # L143:  T_0
-    u0_norm .= sech.(-ts / τ)                              # L144
-    P_peak = 0.881374 * P_cont / fwhm / rep_rate           # L145:  Eq. (10)
-end
-u0_norm .*= u0_modes'
-u0_norm /= √maximum(sum(abs2.(u0_norm), dims=2))           # L148:  renormalize to peak = 1
-ut0 = u0_norm * √P_peak                                    # L149:  scale to √P_peak
-uω0 = ifft(ut0, 1)                                         # L150:  to frequency domain
-\end{lstlisting}
-
-\paragraph{Soliton number.} A key derived quantity is the soliton number
-\begin{equation}
-  N \;=\; \sqrt{\frac{\gamma\,P_\text{peak}\,T_0^2}{|\beta_2|}}.
-  \label{eq:N_soliton}
-\end{equation}
-Across our sweeps, $N$ ranges from $\approx 1.3$ to $\approx 6.3$, spanning the
-single-soliton and few-soliton regimes. This formula appears in
-\file{scripts/common.jl} line 457:
-\begin{lstlisting}[caption={\file{scripts/common.jl} L454--L457},firstnumber=454]
-β2 = betas_user[1]
-T0 = pulse_fwhm / (2 * acosh(sqrt(2)))
-P_peak = P_cont / (pulse_fwhm * pulse_rep_rate)
-N_sol  = sqrt(gamma_user * P_peak * T0^2 / abs(β2))
-\end{lstlisting}
-
-\begin{verifybox}[Please verify]
-(a) The sech$^2$ envelope matches Eq.~\eqref{eq:sech_pulse} including the
-$T_0 = \mathrm{FWHM}/1.7627$ relation. \\
-(b) The peak-to-average factor $0.881374$ on line 145 matches your pulse-shape
-convention. \\
-(c) The soliton number on line 457 matches the standard definition.
-\end{verifybox}
-
-\section{Cost Functional (Physical Interpretation)}
-\label{sec:cost}
-
-The optimization minimizes the fractional spectral energy in a defined Raman band:
-\begin{equation}
-  J \;=\; \frac{E_\text{band}}{E_\text{total}}
-      \;=\; \frac{\displaystyle\int_\text{band} |\hat{u}(L,\omega)|^2\,d\omega}
-                  {\displaystyle\int_{-\infty}^{\infty}|\hat{u}(L,\omega)|^2\,d\omega}
-  \;\in\;[0,1].
-  \label{eq:cost_continuous}
-\end{equation}
-The ``band'' is defined as all FFT bins with frequency offset $\Delta f < -13\,\mathrm{THz}$
-relative to the carrier, which captures the Stokes-shifted Raman content. The
-definition is the same for both fibers.
-
-On the discrete grid, this becomes
-\begin{equation}
-  J \;=\; \frac{\sum_{k \in \mathcal{B}} |\hat{u}_k|^2}
-                {\sum_{k=1}^{N_t} |\hat{u}_k|^2},
-  \label{eq:cost_discrete}
-\end{equation}
-where $\mathcal{B}$ is the set of spectral bins in the Raman band.
-
-\paragraph{Code implementation.} \file{scripts/common.jl}, lines 260--276:
-\begin{lstlisting}[caption={\file{scripts/common.jl} L260--L276},firstnumber=260]
-function spectral_band_cost(uωf, band_mask)
-    @assert size(uωf,1) == length(band_mask)
-    @assert any(band_mask)
-    @assert sum(abs2.(uωf)) > 0
-
-    E_band  = sum(abs2.(uωf[band_mask, :]))        # L266
-    E_total = sum(abs2.(uωf))                      # L267
-    J       = E_band / E_total                     # L268
-    dJ      = uωf .* (band_mask .- J) ./ E_total   # L269: terminal adjoint
-
-    @assert 0 ≤ J ≤ 1
-    @assert all(isfinite, dJ)
-    return J, dJ
-end
-\end{lstlisting}
-
-The second return value \code{dJ} is the terminal condition for the adjoint
-sensitivity equation; it is the derivative of $J$ with respect to $\hat{u}^*(L,\omega)$,
-which you can derive by differentiating Eq.~\eqref{eq:cost_discrete}.
-
-\begin{verifybox}[Please verify]
-(a) The cost is energy-fractional and dimensionless, bounded in $[0,1]$. \\
-(b) The Raman band threshold of $-13\,\mathrm{THz}$ correctly captures
-the Stokes shift in silica. \\
-(c) The gradient expression on line 269 is the correct derivative
-$\partial J / \partial \hat{u}^*(L)$.
-\end{verifybox}
-
-\section{Forward Propagation Solver}
-\label{sec:solver}
-
-The ODE Eq.~\eqref{eq:gnlse_ip} is integrated from $z = 0$ to $z = L$ using
-Julia's \code{DifferentialEquations.jl}. We use \code{Tsit5} (Tsitouras'
-5th-order Runge--Kutta method) with relative tolerance $10^{-8}$.
-
-\file{src/simulation/simulate\_disp\_mmf.jl}, lines 176--198:
-\begin{lstlisting}[caption={\file{src/simulation/simulate\_disp\_mmf.jl} L176--L198},firstnumber=176]
-function solve_disp_mmf(uω0, fiber, sim)
-    p_disp_mmf = get_p_disp_mmf(..., sim["attenuator"])                # L177
-    prob_disp_mmf = ODEProblem(disp_mmf!, uω0, (0, fiber["L"]), p_disp_mmf)  # L179
-
-    if isnothing(fiber["zsave"])
-        sol = solve(prob_disp_mmf, Tsit5(), reltol=1e-8)               # L182
-        return Dict("ode_sol" => sol)
-    else
-        sol = solve(prob_disp_mmf, Tsit5(), reltol=1e-8,
-                     saveat=fiber["zsave"])                            # L186
-        uω_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
-        ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
-        for i in 1:length(fiber["zsave"])
-            uω_z[i,:,:] = cis.(fiber["Dω"]*fiber["zsave"][i]) .* sol(fiber["zsave"][i])
-            ut_z[i,:,:] = fft(uω_z[i,:,:], 1)
-        end
-        return Dict("ode_sol"=>sol, "uω_z"=>uω_z, "ut_z"=>ut_z)
-    end
-end
-\end{lstlisting}
-
-Line 192 converts the interaction-picture field $\tilde{u}$ back to the lab frame
-by multiplying by $e^{+iD(\omega)z}$, which is the inverse of the transformation in
-Eq.~\eqref{eq:ip_transform}.
-
-\paragraph{Boundary condition: super-Gaussian window.} To prevent FFT wraparound,
-a super-Gaussian window of order 30 is applied to the time-domain field on every
-RHS evaluation (line 34 of \code{disp\_mmf!}). This is a soft absorbing boundary
-condition --- it attenuates field content that approaches the edge of the time
-window. The window is built in \code{get\_disp\_sim\_params},
-\file{src/helpers/helpers.jl} lines 59--63:
-\begin{lstlisting}[caption={\file{src/helpers/helpers.jl} L59--L63},firstnumber=59]
-r_attenuation = 0.85 * time_window / 2          # half-width at onset
-n_attenuation = 30                              # super-Gaussian order
-σ_attenuation = r_attenuation / log(2)^(1/n_attenuation)
-...
-attenuator = exp.(-(abs.(1e12*ts)/σ_attenuation).^n_attenuation) * ones(M)'
-\end{lstlisting}
-The functional form is
-\begin{equation}
-  w(t) \;=\; \exp\!\left[-\left(\frac{|t|}{\sigma}\right)^{30}\right],
-  \qquad \sigma \;=\; \frac{0.85\,W/2}{(\ln 2)^{1/30}},
-\end{equation}
-where $W$ is the full time window. For $n=30$, $w(t)\approx 1$ for
-$|t|<0.85\,W/2$ and drops sharply to zero near $|t|=W/2$.
-
-\begin{verifybox}[Please verify]
-(a) \code{Tsit5} with \code{reltol=1e-8} is an acceptable solver for this class
-of nonlinear Schr\"odinger equation at the soliton numbers we study ($N \le 6$). \\
-(b) The super-Gaussian boundary treatment does not interfere with the pulse
-physics as long as the time window is sized so that the pulse never reaches
-$|t|=0.85\,W/2$. This is checked by the photon-conservation test
-(\S\ref{sec:verif_photon}).
-\end{verifybox}
-
-\section{Time Window Sizing}
-\label{sec:timewindow}
-
-The time window $W$ must be large enough that the pulse does not reach the
-absorbing boundary at any point during propagation. Two effects cause the pulse
-to spread in time:
-\begin{enumerate}[leftmargin=*]
-\item \textbf{Dispersive walk-off} between frequencies separated by the Raman shift
-$\Delta\omega_R = 2\pi \times 13\,\mathrm{THz}$. Different frequencies travel at
-different group velocities, so a pair of points separated by $\Delta\omega_R$
-walk apart by
-\begin{equation}
-  \Delta t_\text{walk} \;=\; |\beta_2|\,L\,\Delta\omega_R.
-  \label{eq:walk_off}
-\end{equation}
-
-\item \textbf{SPM-induced spectral broadening} converted back into temporal spread
-via GVD. The nonlinear phase accumulated over the fiber is
-\begin{equation}
-  \phi_\text{NL} \;=\; \gamma\,P_\text{peak}\,L \qquad \text{(radians, dimensionless)}.
-  \label{eq:phi_NL}
-\end{equation}
-The SPM-broadened angular bandwidth of a sech$^2$ pulse is (Agrawal Ch. 4)
-\begin{equation}
-  \Delta\omega_\text{SPM} \;=\; 0.86\,\frac{\phi_\text{NL}}{T_0}.
-  \label{eq:delta_omega_spm}
-\end{equation}
-Propagating this broadened spectrum through GVD produces an additional temporal
-spread of
-\begin{equation}
-  \Delta t_\text{SPM} \;=\; |\beta_2|\,L\,\Delta\omega_\text{SPM}.
-  \label{eq:delta_t_spm}
-\end{equation}
-\end{enumerate}
-
-The recommended time window adds both terms with a safety factor:
-\begin{equation}
-  W \;\gtrsim\; 2\,\bigl(\,\Delta t_\text{walk} + \Delta t_\text{SPM} + 0.5\,\mathrm{ps}\,\bigr).
-  \label{eq:W_recommended}
-\end{equation}
-
-\paragraph{Critical note --- dimensional analysis.} It is tempting to try to use
-$\phi_\text{NL}$ directly as a frequency scale, but $\phi_\text{NL}$ is
-\emph{dimensionless} (radians). The division by $T_0$ in
-Eq.~\eqref{eq:delta_omega_spm} is essential: $\mathrm{rad}/\mathrm{s} =
-\mathrm{rad}\,/\,\mathrm{s}$. An earlier version of the code was missing this
-$1/T_0$ factor and produced time windows 5--7$\times$ too small at high power,
-which caused 38--49\% photon number loss at the absorbing boundary. This was
-caught by the photon-conservation test (\S\ref{sec:verif_photon}) and fixed.
-
-\paragraph{Code implementation.} \file{scripts/common.jl}, lines 191--215:
-\begin{lstlisting}[caption={\file{scripts/common.jl} L191--L215},firstnumber=191]
-function recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27,
-                                 gamma=0.0, P_peak=0.0, pulse_fwhm=185e-15)
-    @assert L_fiber > 0
-    @assert beta2 > 0
-    @assert pulse_fwhm > 0
-
-    Δω_raman   = 2π * 13e12                              # L198: 2π × 13 THz
-    walk_off_ps = beta2 * L_fiber * Δω_raman * 1e12      # L199: Eq. (19)
-    pulse_extent = 0.5
-
-    spm_ps = 0.0
-    if gamma > 0 && P_peak > 0
-        T0     = pulse_fwhm / 1.763                       # sech^2 half-duration [s]
-        φ_NL   = gamma * P_peak * L_fiber                 # L208: Eq. (20) [rad]
-        δω_SPM = 0.86 * φ_NL / T0                         # L209: Eq. (21) [rad/s]
-        spm_ps = beta2 * L_fiber * δω_SPM * 1e12          # L210: Eq. (22) [ps]
-    end
-
-    total_ps = walk_off_ps + spm_ps + pulse_extent
-    return max(5, ceil(Int, total_ps * safety_factor))   # L214: Eq. (23)
-end
-\end{lstlisting}
-
-\begin{verifybox}[Please verify]
-(a) The walk-off formula on line 199 corresponds to Eq.~\eqref{eq:walk_off}.\\
-(b) Line 209 implements Eq.~\eqref{eq:delta_omega_spm}, including the
-dimensional $1/T_0$ factor. \\
-(c) The safety factor of 2 in Eq.~\eqref{eq:W_recommended} is sufficient for
-your range of intended operating conditions.
-\end{verifybox}
-
-\section{Adjoint Sensitivity Equation}
-\label{sec:adjoint}
-
-To optimize the input spectral phase efficiently, we use the adjoint method to
-compute the gradient $\partial J / \partial \varphi$ with only \emph{one}
-additional backward propagation, instead of the $N_t$ finite-difference
-perturbations that na\"ive differentiation would require.
-
-\subsection{Derivation (sketch)}
-
-Start from the optimization problem
-\begin{equation}
-  \min_{\varphi(\omega)}\; J\bigl(\hat{u}(L)\bigr)
-  \quad\text{subject to}\quad
-  \pdv{\hat{u}}{z} = F\bigl(\hat{u},z\bigr),
-  \quad
-  \hat{u}(0,\omega) \;=\; \hat{u}_0(\omega)\,e^{i\varphi(\omega)},
-\end{equation}
-where $F$ is the GNLSE right-hand side (Eq.~\eqref{eq:gnlse_lab}). Introduce a
-Lagrange multiplier field $\lambda(z,\omega)$ --- the adjoint field --- and write
-the Lagrangian
-\begin{equation}
+\section*{Scope}
+
+Derivations unique to this project: the adjoint sensitivity equation for the
+GMMNLSE, its discretization, the chain rule through the input phase mask, the
+photon-number conservation law used for verification, and the SPM-corrected
+time-window formula. The underlying GNLSE (Agrawal Eq.~2.3.36) and Blow--Wood
+Raman response are taken as given.
+
+\section{Adjoint sensitivity equation}
+
+We want $\partial J / \partial \varphi(\omega)$ where $\varphi$ is the input
+spectral phase and
+\[
+  J \;=\; \frac{E_\text{band}(L)}{E_\text{total}(L)}
+      \;=\; \frac{\int_\mathcal{B} |\uhat(L,\omega)|^2 \,d\omega}
+                  {\int |\uhat(L,\omega)|^2 \,d\omega},
+\]
+with $\uhat$ satisfying the GNLSE
+\[
+  \pdv{\uhat}{z} \;=\; F(\uhat,z)
+  \;\equiv\; iD(\omega)\,\uhat
+   + i\gamma\,\frac{\omega}{\omega_0}\,
+     \mathcal{F}\!\left[(1-f_R)|u|^2 u + f_R(h_R \ast |u|^2)u\right],
+\]
+and initial condition $\uhat(0,\omega) = \uhat_0(\omega)\,e^{i\varphi(\omega)}$.
+
+\subsection{Derivation via Lagrange multipliers}
+
+Treat the ODE constraint as a Lagrangian equality and introduce an adjoint field
+$\lambda(z,\omega)$:
+\[
   \mathcal{L}
-  \;=\; J\bigl(\hat{u}(L)\bigr)
-  \;+\; \int_0^L \Re\!\left\langle \lambda,\;
-                   \pdv{\hat{u}}{z} - F(\hat{u},z)\right\rangle\,dz.
-\end{equation}
-Stationarity of $\mathcal{L}$ with respect to $\hat{u}(z)$ (after integration by
-parts in $z$) gives the \textbf{backward adjoint equation}
+  \;=\; J[\uhat(L)]
+  \;+\; \int_0^L \Re \left\langle \lambda,\,\pdv{\uhat}{z} - F(\uhat,z)\right\rangle dz.
+\]
+Here $\langle a,b\rangle = \int a^*(\omega) b(\omega)\,d\omega$. Integrate the
+first term of the integral by parts in $z$:
+\[
+  \int_0^L \Re \left\langle \lambda, \pdv{\uhat}{z}\right\rangle dz
+  \;=\; \Re \langle \lambda(L),\uhat(L)\rangle - \Re \langle \lambda(0),\uhat(0)\rangle
+        - \int_0^L \Re \left\langle \pdv{\lambda}{z},\uhat\right\rangle dz.
+\]
+Requiring stationarity of $\mathcal{L}$ with respect to variations
+$\delta\uhat(z)$ for $z\in(0,L)$ gives
 \begin{equation}
-  \boxed{\;
-    -\dv{\lambda(z,\omega)}{z}
-    \;=\; \left[\pdv{F}{\hat{u}}\right]^\dagger \lambda(z,\omega)
-    \;}
+  -\dv{\lambda}{z} \;=\; \left[\pdv{F}{\uhat}\right]^\dagger \lambda,
   \label{eq:adjoint_ode}
 \end{equation}
-with the \textbf{terminal condition}
+stationarity at the endpoint $z=L$ gives the terminal condition
+\begin{equation}
+  \lambda(L,\omega) \;=\; \pdv{J}{\uhat^*(L,\omega)},
+  \label{eq:terminal}
+\end{equation}
+and stationarity at $z=0$ produces the sensitivity with respect to the initial
+condition,
+\begin{equation}
+  \pdv{J}{\uhat^*(0,\omega)} \;=\; \lambda(0,\omega).
+  \label{eq:sensitivity_u0}
+\end{equation}
+Eq.~(\ref{eq:adjoint_ode}) is integrated backward from $L$ to $0$ with terminal
+data Eq.~(\ref{eq:terminal}).
+
+\subsection{Terminal condition for our cost}
+
+Differentiate $J = E_\text{band}/E_\text{total}$ with respect to $\uhat^*(L,\omega)$
+using $\partial |\uhat|^2 / \partial \uhat^* = \uhat$:
+\begin{align*}
+  \pdv{J}{\uhat^*(L,\omega)}
+  &= \frac{\mathbb{1}_\mathcal{B}(\omega)\,\uhat(L,\omega)\,E_\text{total}
+            - \uhat(L,\omega)\,E_\text{band}}
+           {E_\text{total}^2} \\[0.3em]
+  &= \frac{\uhat(L,\omega)\,[\mathbb{1}_\mathcal{B}(\omega) - J]}{E_\text{total}},
+\end{align*}
+where $\mathbb{1}_\mathcal{B}$ is the indicator function of the Raman band.
+Therefore
 \begin{equation}
   \lambda(L,\omega)
-  \;=\; \pdv{J}{\hat{u}^*}\bigg|_{z=L}.
-  \label{eq:adjoint_terminal}
+  \;=\; \frac{\uhat(L,\omega)\,\bigl[\mathbb{1}_\mathcal{B}(\omega) - J\bigr]}
+              {E_\text{total}}.
+  \label{eq:terminal_explicit}
 \end{equation}
+Implemented in \texttt{scripts/common.jl} L269 as
+\texttt{dJ = u\textomega f .* (band\_mask .- J) ./ E\_total}.
 
-The $\dagger$ denotes the adjoint operator (conjugate transpose in the
-discretized problem). For our cost Eq.~\eqref{eq:cost_discrete}, the terminal
-condition evaluates to
+\subsection{Adjoint operator in the interaction picture}
+
+The forward ODE is integrated for the interaction-picture field
+$\utilde(z,\omega) = e^{-iD(\omega)z}\,\uhat(z,\omega)$, so the adjoint is
+integrated for the corresponding interaction-picture multiplier
+$\tilde{\lambda}(z,\omega) = e^{-iD(\omega)z}\,\lambda(z,\omega)$. The terminal
+condition becomes $\tilde{\lambda}(L,\omega) = e^{-iD(\omega)L}\lambda(L,\omega)$.
+This transformation is applied in
+\texttt{src/simulation/sensitivity\_disp\_mmf.jl} L296.
+
+The operator $[\partial F/\partial \uhat]^\dagger$ has four contributions
+because the nonlinearity $|u|^2 u$ has two derivatives (with respect to both $u$
+and $u^*$ via $|u|^2 = u u^*$) and the Raman convolution has a forward and
+conjugate path. Let $v = \Re u$, $w = \Im u$ be the forward field in time, and
+let $\delta_K^{(1)}$, $\delta_K^{(2)}$ be the two Kerr operators
+\begin{align}
+  \delta_K^{(1)}[t,i,j] &= \sum_{k\ell} \gamma_{\ell k i j}\,(v_k v_\ell + w_k w_\ell)
+      &&(\text{from } |u|^2 = u u^*) \label{eq:delta1}\\
+  \delta_K^{(2)}[t,i,j] &= \sum_{k\ell} \gamma_{\ell k i j}\,(v_k v_\ell - w_k w_\ell + 2i v_k w_\ell)
+      &&(\text{from } u^2) \label{eq:delta2}
+\end{align}
+and let $\delta_R^{(1)} = h_R \ast \delta_K^{(1)}$ (the Raman convolution of the
+$|u|^2$ operator). The Kerr+Raman combined adjoint operator needs the factor
+of 2 from $\partial(|u|^2 u)/\partial u^* = u^2$, giving
 \begin{equation}
-  \lambda(L,\omega)
-  \;=\; \frac{\hat{u}(L,\omega)\bigl(\mathbb{1}_\text{band}(\omega) - J\bigr)}
-              {E_\text{total}},
-  \label{eq:terminal_expression}
+  \delta_{KR} \;=\; 2(1-f_R)\,\delta_K^{(1)} \;+\; \delta_R^{(1)}.
+  \label{eq:deltaKR}
 \end{equation}
-which is exactly what \code{spectral\_band\_cost} returns as \code{dJ} on
-line 269 of \file{scripts/common.jl}.
+The adjoint RHS in the interaction picture is then
+\begin{equation}
+  \dv{\tilde{\lambda}}{z}
+  \;=\; i\,e^{-iD(\omega)z}\,\mathcal{F}^{-1}\!\Bigl[\,
+          \lambda_t \cdot \delta_{KR}
+          \;+\; (1-f_R)\,\lambda^*_t \cdot \delta_K^{(2)}
+          \;+\; R_\text{fwd}(\lambda)
+          \;+\; R_\text{conj}(\lambda)
+        \,\Bigr],
+  \label{eq:adjoint_rhs}
+\end{equation}
+where $R_\text{fwd}$ and $R_\text{conj}$ are the two Raman-convolution paths
+that arise from the self-steepening-scaled Raman term acting on $\lambda$ and
+$\lambda^*$ respectively. These paths involve a convolution with $h_R^*$ or
+$h_R$ plus a $\gamma$-tensor contraction with the forward field at $z$.
 
-\subsection{Gradient with respect to the input phase}
+Implemented in \texttt{sensitivity\_disp\_mmf.jl} L32--79 as four helper
+functions summed on L78:
+\begin{itemize}
+\item L72 \texttt{calc\_$\lambda$\_$\partial$fKR1c$\partial$uc!} computes the
+  $\lambda_t \cdot \delta_{KR}$ term
+\item L73 \texttt{calc\_$\lambda$c\_$\partial$fK$\partial$uc!} computes the
+  $\lambda^*_t \cdot \delta_K^{(2)}$ term
+\item L74 \texttt{calc\_$\lambda$\_$\partial$fR2c$\partial$uc!} computes $R_\text{fwd}$
+\item L75 \texttt{calc\_$\lambda$c\_$\partial$fR$\partial$uc!} computes $R_\text{conj}$
+\end{itemize}
 
-Once $\lambda(0,\omega)$ is known from backward integration, the gradient of
-$J$ with respect to the input phase $\varphi(\omega)$ comes from the chain rule
-through $\hat{u}(0,\omega) = \hat{u}_0(\omega)\,e^{i\varphi}$:
+\subsection{Chain rule through the input phase mask}
+
+The input field is $\uhat(0,\omega) = \uhat_0(\omega)\,e^{i\varphi(\omega)}$.
+We want $\partial J / \partial \varphi(\omega)$, but we already have
+$\partial J / \partial \uhat^*(0,\omega) = \lambda(0,\omega)$ from
+Eq.~(\ref{eq:sensitivity_u0}). Since $J$ is real-valued,
+\[
+  dJ \;=\; 2\,\Re\!\left\{\int \lambda^*(0,\omega)\,d\uhat(0,\omega)\,d\omega\right\}.
+\]
+For a phase perturbation $d\varphi$,
+$d\uhat(0,\omega) = \uhat_0(\omega)\,i e^{i\varphi(\omega)}\,d\varphi(\omega)
+= i\,\uhat_\text{shaped}(\omega)\,d\varphi(\omega)$, so
 \begin{equation}
   \pdv{J}{\varphi(\omega)}
-  \;=\; 2\,\Re\!\left[\,i\,\hat{u}(0,\omega)\,\lambda^*(0,\omega)\,\right].
+  \;=\; 2\,\Re\!\bigl[\,\lambda^*(0,\omega)\cdot i\,\uhat_\text{shaped}(\omega)\,\bigr].
   \label{eq:phase_gradient}
 \end{equation}
+Implemented in \texttt{scripts/raman\_optimization.jl} L91 as
+\texttt{$\partial$J\_$\partial\varphi$ = 2.0 .* real.(conj.($\lambda$0) .* (1im .* u$\omega$0\_shaped))}.
 
-\subsection{Code implementation}
+\subsection{Verification via Taylor remainder}
 
-The adjoint ODE right-hand side is \code{adjoint\_disp\_mmf!} in
-\file{src/simulation/sensitivity\_disp\_mmf.jl}, lines 32--79. It has the same
-overall structure as the forward solver but computes a linearized-transposed
-operator. The four physical pieces are:
-\begin{itemize}[leftmargin=*]
-\item \line{72}: Kerr+Raman $\delta_1$ contraction ($|u|^2 u$ linearization)
-\item \line{73}: conjugate Kerr $\delta_2$ contraction ($u^2$ linearization)
-\item \line{74}: forward-path Raman convolution with $h_R$
-\item \line{75}: conjugate-path Raman convolution with $h_R^*$
-\end{itemize}
-which are summed on line 78 to produce the adjoint time-derivative. Each piece
-is the formal transpose of the corresponding forward term in \code{disp\_mmf!}.
-
-\paragraph{Numerical accuracy.} The forward solver uses \code{Tsit5} with
-continuous interpolation. When the adjoint queries the forward field at an
-arbitrary $z$ (via \code{\~{}\textomega}(z) on line 50), it is evaluated through
-\code{Tsit5}'s 4th-order Hermite interpolant. Consequently the adjoint's
-accuracy is bounded by that 4th-order interpolant, and using a higher-order
-backward solver would not improve anything. We use \code{Tsit5} with
-\code{reltol=1e-8} for the adjoint as well. This choice is validated by the
-Taylor-remainder test (\S\ref{sec:verif_taylor}).
-
-\begin{verifybox}[Please verify]
-(a) The adjoint sensitivity equation Eq.~\eqref{eq:adjoint_ode} is the
-standard form for the backward sensitivity of an ODE-constrained optimization
-problem. \\
-(b) The terminal condition Eq.~\eqref{eq:adjoint_terminal} matches
-Eq.~\eqref{eq:terminal_expression} for our cost functional. \\
-(c) The phase-gradient formula Eq.~\eqref{eq:phase_gradient} is the chain rule
-through the input phase mask.
-\end{verifybox}
-
-\section{Verification Tests}
-\label{sec:verification}
-
-We run four independent physics tests at the production grid size $N_t = 2^{14}$
-in \file{scripts/verification.jl}. Each is derived from a physical invariant or
-analytical solution that must hold if the code is correct.
-
-\subsection{VERIF-01: Soliton shape preservation}
-\label{sec:verif_soliton}
-
-\textbf{Physical principle.} The fundamental $N=1$ soliton is an exact analytical
-solution of the standard NLSE (Kerr nonlinearity with anomalous dispersion, no
-Raman):
+If $\nabla J$ is the true gradient, Taylor's theorem gives
 \begin{equation}
-  u(z,t) \;=\; \sqrt{P_\text{peak}}\,\sech\!\left(\frac{t}{T_0}\right)
-               \exp\!\left[\,i\,\frac{z}{2\,L_D}\,\right],
-  \qquad
-  P_\text{peak} \;=\; \frac{|\beta_2|}{\gamma\,T_0^2}.
-  \label{eq:fundamental_soliton}
+  R(\epsilon) \;\equiv\;
+  \bigl|J(\varphi + \epsilon\,\delta\varphi) - J(\varphi) - \epsilon\,\langle \nabla J,\delta\varphi\rangle\bigr|
+  \;=\; \tfrac{1}{2}\epsilon^2\,|\langle H\delta\varphi,\delta\varphi\rangle| + O(\epsilon^3).
+  \label{eq:taylor}
 \end{equation}
-After one soliton period $z_\text{sol} = (\pi/2)\,L_D$ (with
-$L_D = T_0^2/|\beta_2|$), the pulse returns to its original shape. Any deviation
-is numerical error.
+So $\log R$ versus $\log \epsilon$ has slope $2$. A linear bias in the gradient
+$\nabla J_\text{claimed} = \nabla J + b$ produces an extra term
+$\epsilon\,|\langle b,\delta\varphi\rangle|$ in $R$ which dominates at small
+$\epsilon$ and drops the slope to $1$. Measured slopes at $N_t = 2^{14}$,
+$L = 0.1$ m, $\epsilon \in \{10^0,10^{-1},10^{-2},10^{-3}\}$: $2.01$, $2.07$,
+$2.09$.
 
-\textbf{Code implementation.} \file{scripts/verification.jl} lines 73--150.
-The test runs at $\beta_2 = -2.6\times 10^{-26}$ s$^2$/m, $\gamma = 1.3\times 10^{-3}$
-W$^{-1}$m$^{-1}$, $T_0 = 185\,\mathrm{fs}/(2\operatorname{arcosh}\sqrt{2})$, with
-$f_R$ set to $10^{-15}$ (Raman effectively disabled).
+\section{Photon number conservation}
 
-\textbf{Pass criterion:} $\max |I_\text{out}(t)/\max I_\text{out} - I_\text{in}(t)/\max I_\text{in}| < 0.02$ (2\%) across the pulse core (intensity $>$5\% of peak).
-
-\textbf{Last result:} max deviation $= 0.0112$ (\textbf{PASS}, 1.1\% $<$ 2\%).
-
-\subsection{VERIF-02: Photon number conservation}
-\label{sec:verif_photon}
-
-\textbf{Physical principle.} In a lossless fiber, Raman scattering transfers
-\emph{energy} from higher to lower frequencies by exciting phonons, so
-classical energy $\int|\hat{u}|^2\,d\omega$ is \emph{not} conserved. But every
-Raman event takes one photon at frequency $\omega_1$ and produces one photon at
-$\omega_2 < \omega_1$, so the \emph{photon number}
+With self-steepening and Raman, \emph{classical energy} $\int |\uhat(\omega)|^2 d\omega$ is
+not conserved because every Raman event transfers energy $\hbar(\omega_1-\omega_2)$
+into a phonon. The conserved quantity is the photon number. Each photon at
+$\omega$ carries energy $\hbar\omega$, so the spectral photon density is
+$|\uhat(\omega)|^2/(\hbar\omega)$ and
 \begin{equation}
-  N_\text{ph}
-  \;=\; \int \frac{|\hat{u}(\omega)|^2}{\hbar\,\omega}\,d\omega
-  \;\propto\; \int \frac{|\hat{u}(\omega)|^2}{\omega}\,d\omega
+  N_\text{ph} \;=\; \int \frac{|\uhat(\omega)|^2}{\hbar\,\omega}\,d\omega.
   \label{eq:photon_number}
 \end{equation}
-is conserved. This is the correct invariant to use for verifying a GNLSE with
-self-steepening and Raman (Agrawal Ch.~2.3; Brabec \& Krausz, RMP 2000).
+A Raman event at $\omega_1 \to \omega_2$ removes energy $\hbar\omega_1$ at
+$\omega_1$ (hence $\hbar\omega_1/\hbar\omega_1 = 1$ photon) and deposits energy
+$\hbar\omega_2$ at $\omega_2$ (hence $\hbar\omega_2/\hbar\omega_2 = 1$ photon),
+leaving $N_\text{ph}$ invariant. The $\hbar$ cancels in the ratio
+$N_\text{ph}(L)/N_\text{ph}(0)$ so we drop it in code. Implemented in
+\texttt{scripts/verification.jl} L189--199 as
+\texttt{sum(abs2.(u$\omega$) ./ abs.(omega\_s)) * $\Delta$t}.
 
-\textbf{Code implementation.} \file{scripts/verification.jl} lines 188--199
-(\code{compute\_photon\_number}) and lines 211--252 (test loop over 5 production
-configurations). The $\hbar$ constant is dropped since we check the \emph{ratio}
-$N_\text{ph}(L)/N_\text{ph}(0)$.
+Measured drift across five production runs after the SPM time-window fix:
+all $< 1\%$. Prior to the fix, high-power runs showed up to $49\%$ drift,
+which pointed directly to the dimensional error in the next section.
 
-\textbf{Pass criterion:} $|N_\text{ph}(L)/N_\text{ph}(0) - 1| < 0.01$ (1\%) for all 5 runs.
+\section{Time-window sizing with SPM broadening}
 
-\textbf{Last result (post SPM-formula fix):} drifts $<$ 1\% on all 5 configurations
-(\textbf{PASS}). Prior to the fix, high-power runs showed up to 49\% drift, which
-led directly to discovering and fixing the time-window dimensional error in
-\S\ref{sec:timewindow}.
+The time window $W$ must contain the pulse throughout propagation. Two effects
+broaden the pulse in time.
 
-\begin{verifybox}[Please verify]
-(a) Photon number, not energy, is the correct conservation law for the GNLSE
-with Raman (energy goes into phonons at each Raman event). \\
-(b) The 1\% tolerance is acceptable given the super-Gaussian boundary window,
-which is a physical approximation to an open boundary. \\
-(c) The post-fix drifts are at the level of numerical solver tolerance plus
-attenuator leakage, not a physical error.
-\end{verifybox}
-
-\subsection{VERIF-03: Taylor remainder for the adjoint gradient}
-\label{sec:verif_taylor}
-
-\textbf{Physical principle.} If $\nabla J$ is the correct gradient of $J$, then
-Taylor's theorem guarantees that
+\paragraph{Dispersive walk-off.} Spectral components separated by the Raman
+shift $\Delta\omega_R = 2\pi \cdot 13\,\mathrm{THz}$ travel at different group
+velocities, so they separate by
 \begin{equation}
-  R(\epsilon)
-  \;\equiv\; \bigl|\,J(\varphi + \epsilon\,\delta\varphi)
-               - J(\varphi)
-               - \epsilon\,\langle \nabla J,\,\delta\varphi\rangle\,\bigr|
-  \;=\; O(\epsilon^2).
-  \label{eq:taylor_remainder}
+  \Delta t_\text{walk} \;=\; |\beta_2|\,L\,\Delta\omega_R.
+  \label{eq:walkoff}
 \end{equation}
-Plotting $\log R(\epsilon)$ versus $\log\epsilon$ gives a straight line of
-\emph{slope $2$} if the gradient is correct. A slope of $1$ signals a linear
-bias in the gradient (an error proportional to $\delta\varphi$); a slope of $0$
-signals a zero-order bias. Intermediate slopes near $2$ (say, in $[1.7,2.3]$)
-are treated as passing.
 
-\textbf{Code implementation.} \file{scripts/verification.jl} lines 271--330.
-Runs at $L_\text{fiber} = 0.1$ m (short enough that higher-order Taylor terms
-are negligible). Computes $R$ at $\epsilon \in \{1, 10^{-1}, 10^{-2}, 10^{-3}\}$.
+\paragraph{SPM-induced spectral broadening transmitted through GVD.} The
+nonlinear phase accumulated over the fiber is
+\begin{equation}
+  \phi_\text{NL} \;=\; \gamma\,P_\text{peak}\,L \qquad [\text{radians, dimensionless}].
+  \label{eq:phi_NL}
+\end{equation}
+For a sech$^2$ pulse, the SPM-broadened angular bandwidth is
+\begin{equation}
+  \Delta\omega_\text{SPM} \;=\; 0.86\,\frac{\phi_\text{NL}}{T_0}
+  \qquad [\text{rad/s}],
+  \label{eq:domega_spm}
+\end{equation}
+where $T_0 = \text{FWHM}/1.763$ (Agrawal Ch.~4). Propagating this broadened
+spectrum through GVD gives an additional temporal spread
+\begin{equation}
+  \Delta t_\text{SPM} \;=\; |\beta_2|\,L\,\Delta\omega_\text{SPM}.
+  \label{eq:dt_spm}
+\end{equation}
 
-\textbf{Pass criterion:} slopes between consecutive $\epsilon$ pairs all in
-$[1.4, 2.6]$.
+\paragraph{Dimensional point.} $\phi_\text{NL}$ in Eq.~(\ref{eq:phi_NL}) is
+\emph{dimensionless}. Using it directly as an angular frequency is dimensionally
+wrong: the $1/T_0$ factor in Eq.~(\ref{eq:domega_spm}) converts radians to
+rad/s. An earlier version of the code was missing this $1/T_0$ and therefore
+undersized the time window by a factor of order $T_0 \cdot (\text{scale})$,
+which at 185\,fs pulses and typical operating powers was 5--7$\times$. The
+photon conservation test in the previous section caught this (49\% drift at
+high power) and the correction restored conservation to $<1\%$.
 
-\textbf{Last result:} slopes $= [2.01,\,2.07,\,2.09]$, all in range
-(\textbf{PASS}). This is strong evidence that the hand-derived adjoint of
-\S\ref{sec:adjoint} has no sign error, no missing factor, and no off-by-one in
-the chain rule.
-
-\subsection{VERIF-04: Cost function cross-check}
-\label{sec:verif_cost}
-
-\textbf{Physical principle.} The cost $J$ is a simple ratio of integrals
-(Eq.~\eqref{eq:cost_discrete}), so the result of the optimized routine
-\code{spectral\_band\_cost} must match a direct evaluation of
-$E_\text{band}/E_\text{total}$ to machine precision. This tests that the
-band-mask indexing is correct and that there are no \code{fftshift} confusions.
-
-\textbf{Last result:} $|J_\text{func} - J_\text{direct}| = 0$ exactly
-(\textbf{PASS} at $10^{-12}$ tolerance).
-
-\section{Summary of Physics Quantities to Verify}
-
-\begin{center}\small
-\begin{tabular}{p{0.42\textwidth} p{0.22\textwidth} p{0.25\textwidth}}
-\toprule
-Equation & Section & Code location \\
-\midrule
-GNLSE, interaction picture, Eq.~\eqref{eq:gnlse_ip}  & \S\ref{sec:gnlse}      & \file{simulate\_disp\_mmf.jl} L25--61 \\
-Dispersion Taylor, Eq.~\eqref{eq:D_taylor}           & \S\ref{sec:dispersion} & \file{helpers.jl} L185--187 \\
-Raman response, Eq.~\eqref{eq:hR_blow_wood}          & \S\ref{sec:raman}      & \file{helpers.jl} L181--183 \\
-sech$^2$ pulse, Eq.~\eqref{eq:sech_pulse}            & \S\ref{sec:initial_pulse} & \file{simulate\_disp\_mmf.jl} L142--150 \\
-Peak power factor, Eq.~\eqref{eq:peak_power}         & \S\ref{sec:initial_pulse} & \file{simulate\_disp\_mmf.jl} L145 \\
-Soliton number, Eq.~\eqref{eq:N_soliton}             & \S\ref{sec:initial_pulse} & \file{common.jl} L457 \\
-Cost functional, Eq.~\eqref{eq:cost_discrete}        & \S\ref{sec:cost}       & \file{common.jl} L260--276 \\
-Time window (walk-off + SPM), Eq.~\eqref{eq:W_recommended} & \S\ref{sec:timewindow} & \file{common.jl} L191--215 \\
-Adjoint ODE, Eq.~\eqref{eq:adjoint_ode}              & \S\ref{sec:adjoint}    & \file{sensitivity\_disp\_mmf.jl} L32--79 \\
-Terminal condition, Eq.~\eqref{eq:adjoint_terminal}  & \S\ref{sec:adjoint}    & \file{common.jl} L269 \\
-Photon number, Eq.~\eqref{eq:photon_number}          & \S\ref{sec:verif_photon} & \file{verification.jl} L188--199 \\
-Fundamental soliton, Eq.~\eqref{eq:fundamental_soliton} & \S\ref{sec:verif_soliton} & \file{verification.jl} L73--150 \\
-Taylor remainder test, Eq.~\eqref{eq:taylor_remainder} & \S\ref{sec:verif_taylor} & \file{verification.jl} L271--330 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\section{What the Tests Do and Do Not Prove}
-
-\textbf{The tests prove:}
-\begin{itemize}[leftmargin=*]
-\item Given the model (Eq.~\eqref{eq:gnlse_ip}) and the parameter values
-(\S\ref{sec:dispersion}), the code solves the equations correctly.
-\item The forward propagation reproduces an exact analytical soliton to $1.1\%$.
-\item Photon number is conserved to $<1\%$ across all tested operating points.
-\item The adjoint gradient has no first-order bias (Taylor slope $\approx 2$).
-\item The cost function is computed as claimed.
-\end{itemize}
-
-\textbf{The tests do not prove:}
-\begin{itemize}[leftmargin=*]
-\item That the physics model is appropriate for the experimental regime you
-care about.
-\item That $\gamma$, $\beta_2$, $\beta_3$ for the specific fibers in your lab
-match the presets in \S\ref{sec:dispersion}.
-\item That the optimizer finds the global minimum of Eq.~\eqref{eq:cost_discrete};
-only that whatever local minimum it finds is computed faithfully.
-\end{itemize}
+Implemented in \texttt{scripts/common.jl} L191--215: L208 computes
+$\phi_\text{NL}$, L209 divides by $T_0$ to get Eq.~(\ref{eq:domega_spm}), L210
+applies Eq.~(\ref{eq:dt_spm}), and L213--214 sums walk-off plus SPM with a
+safety factor of 2.
 
 \end{document}
