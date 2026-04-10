@@ -20,9 +20,9 @@
 Derivations unique to this project: the interaction-picture transformation of
 the GNLSE, the adjoint sensitivity equation, its terminal condition for our
 cost, the adjoint operator in the interaction picture, the chain rule through
-the input phase mask, the log-scale cost chain rule, and the SPM-corrected
-time-window formula. The underlying GNLSE (Agrawal Eq.~2.3.36) and Blow--Wood
-Raman response are taken as given.
+the input phase mask, and the SPM-corrected time-window formula. The
+underlying GNLSE (Agrawal Eq.~2.3.36) and Blow--Wood Raman response are taken
+as given.
 
 \section{Interaction picture for the GNLSE}
 
@@ -203,27 +203,6 @@ $d\uhat(0,\omega) = \uhat_0(\omega)\,i e^{i\varphi(\omega)}\,d\varphi(\omega)
 \end{equation}
 Implemented in \texttt{scripts/raman\_optimization.jl} L91 as
 \texttt{$\partial$J\_$\partial\varphi$ = 2.0 .* real.(conj.($\lambda$0) .* (1im .* u$\omega$0\_shaped))}.
-
-\subsection{Log-scale cost and chain rule}
-
-Because $J$ varies over 8+ decades during optimization (from $\sim 10^{-1}$ at
-initialization to $\sim 10^{-7}$ at deep suppression), the linear cost becomes
-numerically flat to L-BFGS in the deep-suppression regime: step lengths shrink
-with $J$ and the optimizer falsely converges. We optimize the log-scale cost
-\begin{equation}
-  J_\text{log} \;=\; 10\,\log_{10} J,
-  \label{eq:log_cost}
-\end{equation}
-with the gradient obtained by chain rule,
-\begin{equation}
-  \pdv{J_\text{log}}{\varphi}
-  \;=\; \frac{10}{J\,\ln 10}\,\pdv{J}{\varphi}.
-  \label{eq:log_gradient}
-\end{equation}
-The prefactor $10/(J\ln 10)$ grows as $J$ shrinks, exactly compensating the
-vanishing of the underlying linear gradient and keeping the optimizer's steps
-meaningful through the full dynamic range. Implemented in
-\texttt{scripts/raman\_optimization.jl} L99--107.
 
 \section{Time-window sizing with SPM broadening}
 
