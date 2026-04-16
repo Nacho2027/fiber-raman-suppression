@@ -337,6 +337,112 @@ See `.planning/todos/pending/provision-gcp-vm.md` and `.planning/notes/compute-i
 - **Editing `.planning/` on one machine without syncing** → stale state on the other. Run `sync-planning-{to,from}-vm` explicitly.
 - **Multiple parallel Claude Code sessions editing the same files** → use git worktrees or enforce non-overlapping directory scope per session.
 
+## Parallel Session Operation Protocol
+
+**This project runs up to 8 concurrent Claude Code sessions on multiple machines (Mac + claude-code-host + sometimes fiber-raman-burst). Silent conflicts would destroy hours of work. Every agent in every session MUST follow this protocol.**
+
+### Rule P1: Session has an OWNED FILE NAMESPACE. Stay inside it.
+
+When a session is launched with a prompt from `.planning/notes/parallel-session-prompts.md`, that prompt specifies the files it owns. The agent MUST NOT write to files outside its namespace. If the agent needs a change to a file outside its namespace (e.g., a utility in `scripts/common.jl`), it STOPS and escalates to the user — it does not silently edit shared code.
+
+Session namespaces (see `.planning/notes/parallel-session-prompts.md` for exact ownership per session):
+
+- New scripts: prefixed by session topic — `multivar_*.jl`, `mmf_*.jl`, `longfiber_*.jl`, `sweep_simple_*.jl`, `cost_audit_*.jl`, etc.
+- New src modules: similarly prefixed and placed in `src/<session_topic>/`
+- `.planning/phases/<N>-<session-topic>/` — entire phase dir owned by one session
+- `.planning/notes/<session-topic>-*.md` — files prefixed by session topic
+- `.planning/seeds/<session-topic>-*.md` — same
+
+**Shared files — NEVER modify without an explicit user go-ahead:**
+- `scripts/common.jl`, `scripts/visualization.jl`
+- `src/simulation/*.jl`, `src/sensitivity_*.jl` (physics core)
+- `Project.toml`, `Manifest.toml`
+- `.gitignore`, `CLAUDE.md`, `README.md` (unless this is Session B's job)
+- `.planning/STATE.md`, `.planning/ROADMAP.md`, `.planning/REQUIREMENTS.md`, `.planning/PROJECT.md`, `.planning/MILESTONES.md`
+
+### Rule P2: Branch-per-session. Never push directly to `main`.
+
+Each session works in a git worktree on its own branch:
+
+```bash
+# Set up ONCE at session start (on Mac or VM — each session in its own worktree):
+git worktree add ../raman-wt-<session-name> sessions/<session-name>
+cd ../raman-wt-<session-name>
+# ... session work happens here ...
+
+# Commits go to this branch:
+git commit -m "..."
+git push origin sessions/<session-name>
+```
+
+**The session NEVER runs `git push origin main`.** Only the user (or a single designated integrator session) merges session branches into main at coordination checkpoints. This eliminates the push race.
+
+### Rule P3: Append-only edits to shared `.planning/` files
+
+If a session MUST touch `STATE.md` / `ROADMAP.md` (e.g., to record a phase outcome), do so ONLY by appending a new row to an existing table — never by editing existing rows. Rebase-friendly.
+
+Better yet: write to a session-specific status file:
+- `.planning/sessions/<session-name>-status.md`
+
+The user (or integrator session) aggregates these into the central STATE.md at checkpoints.
+
+### Rule P4: Sync helpers are non-destructive
+
+`sync-planning-to-vm` and `sync-planning-from-vm` use `rsync --update` (not `--delete`) and exclude git-tracked files (`STATE.md`, `ROADMAP.md`). This means:
+
+- Files that exist on only one side are preserved
+- If a file differs on both sides, the more recently modified version wins (per `--update`)
+- `STATE.md` and `ROADMAP.md` go through git, not rsync — run `git pull` for those
+
+Do NOT run sync-planning-* while another session is actively editing `.planning/` on either side. Coordinate at quiet points.
+
+### Rule P5: Burst VM = serial heavy runs, parallel light runs
+
+The burst VM has 22 cores. Protocol:
+
+**Heavy runs** (>8 cores, >5 min): ONE AT A TIME. Before starting:
+```bash
+burst-ssh "ls /tmp/burst-heavy-lock 2>/dev/null && echo 'LOCKED' || echo 'FREE'"
+# If FREE:
+burst-ssh "touch /tmp/burst-heavy-lock && tmux new -d -s run-<session-name> 'julia -t auto ... ; rm -f /tmp/burst-heavy-lock'"
+```
+
+**Light runs** (≤ 4 cores, quick validation): multiple sessions can run these concurrently as long as the heavy lock is NOT held. Each session names its tmux session distinctly:
+```bash
+burst-ssh "tmux new -d -s validate-<session-name> 'julia -t 4 ...'"
+```
+
+If in doubt, treat as heavy.
+
+### Rule P6: Session host distribution
+
+The `claude-code-host` VM (e2-standard-4, 16 GB RAM) can host ~3 concurrent Claude Code sessions before OOM. Distribute:
+
+- **Run on Mac**: sessions doing heavy editing / lots of context / light compute (Sessions B docs, G synthesis, E sweep design, D perturbation study). Each in its own `~/raman-wt-<name>` worktree.
+- **Run on claude-code-host**: sessions needing the burst VM frequently (Sessions A multivar, C multimode, F long-fiber, H cost-audit). The helper scripts (`burst-start`, `burst-ssh`, etc.) are only on `claude-code-host`.
+
+Before launching a 4th session on claude-code-host, check `free -h` on the VM — if `available` is under 3 GB, don't add more.
+
+### Rule P7: Integration checkpoints
+
+Every 2–3 hours (or at natural breakpoints), the USER (not a session) does an integration pass:
+
+```bash
+# On Mac:
+git fetch origin
+git branch -r | grep sessions/     # see which session branches have new work
+for branch in sessions/B-handoff sessions/D-simple ... ; do
+  git log main..origin/$branch --oneline  # see what's in each
+done
+
+# Review → merge via PR pattern or local merge:
+git checkout main
+git merge origin/sessions/B-handoff --no-ff   # or just ff if clean
+git push origin main
+```
+
+Sessions pull from main at the start of their next work block to incorporate the integrations.
+
 ## Running Simulations — Compute Discipline
 
 **This project has dedicated compute infrastructure. Use it correctly. These rules apply to ALL agents (Claude Code, sub-agents, planners, executors) running Julia simulations in this project.**
