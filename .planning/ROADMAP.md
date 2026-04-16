@@ -232,3 +232,21 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 14 to break down)
+
+### Phase 15: Deterministic Numerical Environment — pin FFTW planner to ESTIMATE, lock thread counts, add reproducibility regression test (fixes max|Δφ|=1.04 rad determinism bug found in Phase 13)
+
+**Goal:** Make the forward solve, adjoint solve, and full L-BFGS optimization path **bit-for-bit reproducible** given the same config and random seed. Phase 13 Plan 01's determinism check found max|Δφ| = 1.04 rad between two identical-seed runs (root cause: FFTW.MEASURE plan selection is timing-dependent). Fix by pinning FFTW planner flags to ESTIMATE, setting FFTW and BLAS thread counts to 1 for optimization runs, and centralizing the setup in a single include so every script gets the same deterministic environment. Add a regression test that runs the same config twice and asserts byte-identical phi_opt.
+**Depends on:** Phase 13 (the bug was found in 13-01 and the snapshot/regression pattern from 14-01 is reused). Should run BEFORE Phase 14 Plan 02 so the A/B comparison there is reproducible.
+**Requirements**: Derived from Phase 13 Plan 01 finding ("Determinism FAIL — max|Δφ| = 1.04 rad") and from the user's explicit direction "I still definitely want to fix this determinism thing"
+**Success Criteria** (what must be TRUE):
+  1. A new helper module `scripts/determinism.jl` exports `ensure_deterministic_environment()` that sets `FFTW.set_planner_flags(FFTW.ESTIMATE)`, `FFTW.set_num_threads(1)`, `BLAS.set_num_threads(1)` and is idempotent + safe to call from any script
+  2. Existing script entry points (`scripts/raman_optimization.jl`, `scripts/amplitude_optimization.jl`, `scripts/run_sweep.jl`, `scripts/run_comparison.jl`) call `ensure_deterministic_environment()` at top level OR the function is auto-applied via a sourced-at-startup shim — pick whichever is minimally invasive. The existing optimizer LOGIC stays byte-identical; only the environment setup changes.
+  3. A regression test `test/test_determinism.jl` runs the same config with `Random.seed!(42)` twice and asserts `phi_opt_a == phi_opt_b` bit-for-bit (`maximum(abs(phi_opt_a - phi_opt_b)) == 0.0`)
+  4. The determinism regression test passes locally and on the burst VM — confirming the fix works in both single-threaded (this host) and multi-threaded contexts (burst should still be deterministic for optimization runs, though FFTW and BLAS stay single-threaded; Julia's outer `Threads.@threads` loops for multi-start etc. are orthogonal and don't affect per-optimization determinism)
+  5. Benchmarked performance impact quantified — record wall-clock time of the SMF-28 canonical optimization before and after, report slowdown in SUMMARY (expected 5-20% from FFTW.ESTIMATE vs MEASURE)
+  6. STATE.md "Resolved Issues" section gains a "[RESOLVED 2026-04-xx] FFTW.MEASURE plan-selection non-determinism" entry; "Critical Context for Future Agents" gains a note about the deterministic environment convention
+  7. Phase 14 Plan 02's A/B comparison uses the deterministic path (update Plan 14-02 if it pre-dates this phase)
+**Plans:** 1 plan
+
+Plans:
+- [x] 15-01: Pin FFTW planner to ESTIMATE, thread pins, src/simulation patch, regression test, benchmark — COMPLETE 2026-04-16 (7/7 bit-identity tests pass; +21.4% slowdown on SMF-28 canonical)

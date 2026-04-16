@@ -115,6 +115,19 @@ See `.planning/notes/compute-infrastructure-decision.md` and `.planning/todos/pe
 
 When implementing Phase 14 (Sharpness-Aware / Hessian-in-Cost optimization), the existing `spectral_band_cost` and `optimize_spectral_phase` entry points **MUST remain fully functional and untouched**. The user's explicit directive: "the original cost function and that type of method should be kept separate and the hessian one should be a new one so we can use them both." Phase 14 adds a NEW parallel path (`spectral_band_cost_sharp`, `optimize_spectral_phase_sharp`) — it does not replace or modify the existing one. Regression tests confirming the original path is unchanged are a Phase 14 success criterion.
 
+### Deterministic Numerical Environment (Phase 15)
+
+All optimization entry-point scripts now call `ensure_deterministic_environment()` at top (from `scripts/determinism.jl`). This pins `FFTW.set_num_threads(1)` and `BLAS.set_num_threads(1)`, and the 18 `plan_fft`/`plan_ifft` call sites across `src/simulation/*.jl` were switched from `flags=FFTW.MEASURE` to `flags=FFTW.ESTIMATE` (commit 1caa08d). Consequence: identical seed → bit-identical `phi_opt`, `J_final`, and `ftrace`, both within a single process and across fresh Julia subprocesses. Verified by:
+
+- `test/test_determinism.jl` — asserts `maximum(abs(phi_opt_a - phi_opt_b)) == 0.0` (same-process)
+- `scripts/phase15_benchmark.jl` — 3 fresh subprocesses produced `max-min(J_final) = 0.0` on ESTIMATE (cross-process bit-identity); MEASURE leg reproduces the Phase 13 bug as a control (max-min = 1.055e-13)
+
+Performance cost: **+21.4%** wall time on SMF-28 canonical (L=2m, P=0.2W, Nt=8192, max_iter=30) — well within the +30% acceptance budget. See `results/raman/phase15/benchmark.md` for the full table.
+
+If an individual script needs max speed at the cost of reproducibility, it can call `ensure_deterministic_environment(force=true)` with custom flags, OR swap the 18 `FFTW.ESTIMATE` tokens back to `FFTW.MEASURE` in `src/simulation/*.jl`. Both are discouraged for research runs — the +21% cost buys exact reproducibility, which is usually the higher-value tradeoff.
+
+Entry-point scripts wired: `raman_optimization.jl`, `amplitude_optimization.jl`, `run_sweep.jl`, `run_comparison.jl`, `generate_sweep_reports.jl`, `sharpness_optimization.jl`. All have exactly 2 added lines (include + call). `scripts/common.jl` was NOT modified (kept pure-utility, per Phase 15 CONTEXT directive).
+
 ### Key Bugs Fixed
 
 1. **dB/linear mismatch (2026-03-26)**: `optimize_spectral_phase` fed `lin_to_dB(J)` to L-BFGS but gradient was linear-scale. Fixed: optimizer now receives linear J. All prior sweep results have degraded convergence.
@@ -155,9 +168,11 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 9 added: Physics of Raman Suppression — understand universal vs arbitrary phase structure
 - Phase 13 added (2026-04-16): Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, Hessian eigenspectrum at L-BFGS optima; gates any Newton's method decision. See `.planning/notes/newton-vs-lbfgs-reframe.md` and `.planning/seeds/newton-method-implementation.md`.
 - Phase 14 added (2026-04-16): Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path `optimize_spectral_phase_sharp` parallel to existing L-BFGS; keeps original cost function unchanged; user directive is both paths must remain usable for A/B comparison.
+- Phase 15 added (2026-04-16): Deterministic Numerical Environment — user-directed. Fixes FFTW.MEASURE plan-selection non-determinism found in Phase 13 Plan 01 (max|Δφ| = 1.04 rad between identical-seed runs). Pins FFTW planner to ESTIMATE, sets FFTW/BLAS thread counts to 1. Runs before Phase 14 Plan 02 so A/B comparison is reproducible.
 
 ### Resolved Issues
 
+- [RESOLVED 2026-04-16] FFTW.MEASURE plan-selection non-determinism (max|Δφ| = 1.04 rad between identical-seed runs, found in Phase 13 Plan 01) — fixed in Phase 15 Plan 01 via `scripts/determinism.jl` (FFTW/BLAS thread pinning) + mechanical `flags=FFTW.MEASURE → flags=FFTW.ESTIMATE` patch across 18 sites in `src/simulation/*.jl`. Regression test `test/test_determinism.jl` asserts `maximum(abs(phi_opt_a - phi_opt_b)) == 0.0` (bit-identity). Also verified cross-process: 3 fresh Julia subprocesses converge to bit-identical `J_final` (benchmark max-min = 0.0). Performance cost: +21.4% wall time on SMF-28 canonical (see `results/raman/phase15/benchmark.md`).
 - [RESOLVED 2026-03-31] recommended_time_window() SPM formula: δω = 0.86 × φ_NL / T0
 - [RESOLVED 2026-03-31] Raman response overflow for large time windows (clamp to max(t,0))
 - [RESOLVED 2026-03-31] dB/linear mismatch fully resolved with log-scale cost function
@@ -170,6 +185,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-16T01:53:00Z
-Last activity: 2026-04-16 - Completed quick task 260415-u4s: Benchmark threading opportunities across simulation codebase
-Next action: Provision Jetstream2 m3.xl VM (or Hetzner CCX53 bridge), then begin multimode M=6 + Newton optimizer sprint
+Last session: 2026-04-16T22:40:00Z
+Last activity: 2026-04-16 - Completed Phase 15 Plan 01 (Deterministic Numerical Environment): regression test passes bit-identity (max|Δφ| = 0.0 rad), SMF-28 canonical benchmark shows +21.4% slowdown (within +30% budget)
+Next action: Continue Phase 13/14/15 Newton/Hessian sprint — Phase 14 Plan 02 A/B comparison can now assume reproducible baseline
