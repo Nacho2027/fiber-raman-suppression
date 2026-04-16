@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
+status: Milestone complete
 stopped_at: "Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures"
-last_updated: "2026-04-04T20:56:54.571Z"
+last_updated: "2026-04-05T03:18:39.360Z"
 progress:
   total_phases: 11
   completed_phases: 8
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 ## Current Position
 
-Phase: 12 (suppression-reach) — EXECUTING
-Plan: 2 of 2
+Phase: 12
+Plan: Not started
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
@@ -63,6 +63,7 @@ Next: Multimode (M>1) simulations for quantum noise analysis
 |---|-------------|------|--------|
 | 260331-gh0 | Fix SPM formula in recommended_time_window, max_iter 30→60, quality reporting | 2026-03-31 | 279d8ef |
 | 260331-ph8 | Phase 8: Sweep point reporting (report cards, summaries, combined report) | 2026-03-31 | 00e5833 |
+| 260415-u4s | Benchmark threading opportunities across simulation codebase | 2026-04-16 | d1c5bd9 |
 
 ## Critical Context for Future Agents
 
@@ -87,6 +88,32 @@ Julia `const` cannot be redefined in REPL. Each script uses a unique prefix to a
 ### Include Guards
 
 Scripts use `if !(@isdefined _COMMON_JL_LOADED)` pattern. `using` statements must go OUTSIDE the guard block (macros need compile-time visibility).
+
+### Burst Compute (Phase 13/14 heavy runs)
+
+The always-on `claude-code-host` (this machine) is `e2-standard-2` (2 vCPU, 8 GB). For anything computationally heavy — multi-start optimization, full Hessian eigendecomposition, parameter sweeps — use the burst VM `fiber-raman-burst` (c3-highcpu-22, 22 vCPU, 44 GB, AVX-512). Helpers installed on PATH:
+
+- `burst-start` — start the burst VM (~30 s boot). Billing begins.
+- `burst-ssh [cmd]` — SSH into burst; with an argument runs that command and returns
+- `burst-stop` — stop the burst VM. **CRITICAL** — always stop when done to avoid $0.90/hour burn
+- `burst-status` — check current state
+
+Workflow:
+1. Commit + push on claude-code-host: `git push`
+2. `burst-start && burst-ssh 'cd ~/fiber-raman-suppression && git pull && julia --threads=22 scripts/<thing>.jl'`
+3. `burst-ssh 'cd ~/fiber-raman-suppression && git add results/ && git commit -m "results" && git push'`
+4. `git pull` on claude-code-host
+5. `burst-stop`
+
+Always use `--threads=22` (or `JULIA_NUM_THREADS=22`) on the burst VM. Benchmark showed parallel forward+adjoint solves give 3.55× at 8 threads — scales further on 22. Embarrassingly-parallel patterns (Hessian columns, multi-start) benefit most.
+
+Light tests / unit tests / plan validation: run directly on this machine — no need for burst.
+
+See `.planning/notes/compute-infrastructure-decision.md` and `.planning/todos/pending/provision-gcp-vm.md` for full details.
+
+### Critical Directive — Do Not Break Original Optimizer Path (Phase 14)
+
+When implementing Phase 14 (Sharpness-Aware / Hessian-in-Cost optimization), the existing `spectral_band_cost` and `optimize_spectral_phase` entry points **MUST remain fully functional and untouched**. The user's explicit directive: "the original cost function and that type of method should be kept separate and the hessian one should be a new one so we can use them both." Phase 14 adds a NEW parallel path (`spectral_band_cost_sharp`, `optimize_spectral_phase_sharp`) — it does not replace or modify the existing one. Regression tests confirming the original path is unchanged are a Phase 14 success criterion.
 
 ### Key Bugs Fixed
 
@@ -126,6 +153,8 @@ Both fixes require re-running the sweep to get valid results.
 ### Roadmap Evolution
 
 - Phase 9 added: Physics of Raman Suppression — understand universal vs arbitrary phase structure
+- Phase 13 added (2026-04-16): Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, Hessian eigenspectrum at L-BFGS optima; gates any Newton's method decision. See `.planning/notes/newton-vs-lbfgs-reframe.md` and `.planning/seeds/newton-method-implementation.md`.
+- Phase 14 added (2026-04-16): Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path `optimize_spectral_phase_sharp` parallel to existing L-BFGS; keeps original cost function unchanged; user directive is both paths must remain usable for A/B comparison.
 
 ### Resolved Issues
 
@@ -141,6 +170,6 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-04T20:56:54.564Z
-Stopped at: Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures
-Next action: Multimode (M>1) simulations for quantum noise analysis; optionally re-run sweep with fixed aggregate JLD2
+Last session: 2026-04-16T01:53:00Z
+Last activity: 2026-04-16 - Completed quick task 260415-u4s: Benchmark threading opportunities across simulation codebase
+Next action: Provision Jetstream2 m3.xl VM (or Hetzner CCX53 bridge), then begin multimode M=6 + Newton optimizer sprint

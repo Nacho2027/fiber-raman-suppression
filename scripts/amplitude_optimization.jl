@@ -29,6 +29,8 @@ using Optim
 
 include("common.jl")
 include("visualization.jl")
+include(joinpath(@__DIR__, "determinism.jl"))
+ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup, cost, and utility functions are in common.jl:

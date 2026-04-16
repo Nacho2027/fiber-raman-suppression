@@ -226,12 +226,12 @@ used for frequency-domain shift operations (equivalent to fftshift for even-leng
 """
 function get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, fR, Nt, M)
     p_params = (ũω, τω, Dω, hRω, conj.(hRω), γ, one_m_fR, fR, Nt, exp.(1im * π * repeat([0, 1], Int(Nt / 2))), exp.(1im * π * repeat([1, 0], Int(Nt / 2))))
-    fft_plan_M = plan_fft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
-    ifft_plan_M = plan_ifft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
-    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
-    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.MEASURE)
-    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
-    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.MEASURE)
+    fft_plan_M = plan_fft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
+    ifft_plan_M = plan_ifft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
+    fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
+    ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
+    fft_plan_MM! = plan_fft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.ESTIMATE)
+    ifft_plan_MM! = plan_ifft!(zeros(ComplexF64, Nt, M, M), 1; flags=FFTW.ESTIMATE)
     p_fft = (fft_plan_M, ifft_plan_M, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!)
 
     exp_D_p = zeros(ComplexF64, Nt, M)

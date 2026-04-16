@@ -113,7 +113,7 @@ Plans:
 | 9. Physics of Raman Suppression | 2/2 | Complete | 2026-04-02 |
 | 10. Propagation-Resolved Physics | 2/2 | Complete    | 2026-04-03 |
 | 11. Classical Physics Completion | 2/2 | Complete    | 2026-04-03 |
-| 12. Suppression Reach & Long-Fiber Behavior | 1/2 | In Progress|  |
+| 12. Suppression Reach & Long-Fiber Behavior | 1/2 | Complete    | 2026-04-05 |
 
 ### Phase 12: Suppression Reach & Long-Fiber Behavior
 **Goal**: Characterize the finite reach of spectral phase Raman suppression by propagating short-fiber-optimized phases through much longer fibers (10m, 30m+) and mapping how the suppression horizon scales with fiber parameters. Determine whether the optimizer's phase still provides benefit over flat phase at distances far beyond the optimization length, and explore whether segmented or iterative optimization could extend the reach.
@@ -125,7 +125,7 @@ Plans:
   3. Suppression horizon L_XdB mapped as a function of at least 2 parameters (power P and soliton number N_sol) for both fiber types
   4. At least one approach to extending suppression reach tested (e.g., segmented optimization where phi_opt is re-optimized at intermediate z-points, or higher Nt for finer spectral control)
   5. Corrected physical narrative: all findings documents accurately describe the finite reach without overclaiming
-**Plans:** 1/2 plans executed
+**Plans:** 1/2 plans complete
 Plans:
 - [x] 12-01-PLAN.md — Long-fiber propagation: take existing phi_opt from 0.5m and 2m optimizations, propagate through 10m and 30m fibers with 100 z-saves, compare shaped vs flat phase, map J(z) evolution beyond optimization horizon
 - [ ] 12-02-PLAN.md — Suppression horizon mapping and reach extension: sweep L_XdB vs (P, N_sol), test segmented optimization concept, produce corrected narrative
@@ -198,3 +198,37 @@ Plans:
 **Plans:** 1/1
 Plans:
 - [ ] 08-01-PLAN.md — Create generate_sweep_reports.jl with report card figure + markdown summaries
+
+### Phase 13: Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, and Hessian eigenspectrum at L-BFGS optima (prerequisite for any Newton's method decision)
+
+**Goal:** Determine whether the apparent "different random starts give different phases" landscape instability is real non-gauge, non-polynomial multiplicity — or gauge symmetry + high-frequency noise around a shared low-order polynomial shape. Produce the evidence the professor's Newton vs L-BFGS decision should hinge on, and reveal which directions in φ-space physically control Raman suppression.
+**Depends on:** Phase 12 (uses converged multi-start optima and serialized results)
+**Requirements**: Derived from `.planning/research/questions.md` Q1 and Q3, from the professor's "stable solutions" request, and from the deferred polynomial-projection plan in `.planning/research/FEATURES.md` line 53
+**Success Criteria** (what must be TRUE):
+  1. **Determinism baseline established** — running the same config with an identical seed twice produces byte-for-byte identical optimized φ (or the source of any divergence is identified and documented)
+  2. **Gauge fix applied and reported** — every existing multi-start optimal φ has had `mean(φ)` and a linear polynomial (group-delay) fit subtracted over the input spectral band per `PITFALLS.md` Pitfall 4; post-fix phase-similarity metrics across random starts are quantified (e.g., pairwise RMS difference, cosine similarity)
+  3. **GDD/TOD/FOD polynomial decomposition** of each gauge-fixed φ is computed, with explained-variance fractions tabulated for polynomial orders 2, 3, 4, 5, 6 across random starts AND across (Nt, L, P) parameter sweeps
+  4. **Hessian eigenspectrum at a converged L-BFGS optimum** is computed via finite-difference HVPs on the existing adjoint gradient, with top-K and bottom-K eigenvalues via Lanczos (no full Nt×Nt construction); the count of near-zero modes beyond the two expected gauge modes is reported, and the top-K eigenvectors are visualized as phase curves over ω
+  5. **Findings document** explicitly answers "is the landscape degeneracy real non-gauge, non-polynomial multiplicity?" with a verdict (yes / no / inconclusive), and routes the downstream decision to one of: (a) reduced-basis optimization, (b) sharpness-aware cost (Hessian-in-cost), (c) Newton's method implementation from `.planning/seeds/newton-method-implementation.md`, or (d) no optimizer change needed
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 13 to break down)
+
+### Phase 14: Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path parallel to existing L-BFGS, keeping original cost function untouched
+
+**Goal:** Implement a sharpness-aware cost function `J_sharp(φ) = J(φ) + λ · sharpness(H(φ))` and a corresponding optimization entry point that lives ALONGSIDE the existing `optimize_spectral_phase` — the original J path and L-BFGS optimizer remain fully usable and untouched. Use this new path to test whether sharpness-penalized optima are more experimentally robust (to shaper quantization and fiber-parameter drift) than vanilla-J optima. Informed by Phase 13's Hessian eigenspectrum findings so the sharpness measure excludes the expected gauge zero modes.
+**Depends on:** Phase 13 (needs the Hessian eigendecomposition machinery built in Phase 13 and the landscape diagnosis to decide which sharpness measure to use)
+**Requirements**: Derived from `.planning/research/questions.md` Q2 (sharpness-aware cost) and from the user's direction that the Hessian-in-cost path must be a NEW entry point keeping the original cost function intact
+**Success Criteria** (what must be TRUE):
+  1. **Original cost untouched** — `spectral_band_cost`, `optimize_spectral_phase`, all existing L-BFGS entry points pass their existing tests byte-for-byte unchanged; no regressions in any prior-phase verification or sweep reproduction
+  2. **New sharpness-aware cost function** (`spectral_band_cost_sharp` or similar) computes `J + λ · sharpness(H)` where sharpness is one of {stochastic `tr(H)` via Hutchinson, top-eigenvalue of `H`, projected `tr(H)` excluding gauge modes}; the choice is documented and justified with Phase 13 evidence
+  3. **Gradient of sharpness term** is derived and validated by a Taylor-remainder test to O(ε²) — same gradient-verification bar as Phase 4 VERIF-03 holds for the new cost
+  4. **New optimization entry point** (`optimize_spectral_phase_sharp` or similar) runs end-to-end on at least one canonical SMF-28 and HNLF config; both L-BFGS and Newton variants are supported via a strategy flag
+  5. **A/B comparison produced**: for 3+ configs, side-by-side results of vanilla-J optimum vs sharpness-aware optimum, including (a) final J in dB, (b) Hessian eigenspectrum at each optimum, (c) robustness test — Gaussian perturbation of φ by σ ∈ {0.01, 0.05, 0.1, 0.2} rad and re-measurement of J for both optima
+  6. **Tests at every layer** — unit tests for the sharpness function, gradient-validation test, integration test for the new optimizer, regression test ensuring the original path is unchanged; all pass before the phase closes
+  7. **Documentation** — a clear entry in `scripts/common.jl` and a usage example in the run scripts explaining when to use each optimizer path
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 14 to break down)
