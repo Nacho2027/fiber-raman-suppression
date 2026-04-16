@@ -2,6 +2,9 @@
 .DS_Store
 .claude/
 
+# Julia
+LocalPreferences.toml
+
 # LaTeX build artifacts
 *.aux
 *.log
