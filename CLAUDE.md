@@ -336,6 +336,105 @@ See `.planning/todos/pending/provision-gcp-vm.md` and `.planning/notes/compute-i
 - **Forgetting to push at session end** → other machines can't see the work. Always push before closing out.
 - **Editing `.planning/` on one machine without syncing** → stale state on the other. Run `sync-planning-{to,from}-vm` explicitly.
 - **Multiple parallel Claude Code sessions editing the same files** → use git worktrees or enforce non-overlapping directory scope per session.
+
+## Running Simulations — Compute Discipline
+
+**This project has dedicated compute infrastructure. Use it correctly. These rules apply to ALL agents (Claude Code, sub-agents, planners, executors) running Julia simulations in this project.**
+
+### Rule 1: ALWAYS run non-trivial simulations on the burst VM, never on `claude-code-host`
+
+`claude-code-host` is a small always-on VM (4 vCPU, 16 GB RAM) sized to host Claude Code, not to run compute. Heavy Julia jobs there will OOM, make the Claude Code session unresponsive, and tie up the editing environment.
+
+**Non-trivial = any of the following:**
+- Any run at `M > 1` (multimode — each solve is 10–50× heavier than M=1)
+- Any run with `Nt ≥ 2^13` at M=1 (full-resolution single-mode optimization)
+- Any multi-start optimization, parameter sweep, or Hessian-column batch
+- Any Newton iteration (requires N_φ independent solves per step)
+- Anything expected to take longer than ~30 seconds per forward solve
+
+**Trivial = OK on `claude-code-host`:** quick sanity checks with small `Nt` (e.g., `2^10`), single forward solves at M=1, unit tests, timing-sensitivity micro-benchmarks.
+
+### How to use the burst VM
+
+From `claude-code-host` (helper scripts are in `~/bin/` on PATH):
+
+```bash
+# 1. Commit and push your code changes first (burst VM pulls from git)
+git add <files> && git commit -m "..." && git push
+
+# 2. Start the burst VM (~30 s to boot)
+burst-start
+
+# 3. Run the simulation in a detached tmux session ON the burst VM
+burst-ssh "cd fiber-raman-suppression && \
+           git pull && \
+           tmux new -d -s run 'julia -t auto --project=. scripts/your_script.jl > run.log 2>&1'"
+
+# 4. Monitor progress
+burst-ssh "tail -f fiber-raman-suppression/run.log"
+
+# 5. When done, pull results back to the claude-code-host checkout
+rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
+      fiber-raman-burst:~/fiber-raman-suppression/results/ \
+      ~/fiber-raman-suppression/results/
+
+# 6. ALWAYS STOP THE BURST VM WHEN DONE ($0.90/hr while running)
+burst-stop
+```
+
+Helper scripts: `burst-start`, `burst-stop`, `burst-ssh`, `burst-status`.
+
+### Rule 2: ALWAYS launch Julia with threading enabled
+
+**The simulation core in `src/simulation/` is single-threaded by default — you must enable threading explicitly via the Julia launch flag.** Without it, you use 1 core out of 4 (or 22 on the burst VM).
+
+```bash
+julia -t auto --project=. <script>      # use all available threads (PREFERRED)
+julia -t 22 --project=. <script>        # or explicit count for burst VM
+```
+
+**Never launch bare `julia` for simulation work.** Verify inside Julia with `Threads.nthreads()` (should return > 1).
+
+Threading speedups observed (per `scripts/benchmark_threading.jl`, commit `d1c5bd9`):
+
+- **Parallel forward solves: 3.55×** at 8 threads on M3 Max → expect ~10–15× on the 22-core burst VM
+- **Multi-start optimization: 2.13×** at 8 threads
+- **FFTW threading at Nt=2^13: counterproductive** — do NOT call `FFTW.set_num_threads(n > 1)` at this grid size; it's already worse
+- **Tullio threading at M=1: no effect** (tensor contractions trivial) — becomes meaningful at `M > 1`
+
+These numbers are only achieved if Julia is launched with `-t N`. Without the flag, all parallelism is dormant.
+
+### Rule 3: ALWAYS stop the burst VM when simulations complete
+
+The burst VM bills at ~$0.90/hr while running, $0 while stopped. Leaving it running overnight by accident costs ~$21. Over a weekend, ~$65. The 4-week project budget is $300 free trial — careless runtime eats it fast.
+
+Before ending any session that touched the burst VM:
+
+```bash
+burst-status            # verify: TERMINATED means stopped
+burst-stop              # if it shows RUNNING, stop it now
+```
+
+### When the `deepcopy(fiber)` pattern is required
+
+Multi-threaded Julia code sharing the `fiber` dict across threads **will race** because `fiber["zsave"]` and other fields are mutated inside solvers. Any `Threads.@threads` loop over independent solves must do:
+
+```julia
+Threads.@threads for i in 1:n_tasks
+    fiber_local = deepcopy(fiber)      # per-thread copy
+    # ... use fiber_local, never the shared fiber
+end
+```
+
+This pattern is already used in `scripts/benchmark_optimization.jl:635` for multi-start optimization and `scripts/benchmark_optimization.jl:704` for parallel gradient validation. Copy it when adding new parallel solve blocks (Newton Hessian, parameter sweeps, etc.).
+
+### Summary — quick checklist before running any simulation
+
+- [ ] Is this "non-trivial" per Rule 1? → YES: use burst VM. NO: may run on `claude-code-host`.
+- [ ] Did I commit and push my code changes so the burst VM's `git pull` gets them?
+- [ ] Am I launching Julia with `-t auto` (or `-t N`)?
+- [ ] If adding new parallel loops: am I `deepcopy(fiber)` per thread?
+- [ ] When done: have I run `burst-stop`?
 <!-- GSD:multi-machine-end -->
 
 
