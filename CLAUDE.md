@@ -286,6 +286,58 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+## Multi-Machine Workflow
+
+This project runs on **multiple machines** (local Mac + GCP claude-code-host + occasional bursts on fiber-raman-burst). The same repo is cloned on each machine. Without discipline, divergent commits on different machines produce merge conflicts.
+
+### Session hygiene — always do these
+
+**At the START of any Claude Code session (regardless of machine):**
+
+```bash
+git fetch origin
+git status                        # check for divergence / uncommitted changes
+git pull --ff-only origin main    # apply remote changes if local is behind
+```
+
+If `git pull --ff-only` fails (diverged histories), the other machine has committed work that isn't in this checkout. Do NOT proceed with edits before reconciling — merging or rebasing blindly after a long session can lose work. Surface it to the user for a decision.
+
+**At the END of any session (or any logical stopping point):**
+
+```bash
+git status                        # confirm what's about to be committed
+git add <specific files>          # prefer explicit over "git add -A"
+git commit -m "<type>(<scope>): <description>"
+git push origin main              # so the other machines can pull
+```
+
+### Gitignored state: `.planning/` and memory
+
+The `.planning/` directory and `~/.claude/projects/.../memory/` files are **not** tracked in git. Changes there only propagate via the local sync helpers on the Mac:
+
+- `sync-planning-to-vm` — Mac → VM (push planning + memory)
+- `sync-planning-from-vm` — VM → Mac (pull planning + memory)
+
+Run these explicitly whenever `.planning/` or memory has been edited on one side. After running `sync-planning-from-vm`, re-read any `.planning/` file you had open — the on-disk content may have changed.
+
+### Machine inventory (as of 2026-04-16)
+
+| Machine | Role | Always on? |
+|---|---|---|
+| Local Mac (`/Users/ignaciojlizama/RiveraLab/fiber-raman-suppression`) | Primary editing, exploration, advisor context | Yes (whenever laptop is on) |
+| `claude-code-host` (GCP e2-standard-4, 34.152.124.66) | Remote Claude Code sessions, long-running tasks | Yes, 24/7 |
+| `fiber-raman-burst` (GCP c3-highcpu-22) | Heavy Newton / multimode runs | On-demand (stopped by default) |
+
+See `.planning/todos/pending/provision-gcp-vm.md` and `.planning/notes/compute-infrastructure-decision.md` for the full setup and rationale.
+
+### Common pitfalls
+
+- **Forgetting to pull at session start** → diverged commits, merge conflicts later. Always fetch+pull first.
+- **Forgetting to push at session end** → other machines can't see the work. Always push before closing out.
+- **Editing `.planning/` on one machine without syncing** → stale state on the other. Run `sync-planning-{to,from}-vm` explicitly.
+- **Multiple parallel Claude Code sessions editing the same files** → use git worktrees or enforce non-overlapping directory scope per session.
+<!-- GSD:multi-machine-end -->
+
 
 
 <!-- GSD:profile-start -->
