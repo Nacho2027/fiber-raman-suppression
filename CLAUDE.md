@@ -341,18 +341,24 @@ See `.planning/todos/pending/provision-gcp-vm.md` and `.planning/notes/compute-i
 
 **This project has dedicated compute infrastructure. Use it correctly. These rules apply to ALL agents (Claude Code, sub-agents, planners, executors) running Julia simulations in this project.**
 
-### Rule 1: ALWAYS run non-trivial simulations on the burst VM, never on `claude-code-host`
+### Rule 1: ALWAYS run simulations on the burst VM, never on `claude-code-host`
 
-`claude-code-host` is a small always-on VM (4 vCPU, 16 GB RAM) sized to host Claude Code, not to run compute. Heavy Julia jobs there will OOM, make the Claude Code session unresponsive, and tie up the editing environment.
+**This rule has NO exceptions.** Any Julia execution that does nonlinear fiber propagation — forward solve, adjoint solve, optimization iteration, sweep point, sanity check, unit test of the simulation code — goes on `fiber-raman-burst`.
 
-**Non-trivial = any of the following:**
-- Any run at `M > 1` (multimode — each solve is 10–50× heavier than M=1)
-- Any run with `Nt ≥ 2^13` at M=1 (full-resolution single-mode optimization)
-- Any multi-start optimization, parameter sweep, or Hessian-column batch
-- Any Newton iteration (requires N_φ independent solves per step)
-- Anything expected to take longer than ~30 seconds per forward solve
+`claude-code-host` is a small always-on VM (4 vCPU, 16 GB RAM) sized to host Claude Code, not to run compute. Even "small" sims on it will:
+- OOM if another Claude Code session is active (each session uses 1–4 GB)
+- Starve Claude Code of CPU, making the editing session unresponsive
+- Make benchmark numbers unreproducible (noisy neighbor)
 
-**Trivial = OK on `claude-code-host`:** quick sanity checks with small `Nt` (e.g., `2^10`), single forward solves at M=1, unit tests, timing-sensitivity micro-benchmarks.
+If you think your run is "small enough to skip the burst VM," use the burst VM anyway. The 30-second VM-start overhead is trivial compared to the time you save by not having to redo a noisy benchmark or recover a frozen session.
+
+**The ONLY Julia work permitted on `claude-code-host`:**
+- `julia --version` and similar single-command checks
+- `Pkg.status()`, `Pkg.instantiate()`, dependency resolution
+- REPL help / doc lookups (no simulation calls)
+- Reading saved JLD2 results for inspection (loading data, not re-running)
+
+Everything else → burst VM.
 
 ### How to use the burst VM
 
