@@ -36,6 +36,8 @@ using Logging
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "determinism.jl"))
+ensure_deterministic_environment()
 
 using JLD2
 using JSON3

@@ -24,6 +24,8 @@ using JSON3
 
 include("common.jl")
 include("visualization.jl")
+include(joinpath(@__DIR__, "determinism.jl"))
+ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup and cost functions are in common.jl:

@@ -33,6 +33,8 @@ using Logging
 # Include shared infrastructure
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "determinism.jl"))
+ensure_deterministic_environment()
 
 using JLD2
 

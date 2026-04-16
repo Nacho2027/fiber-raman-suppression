@@ -44,6 +44,8 @@ include("visualization.jl")
 # The PROGRAM_FILE guard on line 522 of raman_optimization.jl prevents the
 # heavy run block from executing when included from another script.
 include("raman_optimization.jl")
+include(joinpath(@__DIR__, "determinism.jl"))
+ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 1: Constants (replicate from raman_optimization.jl guarded block)
