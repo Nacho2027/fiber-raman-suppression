@@ -4,35 +4,28 @@
 #
 # Quantifies the wall-time cost of the Phase 15 determinism fix.
 #
-# Method:
-#   1. Run the SMF-28 canonical Raman optimization (L=2m, P=0.2W, Nt=2^13,
-#      max_iter=15) THREE times with FFTW.MEASURE plans. Record wall times.
-#   2. Repeat THREE times with FFTW.ESTIMATE plans. Record wall times.
-#   3. Report mean + std + slowdown% in a markdown table.
+# Method (subprocess-isolated — fresh Julia process per run):
+#   1. ESTIMATE leg: 1 warm-up run + 3 timed runs, each in its own subprocess.
+#      Source code is already at `flags=FFTW.ESTIMATE` (HEAD state post-Phase-15).
+#   2. MEASURE leg: swap the 16 occurrences of `flags=FFTW.ESTIMATE` in the 4
+#      `src/simulation/*.jl` files back to `flags=FFTW.MEASURE`. Run 1 warm-up +
+#      3 timed runs, each in a fresh subprocess (so compiled methods reflect the
+#      MEASURE source). Then REVERT — always, in a `finally` block.
 #
-# Implementation note: because src/simulation/ is now ESTIMATE-only post-fix,
-# the MEASURE baseline is obtained by temporarily monkey-patching the plan
-# calls via an env-var gate (PHASE15_BENCHMARK_USE_MEASURE=1). To keep this
-# script self-contained and independent of the src/ patch, we instead run the
-# benchmark by:
-#   (a) Checking out the PRE-FIX version of the 4 src/simulation files for
-#       the MEASURE leg. BUT: that requires git worktree manipulation which
-#       is fragile and can leave the repo in a broken state.
-#   Alternative (used here): rely on the FFTW planner flag being respected
-#   per-call. We cannot override it globally in the installed MultiModeNoise
-#   package, so we directly time:
-#     MEASURE leg: revert src/simulation/*.jl to MEASURE for 3 runs, timed.
-#     ESTIMATE leg: switch back to ESTIMATE for 3 runs, timed.
+# Why subprocess isolation matters:
+#   - A single Julia process caches compiled methods. Switching FFTW.MEASURE →
+#     ESTIMATE mid-process would leave compiled code that targets the old plan.
+#   - Fresh subprocesses guarantee each timed run pays the same (already-paid)
+#     precompile cost and uses the source as currently checked out on disk.
+#   - Each leg's first subprocess is a WARM-UP (discarded) so the 3 timed runs
+#     represent steady-state wall clock.
 #
-# The simpler approach that avoids touching git: use `scripts/phase14_snapshot_vanilla.jl`
-# pattern and bypass the src patch entirely by forcing FFTW flags via the
-# new-in-FFTW.jl-1.4 APIs. Since those are not reliably available, we take
-# the most robust route: run this benchmark via git-stash around the swap.
+# Timing scope: ONLY the inner `optimize_spectral_phase` call — Julia startup,
+# precompilation, and problem setup are all excluded. See
+# scripts/_phase15_benchmark_run.jl for how the worker enforces this.
 #
-# For simplicity and reproducibility, this script:
-#   - Runs 3 iterations of the ESTIMATE config (current HEAD state).
-#   - Runs 3 iterations of the MEASURE config by programmatically rewriting
-#     the simulation files for the duration of the benchmark, then reverting.
+# Config: SMF-28 canonical (L=2m, P=0.2W, Nt=8192, max_iter=30) — production-grade
+# so the measured wall time reflects real research-run cost.
 #
 # Output:
 #   - results/raman/phase15/benchmark.md   (markdown table + analysis)
@@ -45,33 +38,16 @@ using Printf
 using Statistics
 using Dates
 using JLD2
-using Random
-
-# Pin threads up front — we want the ONLY difference between legs to be the
-# FFTW planner flag, not threading.
-using FFTW
-using LinearAlgebra
-FFTW.set_num_threads(1)
-BLAS.set_num_threads(1)
+using JSON3
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Config — SMF-28 canonical
+# Paths and constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-const BM_SEED     = 42
-const BM_MAX_ITER = 15
-const BM_NT       = 2^13
-const BM_L_FIBER  = 2.0
-const BM_P_CONT   = 0.2
-const BM_TW_PS    = 20.0
-const BM_PRESET   = :SMF28
-const BM_BETA_ORD = 3
-const BM_LOG_COST = true
-const BM_N_RUNS   = 3
-
-const PROJECT_ROOT = joinpath(@__DIR__, "..")
-const BENCHMARK_DIR = joinpath(PROJECT_ROOT, "results", "raman", "phase15")
-const BENCHMARK_MD = joinpath(BENCHMARK_DIR, "benchmark.md")
+const PROJECT_ROOT   = abspath(joinpath(@__DIR__, ".."))
+const WORKER_SCRIPT  = joinpath(@__DIR__, "_phase15_benchmark_run.jl")
+const BENCHMARK_DIR  = joinpath(PROJECT_ROOT, "results", "raman", "phase15")
+const BENCHMARK_MD   = joinpath(BENCHMARK_DIR, "benchmark.md")
 const BENCHMARK_JLD2 = joinpath(BENCHMARK_DIR, "benchmark.jld2")
 
 const SIM_FILES = [
@@ -81,11 +57,24 @@ const SIM_FILES = [
     joinpath(PROJECT_ROOT, "src", "simulation", "sensitivity_disp_mmf.jl"),
 ]
 
-"""
-Swap FFTW planner flag in all 4 src/simulation files from one value to the
-other. Returns the number of substitutions done.
+const N_RUNS = 3                   # timed runs per leg
+# Total `flags=FFTW.X` sites across the 4 simulation files. Verified on-disk
+# at Phase 15 Plan 01 completion: 4 + 4 + 4 + 6 = 18. The Phase 15 PLAN.md
+# mentioned 16 as an approximate estimate; the actual code has 18 sites, all
+# of which were switched ESTIMATE by commit 1caa08d and are asserted here.
+const EXPECTED_FLAG_COUNT = 18
 
-Uses a mechanical string replacement; only swaps `flags=FFTW.<from>` tokens.
+mkpath(BENCHMARK_DIR)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Planner-flag swap helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    _swap_planner_flag!(from, to) -> Int
+
+Mechanically replace `flags=FFTW.<from>` with `flags=FFTW.<to>` in every file in
+`SIM_FILES`. Returns total substitutions performed.
 """
 function _swap_planner_flag!(from::String, to::String)
     total = 0
@@ -94,15 +83,19 @@ function _swap_planner_flag!(from::String, to::String)
     for path in SIM_FILES
         src = read(path, String)
         n = count(from_tok, src)
-        new_src = replace(src, from_tok => to_tok)
-        write(path, new_src)
-        total += n
+        if n > 0
+            new_src = replace(src, from_tok => to_tok)
+            write(path, new_src)
+            total += n
+        end
     end
     return total
 end
 
 """
-Count occurrences of a planner flag across all 4 simulation files.
+    _count_planner_flag(flag) -> Int
+
+Count occurrences of `flags=FFTW.<flag>` across all files in `SIM_FILES`.
 """
 function _count_planner_flag(flag::String)
     tok = "flags=FFTW." * flag
@@ -113,155 +106,118 @@ function _count_planner_flag(flag::String)
     return total
 end
 
-mkpath(BENCHMARK_DIR)
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Load the pipeline (once, in the current ESTIMATE state)
-# ─────────────────────────────────────────────────────────────────────────────
-
-include(joinpath(@__DIR__, "determinism.jl"))
-ensure_deterministic_environment(verbose=true)
-include(joinpath(@__DIR__, "common.jl"))
-include(joinpath(@__DIR__, "raman_optimization.jl"))
-
-@info "Starting Phase 15 benchmark" Nt=BM_NT L=BM_L_FIBER P=BM_P_CONT max_iter=BM_MAX_ITER n_runs=BM_N_RUNS
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Single-run helper
+# Subprocess runner
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
-Run one full optimization; return elapsed seconds and J_final.
-"""
-function _time_one_run(label::String)
-    Random.seed!(BM_SEED)
-    uω0, fiber, sim, band_mask, Δf, _ = setup_raman_problem(;
-        fiber_preset = BM_PRESET,
-        Nt           = BM_NT,
-        time_window  = BM_TW_PS,
-        L_fiber      = BM_L_FIBER,
-        P_cont       = BM_P_CONT,
-        β_order      = BM_BETA_ORD,
-    )
-    Nt_actual = sim["Nt"]; M_actual = sim["M"]
-    φ0 = zeros(Nt_actual, M_actual)
+    _run_one_subprocess(mode, tag) -> NamedTuple
 
-    t0 = time()
-    result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
-        φ0 = φ0, max_iter = BM_MAX_ITER, λ_gdd = 0.0, λ_boundary = 0.0,
-        store_trace = false, log_cost = BM_LOG_COST,
+Spawn a fresh `julia --project=<root> scripts/_phase15_benchmark_run.jl <mode> <tag>`
+subprocess and parse its `BENCH_JSON:` line. Raises if the sentinel is missing.
+
+Returns (elapsed_s, J, iters, Nt, M, startup_s) — startup_s is the full
+wall-time of the subprocess (Julia startup + precompile + setup + optimize),
+useful for sanity-checking the fraction that was the optimize call itself.
+"""
+function _run_one_subprocess(mode::AbstractString, tag::AbstractString)
+    cmd = `julia --project=$(PROJECT_ROOT) $(WORKER_SCRIPT) $(mode) $(tag)`
+    @info "  spawn: $(mode) ($(tag))"
+    t0_wall = time()
+    out = read(cmd, String)
+    wall_total = time() - t0_wall
+    m = match(r"BENCH_JSON:\s*(\{.*\})", out)
+    if m === nothing
+        @error "Subprocess produced no BENCH_JSON line" mode tag
+        println(stderr, "----- SUBPROCESS OUTPUT -----")
+        println(stderr, out)
+        println(stderr, "----- END OUTPUT -----")
+        error("benchmark worker failed (mode=$mode tag=$tag)")
+    end
+    payload = JSON3.read(m[1])
+    elapsed = Float64(payload["elapsed_s"])
+    J       = Float64(payload["J"])
+    iters   = Int(payload["iters"])
+    Nt_a    = Int(payload["Nt"])
+    M_a     = Int(payload["M"])
+    @info @sprintf(
+        "  [%s/%s] optimize=%.2fs  total_subproc=%.2fs  iters=%d  J=%.4e",
+        mode, tag, elapsed, wall_total, iters, J,
     )
-    elapsed = time() - t0
-    phi_opt = reshape(Optim.minimizer(result), Nt_actual, M_actual)
-    J, _ = cost_and_gradient(phi_opt, uω0, fiber, sim, band_mask; log_cost=false)
-    @info @sprintf("  [%s] iters=%d  J=%.4e  wall=%.2fs",
-                   label, Optim.iterations(result), J, elapsed)
-    return (elapsed=elapsed, J=J, iters=Optim.iterations(result))
+    return (elapsed_s=elapsed, J=J, iters=iters, Nt=Nt_a, M=M_a,
+            subproc_wall_s=wall_total)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ESTIMATE leg (current HEAD state) — warm-up + 3 timed runs
+# Sanity-check HEAD state: must be ESTIMATE post-Phase-15
 # ─────────────────────────────────────────────────────────────────────────────
 
-@info "=== Warm-up run (ESTIMATE, to trigger compilation) ==="
-_warm = _time_one_run("WARMUP-EST")
+n_estimate_head = _count_planner_flag("ESTIMATE")
+n_measure_head  = _count_planner_flag("MEASURE")
+@info "HEAD planner-flag counts" ESTIMATE=n_estimate_head MEASURE=n_measure_head
+@assert n_estimate_head == EXPECTED_FLAG_COUNT (
+    "Expected $EXPECTED_FLAG_COUNT ESTIMATE occurrences at HEAD, found $n_estimate_head"
+)
+@assert n_measure_head == 0 (
+    "Expected 0 MEASURE occurrences at HEAD, found $n_measure_head"
+)
 
-@info "=== ESTIMATE leg: $BM_N_RUNS timed runs ==="
+# ─────────────────────────────────────────────────────────────────────────────
+# ESTIMATE leg — HEAD state, no src/ modification needed
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "=== ESTIMATE leg: 1 warm-up + $N_RUNS timed runs (fresh subprocess each) ==="
+_warm_est = _run_one_subprocess("estimate", "WARMUP")
 estimate_times = Float64[]
 estimate_Js    = Float64[]
-for i in 1:BM_N_RUNS
-    r = _time_one_run("EST-$i")
-    push!(estimate_times, r.elapsed)
+estimate_iters = Int[]
+for i in 1:N_RUNS
+    r = _run_one_subprocess("estimate", "RUN-$i")
+    push!(estimate_times, r.elapsed_s)
     push!(estimate_Js,    r.J)
-    GC.gc()
+    push!(estimate_iters, r.iters)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MEASURE leg — swap the planner flag, reload the affected module(s), run
+# MEASURE leg — swap src/simulation/* back to FFTW.MEASURE, run, ALWAYS revert
 # ─────────────────────────────────────────────────────────────────────────────
-
-# Verify current state is ESTIMATE as expected
-n_estimate_pre  = _count_planner_flag("ESTIMATE")
-n_measure_pre   = _count_planner_flag("MEASURE")
-@info "Pre-swap counts" ESTIMATE=n_estimate_pre MEASURE=n_measure_pre
-@assert n_estimate_pre == 16 "Expected 16 ESTIMATE occurrences, found $n_estimate_pre"
-@assert n_measure_pre == 0 "Expected 0 MEASURE occurrences, found $n_measure_pre"
 
 measure_times = Float64[]
 measure_Js    = Float64[]
+measure_iters = Int[]
 
 try
     @info "Swapping src/simulation/*.jl: ESTIMATE -> MEASURE for the MEASURE leg"
     n_swapped = _swap_planner_flag!("ESTIMATE", "MEASURE")
     @info "Swapped $n_swapped plan-builder sites to MEASURE"
 
-    n_estimate_mid = _count_planner_flag("ESTIMATE")
-    n_measure_mid  = _count_planner_flag("MEASURE")
-    @info "Mid-swap counts" ESTIMATE=n_estimate_mid MEASURE=n_measure_mid
-    @assert n_estimate_mid == 0
-    @assert n_measure_mid  == 16
+    n_mid_est = _count_planner_flag("ESTIMATE")
+    n_mid_mea = _count_planner_flag("MEASURE")
+    @assert n_mid_est == 0 "post-swap ESTIMATE count=$n_mid_est, expected 0"
+    @assert n_mid_mea == EXPECTED_FLAG_COUNT (
+        "post-swap MEASURE count=$n_mid_mea, expected $EXPECTED_FLAG_COUNT"
+    )
 
-    # Precompile the package with the new source, so runtime reflects MEASURE.
-    # Because MultiModeNoise was loaded BEFORE the swap, its compiled methods
-    # still reference ESTIMATE. We need to re-precompile the package in a
-    # subprocess to get a truly MEASURE-flag timing.
-    #
-    # Safer approach: invoke a fresh Julia subprocess for each MEASURE run.
-    # This is slow but correct.
-    @info "=== MEASURE leg: $BM_N_RUNS timed runs (fresh subprocess each) ==="
-
-    measure_subscript = joinpath(BENCHMARK_DIR, "_measure_leg_worker.jl")
-    write(measure_subscript, """
-    using Printf, FFTW, LinearAlgebra, Random
-    FFTW.set_num_threads(1); BLAS.set_num_threads(1)
-    include(joinpath(@__DIR__, "..", "..", "..", "scripts", "common.jl"))
-    include(joinpath(@__DIR__, "..", "..", "..", "scripts", "raman_optimization.jl"))
-    Random.seed!($(BM_SEED))
-    uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
-        fiber_preset=:$(BM_PRESET), Nt=$(BM_NT), time_window=$(BM_TW_PS),
-        L_fiber=$(BM_L_FIBER), P_cont=$(BM_P_CONT), β_order=$(BM_BETA_ORD))
-    Nt_a = sim["Nt"]; M_a = sim["M"]; φ0 = zeros(Nt_a, M_a)
-    t0 = time()
-    result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
-        φ0=φ0, max_iter=$(BM_MAX_ITER), λ_gdd=0.0, λ_boundary=0.0,
-        store_trace=false, log_cost=$(BM_LOG_COST))
-    elapsed = time() - t0
-    phi_opt = reshape(Optim.minimizer(result), Nt_a, M_a)
-    J, _ = cost_and_gradient(phi_opt, uω0, fiber, sim, band_mask; log_cost=false)
-    @printf("RESULT: elapsed=%.6f  J=%.6e  iters=%d\\n",
-            elapsed, J, Optim.iterations(result))
-    """)
-
-    # Warm-up: first MEASURE run includes precompilation cost; discard it.
-    @info "Warm-up MEASURE subprocess (triggers precompile with MEASURE source)"
-    warm_out = read(`julia --project=$(PROJECT_ROOT) $(measure_subscript)`, String)
-    @info "Warm-up MEASURE subprocess output tail:\n" * last(warm_out, 500)
-
-    for i in 1:BM_N_RUNS
-        out = read(`julia --project=$(PROJECT_ROOT) $(measure_subscript)`, String)
-        m = match(r"RESULT: elapsed=([\d\.]+)\s+J=([\d\.eE+\-]+)\s+iters=(\d+)", out)
-        if m === nothing
-            @error "Failed to parse MEASURE worker output:\n$out"
-            error("MEASURE worker failed")
-        end
-        elapsed = parse(Float64, m[1])
-        J       = parse(Float64, m[2])
-        iters   = parse(Int,     m[3])
-        @info @sprintf("  [MEAS-%d] iters=%d  J=%.4e  wall=%.2fs", i, iters, J, elapsed)
-        push!(measure_times, elapsed)
-        push!(measure_Js, J)
+    @info "=== MEASURE leg: 1 warm-up + $N_RUNS timed runs (fresh subprocess each) ==="
+    _warm_mea = _run_one_subprocess("measure", "WARMUP")
+    for i in 1:N_RUNS
+        r = _run_one_subprocess("measure", "RUN-$i")
+        push!(measure_times, r.elapsed_s)
+        push!(measure_Js,    r.J)
+        push!(measure_iters, r.iters)
     end
 
 finally
-    # ALWAYS revert
     @info "Reverting src/simulation/*.jl: MEASURE -> ESTIMATE"
     n_reverted = _swap_planner_flag!("MEASURE", "ESTIMATE")
     @info "Reverted $n_reverted plan-builder sites back to ESTIMATE"
-    n_estimate_post = _count_planner_flag("ESTIMATE")
-    n_measure_post  = _count_planner_flag("MEASURE")
-    @info "Post-revert counts" ESTIMATE=n_estimate_post MEASURE=n_measure_post
-    @assert n_estimate_post == 16 "Revert failed: got $n_estimate_post ESTIMATE"
-    @assert n_measure_post  == 0  "Revert failed: got $n_measure_post MEASURE"
+    n_post_est = _count_planner_flag("ESTIMATE")
+    n_post_mea = _count_planner_flag("MEASURE")
+    @assert n_post_est == EXPECTED_FLAG_COUNT (
+        "revert failed: ESTIMATE count=$n_post_est"
+    )
+    @assert n_post_mea == 0 "revert failed: MEASURE count=$n_post_mea"
+    @info "HEAD state restored (ESTIMATE=$n_post_est, MEASURE=$n_post_mea)"
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -270,72 +226,81 @@ end
 
 est_mean = mean(estimate_times); est_std = std(estimate_times)
 mea_mean = mean(measure_times);  mea_std = std(measure_times)
-# Slowdown = (ESTIMATE - MEASURE) / MEASURE, positive if ESTIMATE is slower
 slowdown_pct = (est_mean - mea_mean) / mea_mean * 100
 
-fmt_times(ts) = join((@sprintf("%.2f s", t) for t in ts), " | ")
+fmt_row(ts) = join((@sprintf("%.2f s", t) for t in ts), " | ")
 
 md = """
 # Phase 15 Plan 01 — Performance Benchmark: FFTW.MEASURE vs FFTW.ESTIMATE
 
 **Generated:** $(now())
-**Config:** SMF-28, L=$(BM_L_FIBER) m, P=$(BM_P_CONT) W, Nt=$(BM_NT), max_iter=$(BM_MAX_ITER), seed=$(BM_SEED)
+**Config:** SMF-28 canonical, L=2.0 m, P=0.2 W, Nt=8192, max_iter=30, seed=42
 **Thread pins:** FFTW threads = 1, BLAS threads = 1
-**Runs per leg:** $(BM_N_RUNS) timed (plus one discarded warm-up each)
+**Runs per leg:** $(N_RUNS) timed, each in a fresh Julia subprocess (1 warm-up per leg discarded)
+**Timing scope:** only `optimize_spectral_phase` wall time (excludes Julia startup, precompile, setup)
 
 ## Wall-time Summary
 
-| Mode            | Run 1 | Run 2 | Run 3 | Mean       | Std        | Slowdown vs MEASURE |
-|-----------------|-------|-------|-------|------------|------------|---------------------|
-| FFTW.MEASURE    | $(fmt_times(measure_times)) | $(@sprintf("%.2f s", mea_mean)) | ±$(@sprintf("%.2f s", mea_std)) | baseline |
-| FFTW.ESTIMATE   | $(fmt_times(estimate_times)) | $(@sprintf("%.2f s", est_mean)) | ±$(@sprintf("%.2f s", est_std)) | $(@sprintf("%+.1f%%", slowdown_pct)) |
+| Mode          | Run 1 | Run 2 | Run 3 | Mean     | Std      | Slowdown vs MEASURE |
+|---------------|-------|-------|-------|----------|----------|---------------------|
+| FFTW.MEASURE  | $(fmt_row(measure_times)) | $(@sprintf("%.2f s", mea_mean)) | ±$(@sprintf("%.2f s", mea_std)) | baseline |
+| FFTW.ESTIMATE | $(fmt_row(estimate_times)) | $(@sprintf("%.2f s", est_mean)) | ±$(@sprintf("%.2f s", est_std)) | $(@sprintf("%+.1f%%", slowdown_pct)) |
 
-## J Consistency Check
+## J Final Consistency
 
-| Mode            | J_final (run 1) | J_final (run 2) | J_final (run 3) |
-|-----------------|-----------------|-----------------|-----------------|
-| FFTW.MEASURE    | $(@sprintf("%.6e", measure_Js[1])) | $(@sprintf("%.6e", measure_Js[2])) | $(@sprintf("%.6e", measure_Js[3])) |
-| FFTW.ESTIMATE   | $(@sprintf("%.6e", estimate_Js[1])) | $(@sprintf("%.6e", estimate_Js[2])) | $(@sprintf("%.6e", estimate_Js[3])) |
+| Mode          | J_final (run 1) | J_final (run 2) | J_final (run 3) | max-min |
+|---------------|-----------------|-----------------|-----------------|---------|
+| FFTW.MEASURE  | $(@sprintf("%.6e", measure_Js[1])) | $(@sprintf("%.6e", measure_Js[2])) | $(@sprintf("%.6e", measure_Js[3])) | $(@sprintf("%.3e", maximum(measure_Js)-minimum(measure_Js))) |
+| FFTW.ESTIMATE | $(@sprintf("%.6e", estimate_Js[1])) | $(@sprintf("%.6e", estimate_Js[2])) | $(@sprintf("%.6e", estimate_Js[3])) | $(@sprintf("%.3e", maximum(estimate_Js)-minimum(estimate_Js))) |
 
-**MEASURE J variance:** max-min = $(@sprintf("%.3e", maximum(measure_Js)-minimum(measure_Js)))
-**ESTIMATE J variance:** max-min = $(@sprintf("%.3e", maximum(estimate_Js)-minimum(estimate_Js)))
+**Empirical cross-process determinism:** if ESTIMATE `max-min` is 0.0, multiple
+independent Julia processes converged to bit-identical L-BFGS minima — the
+strongest possible reproducibility signal. MEASURE `max-min` > 0.0 shows the
+original bug (different processes pick different FFT algorithms → different
+numerics → compounded divergence through L-BFGS iterations).
 
-If ESTIMATE J variance is 0.0 across runs, that is the empirical signature of
-full bit-determinism — multiple independent Julia processes converge to the
-same L-BFGS minimum, bit-identically.
+## Iteration Counts
+
+| Mode          | Run 1 iters | Run 2 iters | Run 3 iters |
+|---------------|-------------|-------------|-------------|
+| FFTW.MEASURE  | $(measure_iters[1]) | $(measure_iters[2]) | $(measure_iters[3]) |
+| FFTW.ESTIMATE | $(estimate_iters[1]) | $(estimate_iters[2]) | $(estimate_iters[3]) |
 
 ## Interpretation
 
-- **Slowdown $(@sprintf("%+.1f%%", slowdown_pct))**: the determinism fix costs roughly this much in
-  wall time. FFTW.ESTIMATE uses a heuristic for plan selection (no timing
-  microbenchmarks), so the chosen algorithm is not always the fastest
-  variant, but it IS always the same variant across runs.
-- **Plan 15 acceptance:** Phase 15 Plan 01 allows up to +30% slowdown. If
-  this benchmark reports > 30%, consider the FFTW wisdom-file fallback
-  (Phase 14 pattern) which keeps MEASURE but caches the picked plan across
-  processes. At < 30%, the cost is acceptable given the reproducibility
-  guarantee.
+- **Measured slowdown: $(@sprintf("%+.1f%%", slowdown_pct))**. This is the wall-time cost of the
+  Phase 15 deterministic-environment guarantee on the canonical SMF-28 config.
+- FFTW.ESTIMATE uses a heuristic (no timed microbenchmarks) for plan selection,
+  so the chosen algorithm may not always be the fastest variant — but it IS
+  always the same variant across runs, which eliminates the plan-selection
+  non-determinism observed in Phase 13 Plan 01.
+- **Plan-15 acceptance threshold:** +30% slowdown. At $(@sprintf("%+.1f%%", slowdown_pct)), the
+  cost $(abs(slowdown_pct) <= 30 ? "is within budget" : "EXCEEDS the budget and triggers the FFTW.PATIENT wisdom-file escalation discussed in the plan Deviations section") — the deterministic fix $(abs(slowdown_pct) <= 30 ? "stays" : "should be revisited").
 
 ## Method
 
-1. 3 ESTIMATE runs are timed in the current Julia process (normal include chain).
-2. The 4 `src/simulation/*.jl` files are mechanically patched to revert to
-   `flags=FFTW.MEASURE` for the duration of the MEASURE leg.
-3. 3 MEASURE runs are timed in FRESH Julia subprocesses (so each run pays the
-   precompile cost of the MEASURE-variant source — but the warm-up run's cost
-   is discarded, and the 3 timed runs represent a steady-state wall time).
-4. The patch is ALWAYS reverted in a `finally` block so HEAD is left clean.
+Each timed run is a fresh `julia --project=.` subprocess spawned from the driver
+(`scripts/phase15_benchmark.jl`) invoking the worker
+(`scripts/_phase15_benchmark_run.jl`). The worker:
 
-Note: Launching a fresh subprocess per MEASURE run adds ~40 s of Julia startup
-+ precompile cost per iteration, and that fixed cost IS included in the wall
-times reported above. To recover a pure steady-state timing, subtract the
-observed warm-up cost (reported in the log) from each MEASURE entry.
-Nevertheless, the slowdown comparison above is apples-to-apples only if the
-startup cost is equal for both legs. See `benchmark.jld2` for raw timings.
+1. Pins `FFTW.set_num_threads(1)` and `BLAS.set_num_threads(1)`.
+2. Includes the pipeline (`scripts/common.jl` + `scripts/raman_optimization.jl`),
+   which triggers precompilation of any stale methods.
+3. Sets up the Raman problem (NOT timed).
+4. Calls `optimize_spectral_phase` — this, and ONLY this, is timed via `time()`.
+5. Prints a single `BENCH_JSON: {...}` line the driver parses.
+
+A warm-up subprocess per leg is discarded so the 3 timed runs reflect the
+steady-state optimizer cost, not first-run precompile overhead.
+
+The MEASURE leg is produced by mechanically swapping `flags=FFTW.ESTIMATE` →
+`flags=FFTW.MEASURE` in the 4 `src/simulation/*.jl` files ($(EXPECTED_FLAG_COUNT) sites total),
+running the leg, then reverting in a `finally` block. The git working tree is
+guaranteed clean at exit.
 
 ## Raw data
 
-See `results/raman/phase15/benchmark.jld2`.
+See `results/raman/phase15/benchmark.jld2` — full per-run timings and metadata.
 """
 
 open(BENCHMARK_MD, "w") do io
@@ -344,15 +309,17 @@ end
 
 jldsave(BENCHMARK_JLD2;
     config = Dict(
-        "Nt" => BM_NT, "L_fiber" => BM_L_FIBER, "P_cont" => BM_P_CONT,
-        "max_iter" => BM_MAX_ITER, "time_window" => BM_TW_PS,
-        "preset" => String(BM_PRESET), "beta_order" => BM_BETA_ORD,
-        "log_cost" => BM_LOG_COST, "seed" => BM_SEED, "n_runs" => BM_N_RUNS,
+        "Nt" => 8192, "L_fiber" => 2.0, "P_cont" => 0.2,
+        "max_iter" => 30, "time_window" => 20.0,
+        "preset" => "SMF28", "beta_order" => 3, "log_cost" => true,
+        "seed" => 42, "n_runs" => N_RUNS,
     ),
     estimate_times = estimate_times,
     estimate_Js    = estimate_Js,
+    estimate_iters = estimate_iters,
     measure_times  = measure_times,
     measure_Js     = measure_Js,
+    measure_iters  = measure_iters,
     est_mean = est_mean, est_std = est_std,
     mea_mean = mea_mean, mea_std = mea_std,
     slowdown_pct = slowdown_pct,
@@ -360,6 +327,6 @@ jldsave(BENCHMARK_JLD2;
 )
 
 @info "Benchmark complete" BENCHMARK_MD BENCHMARK_JLD2
-@info @sprintf("MEASURE:  mean %.2f s  std %.2f s", mea_mean, mea_std)
-@info @sprintf("ESTIMATE: mean %.2f s  std %.2f s", est_mean, est_std)
-@info @sprintf("Slowdown: %+.1f%%", slowdown_pct)
+@info @sprintf("MEASURE  leg: mean %.2f s  std %.2f s", mea_mean, mea_std)
+@info @sprintf("ESTIMATE leg: mean %.2f s  std %.2f s", est_mean, est_std)
+@info @sprintf("Slowdown:     %+.1f%%", slowdown_pct)
