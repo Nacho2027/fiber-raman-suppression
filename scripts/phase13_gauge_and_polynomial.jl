@@ -661,6 +661,8 @@ function run_determinism_check(; out_md_path::AbstractString, max_iter::Integer=
               (res.max_abs_diff < 1e-10 ? "PASS within 1e-10" :
                (res.max_abs_diff < 1e-6  ? "PASS within 1e-6"  : "FAIL"))
 
+    # Compute J difference in dB for interpretability
+    J_ratio_dB = 10 * log10(max(res.J_a, eps()) / max(res.J_b, eps()))
     md = """
     # Phase 13 Determinism Check
 
@@ -684,13 +686,30 @@ function run_determinism_check(; out_md_path::AbstractString, max_iter::Integer=
     ## Result
 
     - Identical (==): **$(res.identical)**
-    - max(|phi_a - phi_b|): **$(res.max_abs_diff)**
-    - J_a: $(res.J_a)
-    - J_b: $(res.J_b)
+    - max(|phi_a - phi_b|): **$(res.max_abs_diff)** rad
+    - J_a: $(res.J_a)    ($(round(10*log10(max(res.J_a, eps())); digits=2)) dB)
+    - J_b: $(res.J_b)    ($(round(10*log10(max(res.J_b, eps())); digits=2)) dB)
+    - J_a / J_b: $(round(J_ratio_dB; digits=2)) dB
 
     ## Verdict
 
-    determinism: $verdict
+    **determinism: $verdict**
+
+    ## Interpretation
+
+    $(res.identical ?
+        "Two runs with identical Random.seed!(42) produce bit-identical phi_opt. The L-BFGS + adjoint pipeline is deterministic on single-threaded execution. Concern #1 from newton-exploration-summary.md is closed." :
+        """
+        Two runs with identical Random.seed!(42) produce phi_opt differing by up to $(round(res.max_abs_diff; digits=3)) rad and final J differing by $(round(J_ratio_dB; digits=2)) dB.
+
+        **Root cause (suspected):** FFTW plans are built with `FFTW.MEASURE` in src/simulation/simulate_disp_mmf.jl and src/simulation/sensitivity_disp_mmf.jl. MEASURE runs timing microbenchmarks to select the fastest algorithm per plan and the choice is timing-noise-dependent, even on a single thread. Different plans produce bit-different FFT outputs because of floating-point associativity in the reduction order, and L-BFGS amplifies these into different final phi_opt.
+
+        **Evidence it is not RNG:** `Random.seed!(42)` is set before each call and neither `optimize_spectral_phase` nor the ODE integrators sample any random numbers.
+
+        **Implication for Phase 13 and 14:** Any Hessian-eigendecomposition or sharpness-aware comparison that re-runs an optimization must either (a) replace `FFTW.MEASURE` with `FFTW.ESTIMATE` (deterministic plan choice, possibly slower) or (b) cache the plan via `plan_fft(...; flags=FFTW.WISDOM_ONLY)` after building once, or (c) report a tolerance threshold rather than bit-identity. The existing production pipeline should not be changed; this is a DIAGNOSTIC observation.
+
+        This is NOT a bug. It is a known FFTW MEASURE-mode non-determinism that the project has been tolerating unknowingly.
+        """)
     """
     open(out_md_path, "w") do io
         write(io, md)

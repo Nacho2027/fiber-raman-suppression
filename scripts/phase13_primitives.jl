@@ -340,23 +340,27 @@ function determinism_check(;
         seed::Integer=P13_DEFAULT_SEED,
         max_iter::Integer=P13_DEFAULT_MAX_ITER)
     # Lazy-load raman_optimization.jl so callers that only need gauge_fix don't
-    # pay the PyPlot startup cost.
-    if !(@isdefined cost_and_gradient) || !(@isdefined optimize_spectral_phase)
-        include(joinpath(@__DIR__, "raman_optimization.jl"))
+    # pay the PyPlot startup cost. Must use Base.invokelatest when calling
+    # the newly-included optimiser because Julia 1.12 enforces stricter
+    # world-age semantics on global bindings.
+    if !isdefined(Main, :optimize_spectral_phase)
+        @eval Main include($(joinpath(@__DIR__, "raman_optimization.jl")))
     end
 
     function _one_run()
         Random.seed!(seed)
-        # FFTW planner uses any currently-set thread count; we set FFTW to 1
-        # thread below so plan creation is deterministic too.
+        # Pin FFTW and BLAS to single-threaded execution so plan creation and
+        # reductions are bit-deterministic across runs.
         FFTW.set_num_threads(1)
         BLAS.set_num_threads(1)
         uω0, fiber, sim, band_mask, _Δf, _rt = setup_raman_problem(; config...)
-        result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
+        result = Base.invokelatest(Main.optimize_spectral_phase,
+            uω0, fiber, sim, band_mask;
             max_iter=max_iter, log_cost=true)
         Nt = sim["Nt"]; M = sim["M"]
         φ = reshape(copy(result.minimizer), Nt, M)
-        J_final, _ = cost_and_gradient(φ, uω0, fiber, sim, band_mask)
+        J_final, _ = Base.invokelatest(Main.cost_and_gradient,
+            φ, uω0, fiber, sim, band_mask)
         return φ, J_final
     end
 
@@ -387,12 +391,14 @@ function cost_invariance_under_gauge(phi::AbstractArray{<:Real},
         uω0, fiber, sim, band_mask_input::AbstractVector{Bool},
         omega::AbstractVector{<:Real},
         band_mask_output::AbstractVector{Bool})
-    if !(@isdefined cost_and_gradient)
-        include(joinpath(@__DIR__, "raman_optimization.jl"))
+    if !isdefined(Main, :cost_and_gradient)
+        @eval Main include($(joinpath(@__DIR__, "raman_optimization.jl")))
     end
-    J_raw, _ = cost_and_gradient(phi, uω0, fiber, sim, band_mask_output)
+    J_raw, _ = Base.invokelatest(Main.cost_and_gradient,
+        phi, uω0, fiber, sim, band_mask_output)
     phi_g, _ = gauge_fix(phi, band_mask_input, omega)
-    J_fixed, _ = cost_and_gradient(phi_g, uω0, fiber, sim, band_mask_output)
+    J_fixed, _ = Base.invokelatest(Main.cost_and_gradient,
+        phi_g, uω0, fiber, sim, band_mask_output)
     rel_diff = abs(J_raw - J_fixed) / max(abs(J_raw), eps())
     return (J_raw = J_raw, J_fixed = J_fixed, rel_diff = rel_diff)
 end
