@@ -100,3 +100,40 @@ short note.
    ΔJ.  If amplitude-on-top-of-phase adds < 0.5 dB at this config, the
    success criterion is unrealistic and should be re-scoped.
 
+## 2026-04-17 ~22:00 UTC — follow-up fixes landed; convergence bug persists
+
+- Implemented all 4 follow-up items from above: tanh reparameterization
+  (commit 9063c53), warm-start (same), BackTracking line-search trial
+  (commit dd310ad, later reverted in edd8fff), `log_cost=false` for
+  multivar (edd8fff), `save_standard_set` compliance (bde8b04).
+- Ran gradient tests again on the new code: **ALL 3 TESTS PASS**.
+- Ran demo on burst VM via `burst-run-heavy A-demo2` (new wrapper, clean
+  isolation). Results:
+    * phase-only: ΔJ = −55.42 dB
+    * multivar cold (tanh, log_cost=false): ΔJ = −16.78 dB
+    * multivar warm (φ₀=φ_A, log_cost=false): ΔJ = −23.61 dB (regressed
+      from -57 dB initial — A never moved, φ drifted away)
+- 12 standard-images PNGs produced for all 3 runs per new project rule.
+- **Key finding**: L-BFGS with HagerZhang line-search accepts non-monotone
+  steps in the joint (φ, A) space at log_cost=false starting near an
+  optimum. Gradient is FD-correct. This is a line-search robustness issue,
+  not a gradient bug.
+- Ephemeral VM used once (`A-demo` spawn-temp) to avoid the lock queue;
+  destroyed cleanly by trap. `burst-list-ephemerals` clean.
+- Burst VM state: RUNNING (other sessions). Lock released.
+
+## 2026-04-17 ~22:00 UTC — session closing
+
+- Commits on branch: a..edd8fff (latest). All commits pushed to
+  `origin/sessions/A-multivar`.
+- Task 13 complete to the extent possible: tests green, demo ran with
+  all standard artifacts, but the A/B success criterion remains FAIL due
+  to the L-BFGS convergence issue documented above.
+- Follow-up items refreshed in 16-01-SUMMARY.md "Open follow-up" section
+  (amplitude-only warm-start, two-stage warm-start, diagonal Hessian
+  preconditioner, trust-region Newton).
+- No shared-file edits; new rules (P5 wrapper + standard_images)
+  acknowledged and followed for all new runs.
+   ΔJ.  If amplitude-on-top-of-phase adds < 0.5 dB at this config, the
+   success criterion is unrealistic and should be re-scoped.
+

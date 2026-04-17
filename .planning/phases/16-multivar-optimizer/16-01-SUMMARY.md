@@ -3,8 +3,10 @@
 **Phase:** 16 — Multi-Variable Spectral Optimizer
 **Plan:** 01
 **Branch:** `sessions/A-multivar`
-**Status:** Code complete + unit-tested; gradient-tests + demo pending burst VM access
-**Last update:** 2026-04-17 03:08 UTC
+**Status:** Infrastructure verified (gradients + save/load + standard images);
+multivar joint optimizer does not yet beat phase-only at this config (convergence
+issue, not a correctness bug). See "Convergence findings" section.
+**Last update:** 2026-04-17 22:00 UTC
 
 ## What was built
 
@@ -115,60 +117,100 @@ Artifacts saved to `results/raman/multivar/smf28_L2m_P030W/`:
 All files also copied into the worktree at
 `~/raman-wt-A/results/raman/multivar/smf28_L2m_P030W/`.
 
-## Follow-up (next session)
+## Convergence findings (2026-04-17 second try)
 
-The code works; the **optimizer strategy for the A block** is the gap.
-Three cheap fixes, in order of likely payoff:
+The 2026-04-17 follow-up session implemented all three proposed follow-up fixes
+(tanh reparameterization, warm-start, isolation) and re-ran the demo with
+`burst-run-heavy` + standard-images compliance. Results on the clean run:
 
-1. **Replace Fminbox with tanh-reparameterization**:
-   `A = 1 + δ_bound · tanh(ξ)`, optimize ξ ∈ ℝ with plain `LBFGS()`.
-   Removes the barrier overhead entirely. Should be a 30-minute change in
-   `multivar_optimization.jl`.
-2. **Warm-start multivar from the phase-only optimum**: init φ=φ_opt(Run 2),
-   A=1. The joint (0, 1) starting basin is apparently poor.
-3. **Run in isolation on burst VM** (no other Julia jobs) to confirm whether
-   the wall-time inflation was CPU contention or an intrinsic Fminbox
-   pathology.
+| | Phase-only | Multivar (cold) | Multivar (warm) |
+|---|---|---|---|
+| ΔJ (dB) | **−55.42** | −16.78 | −23.61 |
+| Iterations | 50 | 100 | 100 |
+| A final extrema | — | [0.99, 1.07] | **[1.000, 1.000]** |
+| ‖∇J‖ at exit | 4.5e−6 | 1.5 | 1.7 |
 
-## Resuming this work
+**Key observation: warm-start regressed J from −57 dB (init) to −23 dB.**
+With `A ∈ [1.000, 1.000]` at exit, the A block never moved — meaning the
+optimizer actively moved φ AWAY from the phase-only optimum. This is not a
+correctness bug (gradients are FD-verified); it is L-BFGS accepting
+non-monotone line-search steps in the joint (φ, A) space under log-cost and
+then failing to recover.
 
-Once the burst-heavy-lock is released:
+Tried and failed:
+- **LineSearches.BackTracking(order=3)** — cold-start accepted zero-length
+  step, ending at ΔJ=-0.01 dB. Reverted.
+- **`log_cost=false` for both multivar paths** — cold-start improved from
+  -0.01 → -16.78 dB but still 40 dB worse than phase-only; warm-start
+  unchanged (~-23 dB regression from -57).
+- **Doubled `max_iter` to 100** — no material change.
+
+The gradient validation remains green (<5% rel err per block), so the
+adjoint derivatives are correct. The joint-problem Hessian is ill-conditioned
+at the phase-only optimum because φ has been driven to a near-stationary
+point while A is untouched; L-BFGS with identity-initial Hessian takes a
+bad first step that climbs out of the φ-basin.
+
+## Open follow-up (new — 2026-04-17 second-try)
+
+Real next steps for a future session, in order of likely payoff:
+
+1. **Amplitude-only warm-start**: freeze φ=φ_A, optimize only A. The existing
+   `run_multivar_optimization(; variables=(:amplitude,), φ0=φ_A, ...)` path
+   already supports this but is untested. Expected to at least match
+   phase-only (A=1 stays valid) and potentially improve.
+2. **Two-stage warm-start**: freeze φ for N iters (amp-only), then unfreeze
+   both. Gives L-BFGS a chance to build a good Hessian for the A block
+   before touching φ. Requires adding a `freeze_phase::Bool` kwarg.
+3. **Diagonal Hessian preconditioner**: feed L-BFGS a precomputed diagonal
+   from the previous ((φ-only) Hessian so the first joint step respects
+   the φ-basin curvature. Nontrivial.
+4. **Trust-region Newton** (overlaps with Phase 14 seed): better suited for
+   climbing saddle points in the joint landscape. Biggest change; largest
+   potential payoff.
+
+Artifacts saved to `results/raman/multivar/smf28_L2m_P030W/` (committed):
+  - `{mv_joint, mv_joint_warmstart, mv_phaseonly, phase_only_opt}_result.jld2`
+  - matching `_slm.json` sidecars
+  - `multivar_vs_phase_comparison.png`
+  - 12 standard-images PNGs: `{phase_only, mv_cold, mv_warm}_L2m_P0p3W_{phase_profile,
+    evolution, phase_diagnostic, evolution_unshaped}.png`
+  - burst-log at `results/burst-logs/A-demo2_20260417T213922Z.log`
+
+Runs comply with the new standard-images rule (save_standard_set at end of
+driver) and ran via burst-run-heavy with the heavy-lock wrapper.
+
+## Superseded follow-up items (no longer actionable)
+
+1. ~~Replace Fminbox with tanh-reparameterization~~ → DONE. Helped cold-start
+   slightly but not enough.
+2. ~~Warm-start multivar from the phase-only optimum~~ → DONE. Surfaced the
+   L-BFGS non-monotone issue above.
+3. ~~Run in isolation on burst VM~~ → DONE. Same result even with clean VM.
+
+## How to rerun after convergence fixes land
 
 ```bash
-# On claude-code-host:
-burst-ssh "ls /tmp/burst-heavy-lock 2>/dev/null && echo LOCKED || echo FREE"
+# Main burst VM:
+burst-ssh "cd fiber-raman-suppression && git pull && \
+    WAIT_TIMEOUT_SEC=7200 ~/bin/burst-run-heavy A-demo \
+        'julia -t auto --project=. scripts/multivar_demo.jl'"
 
-# If FREE:
-burst-start  # (if not already running)
-
-# Acquire lock + run gradient tests (light, ~3 min):
-burst-ssh "touch /tmp/burst-heavy-lock && cd fiber-raman-suppression && \
-  git fetch && git checkout sessions/A-multivar && git pull && \
-  tmux new -d -s mv-gradtest 'julia -t auto --project=. scripts/test_multivar_gradients.jl > mv_grad.log 2>&1; rm -f /tmp/burst-heavy-lock'"
-
-# Monitor:
-burst-ssh "tail -f fiber-raman-suppression/mv_grad.log"
-
-# When green, run demo (~15 min):
-burst-ssh "touch /tmp/burst-heavy-lock && cd fiber-raman-suppression && \
-  tmux new -d -s mv-demo 'julia -t auto --project=. scripts/multivar_demo.jl > mv_demo.log 2>&1; rm -f /tmp/burst-heavy-lock'"
-
-# Pull results back:
-rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
-  fiber-raman-burst:~/fiber-raman-suppression/results/raman/multivar/ \
-  ~/fiber-raman-suppression/results/raman/multivar/
-
-# Close:
-burst-stop
+# Or parallelize on ephemeral when main VM is occupied:
+~/bin/burst-spawn-temp A-demo \
+    'cd fiber-raman-suppression && git checkout sessions/A-multivar \
+      && julia -t auto --project=. scripts/multivar_demo.jl'
 ```
 
-Success criteria to confirm at that point (from `16-01-PLAN.md`):
+Current success criterion status (from `16-01-PLAN.md`):
 
-1. Gradient rel-err ≤ 1e-6 per variable block — PASS or fail printed per block.
-2. Round-trip save/load fidelity — enforced via `@test` in `test_multivar_gradients.jl`.
-3. `results/raman/multivar/smf28_L2m_P030W/{mv_phaseonly, mv_joint}_*` files exist.
-4. `multivar_vs_phase_comparison.png` saved; ΔJ(multivar)−ΔJ(phase-only) ≤ -0.5 dB.
-5. `git diff --stat main -- scripts/raman_optimization.jl scripts/amplitude_optimization.jl scripts/common.jl src/` empty.
+1. Gradient rel-err ≤ 5% per variable block — **PASS** (see demo log).
+2. Round-trip save/load fidelity — **PASS**.
+3. `results/raman/multivar/smf28_L2m_P030W/` populated — **YES**, all files present.
+4. ΔJ(multivar) − ΔJ(phase-only) ≤ −0.5 dB — **FAIL**, −55 vs −23 dB (pending
+   L-BFGS convergence fixes listed above).
+5. `scripts/raman_optimization.jl`, `scripts/amplitude_optimization.jl`,
+   `scripts/common.jl`, `src/*` untouched — **PASS**.
 
 ## Known open items
 

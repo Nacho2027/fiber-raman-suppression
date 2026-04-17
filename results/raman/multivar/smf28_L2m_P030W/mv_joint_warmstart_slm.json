@@ -1,11 +1,11 @@
 {
     "metrics": {
         "iterations": 100,
-        "delta_J_dB": -16.77501943521427,
+        "delta_J_dB": -23.61446108847012,
         "converged": false,
         "J_before": 0.7088909094749583,
-        "wall_time_s": 394.1361379623413,
-        "J_after": 0.014896267537532617
+        "wall_time_s": 107.4156608581543,
+        "J_after": 0.003084134420654769
     },
     "fiber": {
         "name": "SMF-28",
@@ -74,8 +74,8 @@
             "storage_key": "E_ref"
         }
     },
-    "result_file": "mv_joint_result.jld2",
+    "result_file": "mv_joint_warmstart_result.jld2",
     "generator": "scripts/multivar_optimization.jl (sessions/A-multivar)",
     "schema_version": "1.0",
-    "generated_at": "2026-04-17T21:49:49.996"
+    "generated_at": "2026-04-17T21:51:47.066"
 }

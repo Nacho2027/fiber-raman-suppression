@@ -1,0 +1,125 @@
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info:   Multi-Variable Demo — SMF-28 L=2m P=0.30W (canonical Run 2)
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info: ▶ Run A: phase-only reference (optimize_spectral_phase)
+[ Info: Auto-sizing: time_window 20→36 ps, Nt 8192→8192 (for L=2.0m P=0.300W)
+┌ Info: Optimization
+│   λ_gdd = 0.0001
+└   λ_boundary = 1.0
+┌ Info: ┌─────────────────────────────────────────────────┐
+│ │  RUN SUMMARY: results/raman/multivar/smf28_L2m_P030W/phase_only_opt
+│ ├─────────────────────────────────────────────────┤
+│ │  Fiber        L = 2.0 m, γ = 1.10e-03 W⁻¹m⁻¹
+│ │  Grid         Nt = 8192, time_window = 36.0 ps
+│ │  Regulariz.   λ_gdd = 1.00e-04, λ_boundary = 1.0
+│ │  Iterations   50 (191.3 s)
+│ ├─────────────────────────────────────────────────┤
+│ │  J (before)   7.0889e-01  (-1.5 dB)
+│ │  J (after)    2.0337e-06  (-56.9 dB)
+│ │  ΔJ           -55.4 dB
+│ │  ‖∇J‖         4.53e-06
+│ ├─────────────────────────────────────────────────┤
+│ │  Peak power   in: 0 W → out: 2295 W
+│ │  Energy cons. 1.21e-04 (0.0%)
+│ ├─────────────────────────────────────────────────┤
+│ │  Boundary (input)   1.82e-04  ⚠ DANGER
+│ │  Boundary (output)  1.87e-04  ⚠ DANGER
+└ └─────────────────────────────────────────────────┘
+┌ Warning: Boundary energy is too high — increase time_window or Nt
+└ @ Main ~/fiber-raman-suppression/scripts/raman_optimization.jl:499
+[ Info: Saving results to results/raman/multivar/smf28_L2m_P030W/phase_only_opt_result.jld2
+[ Info: Updated manifest at results/raman/manifest.json (49 runs)
+[ Info:   phase-only: J_before=-1.5 dB  J_after=-56.9 dB  ΔJ=-55.42 dB  (206.6 s)
+[ Info: ▶ Run B: joint phase+amplitude from cold start (tanh reparam, plain LBFGS)
+[ Info: Auto-sizing: time_window 20→36 ps, Nt 8192→8192 (for L=2.0m P=0.300W)
+┌ Info: multivar: saved
+│   jld2_path = "results/raman/multivar/smf28_L2m_P030W/mv_joint_result.jld2"
+└   json_path = "results/raman/multivar/smf28_L2m_P030W/mv_joint_slm.json"
+┌ Info: ┌──────────────────── MULTIVAR RUN SUMMARY ────────────────────┐
+│ │  Save prefix      results/raman/multivar/smf28_L2m_P030W/mv_joint
+│ │  Variables        phase+amplitude
+│ │  Fiber            SMF-28  L=2.00m  γ=1.10e-03
+│ │  Grid             Nt=8192  window=36.0 ps
+│ │  Iterations       100  (409.2 s total, 394.1 s optim)
+│ │  J (before)       7.0889e-01 (-1.5 dB)
+│ │  J (after)        1.4896e-02 (-18.3 dB)
+│ │  ΔJ               -16.78 dB
+│ │  ‖∇J‖ at opt      5.45e-03  | α=1.000 | A∈[0.900, 1.100]
+└ └───────────────────────────────────────────────────────────────┘
+[ Info: ▶ Run B-warm: phase+amplitude warm-started from phase-only optimum
+[ Info: Auto-sizing: time_window 20→36 ps, Nt 8192→8192 (for L=2.0m P=0.300W)
+┌ Info: multivar: saved
+│   jld2_path = "results/raman/multivar/smf28_L2m_P030W/mv_joint_warmstart_result.jld2"
+└   json_path = "results/raman/multivar/smf28_L2m_P030W/mv_joint_warmstart_slm.json"
+┌ Info: ┌──────────────────── MULTIVAR RUN SUMMARY ────────────────────┐
+│ │  Save prefix      results/raman/multivar/smf28_L2m_P030W/mv_joint_warmstart
+│ │  Variables        phase+amplitude
+│ │  Fiber            SMF-28  L=2.00m  γ=1.10e-03
+│ │  Grid             Nt=8192  window=36.0 ps
+│ │  Iterations       100  (114.7 s total, 107.4 s optim)
+│ │  J (before)       7.0889e-01 (-1.5 dB)
+│ │  J (after)        3.0841e-03 (-25.1 dB)
+│ │  ΔJ               -23.61 dB
+│ │  ‖∇J‖ at opt      1.29e-03  | α=1.000 | A∈[0.999, 1.001]
+└ └───────────────────────────────────────────────────────────────┘
+[ Info: ▶ Saving phase-only result in multivar JSON+JLD2 format too
+┌ Info: multivar: saved
+│   jld2_path = "results/raman/multivar/smf28_L2m_P030W/mv_phaseonly_result.jld2"
+└   json_path = "results/raman/multivar/smf28_L2m_P030W/mv_phaseonly_slm.json"
+[ Info: ▶ Plotting comparison figure
+[ Info: Saved comparison figure: results/raman/multivar/smf28_L2m_P030W/multivar_vs_phase_comparison.png
+┌ Info: ═══════════════════════════════════════════════════════════════
+│   DEMO RESULTS
+│ ───────────────────────────────────────────────────────────────
+│   Phase-only            ΔJ = -55.42 dB
+│   Multivariate (cold)   ΔJ = -16.78 dB   (Δ vs phase-only = +38.65 dB)
+│   Multivariate (warm)   ΔJ = -23.61 dB   (Δ vs phase-only = +31.81 dB)
+│   Best improvement          = 31.81 dB  (negative = multivar wins)
+│   Success criterion (≤ -0.5 dB): FAIL — gap smaller than threshold
+└ ═══════════════════════════════════════════════════════════════
+┌ Warning: Demo did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config.
+└ @ Main ~/fiber-raman-suppression/scripts/multivar_demo.jl:275
+[ Info: ▶ Generating standard output images (Project-rule 2026-04-17)
+[ Info: Saved optimization result to results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_phase_profile.png
+┌ Info: standard image wrote
+│   kind = "phase_profile (6-panel)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_phase_profile.png"
+┌ Info: standard image wrote
+│   kind = "evolution (optimized)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_evolution.png"
+[ Info: Saved phase diagnostic to results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_phase_diagnostic.png
+┌ Info: standard image wrote
+│   kind = "phase diagnostic"
+└   path = "results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_phase_diagnostic.png"
+┌ Info: standard image wrote
+│   kind = "evolution (unshaped)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/phase_only_L2m_P0p3W_evolution_unshaped.png"
+[ Info: Saved optimization result to results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_phase_profile.png
+┌ Info: standard image wrote
+│   kind = "phase_profile (6-panel)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_phase_profile.png"
+┌ Info: standard image wrote
+│   kind = "evolution (optimized)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_evolution.png"
+[ Info: Saved phase diagnostic to results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_phase_diagnostic.png
+┌ Info: standard image wrote
+│   kind = "phase diagnostic"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_phase_diagnostic.png"
+┌ Info: standard image wrote
+│   kind = "evolution (unshaped)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_cold_L2m_P0p3W_evolution_unshaped.png"
+[ Info: Saved optimization result to results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_phase_profile.png
+┌ Info: standard image wrote
+│   kind = "phase_profile (6-panel)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_phase_profile.png"
+┌ Info: standard image wrote
+│   kind = "evolution (optimized)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_evolution.png"
+[ Info: Saved phase diagnostic to results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_phase_diagnostic.png
+┌ Info: standard image wrote
+│   kind = "phase diagnostic"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_phase_diagnostic.png"
+┌ Info: standard image wrote
+│   kind = "evolution (unshaped)"
+└   path = "results/raman/multivar/smf28_L2m_P030W/mv_warm_L2m_P0p3W_evolution_unshaped.png"
+[ Info: ═══ Multivar demo complete ═══

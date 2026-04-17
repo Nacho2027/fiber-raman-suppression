@@ -4,7 +4,7 @@
         "delta_J_dB": -55.42287282080116,
         "converged": true,
         "J_before": 0.7088909094749583,
-        "wall_time_s": 12350.113550901413,
+        "wall_time_s": 733.0528631210327,
         "J_after": -56.91707874905933
     },
     "fiber": {
@@ -78,5 +78,5 @@
     "result_file": "mv_phaseonly_result.jld2",
     "generator": "scripts/multivar_optimization.jl (sessions/A-multivar)",
     "schema_version": "1.0",
-    "generated_at": "2026-04-17T07:00:19.159"
+    "generated_at": "2026-04-17T21:51:47.161"
 }
