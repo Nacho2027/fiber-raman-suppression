@@ -509,7 +509,7 @@ function run_selftest(; verbose::Bool=true)
     verbose && @info "Session E self-test: sweep_simple_param.jl"
     # --- Minimal setup ---
     uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
-        fiber_preset=:SMF28, L_fiber=1.0, P_cont=0.05, Nt=2^12, time_window=5.0
+        fiber_preset=:SMF28, β_order=3, L_fiber=1.0, P_cont=0.05, Nt=2^12, time_window=5.0
     )
     Nt = sim["Nt"]
 
