@@ -27,6 +27,8 @@ using Optim
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 
 function run_m1_reference(; seed::Int = 42, max_iter::Int = 30,
                            save_dir::String = joinpath(@__DIR__, "..", "results", "raman", "phase16"))
@@ -79,6 +81,17 @@ function run_m1_reference(; seed::Int = 42, max_iter::Int = 30,
         f["max_iter"]  = max_iter
     end
     @info "Saved $fname"
+
+    # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────
+    save_standard_set(
+        φ_opt, uω0, fiber, sim,
+        band_mask, Δf, raman_threshold;
+        tag         = lowercase(@sprintf("m1_ref_smf28_l1m_p0p05w_seed%d", seed)),
+        fiber_name  = "SMF28",
+        L_m         = 1.0,
+        P_W         = 0.05,
+        output_dir  = save_dir,
+    )
 
     return (; seed, J_ref_dB, J_lin_dB, improvement = J_ref_dB - J_lin_dB, wall, fname)
 end

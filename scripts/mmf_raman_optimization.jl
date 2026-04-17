@@ -42,6 +42,14 @@ using PyPlot
 include(joinpath(@__DIR__, "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "src", "mmf_cost.jl"))
 
+# save_standard_set expects visualization helpers (plot_optimization_result_v2,
+# plot_spectral_evolution, plot_phase_diagnostic) which live in scripts/visualization.jl.
+# That file is in the protected set — we include it read-only. standard_images.jl is
+# the new mandatory wrapper; every driver MUST call save_standard_set after phi_opt.
+include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cost variant dispatch
 # ─────────────────────────────────────────────────────────────────────────────
@@ -500,6 +508,24 @@ function run_mmf_baseline(;
         φ0, opt.φ_opt, setup, opt;
         save_prefix = save_prefix,
         title_suffix = @sprintf("[%s, L=%gm, P=%gW]", String(preset), L_fiber, P_cont),
+    )
+
+    # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────
+    # Every driver producing phi_opt MUST call save_standard_set. Uses the
+    # fundamental-mode slice internally (mode_idx=1) — appropriate for MMF
+    # since LP01 is the dominant detected mode. phi_opt is a Vector{Float64}
+    # (shared across modes); save_standard_set handles Vector input cleanly
+    # (it uses phi[:, 1] indexing which returns the whole vector for 1D inputs).
+    save_standard_set(
+        opt.φ_opt, uω0, fiber, sim,
+        band_mask, setup.Δf, setup.raman_threshold;
+        tag         = lowercase(replace(@sprintf("mmf_%s_l%gm_p%gw_seed%d",
+                                                 String(preset), L_fiber, P_cont, seed),
+                                        "." => "p")),
+        fiber_name  = String(preset),
+        L_m         = L_fiber,
+        P_W         = P_cont,
+        output_dir  = save_dir,
     )
 
     return (

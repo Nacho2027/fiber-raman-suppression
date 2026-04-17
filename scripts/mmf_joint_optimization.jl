@@ -377,6 +377,22 @@ function run_joint_baseline(;
     end
     @info "Saved $fname"
 
+    # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────
+    # Reconstruct the shaped-field uω0_base with the OPTIMIZED c_m so the
+    # "unshaped" comparison plot reflects the realizable experimental launch.
+    uω0_base_opt = uω0_pulse .* reshape(joint.c_opt, 1, M)
+    save_standard_set(
+        joint.φ_opt, uω0_base_opt, setup.fiber, setup.sim,
+        setup.band_mask, setup.Δf, setup.raman_threshold;
+        tag         = lowercase(replace(@sprintf("joint_%s_l%gm_p%gw_seed%d",
+                                                 String(preset), L_fiber, P_cont, seed),
+                                        "." => "p")),
+        fiber_name  = String(preset),
+        L_m         = L_fiber,
+        P_W         = P_cont,
+        output_dir  = save_dir,
+    )
+
     return (; setup, joint, J_lin_dB, wall, fname)
 end
 
