@@ -78,7 +78,7 @@ But if you're uncertain whether a job is "light," use `run-heavy.sh` — being b
 
 ## On-demand ephemeral second burst VM
 
-For the rare case when you genuinely need a second heavy Julia run in parallel with the one currently holding the lock on `fiber-raman-burst`, use `~/bin/burst-spawn-temp` **on claude-code-host** (not on the burst VM).
+When you want to run a heavy Julia job in parallel with whatever is currently on `fiber-raman-burst` (queued work, a parallel sweep, an isolated reproducibility run), use `~/bin/burst-spawn-temp` **on claude-code-host** (not on the burst VM).
 
 ```bash
 ~/bin/burst-spawn-temp <session-tag> '<command>'
@@ -105,13 +105,13 @@ Ephemeral VMs bill at ~$0.90/hr while running. The trap is the primary cleanup; 
 ~/bin/burst-list-ephemerals --destroy # destroy all of them
 ```
 
-### When to use it
+### Good uses
 
-- You genuinely need two independent multi-hour heavy jobs at once and serializing would lose a half-day.
-- You want to reproduce a run in total isolation (no noisy-neighbor risk from other sessions).
+- Second heavy job while the main VM is busy.
+- Parallelizing a multi-config sweep that would serialize to half a day on one VM.
+- Isolated reproducibility runs with no noisy-neighbor risk.
+- Quick experiments you don't want to queue behind a long-running job.
 
-### When NOT to use it
+### Soft cap and cleanup
 
-- You can serialize behind the lock on the main burst VM (almost always the right call).
-- You have more than one or two short (<30 min) jobs queued — the per-spawn setup cost isn't worth it.
-- Rule P6 ("distribute sessions across hosts") already gives you enough separation for editing-heavy sessions.
+Keep the concurrent count of ephemerals at ~2 or fewer — each bills ~$0.90/hr, so a dozen simultaneous would burn through the project budget in a day. Run `burst-list-ephemerals` at the end of a work block and destroy any orphans. The trap + 6-hour auto-shutdown mean a one-off failure will not cost you overnight, but explicit cleanup is still the right habit.

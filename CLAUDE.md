@@ -467,7 +467,7 @@ burst-ssh "tmux new -d -s E-validate 'julia -t 4 --project=. scripts/check.jl'"
 
 **Pre-Apr-17 manual lock pattern (`touch /tmp/burst-heavy-lock`) is DEPRECATED.** Use the wrapper. Any session still using the old pattern is violating Rule P5.
 
-**On-demand second burst VM:** when you really need two independent heavy jobs in parallel (rare), use `~/bin/burst-spawn-temp <tag> '<command>'` on claude-code-host. It creates an ephemeral VM from a machine image of `fiber-raman-burst`, runs the command, and destroys the VM on exit via a trap (plus a 6-hour auto-shutdown safety net). Never leave ephemerals running overnight — `~/bin/burst-list-ephemerals --destroy` kills any orphans. Full docs in `scripts/burst/README.md`.
+**On-demand second burst VM:** when you want to run a heavy job in parallel with the one on the main burst VM, use `~/bin/burst-spawn-temp <tag> '<command>'` on claude-code-host. It creates an ephemeral VM from a machine image of `fiber-raman-burst`, runs the command, and destroys the VM on exit via a trap (plus a 6-hour auto-shutdown safety net). Use it freely — good cases include a queued heavy job while the main VM is busy, isolated reproducibility runs, and experiments that shouldn't disturb a long-running job. Guidelines: keep the concurrent count of ephemerals at ~2 or fewer (each bills ~$0.90/hr), and run `~/bin/burst-list-ephemerals` at the end of a work block to confirm nothing is orphaned (kill orphans with `--destroy`). Full docs in `scripts/burst/README.md`.
 
 ### Rule P6: Session host distribution
 
