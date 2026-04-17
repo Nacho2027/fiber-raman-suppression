@@ -142,7 +142,7 @@ for cand in CANDIDATES
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(
         Nt          = 2^14,
         time_window = 10.0,
-        β_order     = 2,
+        β_order     = 3,
         L_fiber     = cand.L,
         P_cont      = cand.P,
         fiber_preset = cand.fiber,
