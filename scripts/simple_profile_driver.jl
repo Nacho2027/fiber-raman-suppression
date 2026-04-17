@@ -281,6 +281,21 @@ function stage_baseline(; verbose::Bool=true)
     verbose && println(repeat("━", 72))
     verbose && println(@sprintf("  J_final_dB = %.3f dB  |  wall = %.2f s  |  tolerance OK", J_final_dB, t_wall))
     verbose && println(repeat("━", 72))
+
+    # Rule 2: mandatory standard-image set
+    try
+        include(joinpath(@__DIR__, "standard_images.jl"))
+        save_standard_set(
+            phi_opt, uω0, fiber, sim, band_mask, Δf, raman_threshold;
+            tag        = "smf28_L0p50m_P0p050W_baseline",
+            fiber_name = "SMF28",
+            L_m        = SP_BASELINE.L,
+            P_W        = SP_BASELINE.P,
+            output_dir = joinpath(SP_RESULTS_DIR, "standard_images"),
+        )
+    catch e
+        @warn "save_standard_set failed (Rule 2 non-compliance)" exception=e
+    end
     return out_path
 end
 
@@ -622,6 +637,25 @@ function stage_transferability(; verbose::Bool=true)
         if phi_warm_sample_idx[3] < 0 && tgt.fiber_name == "HNLF" && tgt.L == 0.5 && tgt.P == 0.005
             phi_warm_samples[:, :, 3] = phi_warm
             phi_warm_sample_idx[3] = i
+        end
+
+        # Rule 2: mandatory standard-image set for every phi_opt produced
+        try
+            include(joinpath(@__DIR__, "standard_images.jl"))
+            fname_canonical = replace(String(tgt.fiber_name), "-" => "")
+            tag = lowercase(@sprintf("%s_L%.2fm_P%.3fW_warm", fname_canonical, tgt.L, tgt.P))
+            tag = replace(tag, "." => "p")
+            save_standard_set(
+                phi_warm, tgt_uω0, tgt_fiber_copy, tgt_sim, tgt_band,
+                fftshift(fftfreq(tgt_sim["Nt"], 1 / tgt_sim["Δt"])), -5.0;
+                tag        = tag,
+                fiber_name = fname_canonical,
+                L_m        = Float64(tgt.L),
+                P_W        = Float64(tgt.P),
+                output_dir = joinpath(SP_RESULTS_DIR, "standard_images"),
+            )
+        catch e
+            @warn "save_standard_set failed for target $(i) (Rule 2 non-compliance)" exception=e
         end
 
         verbose && @info @sprintf("[%2d/%d] %s L=%.2fm P=%.3fW Φ_NL=%.2f: J_eval=%.2f dB → J_warm=%.2f dB (%.1fs, %d iter)",
