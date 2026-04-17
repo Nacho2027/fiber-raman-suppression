@@ -185,6 +185,10 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-16T22:40:00Z
-Last activity: 2026-04-16 - Completed Phase 15 Plan 01 (Deterministic Numerical Environment): regression test passes bit-identity (max|Δφ| = 0.0 rad), SMF-28 canonical benchmark shows +21.4% slowdown (within +30% budget)
-Next action: Continue Phase 13/14/15 Newton/Hessian sprint — Phase 14 Plan 02 A/B comparison can now assume reproducible baseline
+Last session: 2026-04-17T02:40:00Z
+Last activity: 2026-04-17 - Consolidated parallel GSD-2 (`.gsd/`) tracking back into GSD v1 (`.planning/`). Salvaged unique content: `07-03-SUMMARY.md` (full parameter sweep launched on burst VM 2026-04-17T01:42Z, still running at consolidation time) and `.planning/notes/gsd2-salvaged-decisions.md`. Archive at `.planning/archive/gsd2-parallel-run-2026-04-17.tar.gz`.
+Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
+
+## Active Background Jobs
+
+- **Parameter sweep (Phase 07 Plan 03)** — `julia -t auto scripts/run_sweep.jl` on `fiber-raman-burst` in tmux session `sweep`, heavy lock held. Launched 2026-04-17T01:42Z. At last check: SMF-28 11/12 done + L5m_P0.2W in progress; HNLF 4/12 at L=1.0m P=0.005W in progress. Multi-start + aggregate saves + heatmap PNGs still pending. See `.planning/phases/07-parameter-sweeps/07-03-SUMMARY.md`.
