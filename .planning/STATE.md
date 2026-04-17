@@ -169,6 +169,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 13 added (2026-04-16): Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, Hessian eigenspectrum at L-BFGS optima; gates any Newton's method decision. See `.planning/notes/newton-vs-lbfgs-reframe.md` and `.planning/seeds/newton-method-implementation.md`.
 - Phase 14 added (2026-04-16): Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path `optimize_spectral_phase_sharp` parallel to existing L-BFGS; keeps original cost function unchanged; user directive is both paths must remain usable for A/B comparison.
 - Phase 15 added (2026-04-16): Deterministic Numerical Environment — user-directed. Fixes FFTW.MEASURE plan-selection non-determinism found in Phase 13 Plan 01 (max|Δφ| = 1.04 rad between identical-seed runs). Pins FFTW planner to ESTIMATE, sets FFTW/BLAS thread counts to 1. Runs before Phase 14 Plan 02 so A/B comparison is reproducible.
+- Phase 16 added (2026-04-17, Session H): Cost Function Head-to-Head Audit — systematic 4-variant × 3-config comparison (linear E_band/E_total, log-scale dB, sharpness-aware from Phase 14, noise-aware scaffold). Produces `.planning/notes/cost-function-default.md` recommending a project-wide default cost; prevents drift between parallel optimization paths. Owned namespace: `scripts/cost_audit_*.jl`, `.planning/phases/16-*/`, `.planning/notes/cost-audit-*.md`, `.planning/sessions/H-cost-*.md`. No modifications to existing optimizers — new wrappers only. 12 runs on burst VM.
 
 ### Resolved Issues
 

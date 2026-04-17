@@ -250,3 +250,13 @@ Plans:
 
 Plans:
 - [x] 15-01: Pin FFTW planner to ESTIMATE, thread pins, src/simulation patch, regression test, benchmark — COMPLETE 2026-04-16 (7/7 bit-identity tests pass; +21.4% slowdown on SMF-28 canonical)
+
+### Phase 16: Cost Function Head-to-Head Audit — compare linear, log-scale dB, sharpness-aware, and noise-aware cost variants across 3 (fiber,L,P) configs and recommend a default
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
