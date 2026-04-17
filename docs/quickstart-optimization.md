@@ -47,12 +47,35 @@ Results land under `results/raman/<run_id>/`:
 
 ```
 results/raman/smf28_L2.0m_P0.2W_<timestamp>/
-├── _result.jld2        # binary payload (phi_opt, uω0, uωf, convergence history)
-├── _result.json        # scalar metadata sidecar (grep-able)
-├── spectral.png        # input vs output spectrum on dB axes
-├── phase.png           # 3-view phase diagnostic (wrapped, unwrapped, group delay)
-└── evolution.png       # 2x2 evolution comparison (spectral + temporal)
+├── _result.jld2                    # binary payload (phi_opt, uω0, uωf, history)
+├── _result.json                    # scalar metadata sidecar (grep-able)
+├── {tag}_phase_profile.png         # 6-panel before/after (mandatory standard image)
+├── {tag}_evolution.png             # spectral-evolution waterfall (mandatory)
+├── {tag}_phase_diagnostic.png      # wrapped/unwrapped/group-delay triplet (mandatory)
+├── {tag}_evolution_unshaped.png    # phi ≡ 0 waterfall for comparison (mandatory)
+├── spectral.png                    # input vs output spectrum on dB axes
+├── phase.png                       # 3-view phase diagnostic
+└── evolution.png                   # 2x2 evolution comparison
 ```
+
+The four `{tag}_*.png` files are the research group's **standard image
+set** — every driver that produces a `phi_opt` must generate them via
+`save_standard_set(...)` from `scripts/standard_images.jl` (Project-rule
+in `CLAUDE.md`). A run without the standard set is not considered
+complete. If you are writing a new driver, the end of it must look like:
+
+```julia
+include(joinpath(@__DIR__, "standard_images.jl"))
+save_standard_set(phi_opt, uω0, fiber, sim,
+                  band_mask, Δf, raman_threshold;
+                  tag        = "smf28_L2m_P0p2W",
+                  fiber_name = "SMF28", L_m = 2.0, P_W = 0.2,
+                  output_dir = "results/raman/my_run/")
+```
+
+To backfill the standard images for older JLD2 runs, use
+`scripts/regenerate_standard_images.jl` on the burst VM — see
+[quickstart-sweep.md](./quickstart-sweep.md#step-5--generate-report-cards-heatmaps-and-standard-images).
 
 Quick scalar peek:
 

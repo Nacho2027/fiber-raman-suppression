@@ -44,8 +44,15 @@ optimize:
 
 sweep:
 	@echo ""
-	@echo "⚠  make sweep: this run takes 2–3 h. Burst VM strongly recommended."
-	@echo "    Press Ctrl-C within 3 seconds to abort."
+	@echo "⚠  make sweep: heavy job (2–3 h wall). On the burst VM, launch it through"
+	@echo "    the heavy-lock wrapper (Rule P5 in CLAUDE.md) — not this target:"
+	@echo ""
+	@echo "      burst-ssh \"cd fiber-raman-suppression && \\"
+	@echo "                 ~/bin/burst-run-heavy <SESSION-TAG> \\"
+	@echo "                 'julia -t auto --project=. scripts/run_sweep.jl'\""
+	@echo ""
+	@echo "    See docs/quickstart-sweep.md for the full recipe."
+	@echo "    Press Ctrl-C within 3 seconds to abort this local run."
 	@echo ""
 	@sleep 3
 	$(JL) -t auto scripts/run_sweep.jl
