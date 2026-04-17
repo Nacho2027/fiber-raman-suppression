@@ -24,6 +24,10 @@
 
 set -uo pipefail  # -e deliberately omitted; we want to finish cleanup even on failure
 
+# Ensure julia is on PATH (juliaup install dir); non-interactive bash on the
+# burst VM does not source .bashrc by default.
+export PATH="$HOME/.juliaup/bin:$PATH"
+
 PHASE_DIR="$HOME/fiber-raman-suppression"
 RESULTS_DIR="$PHASE_DIR/results/raman/phase16"
 LOG_DIR="$RESULTS_DIR/logs"
