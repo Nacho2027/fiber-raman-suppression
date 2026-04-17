@@ -28,7 +28,14 @@ set -uo pipefail  # -e deliberately omitted; we want to finish cleanup even on f
 # burst VM does not source .bashrc by default.
 export PATH="$HOME/.juliaup/bin:$PATH"
 
-PHASE_DIR="$HOME/fiber-raman-suppression"
+# Use a dedicated Session F worktree when present — isolates us from other
+# sessions that do `git checkout` on the main burst VM repo. Created via
+# `git worktree add /home/ignaciojlizama/raman-wt-F sessions/F-longfiber`.
+if [[ -d "$HOME/raman-wt-F/.git" ]] || [[ -f "$HOME/raman-wt-F/.git" ]]; then
+    PHASE_DIR="$HOME/raman-wt-F"
+else
+    PHASE_DIR="$HOME/fiber-raman-suppression"
+fi
 RESULTS_DIR="$PHASE_DIR/results/raman/phase16"
 LOG_DIR="$RESULTS_DIR/logs"
 LOCK_FILE="/tmp/burst-heavy-lock"
