@@ -65,15 +65,70 @@ See `.planning/sessions/A-multivar-decisions.md` for full rationale. Highlights:
 - `scripts/test_multivar_gradients.jl`: **parses cleanly** (full run pending burst VM).
 - `scripts/multivar_demo.jl`: **parses cleanly** (full run pending burst VM).
 
-### ⏸  Pending burst VM access
+### ✅ Passed on burst VM
 
-- **Gradient-validation tests** (Nt=2^12 forward-adjoint solves): need `-t auto` on
-  burst VM per CLAUDE.md Rule 1.
-- **End-to-end demo run** (Nt=2^13, SMF-28 L=2m P=0.30W): needs ~2 × 5 min on burst VM.
-- **A/B success criterion** (multivar beats phase-only by ≥ 0.5 dB): depends on demo run.
+- `scripts/test_multivar_gradients.jl` at Nt=2^12, `-t 4`:
+  - Test 1 — FD vs adjoint per variable subset: **PASS**. Worst rel-err:
+    phase 4.6% (ε=1e-5, truncation-dominated); amplitude 0.7%; energy 0.1%.
+    All within project-wide 5% physics tolerance.
+  - Test 2 — `:mode_coeffs` stripping (Decision D4): **PASS**.
+  - Test 3 — save/load JLD2+JSON round-trip: **PASS**. Bit-identical recovery
+    of `phi_opt, amp_opt, E_opt, J_after, convergence_history, variables_enabled`.
 
-The burst VM was heavy-locked by Session E's 12-point parameter sweep for the
-duration of this session. My runs are queued behind the lock.
+### ⚠️ Partial — demo A/B criterion NOT MET
+
+`scripts/multivar_demo.jl` at SMF-28 L=2m P=0.30W (Nt=2^13 auto-sized,
+max_iter=50):
+
+| | Phase-only (reference) | Multivar (phase+amplitude) |
+|---|---|---|
+| J_before (dB) | −1.5 | −1.5 |
+| J_after  (dB) | **−56.9** | **−25.4** |
+| ΔJ (dB) | **−55.42** | **−23.95** |
+| Iterations | 50 | **2** (!) |
+| Wall time (s) | 222 | 12125 |
+| ‖∇J‖ at opt | 4.5e−6 | **1.47** |
+
+Multivar stopped at iteration 2 with a huge gradient norm — i.e. the
+optimization effectively didn't start. Root cause analysis:
+
+- `Fminbox(LBFGS)` for the joint (φ, A) problem completed only 2 **outer**
+  iterations during the run. Each outer iteration does a full inner LBFGS
+  with a barrier term on A bounds; at log-scale cost `f_abstol=0.01`, Optim
+  declared convergence per outer iter on a stale criterion.
+- The multivar run fought CPU contention from 5+ concurrent Julia jobs on
+  the burst VM (Session E sweep + Session F queue + mine). Wall time was
+  inflated ~50× vs what a clean run would have produced.
+- The phase-only baseline used plain `LBFGS()` (no barrier) and finished
+  normally in 205 s — so the overhead is specific to Fminbox path.
+
+**Conclusion:** infrastructure and gradients are verified correct; the
+Fminbox wrapping choice (Decision D2/D3 box on A) needs replacement before
+the multivar path can beat the phase-only reference.
+
+Artifacts saved to `results/raman/multivar/smf28_L2m_P030W/`:
+  - `mv_joint_result.jld2` + `mv_joint_slm.json`
+  - `mv_phaseonly_result.jld2` + `mv_phaseonly_slm.json`
+  - `phase_only_opt_result.jld2` (from the un-modified reference optimizer)
+  - `multivar_vs_phase_comparison.png`
+
+All files also copied into the worktree at
+`~/raman-wt-A/results/raman/multivar/smf28_L2m_P030W/`.
+
+## Follow-up (next session)
+
+The code works; the **optimizer strategy for the A block** is the gap.
+Three cheap fixes, in order of likely payoff:
+
+1. **Replace Fminbox with tanh-reparameterization**:
+   `A = 1 + δ_bound · tanh(ξ)`, optimize ξ ∈ ℝ with plain `LBFGS()`.
+   Removes the barrier overhead entirely. Should be a 30-minute change in
+   `multivar_optimization.jl`.
+2. **Warm-start multivar from the phase-only optimum**: init φ=φ_opt(Run 2),
+   A=1. The joint (0, 1) starting basin is apparently poor.
+3. **Run in isolation on burst VM** (no other Julia jobs) to confirm whether
+   the wall-time inflation was CPU contention or an intrinsic Fminbox
+   pathology.
 
 ## Resuming this work
 

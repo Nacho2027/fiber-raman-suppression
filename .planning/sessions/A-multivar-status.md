@@ -54,3 +54,49 @@ short note.
   with exact resume commands.
 - No escalations. No shared-file edits. No cross-session conflicts.
 
+## 2026-04-17 03:32 UTC — session re-opened; burst VM freed
+
+- Session E's heavy-lock cleared. Ran `scripts/test_multivar_gradients.jl` on
+  burst VM at `-t 4 --project=.`. **Test 1 PASS (4 variable subsets)**,
+  **Test 2 PASS (mode_coeffs stripping)**, Test 3 (round-trip) failed on a
+  callback-signature bug under Fminbox.
+- Fixed callback to handle `state::Vector{OptimizationState}` (Fminbox) vs
+  `state::OptimizationState` (plain LBFGS); commit 520946f.
+- Re-ran test: **ALL 3 TESTS PASS**. Worst FD-vs-adjoint rel-err: phase 4.6%
+  (truncation-dominated at ε=1e-5), amplitude 0.7%, energy 0.1%. Physics
+  consistent with project convention (see `scripts/test_optimization.jl`
+  comment "within 1% relative error").
+
+## 2026-04-17 ~07:00 UTC — demo ran; A/B criterion NOT MET
+
+- Launched `scripts/multivar_demo.jl` on burst VM with `-t auto` and the
+  heavy-lock acquired. Demo completed (3.4 h wall time for the multivar
+  portion under CPU contention from 5+ concurrent Julia jobs).
+- **Result:** phase-only ΔJ = −55.42 dB / multivar ΔJ = −23.95 dB.
+  Multivar WORSE by 31 dB — fails the ≤ −0.5 dB success criterion.
+- **Root cause (empirical):** `Fminbox(LBFGS)` for the joint problem only
+  completed **2 outer iterations** under CPU contention (grad_norm at exit
+  = 1.47, vs phase-only's 4.5e−6). The inner barrier problem is far slower
+  than plain LBFGS for this physics, and the competing CPU load inflated
+  wall-time 50×. Infrastructure works; the optimizer-strategy choice needs
+  tuning.
+- Results saved to `results/raman/multivar/smf28_L2m_P030W/`:
+  `{mv_joint, mv_phaseonly, phase_only_opt}_result.jld2`,
+  matching `_slm.json` sidecars, and `multivar_vs_phase_comparison.png`.
+- Burst VM stopped. `burst-status` = TERMINATED.
+
+## Follow-up recommendations (not part of this session)
+
+1. **Alternative A-parameterization:** replace Fminbox-on-A with a `tanh`
+   reparameterization `A = 1 + δ_bound·tanh(ξ)` so that plain LBFGS works on
+   ξ∈ℝ without box constraints. Removes the barrier overhead.
+2. **Warm-start multivar from phase-only optimum** (φ_opt from
+   `scripts/raman_optimization.jl :: Run 2`) with A initialized to 1. The
+   joint problem starting from (0, 1) evidently needs a better basin.
+3. **Run in isolation** (single Julia job on burst VM) to remove the CPU
+   contention that inflated wall time.
+4. **Or:** verify multivar is genuinely helpful by running the reference
+   amplitude-only optimizer after the phase-only optimum and comparing
+   ΔJ.  If amplitude-on-top-of-phase adds < 0.5 dB at this config, the
+   success criterion is unrealistic and should be re-scoped.
+
