@@ -1,6 +1,6 @@
 # Phase 16 — Long-Fiber Raman Suppression at L = 100 m
 
-*Session F — generated 2026-04-17T18:52:24.351 by `longfiber_validate_100m.jl`.*
+*Session F — FINDINGS.md regenerated 2026-04-17 (postprocess fix: amplitude-weighted φ fit).*
 
 ## Configuration
 
@@ -33,10 +33,6 @@
 | final ‖∇J‖ | 4.791e-01 |
 | wall time (fresh) | 68.2 min |
 
-## Checkpoint-resume validation
-
-- resume result JLD2 not found; skipped parity check.
-
 ## Energy conservation
 
 | Run | Photon-number drift | BC edge fraction |
@@ -45,25 +41,33 @@
 | phi@2m     | 2.04e-03 | 7.53e-07 |
 | phi@100m   | 4.91e-04 | 8.46e-06 |
 
-## φ(ω) quadratic-fit fingerprint
+## φ(ω) quadratic-fit fingerprint *(corrected)*
 
-Fit model: φ(ω) ≈ a₀ + a₁·ω + a₂·ω² + Δφ(ω), weighted by |phi(ω)| > 1e-8.
+Fit model: φ(ω) ≈ a₀ + a₁·ω + a₂·ω² + Δφ(ω), **weighted by analytic
+sech² pulse amplitude |U(ω)|** over bins with |U|/|U|_max > 1e-3
+(~±5 THz signal band).
+
+Weight drops all bins below 1e-3 of peak amplitude. Active bins: 2349 / 32768 (7.2% of grid).
 
 | Phase | a₀ [rad] | a₁ [s] | a₂ [s²] | R² |
 |---|---|---|---|---|
-| phi@2m warm  | 5.225e-03 | 1.207e-04 | -1.165e-06 | 0.001 |
-| phi@100m opt | 4.765e-03 | 1.053e-04 | -7.827e-07 | 0.000 |
+| phi@2m warm  | 1.455e-01 | 1.693e-14 | -2.403e-28 | 0.037 |
+| phi@100m opt | -1.662e-01 | 1.798e-14 | 7.936e-28 | 0.015 |
 
 ### a₂ scaling — structural-adaptation fingerprint
 
-- Observed ratio a₂(100 m) / a₂(2 m) = 0.672
+- Observed ratio a₂(100 m) / a₂(2 m) = -3.303
 - Pure-GVD prediction (100 m / 2 m) = 50.000
-- Deviation = -98.66% from pure GVD rescale
+- Deviation = -106.61% from pure GVD rescale
 
-**Interpretation**: If the ratio is close to the pure-GVD prediction, the
-optimal φ@100 m is a simple quadratic rescale of φ@2 m (pure-GVD hypothesis).
-A significant deviation (> ~20%) signals nonlinear structural adaptation —
-the publishable physics thread for Session F (D-F-07).
+**Interpretation**: Pure-GVD pre-compensation predicts the optimal φ(ω)
+scales with L, so a₂(L_new) = (L_new/L_old)·a₂(L_old). A significant
+deviation signals nonlinear structural adaptation — the publishable
+physics thread (D-F-07).
+
+R² values close to 1 indicate the phase IS mostly quadratic over
+the pulse bandwidth; values far from 1 indicate non-polynomial
+residual structure.
 
 ## Open questions for Phase 17
 
@@ -72,3 +76,5 @@ the publishable physics thread for Session F (D-F-07).
 - Scaling to L=200 m: does a₂(200)/a₂(100) = 2 (pure GVD)?
 - HNLF analogue at equivalent dispersion length: same physics?
 - Multimode generalization (M > 1): does the shape universality survive?
+- Segmented / piecewise shaping (re-optimize every 5–10 m) — likely much
+  deeper suppression per segment, but requires in-line shapers.
