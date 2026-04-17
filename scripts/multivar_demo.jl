@@ -272,4 +272,52 @@ if best_improvement > -0.5
     @warn "Demo did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config."
 end
 
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. Mandatory standard output images (Project-level rule, 2026-04-17)
+# ═════════════════════════════════════════════════════════════════════════════
+# `save_standard_set` takes a `phi_opt` and renders the 4 canonical PNGs the
+# group expects. Our phase-only run propagates uω0·cis(φ) directly. Our
+# multivar runs propagate α·A·cis(φ)·uω0, so we fold (α·A) into the "base"
+# input when calling — that way the standard visualization reflects what was
+# actually propagated, not just the phase component.
+
+@info "▶ Generating standard output images (Project-rule 2026-04-17)"
+include(joinpath(@__DIR__, "standard_images.jl"))
+
+# Phase-only run — base uω0, phi=φ_A
+save_standard_set(
+    φ_A, uω0_A, fiber_A, sim_A,
+    band_mask_A, Δf_A, -5.0;
+    tag = "phase_only_L2m_P0p3W",
+    fiber_name = "SMF28",
+    L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+    output_dir = OUT_DIR,
+)
+
+# Multivar cold-start — effective base = α·A·uω0
+let αB = outB.outcome.diagnostics[:alpha], AB = outB.outcome.A_opt
+    uω0_B_eff = @. αB * AB * outB.uω0
+    save_standard_set(
+        outB.outcome.φ_opt, uω0_B_eff, outB.fiber, outB.sim,
+        outB.band_mask, Δf_A, -5.0;
+        tag = "mv_cold_L2m_P0p3W",
+        fiber_name = "SMF28",
+        L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+        output_dir = OUT_DIR,
+    )
+end
+
+# Multivar warm-start — same convention
+let αBw = outB_warm.outcome.diagnostics[:alpha], ABw = outB_warm.outcome.A_opt
+    uω0_Bw_eff = @. αBw * ABw * outB_warm.uω0
+    save_standard_set(
+        outB_warm.outcome.φ_opt, uω0_Bw_eff, outB_warm.fiber, outB_warm.sim,
+        outB_warm.band_mask, Δf_A, -5.0;
+        tag = "mv_warm_L2m_P0p3W",
+        fiber_name = "SMF28",
+        L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+        output_dir = OUT_DIR,
+    )
+end
+
 @info "═══ Multivar demo complete ═══"
