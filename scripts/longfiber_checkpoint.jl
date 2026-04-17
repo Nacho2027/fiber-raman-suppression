@@ -167,7 +167,14 @@ function longfiber_checkpoint_cb(buf::CheckpointBuf, out_dir::AbstractString;
         iter   = buf.iter
         stride_hit = (iter > 0 && iter % every == 0)
         time_hit   = (now_s - buf.last_ckpt_s > time_gate_s)
-        first_hit  = (state.iteration == 0 && iter <= 1)
+        # Optim.jl 1.13: `callback` receives the trace `Vector{OptimizationState}`,
+        # not a single state. Guard both shapes.
+        state_iter = if isa(state, AbstractVector)
+            isempty(state) ? 0 : state[end].iteration
+        else
+            state.iteration
+        end
+        first_hit  = (state_iter == 0 && iter <= 1)
 
         if stride_hit || time_hit || first_hit
             elapsed = now_s - buf.t_start
