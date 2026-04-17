@@ -1,0 +1,222 @@
+"""
+Multi-Variable Optimizer Demonstration Run (Session A)
+
+Compares phase-only (existing) vs. joint (phase + amplitude) multi-variable
+optimization at the SMF-28 canonical config (Run 2 equivalent:
+L=2m, P=0.30W, Nt=2^13, time_window=20 ps, SMF-28 dispersion).
+
+Produces:
+  - results/raman/multivar/smf28_L2m_P030W/mv_phaseonly_{result.jld2, slm.json}
+  - results/raman/multivar/smf28_L2m_P030W/mv_joint_{result.jld2, slm.json}
+  - results/raman/multivar/smf28_L2m_P030W/multivar_vs_phase_comparison.png
+
+Success criteria:
+  ΔJ(multivar) − ΔJ(phase-only) ≤ -0.5 dB   (multi-var strictly better)
+
+Run on burst VM:
+    julia -t auto --project=. scripts/multivar_demo.jl
+"""
+
+try using Revise catch end
+using Printf
+using LinearAlgebra
+using Logging
+using Dates
+ENV["MPLBACKEND"] = "Agg"
+using PyPlot
+using MultiModeNoise
+
+# Reference (phase-only) optimizer — UNMODIFIED
+include(joinpath(@__DIR__, "raman_optimization.jl"))
+# New multi-variable optimizer
+include(joinpath(@__DIR__, "multivar_optimization.jl"))
+
+# ── Output directory ────────────────────────────────────────────────────────
+const OUT_DIR = joinpath("results", "raman", "multivar", "smf28_L2m_P030W")
+mkpath(OUT_DIR)
+
+@info "═══════════════════════════════════════════════════════════════"
+@info "  Multi-Variable Demo — SMF-28 L=2m P=0.30W (canonical Run 2)"
+@info "═══════════════════════════════════════════════════════════════"
+
+# ── Shared run config ────────────────────────────────────────────────────────
+const DEMO_KW = (
+    L_fiber = 2.0,
+    P_cont = 0.30,
+    Nt = 2^13,
+    time_window = 20.0,
+    β_order = 3,
+    gamma_user = 1.1e-3,
+    betas_user = [-2.17e-26, 1.2e-40],
+    fR = 0.18,
+    pulse_fwhm = 185e-15,
+)
+const MAX_ITER = 50
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. Phase-only baseline (using UNMODIFIED raman_optimization.jl)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@info "▶ Run A: phase-only reference (optimize_spectral_phase)"
+t_A = time()
+result_A, uω0_A, fiber_A, sim_A, band_mask_A, Δf_A = run_optimization(
+    ; DEMO_KW...,
+    max_iter = MAX_ITER, validate = false,
+    λ_gdd = 1e-4, λ_boundary = 1.0, log_cost = true,
+    fiber_name = "SMF-28",
+    save_prefix = joinpath(OUT_DIR, "phase_only_opt"),
+    do_plots = false,
+)
+φ_A = reshape(result_A.minimizer, sim_A["Nt"], sim_A["M"])
+conv_A = collect(Optim.f_trace(result_A))
+J_A_lin, _ = cost_and_gradient(φ_A, uω0_A, fiber_A, sim_A, band_mask_A)
+J_A_dB = MultiModeNoise.lin_to_dB(J_A_lin)
+J0_lin, _ = cost_and_gradient(zeros(size(φ_A)), uω0_A, fiber_A, sim_A, band_mask_A)
+J0_dB = MultiModeNoise.lin_to_dB(J0_lin)
+ΔJ_A_dB = J_A_dB - J0_dB
+@info @sprintf("  phase-only: J_before=%.1f dB  J_after=%.1f dB  ΔJ=%.2f dB  (%.1f s)",
+    J0_dB, J_A_dB, ΔJ_A_dB, time() - t_A)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. Joint (phase + amplitude) multi-variable
+# ═════════════════════════════════════════════════════════════════════════════
+
+@info "▶ Run B: joint phase+amplitude (optimize_spectral_multivariable)"
+outB = run_multivar_optimization(
+    ; DEMO_KW...,
+    variables = (:phase, :amplitude),
+    max_iter = MAX_ITER,
+    validate = false,
+    δ_bound = 0.10,
+    λ_gdd = 1e-4, λ_boundary = 1.0,
+    λ_energy = 1.0, λ_tikhonov = 0.0, λ_tv = 0.0, λ_flat = 0.0,
+    log_cost = true,
+    fiber_name = "SMF-28",
+    save_prefix = joinpath(OUT_DIR, "mv_joint"),
+)
+J_B_lin = outB.J_after_lin
+J_B_dB = MultiModeNoise.lin_to_dB(J_B_lin)
+ΔJ_B_dB = outB.ΔJ_dB
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. Phase-only result in multivar format (for symmetric comparison)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@info "▶ Saving phase-only result in multivar JSON+JLD2 format too"
+# Create a fake outcome struct mimicking optimize_spectral_multivariable output
+struct_stub = (
+    result = result_A,
+    cfg = MVConfig(variables = (:phase,), log_cost = true),
+    scale = ones(length(φ_A)),
+    x_opt = vec(φ_A),
+    φ_opt = φ_A,
+    A_opt = ones(size(φ_A)),
+    E_opt = sum(abs2, uω0_A),
+    E_ref = sum(abs2, uω0_A),
+    J_opt = J_A_dB,
+    g_norm = 0.0,
+    diagnostics = Dict{Symbol,Any}(:alpha => 1.0, :A_extrema => (1.0, 1.0)),
+    wall_time_s = time() - t_A,
+    iterations = Optim.iterations(result_A),
+)
+meta_A = Dict{Symbol,Any}(
+    :fiber_name => "SMF-28",
+    :L_m => DEMO_KW.L_fiber, :P_cont_W => DEMO_KW.P_cont,
+    :lambda0_nm => 1550.0, :fwhm_fs => DEMO_KW.pulse_fwhm * 1e15,
+    :rep_rate_Hz => 80.5e6,
+    :gamma => DEMO_KW.gamma_user, :betas => DEMO_KW.betas_user,
+    :time_window_ps => DEMO_KW.Nt * sim_A["Δt"],
+    :sim_Dt => sim_A["Δt"], :sim_omega0 => sim_A["ω0"],
+    :J_before => J0_lin, :delta_J_dB => ΔJ_A_dB,
+    :band_mask => band_mask_A, :uomega0 => uω0_A,
+    :convergence_history => conv_A,
+    :run_tag => Dates.format(now(), "yyyymmdd_HHMMss"),
+)
+save_multivar_result(joinpath(OUT_DIR, "mv_phaseonly"), struct_stub; meta=meta_A)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. Comparison figure
+# ═════════════════════════════════════════════════════════════════════════════
+
+@info "▶ Plotting comparison figure"
+fig, axs = subplots(1, 2, figsize=(12, 4.5))
+
+# Left: convergence
+ax1 = axs[1]
+conv_B = outB.meta[:convergence_history]
+ax1.plot(1:length(conv_A), conv_A, "-o", color="tab:blue", label="phase-only", markersize=3)
+if !isempty(conv_B)
+    ax1.plot(1:length(conv_B), conv_B, "-s", color="tab:red", label="phase+amplitude (multivar)", markersize=3)
+end
+ax1.set_xlabel("iteration")
+ax1.set_ylabel("J [dB]")
+ax1.set_title("Convergence")
+ax1.legend(loc="upper right")
+ax1.grid(true, alpha=0.3)
+
+# Right: output spectrum in Raman band for both
+ax2 = axs[2]
+# Re-propagate both to get output spectra
+fiber_prop = deepcopy(fiber_A)
+fiber_prop["zsave"] = [fiber_A["L"]]
+
+# Phase-only output
+uω0_A_shaped = @. uω0_A * cis(φ_A)
+sol_A = MultiModeNoise.solve_disp_mmf(uω0_A_shaped, fiber_prop, sim_A)
+uωf_A = sol_A["uω_z"][end, :, :]
+
+# Joint output
+α_B = outB.outcome.diagnostics[:alpha]
+uω0_B_shaped = @. α_B * outB.outcome.A_opt * cis(outB.outcome.φ_opt) * outB.uω0
+fiber_prop_B = deepcopy(outB.fiber)
+fiber_prop_B["zsave"] = [outB.fiber["L"]]
+sol_B = MultiModeNoise.solve_disp_mmf(uω0_B_shaped, fiber_prop_B, outB.sim)
+uωf_B = sol_B["uω_z"][end, :, :]
+
+import FFTW
+Δf_A_shifted = fftshift(FFTW.fftfreq(sim_A["Nt"], 1 / sim_A["Δt"]))
+S_A = fftshift(vec(sum(abs2, uωf_A; dims=2)))
+S_B = fftshift(vec(sum(abs2, uωf_B; dims=2)))
+S_A_norm = S_A ./ maximum(S_A)
+S_B_norm = S_B ./ maximum(S_B)
+ax2.plot(Δf_A_shifted, 10 .* log10.(max.(S_A_norm, 1e-15)), "-", color="tab:blue", label="phase-only", linewidth=1.3)
+ax2.plot(Δf_A_shifted, 10 .* log10.(max.(S_B_norm, 1e-15)), "-", color="tab:red", label="phase+amplitude", linewidth=1.3)
+ax2.axvline(-5.0, color="k", linestyle=":", alpha=0.5, label="Raman threshold")
+ax2.set_xlabel("Δf [THz]")
+ax2.set_ylabel("|U(f)|² [dB norm]")
+ax2.set_title("Output spectrum at z=L")
+ax2.set_xlim(-30, 10)
+ax2.set_ylim(-60, 5)
+ax2.legend(loc="lower right")
+ax2.grid(true, alpha=0.3)
+
+fig.suptitle(@sprintf("SMF-28 L=%.1fm P=%.2fW:  phase-only ΔJ=%.2f dB  |  multivar ΔJ=%.2f dB  |  Δ(diff)=%.2f dB",
+    DEMO_KW.L_fiber, DEMO_KW.P_cont, ΔJ_A_dB, ΔJ_B_dB, ΔJ_B_dB - ΔJ_A_dB))
+fig.tight_layout()
+cmp_path = joinpath(OUT_DIR, "multivar_vs_phase_comparison.png")
+savefig(cmp_path, dpi=200)
+@info "Saved comparison figure: $cmp_path"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. Success criterion + final summary
+# ═════════════════════════════════════════════════════════════════════════════
+
+improvement_dB = ΔJ_B_dB - ΔJ_A_dB
+@info @sprintf("""
+═══════════════════════════════════════════════════════════════
+  DEMO RESULTS
+───────────────────────────────────────────────────────────────
+  Phase-only    ΔJ = %.2f dB
+  Multivariate  ΔJ = %.2f dB
+  Improvement      = %.2f dB   (negative = multivar is better)
+  Success criterion (≤ -0.5 dB): %s
+═══════════════════════════════════════════════════════════════
+""",
+    ΔJ_A_dB, ΔJ_B_dB, improvement_dB,
+    improvement_dB ≤ -0.5 ? "PASS" : "FAIL — gap smaller than threshold")
+
+if improvement_dB > -0.5
+    @warn "Demo did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config."
+end
+
+@info "═══ Multivar demo complete ═══"
