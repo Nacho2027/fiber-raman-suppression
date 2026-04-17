@@ -75,3 +75,43 @@ burst-ssh "tmux new -d -s E-validate 'julia -t 4 --project=. scripts/e2e_check.j
 ```
 
 But if you're uncertain whether a job is "light," use `run-heavy.sh` — being blocked by the lock is much cheaper than freezing the VM.
+
+## On-demand ephemeral second burst VM
+
+For the rare case when you genuinely need a second heavy Julia run in parallel with the one currently holding the lock on `fiber-raman-burst`, use `~/bin/burst-spawn-temp` **on claude-code-host** (not on the burst VM).
+
+```bash
+~/bin/burst-spawn-temp <session-tag> '<command>'
+
+# Example — run a parallel sweep while the main burst VM is busy:
+~/bin/burst-spawn-temp B-parallel-sweep \
+    'julia -t auto --project=. scripts/my_other_sweep.jl'
+```
+
+What it does:
+
+1. Ensures a recent machine image of `fiber-raman-burst` exists (`fiber-raman-burst-template`). Creates one on first use or when the cached image is >48 h old. Takes ~2 min on cache miss; near-instant on hit.
+2. Creates an ephemeral VM `fiber-raman-temp-<tag>-<timestamp>` from the machine image. Same size as the main burst VM (c3-highcpu-22 by default). VM boots with the whole working filesystem — Julia, repo, data, and `~/bin` scripts are pre-installed.
+3. Runs your command via the same `burst-run-heavy` wrapper on the ephemeral VM (so lock and per-run-log conventions still apply locally).
+4. **On exit — success, failure, or Ctrl-C — destroys the ephemeral VM** via a trap.
+5. Safety net: before running the command, schedules `sudo shutdown -h +360` (6 hours) on the VM in case the trap never fires (claude-code-host network drop). Configurable via `BURST_AUTO_SHUTDOWN_HOURS`.
+
+### Cost note
+
+Ephemeral VMs bill at ~$0.90/hr while running. The trap is the primary cleanup; the 6-hour auto-shutdown is backup. If you suspect an orphan was left behind:
+
+```bash
+~/bin/burst-list-ephemerals           # list running ephemerals
+~/bin/burst-list-ephemerals --destroy # destroy all of them
+```
+
+### When to use it
+
+- You genuinely need two independent multi-hour heavy jobs at once and serializing would lose a half-day.
+- You want to reproduce a run in total isolation (no noisy-neighbor risk from other sessions).
+
+### When NOT to use it
+
+- You can serialize behind the lock on the main burst VM (almost always the right call).
+- You have more than one or two short (<30 min) jobs queued — the per-spawn setup cost isn't worth it.
+- Rule P6 ("distribute sessions across hosts") already gives you enough separation for editing-heavy sessions.

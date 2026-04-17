@@ -438,6 +438,8 @@ burst-ssh "tmux new -d -s E-validate 'julia -t 4 --project=. scripts/check.jl'"
 
 **Pre-Apr-17 manual lock pattern (`touch /tmp/burst-heavy-lock`) is DEPRECATED.** Use the wrapper. Any session still using the old pattern is violating Rule P5.
 
+**On-demand second burst VM:** when you really need two independent heavy jobs in parallel (rare), use `~/bin/burst-spawn-temp <tag> '<command>'` on claude-code-host. It creates an ephemeral VM from a machine image of `fiber-raman-burst`, runs the command, and destroys the VM on exit via a trap (plus a 6-hour auto-shutdown safety net). Never leave ephemerals running overnight — `~/bin/burst-list-ephemerals --destroy` kills any orphans. Full docs in `scripts/burst/README.md`.
+
 ### Rule P6: Session host distribution
 
 The `claude-code-host` VM (e2-standard-4, 16 GB RAM) can host ~3 concurrent Claude Code sessions before OOM. Distribute:
