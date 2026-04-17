@@ -134,7 +134,7 @@ function build_phase_basis(Nt::Int, N_phi::Int;
         for j in 1:N_phi
             y = zeros(Float64, N_phi)
             y[j] = 1.0
-            itp = cubic_spline_interpolation(1:N_phi, y; extrapolation_bc=Flat())
+            itp = cubic_spline_interpolation(1:N_phi, y; extrapolation_bc=Interpolations.Flat())
             for (idx, t) in zip(support, ti)
                 B_shift[idx, j] = itp(t)
             end
@@ -145,7 +145,7 @@ function build_phase_basis(Nt::Int, N_phi::Int;
         for j in 1:N_phi
             y = zeros(Float64, N_phi)
             y[j] = 1.0
-            itp = linear_interpolation(1:N_phi, y; extrapolation_bc=Flat())
+            itp = linear_interpolation(1:N_phi, y; extrapolation_bc=Interpolations.Flat())
             for (idx, t) in zip(support, ti)
                 B_shift[idx, j] = itp(t)
             end
