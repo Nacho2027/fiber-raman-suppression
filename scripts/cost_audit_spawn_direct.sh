@@ -75,6 +75,7 @@ fi
 log "scheduling ${AUTO_SHUTDOWN_MINUTES}-minute auto-shutdown"
 gcloud compute ssh "$VM_NAME" \
     --zone="$ZONE" --project="$PROJECT" \
+    --ssh-flag='-o StrictHostKeyChecking=no' \
     --command="sudo shutdown -h +${AUTO_SHUTDOWN_MINUTES}" \
     >/dev/null 2>&1 || log "WARN: auto-shutdown schedule failed (trap is primary)"
 
@@ -123,16 +124,22 @@ log "tarball size: $(stat -c %s "$TAR") bytes"
 
 # Transfer
 log "scp-ing tarball"
-gcloud compute scp "$TAR" "$VM_NAME:/tmp/payload.tgz" \
-    --zone="$ZONE" --project="$PROJECT" \
-    --quiet >>"$LOG" 2>&1
+if ! gcloud compute scp "$TAR" "$VM_NAME:/tmp/payload.tgz" \
+        --zone="$ZONE" --project="$PROJECT" \
+        --scp-flag='-o StrictHostKeyChecking=no' \
+        >>"$LOG" 2>&1 ; then
+    log "ERROR: scp failed"
+    cat "$LOG" | tail -20
+    exit 1
+fi
 
 # Extract on the VM (overwrites files in ~/fiber-raman-suppression)
 log "extracting tarball on VM"
 gcloud compute ssh "$VM_NAME" \
     --zone="$ZONE" --project="$PROJECT" \
+    --ssh-flag='-o StrictHostKeyChecking=no' \
     --command="cd \$HOME && tar xzf /tmp/payload.tgz && chmod +x fiber-raman-suppression/scripts/cost_audit_run_batch.sh && ls -la fiber-raman-suppression/scripts/cost_audit_run_batch.sh fiber-raman-suppression/scripts/cost_audit_driver.jl" \
-    >>"$LOG" 2>&1
+    2>&1 | tee -a "$LOG"
 
 # ── step 5: run the batch via burst-run-heavy ────────────────────────────────
 # The in-CMD git step is now a no-op / belt-and-suspenders. If it fails (auth
@@ -141,26 +148,41 @@ INNER_CMD="cd ~/fiber-raman-suppression && bash scripts/cost_audit_run_batch.sh"
 
 log "running batch via burst-run-heavy H-audit"
 # Skip the git-sync in the batch script by setting an env var the script honors.
+# We allow this step to fail without tripping set -e (batch may error mid-run;
+# we still want to pull any partial results back).
+set +e
 gcloud compute ssh "$VM_NAME" \
     --zone="$ZONE" --project="$PROJECT" \
+    --ssh-flag='-o StrictHostKeyChecking=no' \
+    --ssh-flag='-o ServerAliveInterval=60' \
+    --ssh-flag='-o ServerAliveCountMax=10' \
     --command="cd fiber-raman-suppression && export PATH=\$HOME/.juliaup/bin:\$HOME/bin:\$PATH && COST_AUDIT_SKIP_GIT_SYNC=1 ~/bin/burst-run-heavy $SESSION '$INNER_CMD'" \
     2>&1 | tee -a "$LOG"
+BATCH_RC=${PIPESTATUS[0]}
+set -e
+log "batch exit code: $BATCH_RC"
 
 # ── step 6: collect results ──────────────────────────────────────────────────
 log "pulling results tarball back"
+set +e
 gcloud compute ssh "$VM_NAME" \
     --zone="$ZONE" --project="$PROJECT" \
-    --command="cd \$HOME/fiber-raman-suppression && tar czf /tmp/results.tgz results/cost_audit results/burst-logs 2>/dev/null || true" \
-    >>"$LOG" 2>&1
+    --ssh-flag='-o StrictHostKeyChecking=no' \
+    --command="cd \$HOME/fiber-raman-suppression && tar czf /tmp/results.tgz results/cost_audit results/burst-logs 2>/dev/null || true; ls -la /tmp/results.tgz 2>&1 || true" \
+    2>&1 | tee -a "$LOG"
 
 mkdir -p "$REPO_ROOT/results"
 gcloud compute scp "$VM_NAME:/tmp/results.tgz" "$LOGROOT/results.tgz" \
     --zone="$ZONE" --project="$PROJECT" \
-    --quiet >>"$LOG" 2>&1 || log "WARN: results pull failed"
+    --scp-flag='-o StrictHostKeyChecking=no' \
+    2>&1 | tee -a "$LOG"
+set -e
 
 if [[ -f "$LOGROOT/results.tgz" ]]; then
-    tar xzf "$LOGROOT/results.tgz" -C "$REPO_ROOT"
+    tar xzf "$LOGROOT/results.tgz" -C "$REPO_ROOT" 2>&1 | tee -a "$LOG"
     log "results extracted to $REPO_ROOT/results/cost_audit"
+else
+    log "WARN: no results tarball — batch likely errored before producing results"
 fi
 
-log "done"
+log "done (batch rc=$BATCH_RC)"
