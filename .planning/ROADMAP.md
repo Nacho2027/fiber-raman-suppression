@@ -250,3 +250,13 @@ Plans:
 
 Plans:
 - [x] 15-01: Pin FFTW planner to ESTIMATE, thread pins, src/simulation patch, regression test, benchmark — COMPLETE 2026-04-16 (7/7 bit-identity tests pass; +21.4% slowdown on SMF-28 canonical)
+
+### Phase 16: Simple Phase Profile Stability Study — investigate whether the striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (remarkably simple ~3-feature unwrapped phase, TV<2 rad) sits in a flat basin with large convergence radius (experimentally robust) or a coincidental sharp minimum. Baseline reproduction on burst VM, perturbation study, transferability sweep, simplicity quantification vs Phases 10/11/12 optima, synthesis figure. Feeds Session E.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
