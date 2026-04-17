@@ -13,6 +13,35 @@ A comprehensive fix of all plotting and visualization in the smf-gain-noise proj
 - **Backward compatibility**: Keep the same function signatures where possible, or provide clear migration.
 - **Output format**: PNG at 300 DPI for archival, must look good at both screen and print resolution.
 - **Performance**: Plotting should not add significant overhead to optimization runs.
+
+### Standard output images — mandatory for every optimization run
+
+**Every optimization driver that produces a `phi_opt` MUST, before exiting, call `save_standard_set(...)` from `scripts/standard_images.jl`.** This produces the image set the research group expects:
+
+1. `{tag}_phase_profile.png` — 6-panel before/after optimization comparison (wrapped + unwrapped + group delay × input/output)
+2. `{tag}_evolution.png` — colorful spectral-evolution waterfall of the optimized field
+3. `{tag}_phase_diagnostic.png` — wrapped/unwrapped/group-delay triplet of phi_opt alone
+4. `{tag}_evolution_unshaped.png` — matching waterfall with phi ≡ 0 for comparison
+
+Template:
+
+```julia
+include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
+
+# ... setup_raman_problem, run optimizer, produce phi_opt ...
+
+save_standard_set(phi_opt, uω0, fiber, sim,
+    band_mask, Δf, raman_threshold;
+    tag = "smf28_L2m_P0p2W",                    # filename prefix
+    fiber_name = "SMF28", L_m = 2.0, P_W = 0.2, # metadata for captions
+    output_dir = "results/raman/my_run/")
+```
+
+For runs that produced a `phi_opt` before this rule was in place, run `scripts/regenerate_standard_images.jl` (behind the heavy lock) to generate the standard set for every JLD2 under `results/raman/` that carries a phi_opt. Override the scan root via `REGEN_ROOT`.
+
+Drivers that skip this step are incomplete. Do not mark work "done" without the standard images on disk.
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:codebase/STACK.md -->
@@ -396,23 +425,49 @@ The user (or integrator session) aggregates these into the central STATE.md at c
 
 Do NOT run sync-planning-* while another session is actively editing `.planning/` on either side. Coordinate at quiet points.
 
-### Rule P5: Burst VM = serial heavy runs, parallel light runs
+### Rule P5: Burst VM coordination — MANDATORY WRAPPER (post-2026-04-17)
 
-The burst VM has 22 cores. Protocol:
+**Context:** On 2026-04-17, 7+ concurrent heavy Julia processes on the 22-core burst VM caused a hard kernel lockup. The manual lock in the earlier version of this rule was not uniformly respected. The current rule uses an enforced wrapper (`~/bin/burst-run-heavy`) plus a watchdog (`~/bin/burst-watchdog` running as `raman-watchdog.service`). See `scripts/burst/README.md` for the full mechanism.
 
-**Heavy runs** (>8 cores, >5 min): ONE AT A TIME. Before starting:
+**All sessions MUST obey the following.**
+
+**Heavy runs** (>8 cores, >5 min, any simulation): never launch directly. Use the wrapper:
+
 ```bash
-burst-ssh "ls /tmp/burst-heavy-lock 2>/dev/null && echo 'LOCKED' || echo 'FREE'"
-# If FREE:
-burst-ssh "touch /tmp/burst-heavy-lock && tmux new -d -s run-<session-name> 'julia -t auto ... ; rm -f /tmp/burst-heavy-lock'"
+burst-ssh "cd fiber-raman-suppression && ~/bin/burst-run-heavy <SESSION-TAG> \
+          'julia -t auto --project=. scripts/your_script.jl'"
 ```
 
-**Light runs** (≤ 4 cores, quick validation): multiple sessions can run these concurrently as long as the heavy lock is NOT held. Each session names its tmux session distinctly:
+The wrapper enforces session-tag format `^[A-Za-z]-[A-Za-z0-9_-]+$` (e.g., `A-multivar`, `E-sweep2`, `F-T5`, `H-audit`), acquires `/tmp/burst-heavy-lock` with stale-lock detection, launches the job in a named tmux, releases the lock on exit (even on crash via `trap`), and tees all stdout/stderr to `results/burst-logs/<tag>_<timestamp>.log`.
+
+If another session holds the lock, `burst-run-heavy` fails immediately by default and prints the current holder. To wait instead, set `WAIT_TIMEOUT_SEC=<seconds>`:
+
 ```bash
-burst-ssh "tmux new -d -s validate-<session-name> 'julia -t 4 ...'"
+burst-ssh "cd fiber-raman-suppression && WAIT_TIMEOUT_SEC=3600 \
+          ~/bin/burst-run-heavy F-T5 'julia -t auto --project=. scripts/longfiber.jl'"
 ```
 
-If in doubt, treat as heavy.
+**Before any work on the burst VM, check state:**
+
+```bash
+burst-ssh "~/bin/burst-status"
+# Shows: lock holder + pid + start time, tmux sessions, heavy Julia procs,
+#        load, memory, watchdog service status.
+```
+
+**Light runs** (≤ 4 cores, quick validation): the wrapper is optional, but the `<Letter>-<name>` tmux naming convention is still mandatory so `burst-status` can attribute the work:
+
+```bash
+burst-ssh "tmux new -d -s E-validate 'julia -t 4 --project=. scripts/check.jl'"
+```
+
+**Watchdog:** `~/bin/burst-watchdog` (running as `systemctl --user status raman-watchdog.service`) kills the youngest heavy Julia if 1-min load > 35 OR available memory < 4 GB, AND ≥ 2 heavy Julia processes are active. Logs to `~/watchdog.log` on the VM. A single job at 100% CPU is fine — the watchdog only fires on contention.
+
+**If in doubt, treat as heavy** — being blocked by the lock is much cheaper than freezing the VM.
+
+**Pre-Apr-17 manual lock pattern (`touch /tmp/burst-heavy-lock`) is DEPRECATED.** Use the wrapper. Any session still using the old pattern is violating Rule P5.
+
+**On-demand second burst VM:** when you really need two independent heavy jobs in parallel (rare), use `~/bin/burst-spawn-temp <tag> '<command>'` on claude-code-host. It creates an ephemeral VM from a machine image of `fiber-raman-burst`, runs the command, and destroys the VM on exit via a trap (plus a 6-hour auto-shutdown safety net). Never leave ephemerals running overnight — `~/bin/burst-list-ephemerals --destroy` kills any orphans. Full docs in `scripts/burst/README.md`.
 
 ### Rule P6: Session host distribution
 
@@ -466,33 +521,41 @@ If you think your run is "small enough to skip the burst VM," use the burst VM a
 
 Everything else → burst VM.
 
-### How to use the burst VM
+### How to use the burst VM (current pattern — post-2026-04-17)
 
 From `claude-code-host` (helper scripts are in `~/bin/` on PATH):
 
 ```bash
-# 1. Commit and push your code changes first (burst VM pulls from git)
+# 1. Commit and push your code changes first (burst VM pulls from git).
 git add <files> && git commit -m "..." && git push
 
-# 2. Start the burst VM (~30 s to boot)
+# 2. Start the burst VM (~30 s to boot).
 burst-start
 
-# 3. Run the simulation in a detached tmux session ON the burst VM
-burst-ssh "cd fiber-raman-suppression && \
-           git pull && \
-           tmux new -d -s run 'julia -t auto --project=. scripts/your_script.jl > run.log 2>&1'"
+# 3. Check the VM is free before you try to claim the lock.
+burst-ssh "~/bin/burst-status"
 
-# 4. Monitor progress
-burst-ssh "tail -f fiber-raman-suppression/run.log"
+# 4. Run the simulation through the MANDATORY heavy-lock wrapper (Rule P5).
+#    Session tag must match ^[A-Za-z]-[A-Za-z0-9_-]+$ — e.g. E-sweep2.
+burst-ssh "cd fiber-raman-suppression && git pull && \
+           ~/bin/burst-run-heavy E-sweep2 \
+           'julia -t auto --project=. scripts/your_script.jl'"
 
-# 5. When done, pull results back to the claude-code-host checkout
+# 5. Monitor progress (per-run log path printed by the wrapper).
+burst-ssh "tail -f fiber-raman-suppression/results/burst-logs/E-sweep2_*.log"
+
+# 6. When done, pull results back to the claude-code-host checkout.
 rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
       fiber-raman-burst:~/fiber-raman-suppression/results/ \
       ~/fiber-raman-suppression/results/
 
-# 6. ALWAYS STOP THE BURST VM WHEN DONE ($0.90/hr while running)
+# 7. ALWAYS STOP THE BURST VM WHEN DONE (~$0.90/hr while running).
 burst-stop
 ```
+
+The raw `tmux new -d -s run 'julia ...'` pattern from earlier versions of
+this doc is DEPRECATED because it bypasses the heavy-lock and can
+re-create the Apr-17 lockup scenario. Use `~/bin/burst-run-heavy` instead.
 
 Helper scripts: `burst-start`, `burst-stop`, `burst-ssh`, `burst-status`.
 
