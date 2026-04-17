@@ -23,9 +23,6 @@ Entry points:
   - `run_multivar_optimization(; kwargs...)` — high-level end-to-end runner
 """
 
-if !(@isdefined _MULTIVAR_OPT_LOADED)
-const _MULTIVAR_OPT_LOADED = true
-
 try using Revise catch end
 using Printf
 using LinearAlgebra
@@ -38,6 +35,9 @@ using MultiModeNoise
 using Optim
 using JLD2
 using JSON3
+
+if !(@isdefined _MULTIVAR_OPT_LOADED)
+const _MULTIVAR_OPT_LOADED = true
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
