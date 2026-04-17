@@ -1,0 +1,30 @@
+Precompiling packages...
+  30343.9 ms  ✓ MultiModeNoise
+  1 dependency successfully precompiled in 31 seconds. 434 already precompiled.
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info: Long-fiber 100 m forward baseline — Session F / Phase 16 — start 2026-04-17T03:42:55.730
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info: Julia threads: 22  BLAS threads: 11
+[ Info: Long-fiber setup: SMF-28 (β₂ only), L=100.0 m, P=0.050 W, Nt=32768, tw=160.0 ps, β_order=2
+[ Info: warm-start: Nt=8192, tw=13.00 ps
+┌ Warning: longfiber_interpolate_phi: new Nyquist 102.40 THz < 0.5 * old Nyquist 315.08 THz — 68% of stored spectral range will be dropped
+└ @ Main ~/raman-wt-F/scripts/longfiber_setup.jl:131
+[ Info: phi_warm: max|phi|=1.990e+00, nonzero=32768 / 32768
+[ Info: [FLAT] wall=60.0s  J=9.543e-01 (-0.20 dB)  BC=6.82e-01  alias_in=2.51e-32 alias_out=6.75e-11  E_drift=4.850e-02
+[ Info: [WARM] wall=11507.7s  J=7.072e-06 (-51.50 dB)  BC=7.53e-07  alias_in=2.51e-32 alias_out=7.60e-21  E_drift=2.040e-03
+[ Info: ════════════════════════════════════════════════════════════════
+[ Info: [WARN] BC edge energy flat  : 6.82e-01
+[ Info: [PASS] BC edge energy warm  : 7.53e-07
+[ Info: [PASS] aliasing frac flat   : 6.75e-11
+[ Info: [PASS] aliasing frac warm   : 7.60e-21
+[ Info: [FAIL] energy drift flat    : 4.85e-02
+[ Info: [PASS] energy drift warm    : 2.04e-03
+[ Info: [PASS] per-solve wall time  : 60.0s (<300 s budget)
+[ Info:   J_flat = -0.20 dB  J_warm = -51.50 dB  Δ = -51.30 dB
+[ Info: ════════════════════════════════════════════════════════════════
+[ Info: saved results/raman/phase16/100m_forward_flat.jld2
+[ Info: saved results/raman/phase16/100m_forward_warm.jld2
+[ Info: saved figure results/images/physics_16_02_forward_100m.png
+┌ Warning: 100 m forward solve did NOT pass all checks — inspect log before launching Task 5
+└ @ Main ~/raman-wt-F/scripts/longfiber_forward_100m.jl:318
+[ Info: per-solve wall budget for Task 5: ~60.0 s/iter (× 2 forward+adjoint) × 100 iter ≈ 199.9 min

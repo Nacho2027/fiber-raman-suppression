@@ -1,0 +1,27 @@
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info: Long-fiber 100 m validation — Session F / Phase 16 — start 2026-04-17T18:51:10.387
+[ Info: ═══════════════════════════════════════════════════════════════
+[ Info: Long-fiber setup: SMF-28 (β₂ only), L=100.0 m, P=0.050 W, Nt=32768, tw=160.0 ps, β_order=2
+[ Info: phi@2m  : a₀=5.225e-03 a₁=1.207e-04 a₂=-1.165e-06 R²=0.001
+[ Info: phi@100m: a₀=4.765e-03 a₁=1.053e-04 a₂=-7.827e-07 R²=0.000
+[ Info: a₂(100m)/a₂(2m) = 0.672  (pure-GVD 100m/2m = 50.00; deviation = -98.66%)
+[ Info: [FLAT] z-saved forward solve: 101 saves over 100.0 m
+[ Info: [FLAT] wall=47.9s  J_end=9.543e-01 (-0.20 dB)  BC=6.82e-01  E_drift=4.850e-02
+[ Info: [WARM] z-saved forward solve: 101 saves over 100.0 m
+[ Info: [WARM] wall=10.8s  J_end=7.072e-06 (-51.50 dB)  BC=7.53e-07  E_drift=2.040e-03
+[ Info: [OPT] z-saved forward solve: 101 saves over 100.0 m
+[ Info: [OPT] wall=6.5s  J_end=3.337e-06 (-54.77 dB)  BC=8.46e-06  E_drift=4.908e-04
+┌ Warning: no resume result JLD2 at results/raman/phase16/100m_opt_resume_result.jld2 — skipping parity check
+└ @ Main ~/raman-wt-F/scripts/longfiber_validate_100m.jl:388
+[ Info: saved figure results/images/physics_16_04_phi_profile_2m_vs_100m.png
+[ Info: saved figure results/images/physics_16_05_Jz_comparison.png
+[ Info: saved results/raman/phase16/100m_validate.jld2
+[ Info: saved results/raman/phase16/100m_Jz_threeway.jld2
+[ Info: saved results/raman/phase16/FINDINGS.md
+[ Info: ════════════════════════════════════════════════════════════════
+[ Info: [PASS] energy conservation at optimum (< 1%)
+[ Info: [PASS] BC edge fraction at optimum     (< 1e-3)
+[ Info: [WARN] φ_opt quadratic fit R² > 0.8    (R²=0.000)
+[ Info: ════════════════════════════════════════════════════════════════
+[ Info: 100 m validation: findings at results/raman/phase16/FINDINGS.md
+T6 EXIT 0
