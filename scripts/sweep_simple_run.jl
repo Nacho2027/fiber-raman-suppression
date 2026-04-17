@@ -42,6 +42,8 @@ using JLD2
 using Dates
 
 include(joinpath(@__DIR__, "sweep_simple_param.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
 ensure_deterministic_environment()
 
@@ -248,7 +250,82 @@ function run_sweep1(; dry_run::Bool=false)
     end
 
     @info "Sweep 1 complete ($(length(results)) levels)"
+    # Rule 2 (project-level): emit the standard 4-image set for every phi_opt.
+    finalize_standard_images(results;
+                              uω0=uω0, fiber=fiber, sim=sim,
+                              band_mask=band_mask, bw_mask=bw_mask,
+                              subdir="sweep1_canonical",
+                              fiber_name=String(LR_SWEEP1_CONFIG.fiber_preset),
+                              L_m=LR_SWEEP1_CONFIG.L_fiber,
+                              P_W=LR_SWEEP1_CONFIG.P_cont)
     return results
+end
+
+"""
+Emit `save_standard_set` for every successful row. Skips rows missing phi_opt.
+Required by project Rule 2 (standard output images).
+"""
+function finalize_standard_images(results::Vector{<:Dict};
+                                   uω0=nothing, fiber=nothing, sim=nothing,
+                                   band_mask=nothing, bw_mask=nothing,
+                                   subdir::AbstractString,
+                                   fiber_name::AbstractString="",
+                                   L_m::Real=0.0, P_W::Real=0.0,
+                                   rebuild_per_config::Bool=false)
+    out_dir = joinpath(LR_RESULTS_DIR, subdir)
+    mkpath(out_dir)
+    Nt = sim === nothing ? nothing : sim["Nt"]
+    _get_Δf(sim) = fftshift(fftfreq(sim["Nt"], 1/sim["Δt"]))
+    for (i, r) in enumerate(results)
+        haskey(r, "phi_opt") || continue
+        phi_vec = r["phi_opt"]
+        cfg = get(r, "config", Dict())
+        _cg(k) = haskey(cfg, Symbol(k)) ? cfg[Symbol(k)] : get(cfg, k, nothing)
+        fiber_name_row = String(something(_cg("fiber_preset"), fiber_name))
+        L_row = Float64(something(_cg("L_fiber"), L_m))
+        P_row = Float64(something(_cg("P_cont"), P_W))
+        N_phi_row = Int(get(r, "N_phi", -1))
+        tag = @sprintf("%s_L%.2fm_P%.3fW_Nphi%d",
+                       replace(fiber_name_row, "-" => ""),
+                       L_row, P_row, N_phi_row)
+
+        if rebuild_per_config || Nt === nothing || length(phi_vec) != Nt
+            # Rebuild per-row setup — configs differ
+            local uω0_r, fiber_r, sim_r, band_mask_r, Δf_r, raman_thr_r
+            uω0_r, fiber_r, sim_r, band_mask_r, Δf_r, raman_thr_r = setup_raman_problem(;
+                fiber_preset = Symbol(fiber_name_row),
+                β_order      = 3,
+                L_fiber      = L_row,
+                P_cont       = P_row,
+                Nt           = LR_BASELINE_NT,
+                time_window  = LR_BASELINE_TW,
+            )
+            phi_mat = length(phi_vec) == sim_r["Nt"] ? reshape(phi_vec, sim_r["Nt"], 1) : phi_vec
+            try
+                save_standard_set(phi_mat, uω0_r, fiber_r, sim_r,
+                                  band_mask_r, Δf_r, raman_thr_r;
+                                  tag=tag, fiber_name=fiber_name_row,
+                                  L_m=L_row, P_W=P_row, output_dir=out_dir)
+            catch e
+                @warn "standard image failed" row=i tag=tag error=sprint(showerror, e)
+            end
+        else
+            Δf = _get_Δf(sim)
+            raman_thr = -5.0
+            phi_mat = reshape(phi_vec, Nt, 1)
+            try
+                save_standard_set(phi_mat, uω0, fiber, sim,
+                                  band_mask, Δf, raman_thr;
+                                  tag=tag, fiber_name=fiber_name_row,
+                                  L_m=L_row, P_W=P_row, output_dir=out_dir)
+            catch e
+                @warn "standard image failed" row=i tag=tag error=sprint(showerror, e)
+            end
+        end
+        flush(stderr)
+    end
+    @info "Standard images written to $(out_dir) ($(length(results)) rows)"
+    return nothing
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -409,6 +486,18 @@ function run_sweep2(; dry_run::Bool=false)
                  configs=[Dict("fiber_preset"=>String(f), "L_fiber"=>L, "P_cont"=>P)
                           for (f, L, P) in configs])
     println(stderr, "Sweep 2 complete. Saved $(save_path) ($(length(results)) rows)."); flush(stderr)
+
+    # Rule 2: emit the 4-image standard set for every phi_opt produced.
+    # Each row has its own (fiber, L, P) so rebuild per config.
+    filled = [isassigned(results, i) for i in eachindex(results)]
+    safe_results = results[filled]
+    try
+        finalize_standard_images(safe_results;
+                                  subdir="sweep2_LP_fiber",
+                                  rebuild_per_config=true)
+    catch e
+        @warn "finalize_standard_images failed" error=sprint(showerror, e)
+    end
     return results
 end
 
