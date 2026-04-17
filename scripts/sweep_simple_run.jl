@@ -146,11 +146,57 @@ function run_sweep1(; dry_run::Bool=false)
     B_prev = nothing
 
     for (lvl, N_phi) in enumerate(N_phi_levels)
-        kind = N_phi == Nt ? :identity : :cubic
+        is_baseline = (N_phi == Nt)
+        kind = is_baseline ? :identity : :cubic
         @info @sprintf("[sweep1 level %d/%d] N_phi=%d kind=:%s", lvl, length(N_phi_levels), N_phi, kind)
 
-        # Build basis once
-        B = build_phase_basis(Nt, N_phi; kind=kind, bandwidth_mask=(kind === :identity ? nothing : bw_mask))
+        if is_baseline
+            # Full-resolution baseline — bypass the low-res wrapper (an explicit
+            # Nt×Nt identity would be 2 GB for Nt=2^14). Route directly to the
+            # canonical optimizer.
+            if dry_run
+                @info "  (dry-run) would run full-res optimize_spectral_phase"
+                continue
+            end
+            # Upsample previous-level optimum into the Nt-long phase as φ0
+            if c_prev !== nothing
+                φ0 = reshape(B_prev * c_prev, Nt, 1)
+            else
+                φ0 = zeros(Nt, 1)
+            end
+            t0 = time()
+            result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
+                                              φ0=φ0, max_iter=LR_MAX_ITER,
+                                              log_cost=LR_LOG_COST)
+            phi_full = reshape(Optim.minimizer(result), Nt, 1)
+            elapsed = time() - t0
+            @info @sprintf("  baseline: J=%.3f dB  iters=%d  (%.1fs)",
+                           Optim.minimum(result), Optim.iterations(result), elapsed)
+            row = Dict(
+                "config"     => Dict("N_phi"=>N_phi, "kind"=>"identity",
+                                     "fiber_preset"=>String(LR_SWEEP1_CONFIG.fiber_preset),
+                                     "L_fiber"=>LR_SWEEP1_CONFIG.L_fiber,
+                                     "P_cont"=>LR_SWEEP1_CONFIG.P_cont),
+                "N_phi"      => N_phi,
+                "kind"       => "identity",
+                "c_opt"      => vec(phi_full),
+                "phi_opt"    => vec(phi_full),
+                "J_final"    => Optim.minimum(result),
+                "iterations" => Optim.iterations(result),
+                "converged"  => Optim.f_converged(result),
+                "N_eff"      => phase_neff(vec(phi_full), bw_mask),
+                "TV"         => phase_tv(vec(phi_full), bw_mask),
+                "curvature"  => phase_curvature(vec(phi_full), sim, bw_mask),
+            )
+            push!(results, row)
+            save_path = joinpath(LR_RESULTS_DIR, "sweep1_Nphi.jld2")
+            JLD2.jldsave(save_path; results, run_tag=LR_RUN_TAG)
+            @info "  saved $(save_path) ($(length(results)) rows)"
+            continue
+        end
+
+        # Low-resolution levels: build a small (Nt × N_phi) basis
+        B = build_phase_basis(Nt, N_phi; kind=kind, bandwidth_mask=bw_mask)
 
         # Seeds: coarsest level → multi-start; finer levels → warm-start from prev optimum.
         if lvl == 1
