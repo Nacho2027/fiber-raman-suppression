@@ -30,11 +30,15 @@ echo "== cost_audit_run_batch.sh :: $(date -u +%Y-%m-%dT%H:%M:%SZ) =="
 echo "== hostname: $(hostname)"
 echo "== PATH: $PATH"
 
-# Stage 1 — sync to sessions/H-cost
-echo "== [1/7] git checkout sessions/H-cost"
-git fetch origin
-git checkout sessions/H-cost
-git pull origin sessions/H-cost
+# Stage 1 — sync to sessions/H-cost (skip when files are scp'd directly)
+if [[ "${COST_AUDIT_SKIP_GIT_SYNC:-0}" == "1" ]]; then
+    echo "== [1/7] git sync skipped (COST_AUDIT_SKIP_GIT_SYNC=1, files delivered via scp)"
+else
+    echo "== [1/7] git checkout sessions/H-cost"
+    git fetch origin
+    git checkout sessions/H-cost
+    git pull origin sessions/H-cost
+fi
 
 # Stage 2 — unit tests
 echo "== [2/7] unit tests"
@@ -60,13 +64,21 @@ $JULIA scripts/cost_audit_analyze.jl
 $JULIA test/test_cost_audit_analyzer.jl
 
 # Stage 7 — publish results
-echo "== [7/7] commit + push results"
-git add results/cost_audit/ results/burst-logs/ 2>/dev/null || true
-if git diff --cached --quiet; then
-    echo "no results changes to commit (unexpected, continuing)"
+# When run via cost_audit_spawn_direct.sh on an ephemeral VM, results are
+# pulled back via scp (no git auth on the ephemeral). The caller will commit
+# locally and push. When run on the permanent burst, commit + push directly.
+if [[ "${COST_AUDIT_SKIP_GIT_SYNC:-0}" == "1" ]]; then
+    echo "== [7/7] skipping git commit/push (spawner will collect results via scp)"
+    du -sh results/cost_audit 2>/dev/null || true
 else
-    git commit -m "results(16-02): 12-run cost-audit batch + 48 standard images"
-    git push origin sessions/H-cost
+    echo "== [7/7] commit + push results"
+    git add results/cost_audit/ results/burst-logs/ 2>/dev/null || true
+    if git diff --cached --quiet; then
+        echo "no results changes to commit (unexpected, continuing)"
+    else
+        git commit -m "results(16-02): 12-run cost-audit batch + 48 standard images"
+        git push origin sessions/H-cost
+    fi
 fi
 
 echo "== cost_audit_run_batch.sh done :: $(date -u +%Y-%m-%dT%H:%M:%SZ) =="
