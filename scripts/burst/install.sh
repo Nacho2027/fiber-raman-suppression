@@ -15,12 +15,21 @@ RMT=fiber-raman-burst
 ZONE=us-east5-a
 PROJECT=riveralab
 
-echo "=== Step 1: make burst scripts executable on $RMT ==="
+echo "=== Step 1: install scripts into ~/bin (branch-independent) on $RMT ==="
+# We keep the canonical source in scripts/burst/ on main, but deploy the
+# executables to ~/bin so they survive when a session checks out a branch
+# that doesn't contain scripts/burst/.
 gcloud compute ssh --zone="$ZONE" --project="$PROJECT" "$RMT" --command='
     set -e
+    mkdir -p ~/bin
     cd fiber-raman-suppression
-    chmod +x scripts/burst/run-heavy.sh scripts/burst/watchdog.sh scripts/burst/install.sh 2>/dev/null || true
-    ls -la scripts/burst/
+    # Fetch latest main; pull the scripts via "git show" so we do not require
+    # the checkout to be on main.
+    git fetch origin main --quiet
+    git show origin/main:scripts/burst/run-heavy.sh > ~/bin/burst-run-heavy
+    git show origin/main:scripts/burst/watchdog.sh > ~/bin/burst-watchdog
+    chmod +x ~/bin/burst-run-heavy ~/bin/burst-watchdog
+    ls -la ~/bin/burst-run-heavy ~/bin/burst-watchdog
 '
 
 echo "=== Step 2: install watchdog as systemd --user service ==="
@@ -34,7 +43,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/fiber-raman-suppression/scripts/burst/watchdog.sh
+ExecStart=%h/bin/burst-watchdog
 Restart=on-failure
 RestartSec=30
 StandardOutput=append:%h/watchdog.log

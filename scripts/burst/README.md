@@ -10,19 +10,21 @@ This directory contains the mandatory coordination infrastructure for `fiber-ram
 
 ## How sessions should use this
 
+`install.sh` deploys the wrappers into `~/bin/` on the burst VM so they are **branch-independent** (they keep working no matter which branch a session has checked out).
+
 **Do NOT launch Julia directly in a tmux.** Always go through the wrapper:
 
 ```bash
 # On claude-code-host, to run a heavy job on the burst VM:
-burst-ssh "cd fiber-raman-suppression && scripts/burst/run-heavy.sh E-sweep2 \
+burst-ssh "cd fiber-raman-suppression && ~/bin/burst-run-heavy E-sweep2 \
           'julia -t auto --project=. scripts/sweep_simple_run.jl'"
 ```
 
-If another session is holding the lock, `run-heavy.sh` fails immediately by default with a message showing who is holding it. To wait instead, set `WAIT_TIMEOUT_SEC=<n>`:
+If another session is holding the lock, `burst-run-heavy` fails immediately by default with a message showing who is holding it. To wait instead, set `WAIT_TIMEOUT_SEC=<n>`:
 
 ```bash
 burst-ssh "cd fiber-raman-suppression && WAIT_TIMEOUT_SEC=3600 \
-          scripts/burst/run-heavy.sh F-longfiber-T5 \
+          ~/bin/burst-run-heavy F-longfiber-T5 \
           'julia -t auto --project=. scripts/longfiber_optimize_100m.jl'"
 ```
 
