@@ -1,0 +1,60 @@
+- raman_half_bw_thz = 2.5 THz gives ~5 THz display band (~30-50 nm), matching silica Raman FWHM/2
+- Removed redundant 'Raman band' label from axvspan in plot_optimization_result_v2 — onset axvline already provides legend entry
+- BUG-03 fix: zero phase at -40 dB (not NaN) before _manual_unwrap — unwrapper requires finite values
+- Wrapped phase panel shows original unmasked phase for display fidelity; NaN mask applied after
+- GDD percentile clipping uses Statistics.quantile (already imported) at 2nd/98th with 5% margin
+- 3x2 layout (not 2x3) — portrait orientation better for panel readability at 12x12 inches
+- Panel (3,2) hidden with set_visible(false) since only 5 physics views needed
+- _spectral_signal_xlim filters lambda < 0 to remove negative-frequency FFT artifacts
+- Dt_test must be in ps units (not seconds) so fftfreq returns THz grid — plan test code had unit bug fixed
+- Used β_order=3 for VERIF-04 SMF28 preset — SMF28 has both β₂ and β₃, requires β_order >= 3
+- VERIF-04 tolerance is atol=1e-12: both paths use identical floating-point arithmetic so any nonzero diff would signal a logic error
+- center_mask threshold at I_in_norm > 0.05 prevents noise-dominated tails from inflating max_dev in VERIF-01
+- VERIF-02 FAILs by design: attenuator window causes 2.7-49% photon number drift — this is expected behavior for the FFT boundary suppressor, not a solver bug
+- sim['ωs'] is absolute angular frequency (ω₀ already included); correct formula is abs.(omega_s) not abs.(omega_s .+ omega_0)
+- Taylor remainder at Nt=2^14 requires L_fiber=0.1m; longer fibers inflate 3rd-order Taylor terms causing slopes outside [1.4, 2.6]
+- Epsilon range [1e0, 1e-1, 1e-2, 1e-3] for Nt=2^14 Taylor test (shifted vs [1e-1, 1e-2, 1e-3, 1e-4] at Nt=2^8)
+- VERIF-03 PASS: slopes [2.01, 2.07, 2.09] confirm adjoint gradient is O(eps²) correct at production grid
+- JLD2 chosen over NPZ for binary persistence: round-trips native Julia types (complex arrays, Dicts, NamedTuples) cleanly
+- Manifest stored at results/raman/manifest.json (fixed path) regardless of save_prefix depth — Phase 6 needs a single discovery point
+- Manifest is append-safe (read-update-write) so multiple sequential runs accumulate correctly
+- uomega0 used as JLD2 key (ASCII-safe) for cross-tool HDF5 compatibility
+- Compat entries for JLD2 and JSON3 added by Pkg.add — kept as installed (0.6.3 and 1.14.3)
+- Using/import statements must be placed OUTSIDE the include guard because Julia resolves macros (like @sprintf) at parse time within the guard block — moved all imports before the guard
+- phi_norm zero-fills noise-floor bins (where !signal_mask) to avoid random noise-floor phase contaminating y-axis scale
+- Polynomial overlay (phi_poly) is computed in rad/s domain (omega_rad_s = 2pi * df_THz * 1e12) matching decompose_phase_polynomial's internal convention
+- Wavelength Raman band bounds computed from the exact -13.2 and -30 THz offsets applied to C_NM_THZ/1550 carrier frequency
+- Fig 5 uses Option A (no re-propagation): JLD2 does not store optimized output field; adding re-propagation adds ~2.5 min and Plan 02 PLAN.md explicitly calls for Option A for this reason
+- Global P_peak_global normalization in Fig 5: maximum across all runs so dB values are directly comparable between subplots
+- Group delay NaN masking: gd_ps[!signal_mask] = NaN produces clean display without clipping/distortion from noise-floor values
+- SPM formula spm_ps = beta2 * L * (gamma * P_peak * L) * 1e12 is a first-order estimate; formula is dimensionally approximate but matches plan spec exactly; accuracy validated by photon drift check in sweep runs
+- gamma and P_peak default to 0.0 for full backward compatibility with all existing callers (benchmark_optimization.jl, etc.)
+- nt_for_window defaults dt_min_ps=0.0105 (10.5 fs) to maintain resolution for femtosecond pulse structures
+- do_plots=true by default preserves all existing run_optimization() call behavior; sweep code passes do_plots=false
+- Test for SPM change uses extreme params (gamma=1.0, P_peak=1e14) because formula requires gamma*P_peak*L > Δω_raman~8.17e13 to dominate
+- β_order=3 required in setup_raman_problem when using fiber presets with 2 betas (β₂+β₃); default β_order=2 rejects them
+- 6 configs selected: SMF-28 N={1.3, 2.6, 2.6(5m)}, HNLF N={2.6, 3.6, 6.3} to span full N_sol range plus degraded long-fiber case
+- @sprintf with '*' string concatenation is not a literal format string in Julia 1.12 macroexpand — split into variable + single-literal sprintf
+- DocStringExtensions loads transitively via DifferentialEquations.jl and calls macroexpand on function bodies at docstring-bind time
+- Bypass setup_raman_problem auto-sizing by calling MultiModeNoise internals directly — setup_raman_problem overrides explicit Nt/tw when recommended window > supplied value, which is always true at L=30m SMF-28 (4276ps rec vs 500ps cap)
+- phi_opt interpolation via Interpolations.linear_interpolation on physical frequency axis (fftfreq) with extrapolation_bc=0.0 — zero outside stored range is correct because pulse spectrum is negligible outside ±15 THz
+- JLD2 saves J_z only (no uω_z) for 100 z-saves at Nt=65536 — saves 200MB per file, 3.2GB total; J(z) is the sufficient statistic for suppression reach analysis
+- uω_z saved only for one representative config (SMF-28 L=30m multistart) for spectral evolution figure — released immediately after plotting
+- SMF-28 shaped bc_frac=1.0 at L=10m and L=30m is a physics finding, not a numerical failure — the optimizer spreads the shaped field temporally across the full 500ps window while keeping Raman energy low; frequency-domain J(z) still correctly computed
+- HNLF finite reach confirmed: shaping benefit decays from 48 dB at z=1m to <3 dB by z=15m — fundamentally different behavior from SMF-28
+- Gauge-fix recipe: subtract mean(phi[band_input]) globally, then fit and subtract alpha*(omega - mean(omega_band)) globally (centered regression for numerical decoupling of C and alpha)
+- Input-band mask reconstructed from |uomega0|^2 at 99.9% cumulative energy cutoff (JLD2 band_mask field is the OUTPUT Raman mask, not what PITFALLS.md Pitfall 4 calls band_mask_input)
+- Polynomial basis: QR-orthonormalised monomials {x^2, x^3, x^4, x^5, x^6} on x = 2*(omega - omega_mean)/omega_range in [-1,1] over the input band
+- Residual fraction = ||phi_gf - phi_poly||^2_band / max(||phi_gf||^2_band, eps) with denominator guard
+- Collapse threshold: rms_gauge_fixed < 10% * rms_raw for same-config pairs
+- Determinism check pinned to FFTW.set_num_threads(1) and BLAS.set_num_threads(1) with Random.seed!(42)
+- Arpack matrix-free eigs used with :LR and :SR; no shift-invert attempted (requires factorisation, impossible for matrix-free HVP). Consequence: the 2 theoretically-predicted gauge null-modes at lambda=0 are NOT in the reported 40-vector spectrum. Their existence is a symmetry theorem (cost invariant under phi -> phi + C + alpha*omega) and their position was inferred from projection norms, not measured directly.
+- Both canonical optima analysed at Nt=8192 (production grid). Cross-validation against dense Hessian at Nt=2^8 confirmed HVP machinery is correct.
+- FFTW pinned to ESTIMATE + single thread to satisfy Plan 01's determinism finding (MEASURE drifts 1 rad between runs). BLAS also pinned to single thread for bit-reproducible reductions.
+- Figures decoupled from compute: scripts/phase13_hessian_figures.jl reads the JLD2 outputs and is idempotent / cheap. This plan's remaining tasks (figures + FINDINGS) could therefore be finished on the 2-vCPU local host after the burst VM delivered the raw data.
+- Headline verdict indefinite_hessian rather than non_gauge_flatness: both configs have bottom-20 eigenvalues that are ALL negative (100%), with |lambda_min|/lambda_max = 2.6% (SMF) / 0.41% (HNLF) — saddle, not flat region.
+- Pin the environment ONLY — do not change any physics/numerical logic. The MEASURE→ESTIMATE swap changes WHICH FFT algorithm is picked, not WHAT is computed.
+- 18 src/simulation/ call sites (not 16 as plan estimated) — verified empirically and corrected EXPECTED_FLAG_COUNT in benchmark driver.
+- Subprocess-isolated benchmark design (rewritten from in-process scaffold): fresh julia --project=. per run, JSON sentinel extraction, warm-up discarded, only optimize call timed.
+- Measurement criterion: cross-process bit-identity of J_final. ESTIMATE leg max-min = 0.0 (perfect). MEASURE leg max-min = 1.055e-13 (reproduces Phase 13 bug as a control).
+- Slowdown +21.4% (within +30% budget) — fix accepted as-is, no PATIENT wisdom-file fallback needed.
