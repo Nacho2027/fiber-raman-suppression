@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Milestone complete
-stopped_at: "Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures"
-last_updated: "2026-04-05T03:18:39.360Z"
+status: Executing Phase 16
+last_updated: "2026-04-17T03:52:20.728Z"
+last_activity: 2026-04-17
 progress:
-  total_phases: 11
-  completed_phases: 8
-  total_plans: 19
+  total_phases: 15
+  completed_phases: 2
+  total_plans: 11
   completed_plans: 17
-  percent: 89
+  percent: 100
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 12 — suppression-reach
+**Current focus:** Phase 16 — Cost Function Head-to-Head Audit
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 16 (Cost Function Head-to-Head Audit) — EXECUTING
+Plan: 1 of 2
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
@@ -99,6 +99,7 @@ The always-on `claude-code-host` (this machine) is `e2-standard-2` (2 vCPU, 8 GB
 - `burst-status` — check current state
 
 Workflow:
+
 1. Commit + push on claude-code-host: `git push`
 2. `burst-start && burst-ssh 'cd ~/fiber-raman-suppression && git pull && julia --threads=22 scripts/<thing>.jl'`
 3. `burst-ssh 'cd ~/fiber-raman-suppression && git add results/ && git commit -m "results" && git push'`
@@ -187,7 +188,7 @@ Both fixes require re-running the sweep to get valid results.
 ## Session Continuity
 
 Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-17 - Consolidated parallel GSD-2 (`.gsd/`) tracking back into GSD v1 (`.planning/`). Salvaged unique content: `07-03-SUMMARY.md` (full parameter sweep launched on burst VM 2026-04-17T01:42Z, still running at consolidation time) and `.planning/notes/gsd2-salvaged-decisions.md`. Archive at `.planning/archive/gsd2-parallel-run-2026-04-17.tar.gz`.
+Last activity: 2026-04-17
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs

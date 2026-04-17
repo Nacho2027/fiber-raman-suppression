@@ -9,9 +9,11 @@
 # with per-run JLD2 snapshots, gauge-projected Hessian top-32 eigenspectrum, and
 # robustness probe at σ ∈ {0.01, 0.05, 0.1, 0.2}.
 #
-# Runs on the burst VM (CLAUDE.md Rule 1). Acquires /tmp/burst-heavy-lock for
-# the full batch; run_one() does NOT take the lock (integration-test callers
-# can run on a shared VM under the light-lock protocol).
+# Runs on the burst VM (CLAUDE.md Rule 1) under the `burst-run-heavy` wrapper,
+# which manages `/tmp/burst-heavy-lock`. Per Rule P5 (2026-04-17 update), the
+# in-Julia `touch(lock)` / `rm(lock)` pattern is DEPRECATED — invoke via
+# `burst-ssh "cd fiber-raman-suppression && ~/bin/burst-run-heavy H-audit \\
+#  'julia -t auto --project=. scripts/cost_audit_driver.jl'"`.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ENV["MPLBACKEND"] = "Agg"
@@ -30,6 +32,8 @@ include(joinpath(@__DIR__, "phase13_primitives.jl"))
 include(joinpath(@__DIR__, "phase13_hvp.jl"))
 include(joinpath(@__DIR__, "phase13_hessian_eigspec.jl"))
 include(joinpath(@__DIR__, "cost_audit_noise_aware.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 
 # FFTW wisdom (D-09; belt-and-suspenders under Phase-15 ESTIMATE).
 const CA_FFTW_WISDOM_PATH = joinpath(@__DIR__, "..", "results", "raman",
@@ -63,7 +67,8 @@ const CA_HESSIAN_EPS    = 1e-4
 const CA_ARPACK_TOL     = 1e-6
 const CA_ARPACK_MAXITER = 500
 const CA_RESULTS_ROOT   = joinpath(@__DIR__, "..", "results", "cost_audit")
-const CA_HEAVY_LOCK     = "/tmp/burst-heavy-lock"
+# CA_HEAVY_LOCK removed per Rule P5 update (2026-04-17) — burst-run-heavy owns
+# the lock now; in-Julia management would collide with the wrapper.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -339,6 +344,27 @@ function run_one(variant::Symbol, config_tag::Symbol;
             println(io, "fftw_threads=", FFTW.get_num_threads())
             println(io, "blas_threads=", BLAS.get_num_threads())
         end
+
+        # Mandatory standard image set (Project-level rule, 2026-04-17 update).
+        # Every driver producing phi_opt MUST call save_standard_set().
+        # phi_opt is (Nt, M); standard_images expects a Vector{Float64}. M=1 here.
+        try
+            M_local = sim["M"]
+            phi_vec = M_local > 1 ? vec(φ_opt) : φ_opt[:, 1]
+            L_disp_cm = round(Int, cfg.L_fiber * 100)
+            P_mW = round(Int, cfg.P_cont * 1000)
+            tag = @sprintf("cost_audit_%s_%s_%s_L%dcm_P%dmW",
+                           String(config_tag), String(cfg.fiber_preset),
+                           String(variant), L_disp_cm, P_mW)
+            save_standard_set(phi_vec, uω0, fiber, sim,
+                              band_mask, Δf, raman_threshold;
+                              tag = tag,
+                              fiber_name = String(cfg.fiber_preset),
+                              L_m = cfg.L_fiber, P_W = cfg.P_cont,
+                              output_dir = dir)
+        catch e
+            @warn "save_standard_set failed — continuing" variant=variant config=config_tag exception=(e, catch_backtrace())
+        end
     end
     return result_nt
 end
@@ -346,47 +372,41 @@ end
 """
     run_all(; max_iter=100, Nt=8192, results_root=CA_RESULTS_ROOT) -> Nothing
 
-Execute all 12 (variant, config) pairs serially. Acquires /tmp/burst-heavy-lock;
-releases in `finally`. Appends per-run row to results/cost_audit/wall_log.csv.
+Execute all 12 (variant, config) pairs serially. The heavy lock
+(`/tmp/burst-heavy-lock`) is owned by `burst-run-heavy` — this function does
+NOT manage the lock itself. Appends per-run row to
+`results/cost_audit/wall_log.csv`.
 """
 function run_all(; max_iter::Int=100, Nt::Int=8192,
                  results_root::AbstractString=CA_RESULTS_ROOT)
     isdir(results_root) || mkpath(results_root)
-    if isfile(CA_HEAVY_LOCK)
-        error("heavy lock held at $CA_HEAVY_LOCK — another heavy run in progress")
-    end
-    touch(CA_HEAVY_LOCK)
     wall_log_path = joinpath(results_root, "wall_log.csv")
-    try
-        if !isfile(wall_log_path)
-            open(wall_log_path, "w") do io
-                println(io, "config,variant,wall_s,J_final_dB,iterations," *
-                             "iter_to_90pct,converged,dnf,hostname,timestamp")
+    if !isfile(wall_log_path)
+        open(wall_log_path, "w") do io
+            println(io, "config,variant,wall_s,J_final_dB,iterations," *
+                         "iter_to_90pct,converged,dnf,hostname,timestamp")
+        end
+    end
+    for cfg in CA_CONFIGS, variant in CA_VARIANTS
+        @info @sprintf("═══ run %s/%s ═══", cfg.tag, variant)
+        try
+            r = run_one(variant, cfg.tag;
+                        max_iter=max_iter, Nt=Nt, save=true,
+                        results_root=results_root)
+            open(wall_log_path, "a") do io
+                println(io, join((String(cfg.tag), String(variant),
+                    r.wall_s, r.J_final_dB, r.iterations, r.iter_to_90pct,
+                    r.converged, r.dnf, r.hostname,
+                    Dates.format(now(), "yyyymmdd_HHMMss")), ","))
+            end
+        catch e
+            @error "run FAILED — marking DNF" config=cfg.tag variant=variant exception=(e, catch_backtrace())
+            open(wall_log_path, "a") do io
+                println(io, join((String(cfg.tag), String(variant),
+                    NaN, NaN, 0, 0, false, true, gethostname(),
+                    Dates.format(now(), "yyyymmdd_HHMMss")), ","))
             end
         end
-        for cfg in CA_CONFIGS, variant in CA_VARIANTS
-            @info @sprintf("═══ run %s/%s ═══", cfg.tag, variant)
-            try
-                r = run_one(variant, cfg.tag;
-                            max_iter=max_iter, Nt=Nt, save=true,
-                            results_root=results_root)
-                open(wall_log_path, "a") do io
-                    println(io, join((String(cfg.tag), String(variant),
-                        r.wall_s, r.J_final_dB, r.iterations, r.iter_to_90pct,
-                        r.converged, r.dnf, r.hostname,
-                        Dates.format(now(), "yyyymmdd_HHMMss")), ","))
-                end
-            catch e
-                @error "run FAILED — marking DNF" config=cfg.tag variant=variant exception=(e, catch_backtrace())
-                open(wall_log_path, "a") do io
-                    println(io, join((String(cfg.tag), String(variant),
-                        NaN, NaN, 0, 0, false, true, gethostname(),
-                        Dates.format(now(), "yyyymmdd_HHMMss")), ","))
-                end
-            end
-        end
-    finally
-        rm(CA_HEAVY_LOCK; force=true)
     end
     return nothing
 end
