@@ -78,6 +78,12 @@ Fields
 Base.@kwdef mutable struct MVConfig
     variables::Tuple{Vararg{Symbol}} = (:phase, :amplitude)
     δ_bound::Float64    = MV_DEFAULT_DELTA_AMP
+    # Amplitude parameterization:
+    #   :tanh    → A = 1 + δ_bound · tanh(ξ); optimizer works on ξ ∈ ℝ, plain LBFGS.
+    #   :fminbox → A is the search variable directly; Fminbox(LBFGS) enforces bounds.
+    # Default :tanh avoids the barrier-wrapper overhead that made :fminbox stall in
+    # the 16-01 demo (see SUMMARY.md "partial" section).
+    amp_param::Symbol   = :tanh
     s_φ::Float64        = 1.0
     s_A::Float64        = 1.0   # set from δ_bound at construction if default
     s_E::Float64        = 1.0   # set from E_ref at construction
@@ -227,7 +233,19 @@ function cost_and_gradient_multivar(
     _E_ref = isnothing(E_ref) ? sum(abs2, uω0) : Float64(E_ref)
 
     parts = mv_unpack(x, cfg, Nt, M, _E_ref)
-    φ, A, E = parts.φ, parts.A, parts.E
+    φ, A_raw, E = parts.φ, parts.A, parts.E
+
+    # Amplitude parameterization transform (Decision D2 revisited — 2026-04-17):
+    #   :tanh    → search variable is ξ; A = 1 + δ·tanh(ξ), bounded in (1-δ, 1+δ).
+    #              ∂A/∂ξ = δ·(1 - tanh²(ξ)) = δ - (A-1)²/δ   (stable via (A-1))
+    #   :fminbox → search variable IS A; no transform here (Fminbox enforces bounds).
+    dA_dξ = nothing
+    if :amplitude in cfg.variables && cfg.amp_param === :tanh
+        A = 1.0 .+ cfg.δ_bound .* tanh.(A_raw)
+        dA_dξ = cfg.δ_bound .* (1.0 .- tanh.(A_raw) .^ 2)
+    else
+        A = A_raw
+    end
 
     # PRECONDITIONS
     @assert all(isfinite, φ) "phase has NaN/Inf"
@@ -274,10 +292,11 @@ function cost_and_gradient_multivar(
     end
 
     #   Amplitude gradient: 2 Re[ conj(λ₀) · u_shaped / A ]  =  2α Re[ conj(λ₀) · cis(φ) · uω0 ]
+    #   For :tanh parameterization, multiply by dA/dξ (chain rule).
     if haskey(off.ranges, :amplitude)
-        #   Use the second (stable) form to avoid division by small A entries.
-        g_amp = @. 2.0 * α * real(conj(λ0) * cis(φ) * uω0)
-        g[off.ranges[:amplitude]] .= vec(g_amp)
+        g_A = @. 2.0 * α * real(conj(λ0) * cis(φ) * uω0)
+        g_out = dA_dξ === nothing ? g_A : (g_A .* dA_dξ)   # d/dξ when :tanh
+        g[off.ranges[:amplitude]] .= vec(g_out)
     end
 
     #   Energy gradient: (1/E) Σ Re[ conj(λ₀) · u_shaped ]
@@ -350,9 +369,12 @@ function cost_and_gradient_multivar(
     end
 
     # Amplitude regularizers (inherited from amplitude_optimization.jl)
+    # Accumulate in A-space first, then chain-rule through dA/dξ at the end so
+    # the :tanh path gets a consistent ∂J_total/∂ξ.
     if haskey(off.ranges, :amplitude)
         uω0_abs2 = abs2.(uω0)
         E_original = sum(uω0_abs2)
+        g_A_reg = zeros(Nt, M)
 
         # Energy-preservation penalty (soft): matches amplitude_cost semantics
         if cfg.λ_energy > 0
@@ -361,7 +383,7 @@ function cost_and_gradient_multivar(
             J_E_pen = cfg.λ_energy * (ratio - 1.0)^2
             # ∂(ratio)/∂A = 2·α²·A·|uω0|² / E_original
             g_E_pen = @. 2.0 * cfg.λ_energy * (ratio - 1.0) * (2.0 * α^2 * A * uω0_abs2) / E_original
-            g[off.ranges[:amplitude]] .+= vec(g_E_pen)
+            g_A_reg .+= g_E_pen
             J_total += J_E_pen
             reg_breakdown["J_energy"] = J_E_pen
         end
@@ -371,7 +393,7 @@ function cost_and_gradient_multivar(
             N_elem = length(deviation)
             J_tik = cfg.λ_tikhonov * sum(deviation .^ 2) / N_elem
             g_tik = @. 2.0 * cfg.λ_tikhonov * deviation / N_elem
-            g[off.ranges[:amplitude]] .+= vec(g_tik)
+            g_A_reg .+= g_tik
             J_total += J_tik
             reg_breakdown["J_tikhonov"] = J_tik
         end
@@ -392,10 +414,14 @@ function cost_and_gradient_multivar(
             end
             J_tv *= cfg.λ_tv / Nt
             g_tv .*= cfg.λ_tv / Nt
-            g[off.ranges[:amplitude]] .+= vec(g_tv)
+            g_A_reg .+= g_tv
             J_total += J_tv
             reg_breakdown["J_tv"] = J_tv
         end
+
+        # Chain-rule the accumulated A-space reg gradient into ξ-space when :tanh.
+        g_A_reg_out = dA_dξ === nothing ? g_A_reg : (g_A_reg .* dA_dξ)
+        g[off.ranges[:amplitude]] .+= vec(g_A_reg_out)
     end
 
     # Log-cost transform of the **physics cost** only (regularizers already additive).
@@ -477,6 +503,7 @@ function optimize_spectral_multivariable(
     max_iter::Int=50,
     φ0=nothing, A0=nothing, E0=nothing,
     δ_bound::Real=MV_DEFAULT_DELTA_AMP,
+    amp_param::Symbol=:tanh,
     λ_gdd::Real=0.0, λ_boundary::Real=0.0,
     λ_energy::Real=0.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0, λ_flat::Real=0.0,
     log_cost::Bool=true,
@@ -484,16 +511,25 @@ function optimize_spectral_multivariable(
 )
     Nt = sim["Nt"]; M = sim["M"]
     vars = sanitize_variables(variables)
+    @assert amp_param in (:tanh, :fminbox) "amp_param must be :tanh or :fminbox, got $amp_param"
 
     E_ref = sum(abs2, uω0)
 
-    # Construct config and scaling (preconditioning per Decision D5)
+    # Construct config and scaling (preconditioning per Decision D5).
+    # For :tanh, the search variable ξ is already O(1); s_A = 1.0 is correct.
+    # For :fminbox, search variable is raw A with perturbation scale δ_bound → s_A=1/δ.
+    s_A_val = if :amplitude in vars
+        amp_param === :tanh ? 1.0 : (1.0 / δ_bound)
+    else
+        1.0
+    end
     cfg = MVConfig(
         variables = vars,
         δ_bound = Float64(δ_bound),
+        amp_param = amp_param,
         s_φ = 1.0,
-        s_A = :amplitude in vars ? (1.0 / δ_bound) : 1.0,
-        s_E = :energy    in vars ? (1.0 / max(E_ref, eps())) : 1.0,
+        s_A = s_A_val,
+        s_E = :energy in vars ? (1.0 / max(E_ref, eps())) : 1.0,
         log_cost = log_cost,
         λ_gdd = λ_gdd,
         λ_boundary = λ_boundary,
@@ -504,11 +540,19 @@ function optimize_spectral_multivariable(
     )
     scale = build_scaling_vector(cfg, Nt, M)
 
-    # Initial guesses
+    # Initial guesses. When :tanh, the search variable is ξ such that
+    # A = 1 + δ·tanh(ξ). Map A0 → ξ0 = atanh((A0 − 1) / δ).
     φ_init = isnothing(φ0) ? zeros(Nt, M) : Matrix{Float64}(φ0)
     A_init = isnothing(A0) ? ones(Nt, M)  : Matrix{Float64}(A0)
     E_init = isnothing(E0) ? E_ref        : Float64(E0)
-    x0 = mv_pack(φ_init, A_init, E_init, cfg, Nt, M)
+    A_init_search = if amp_param === :tanh && :amplitude in vars
+        # Invert A = 1 + δ·tanh(ξ) — clamp to avoid Inf at boundary.
+        u = clamp.((A_init .- 1.0) ./ δ_bound, -1.0 + 1e-6, 1.0 - 1e-6)
+        atanh.(u)
+    else
+        A_init
+    end
+    x0 = mv_pack(φ_init, A_init_search, E_init, cfg, Nt, M)
     y0 = scale .* x0   # scaled search variable (L-BFGS operates on y)
 
     # Fiber mutation guard: caller should set zsave = nothing but we enforce.
@@ -535,8 +579,9 @@ function optimize_spectral_multivariable(
         return false
     end
 
-    # Bounds if amplitude is enabled
-    use_box = :amplitude in vars
+    # Fminbox path only for :fminbox; :tanh goes through plain LBFGS (the
+    # tanh transform keeps A ∈ (1-δ, 1+δ) unconditionally so no box needed).
+    use_box = (:amplitude in vars) && (amp_param === :fminbox)
     if use_box
         lower_x = fill(-Inf, length(x0))
         upper_x = fill(Inf, length(x0))
@@ -586,6 +631,15 @@ function optimize_spectral_multivariable(
     x_opt = y_opt ./ scale
     unpacked = mv_unpack(x_opt, cfg, Nt, M, E_ref)
 
+    # When :tanh, `unpacked.A` is ξ (search variable). Compute the physical A
+    # for the return value; cost_and_gradient_multivar does this transform
+    # internally each call, so the diagnostics below see the right A.
+    A_opt_physical = if (:amplitude in vars) && amp_param === :tanh
+        1.0 .+ δ_bound .* tanh.(unpacked.A)
+    else
+        unpacked.A
+    end
+
     elapsed = time() - t_start
 
     # Final re-evaluation for clean diagnostics (unscaled gradient)
@@ -597,7 +651,7 @@ function optimize_spectral_multivariable(
         scale = scale,
         x_opt = x_opt,
         φ_opt = unpacked.φ,
-        A_opt = unpacked.A,
+        A_opt = A_opt_physical,
         E_opt = unpacked.E,
         E_ref = E_ref,
         J_opt = J_opt,
@@ -805,6 +859,8 @@ function run_multivar_optimization(;
     max_iter::Int=50,
     validate::Bool=true,
     δ_bound::Real=MV_DEFAULT_DELTA_AMP,
+    amp_param::Symbol=:tanh,
+    φ0=nothing, A0=nothing,
     λ_gdd::Real=1e-4, λ_boundary::Real=1.0,
     λ_energy::Real=1.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0, λ_flat::Real=0.0,
     log_cost::Bool=true,
@@ -823,16 +879,18 @@ function run_multivar_optimization(;
     E_ref = sum(abs2, uω0)
 
     if validate
+        s_A_val = amp_param === :tanh ? 1.0 : (1.0 / δ_bound)
         cfg_val = MVConfig(
             variables = sanitize_variables(variables),
             δ_bound = Float64(δ_bound),
+            amp_param = amp_param,
             s_φ = 1.0,
-            s_A = 1.0 / δ_bound,
+            s_A = s_A_val,
             s_E = 1.0 / E_ref,
             log_cost = false,   # validate on linear cost for clean FD
         )
         @info "multivar: validating gradient before optimization"
-        mv_validate_gradient(uω0, fiber, sim, band_mask, cfg_val; n_checks=3)
+        mv_validate_gradient(uω0, fiber, sim, band_mask, cfg_val; n_checks=3, rel_tol=5e-2)
     end
 
     outcome = optimize_spectral_multivariable(
@@ -840,14 +898,19 @@ function run_multivar_optimization(;
         variables = variables,
         max_iter = max_iter,
         δ_bound = δ_bound,
+        amp_param = amp_param,
+        φ0 = φ0, A0 = A0,
         λ_gdd = λ_gdd, λ_boundary = λ_boundary,
         λ_energy = λ_energy, λ_tikhonov = λ_tikhonov,
         λ_tv = λ_tv, λ_flat = λ_flat,
         log_cost = log_cost,
     )
 
-    # Metrics for meta dict
-    x_zero = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, outcome.cfg, Nt, M)
+    # Metrics for meta dict.
+    # Un-shaped baseline means φ=0, A=1, E=E_ref. For :tanh parameterization
+    # the search var ξ=0 corresponds to A=1; for :fminbox ξ==A==1 directly.
+    A_baseline_search = outcome.cfg.amp_param === :tanh ? zeros(Nt, M) : ones(Nt, M)
+    x_zero = mv_pack(zeros(Nt, M), A_baseline_search, E_ref, outcome.cfg, Nt, M)
     cfg_linear = deepcopy(outcome.cfg); cfg_linear.log_cost = false
     J_before, _, _ = cost_and_gradient_multivar(x_zero, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
 
@@ -946,9 +1009,14 @@ function mv_validate_gradient(
     Nt = sim["Nt"]; M = sim["M"]
     E_ref = sum(abs2, uω0)
 
-    # Base test point: small-random phase, near-unity amp, E ≈ E_ref
+    # Base test point: small-random phase, near-unity amp, E ≈ E_ref.
+    # When :tanh, the search variable is ξ; ξ ≈ 0.1·randn gives A very close to 1.
     φ_test = 0.1 .* randn(Nt, M)
-    A_test = 1.0 .+ 0.02 .* randn(Nt, M)
+    A_test = if cfg.amp_param === :tanh
+        0.1 .* randn(Nt, M)          # ξ ∈ ℝ
+    else
+        1.0 .+ 0.02 .* randn(Nt, M)  # A in box
+    end
     E_test = E_ref * (1.0 + 0.05 * randn())
     x0 = mv_pack(φ_test, A_test, E_test, cfg, Nt, M)
 

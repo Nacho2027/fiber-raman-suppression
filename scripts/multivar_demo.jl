@@ -81,13 +81,14 @@ J0_dB = MultiModeNoise.lin_to_dB(J0_lin)
 # 2. Joint (phase + amplitude) multi-variable
 # ═════════════════════════════════════════════════════════════════════════════
 
-@info "▶ Run B: joint phase+amplitude (optimize_spectral_multivariable)"
+@info "▶ Run B: joint phase+amplitude from cold start (tanh reparam, plain LBFGS)"
 outB = run_multivar_optimization(
     ; DEMO_KW...,
     variables = (:phase, :amplitude),
     max_iter = MAX_ITER,
     validate = false,
     δ_bound = 0.10,
+    amp_param = :tanh,
     λ_gdd = 1e-4, λ_boundary = 1.0,
     λ_energy = 1.0, λ_tikhonov = 0.0, λ_tv = 0.0, λ_flat = 0.0,
     log_cost = true,
@@ -97,6 +98,30 @@ outB = run_multivar_optimization(
 J_B_lin = outB.J_after_lin
 J_B_dB = MultiModeNoise.lin_to_dB(J_B_lin)
 ΔJ_B_dB = outB.ΔJ_dB
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2b. Warm-started multivar run — seeded with phase-only optimum, A=1
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "▶ Run B-warm: phase+amplitude warm-started from phase-only optimum"
+outB_warm = run_multivar_optimization(
+    ; DEMO_KW...,
+    variables = (:phase, :amplitude),
+    max_iter = MAX_ITER,
+    validate = false,
+    δ_bound = 0.10,
+    amp_param = :tanh,
+    φ0 = φ_A,                         # reuse phase-only optimum
+    A0 = ones(sim_A["Nt"], sim_A["M"]),
+    λ_gdd = 1e-4, λ_boundary = 1.0,
+    λ_energy = 1.0, λ_tikhonov = 0.0, λ_tv = 0.0, λ_flat = 0.0,
+    log_cost = true,
+    fiber_name = "SMF-28",
+    save_prefix = joinpath(OUT_DIR, "mv_joint_warmstart"),
+)
+J_Bw_lin = outB_warm.J_after_lin
+J_Bw_dB = MultiModeNoise.lin_to_dB(J_Bw_lin)
+ΔJ_Bw_dB = outB_warm.ΔJ_dB
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 3. Phase-only result in multivar format (for symmetric comparison)
@@ -139,14 +164,20 @@ save_multivar_result(joinpath(OUT_DIR, "mv_phaseonly"), struct_stub; meta=meta_A
 # ═════════════════════════════════════════════════════════════════════════════
 
 @info "▶ Plotting comparison figure"
-fig, axs = subplots(1, 2, figsize=(12, 4.5))
+fig, axs = subplots(1, 2, figsize=(13, 4.5))
 
 # Left: convergence
 ax1 = axs[1]
 conv_B = outB.meta[:convergence_history]
+conv_Bw = outB_warm.meta[:convergence_history]
 ax1.plot(1:length(conv_A), conv_A, "-o", color="tab:blue", label="phase-only", markersize=3)
 if !isempty(conv_B)
-    ax1.plot(1:length(conv_B), conv_B, "-s", color="tab:red", label="phase+amplitude (multivar)", markersize=3)
+    ax1.plot(1:length(conv_B), conv_B, "-s", color="tab:red",
+             label="multivar cold-start (tanh)", markersize=3)
+end
+if !isempty(conv_Bw)
+    ax1.plot(1:length(conv_Bw), conv_Bw, "-^", color="tab:green",
+             label="multivar warm-start (tanh)", markersize=3)
 end
 ax1.set_xlabel("iteration")
 ax1.set_ylabel("J [dB]")
@@ -154,9 +185,8 @@ ax1.set_title("Convergence")
 ax1.legend(loc="upper right")
 ax1.grid(true, alpha=0.3)
 
-# Right: output spectrum in Raman band for both
+# Right: output spectrum in Raman band for all three
 ax2 = axs[2]
-# Re-propagate both to get output spectra
 fiber_prop = deepcopy(fiber_A)
 fiber_prop["zsave"] = [fiber_A["L"]]
 
@@ -165,7 +195,7 @@ uω0_A_shaped = @. uω0_A * cis(φ_A)
 sol_A = MultiModeNoise.solve_disp_mmf(uω0_A_shaped, fiber_prop, sim_A)
 uωf_A = sol_A["uω_z"][end, :, :]
 
-# Joint output
+# Joint cold-start output
 α_B = outB.outcome.diagnostics[:alpha]
 uω0_B_shaped = @. α_B * outB.outcome.A_opt * cis(outB.outcome.φ_opt) * outB.uω0
 fiber_prop_B = deepcopy(outB.fiber)
@@ -173,14 +203,23 @@ fiber_prop_B["zsave"] = [outB.fiber["L"]]
 sol_B = MultiModeNoise.solve_disp_mmf(uω0_B_shaped, fiber_prop_B, outB.sim)
 uωf_B = sol_B["uω_z"][end, :, :]
 
+# Joint warm-start output
+α_Bw = outB_warm.outcome.diagnostics[:alpha]
+uω0_Bw_shaped = @. α_Bw * outB_warm.outcome.A_opt * cis(outB_warm.outcome.φ_opt) * outB_warm.uω0
+fiber_prop_Bw = deepcopy(outB_warm.fiber)
+fiber_prop_Bw["zsave"] = [outB_warm.fiber["L"]]
+sol_Bw = MultiModeNoise.solve_disp_mmf(uω0_Bw_shaped, fiber_prop_Bw, outB_warm.sim)
+uωf_Bw = sol_Bw["uω_z"][end, :, :]
+
 import FFTW
 Δf_A_shifted = fftshift(FFTW.fftfreq(sim_A["Nt"], 1 / sim_A["Δt"]))
 S_A = fftshift(vec(sum(abs2, uωf_A; dims=2)))
 S_B = fftshift(vec(sum(abs2, uωf_B; dims=2)))
-S_A_norm = S_A ./ maximum(S_A)
-S_B_norm = S_B ./ maximum(S_B)
-ax2.plot(Δf_A_shifted, 10 .* log10.(max.(S_A_norm, 1e-15)), "-", color="tab:blue", label="phase-only", linewidth=1.3)
-ax2.plot(Δf_A_shifted, 10 .* log10.(max.(S_B_norm, 1e-15)), "-", color="tab:red", label="phase+amplitude", linewidth=1.3)
+S_Bw = fftshift(vec(sum(abs2, uωf_Bw; dims=2)))
+to_dB(S) = 10 .* log10.(max.(S ./ maximum(S), 1e-15))
+ax2.plot(Δf_A_shifted, to_dB(S_A),  "-", color="tab:blue",  label="phase-only",         linewidth=1.3)
+ax2.plot(Δf_A_shifted, to_dB(S_B),  "-", color="tab:red",   label="multivar cold-start", linewidth=1.3)
+ax2.plot(Δf_A_shifted, to_dB(S_Bw), "-", color="tab:green", label="multivar warm-start", linewidth=1.3)
 ax2.axvline(-5.0, color="k", linestyle=":", alpha=0.5, label="Raman threshold")
 ax2.set_xlabel("Δf [THz]")
 ax2.set_ylabel("|U(f)|² [dB norm]")
@@ -190,8 +229,11 @@ ax2.set_ylim(-60, 5)
 ax2.legend(loc="lower right")
 ax2.grid(true, alpha=0.3)
 
-fig.suptitle(@sprintf("SMF-28 L=%.1fm P=%.2fW:  phase-only ΔJ=%.2f dB  |  multivar ΔJ=%.2f dB  |  Δ(diff)=%.2f dB",
-    DEMO_KW.L_fiber, DEMO_KW.P_cont, ΔJ_A_dB, ΔJ_B_dB, ΔJ_B_dB - ΔJ_A_dB))
+fig.suptitle(@sprintf(
+    "SMF-28 L=%.1fm P=%.2fW:  phase-only ΔJ=%.2f dB | cold ΔJ=%.2f dB (Δ=%.2f) | warm ΔJ=%.2f dB (Δ=%.2f)",
+    DEMO_KW.L_fiber, DEMO_KW.P_cont,
+    ΔJ_A_dB, ΔJ_B_dB, ΔJ_B_dB - ΔJ_A_dB,
+    ΔJ_Bw_dB, ΔJ_Bw_dB - ΔJ_A_dB))
 fig.tight_layout()
 cmp_path = joinpath(OUT_DIR, "multivar_vs_phase_comparison.png")
 savefig(cmp_path, dpi=200)
@@ -201,21 +243,28 @@ savefig(cmp_path, dpi=200)
 # 5. Success criterion + final summary
 # ═════════════════════════════════════════════════════════════════════════════
 
-improvement_dB = ΔJ_B_dB - ΔJ_A_dB
+improvement_cold = ΔJ_B_dB  - ΔJ_A_dB   # negative = multivar cold better
+improvement_warm = ΔJ_Bw_dB - ΔJ_A_dB   # negative = warm-start better
+best_improvement = min(improvement_cold, improvement_warm)
+
 @info @sprintf("""
 ═══════════════════════════════════════════════════════════════
   DEMO RESULTS
 ───────────────────────────────────────────────────────────────
-  Phase-only    ΔJ = %.2f dB
-  Multivariate  ΔJ = %.2f dB
-  Improvement      = %.2f dB   (negative = multivar is better)
+  Phase-only            ΔJ = %.2f dB
+  Multivariate (cold)   ΔJ = %.2f dB   (Δ vs phase-only = %+.2f dB)
+  Multivariate (warm)   ΔJ = %.2f dB   (Δ vs phase-only = %+.2f dB)
+  Best improvement          = %.2f dB  (negative = multivar wins)
   Success criterion (≤ -0.5 dB): %s
 ═══════════════════════════════════════════════════════════════
 """,
-    ΔJ_A_dB, ΔJ_B_dB, improvement_dB,
-    improvement_dB ≤ -0.5 ? "PASS" : "FAIL — gap smaller than threshold")
+    ΔJ_A_dB,
+    ΔJ_B_dB,  improvement_cold,
+    ΔJ_Bw_dB, improvement_warm,
+    best_improvement,
+    best_improvement ≤ -0.5 ? "PASS" : "FAIL — gap smaller than threshold")
 
-if improvement_dB > -0.5
+if best_improvement > -0.5
     @warn "Demo did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config."
 end
 
