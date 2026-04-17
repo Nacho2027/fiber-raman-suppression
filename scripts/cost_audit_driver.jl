@@ -152,7 +152,7 @@ function _hessian_top_k(setup_kwargs::NamedTuple, φ_opt::AbstractMatrix;
     λ_real = real.(λ_top)
     lambda_max = maximum(λ_real)
     lambda_min_in_top = minimum(λ_real)
-    cond_proxy = lambda_max / max(abs(lambda_min_in_top), eps())
+    cond_proxy = lambda_max / max(abs(lambda_min_in_top), Base.eps())
     return (lambda_top=λ_real, cond_proxy=cond_proxy,
             lambda_max=lambda_max, dnf=false)
 end
@@ -217,7 +217,8 @@ function run_one(variant::Symbol, config_tag::Symbol;
         J_final    = Optim.minimum(result)
         iterations = Optim.iterations(result)
         converged  = Optim.converged(result)
-        f_trace    = [t.value for t in Optim.f_trace(result)]
+        # Optim.f_trace returns Vector{Float64} directly (function values per iter)
+        f_trace    = Vector{Float64}(Optim.f_trace(result))
 
     elseif variant == :log_dB
         # D-08: log_dB cost → f_abstol=0.01 dB (set internally when log_cost=true).
@@ -228,7 +229,7 @@ function run_one(variant::Symbol, config_tag::Symbol;
         J_final     = 10^(J_final_dB_/10)
         iterations  = Optim.iterations(result)
         converged   = Optim.converged(result)
-        f_trace_dB  = [t.value for t in Optim.f_trace(result)]
+        f_trace_dB  = Vector{Float64}(Optim.f_trace(result))
         f_trace     = [10^(v/10) for v in f_trace_dB]
         log_cost_used = true
 
@@ -264,7 +265,9 @@ function run_one(variant::Symbol, config_tag::Symbol;
         uωf_buffer = similar(uω0)
         Nt_sim = sim["Nt"]; M_sim = sim["M"]
         trace_vals = Float64[]
-        cb = state -> (push!(trace_vals, state.value); false)
+        # Optim.jl with store_trace=true passes the whole trace vector, not
+        # a single state. Access tr[end].value to record the latest iteration.
+        cb = tr -> (isempty(tr) || push!(trace_vals, tr[end].value); false)
         fg! = Optim.only_fg!() do F, G, φ_vec
             φ = reshape(φ_vec, Nt_sim, M_sim)
             J, ∂J = cost_and_gradient_curvature(φ, uω0, fiber, sim, band_mask;
