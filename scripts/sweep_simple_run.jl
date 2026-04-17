@@ -272,39 +272,81 @@ function run_one_config_sweep2(; fiber_preset::Symbol, L_fiber::Real, P_cont::Re
         Nt           = LR_BASELINE_NT,
         time_window  = LR_BASELINE_TW,
     )
-    println(stderr, "[thr $tid] setup done Nt=$(sim["Nt"]) $(fiber_preset) L=$(L_fiber) P=$(P_cont)"); flush(stderr)
     bw_mask = pulse_bandwidth_mask(uω0)
+    bw_bins = sum(bw_mask)
     Nt = sim["Nt"]
+    println(stderr, "[thr $tid] setup done Nt=$(Nt) bw_bins=$(bw_bins) $(fiber_preset) L=$(L_fiber) P=$(P_cont)"); flush(stderr)
 
     out = Vector{Dict{String,Any}}()
 
     # ---- level 1: N_phi=16, 3-seed multi-start ----
-    B16 = build_phase_basis(Nt, 16; kind=:cubic, bandwidth_mask=bw_mask)
-    seeds16 = multistart_seeds(16, Nt)
     best16 = nothing
-    for s in seeds16
-        r = run_one_optimization(uω0, fiber, sim, band_mask;
-                                 N_phi=16, kind=:cubic, bw_mask=bw_mask,
-                                 c0=s, B_precomputed=B16)
-        if best16 === nothing || r.J_final < best16.J_final
-            best16 = r
+    if bw_bins < 16
+        err = Dict(
+            "config" => Dict("fiber_preset"=>String(fiber_preset),
+                             "L_fiber"=>L_fiber, "P_cont"=>P_cont, "N_phi"=>16),
+            "N_phi" => 16,
+            "error" => "bandwidth bins $bw_bins < N_phi 16 — pulse too narrow",
+        )
+        push!(out, err)
+    else
+        try
+            B16 = build_phase_basis(Nt, 16; kind=:cubic, bandwidth_mask=bw_mask)
+            seeds16 = multistart_seeds(16, Nt)
+            for s in seeds16
+                r = run_one_optimization(uω0, fiber, sim, band_mask;
+                                         N_phi=16, kind=:cubic, bw_mask=bw_mask,
+                                         c0=s, B_precomputed=B16,
+                                         max_iter=30)  # trimmed from 50 to bound tail latency
+                if best16 === nothing || r.J_final < best16.J_final
+                    best16 = r
+                end
+            end
+            push!(out, package_result(best16, uω0, sim, band_mask, bw_mask;
+                                      config=(N_phi=16, kind=:cubic,
+                                              fiber_preset=fiber_preset,
+                                              L_fiber=L_fiber, P_cont=P_cont)))
+        catch e
+            push!(out, Dict(
+                "config" => Dict("fiber_preset"=>String(fiber_preset),
+                                 "L_fiber"=>L_fiber, "P_cont"=>P_cont, "N_phi"=>16),
+                "N_phi" => 16,
+                "error" => sprint(showerror, e),
+            ))
         end
     end
-    push!(out, package_result(best16, uω0, sim, band_mask, bw_mask;
-                              config=(N_phi=16, kind=:cubic,
-                                      fiber_preset=fiber_preset,
-                                      L_fiber=L_fiber, P_cont=P_cont)))
 
-    # ---- level 2: N_phi=64, warm-started from 16 ----
-    B64 = build_phase_basis(Nt, 64; kind=:cubic, bandwidth_mask=bw_mask)
-    c64_0 = continuation_upsample(vec(best16.c_opt), B16, B64)
-    r64 = run_one_optimization(uω0, fiber, sim, band_mask;
-                                N_phi=64, kind=:cubic, bw_mask=bw_mask,
-                                c0=c64_0, B_precomputed=B64)
-    push!(out, package_result(r64, uω0, sim, band_mask, bw_mask;
-                              config=(N_phi=64, kind=:cubic,
-                                      fiber_preset=fiber_preset,
-                                      L_fiber=L_fiber, P_cont=P_cont)))
+    # ---- level 2: N_phi=64 (or clamped), warm-started from level 1 ----
+    N_phi_2 = min(64, bw_bins)   # clamp to physical ceiling
+    if best16 === nothing || N_phi_2 < 8
+        push!(out, Dict(
+            "config" => Dict("fiber_preset"=>String(fiber_preset),
+                             "L_fiber"=>L_fiber, "P_cont"=>P_cont, "N_phi"=>N_phi_2),
+            "N_phi" => N_phi_2,
+            "error" => "level 1 failed or bandwidth too narrow ($(bw_bins) bins)",
+        ))
+    else
+        try
+            B2 = build_phase_basis(Nt, N_phi_2; kind=:cubic, bandwidth_mask=bw_mask)
+            B16 = build_phase_basis(Nt, 16; kind=:cubic, bandwidth_mask=bw_mask)
+            c2_0 = continuation_upsample(vec(best16.c_opt), B16, B2)
+            r2 = run_one_optimization(uω0, fiber, sim, band_mask;
+                                       N_phi=N_phi_2, kind=:cubic, bw_mask=bw_mask,
+                                       c0=c2_0, B_precomputed=B2,
+                                       max_iter=30)
+            push!(out, package_result(r2, uω0, sim, band_mask, bw_mask;
+                                      config=(N_phi=N_phi_2, kind=:cubic,
+                                              fiber_preset=fiber_preset,
+                                              L_fiber=L_fiber, P_cont=P_cont)))
+        catch e
+            push!(out, Dict(
+                "config" => Dict("fiber_preset"=>String(fiber_preset),
+                                 "L_fiber"=>L_fiber, "P_cont"=>P_cont, "N_phi"=>N_phi_2),
+                "N_phi" => N_phi_2,
+                "error" => sprint(showerror, e),
+            ))
+        end
+    end
     return out
 end
 
