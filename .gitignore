@@ -39,3 +39,25 @@ __pycache__/
 *.swp
 *.swo
 *~
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
+.bg-shell/
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+dist/
+build/
+.venv/
+venv/
+target/
+vendor/
+coverage/
+.cache/
+tmp/

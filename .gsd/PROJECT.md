@@ -33,17 +33,24 @@ Physically correct simulation and optimization of Raman suppression, with every 
 - ✓ Per-run JLD2 result files with 18 fields (phi_opt, uω0, convergence history, metadata) — v2.0 Phase 5
 - ✓ Append-safe manifest.json indexing all runs with scalar summaries — v2.0 Phase 5
 - ✓ Optim.jl convergence trace captured via store_trace=true — v2.0 Phase 5
+- ✓ Summary table aggregates all runs (J_before/after, delta-dB, iterations, wall time, soliton N) — v2.0 Phase 6
+- ✓ Overlay convergence plot shows all runs' J vs iteration on single figure — v2.0 Phase 6
+- ✓ Overlay spectral comparison per fiber type on shared wavelength axes — v2.0 Phase 6
+- ✓ GDD/TOD polynomial phase decomposition with residual fraction — v2.0 Phase 6
+- ✓ Soliton number N annotated in metadata and summary table — v2.0 Phase 6
 
 ### Active
 
-#### Current Milestone: v2.0 Verification & Discovery
+#### Current Milestone: v2.0 Verification & Discovery (M002)
+
+**Progress:** S01 (Correctness Verification) ✓, S02 (Result Serialization) ✓, S03 (Cross Run Comparison) ✓, S04 (Parameter Sweeps) next.
 
 **Goal:** Verify that the raman_optimization pipeline is physically correct, then systematically explore parameter space and identify non-trivial patterns across optimization runs.
 
 **Target features:**
-- Correctness verification of raman_optimization.jl against published NLSE/Raman theory
-- Cross-run comparison infrastructure (overlay phase profiles, costs, convergence)
-- Pattern detection across fiber types and optimization configs
+- ~~Correctness verification of raman_optimization.jl against published NLSE/Raman theory~~ ✓
+- ~~Cross-run comparison infrastructure (overlay phase profiles, costs, convergence)~~ ✓
+- ~~Pattern detection across fiber types and optimization configs~~ ✓
 - Parameter space exploration (fiber lengths, peak powers beyond current presets)
 - Automated summary/amalgamation plots after all runs complete
 
@@ -56,8 +63,9 @@ Physically correct simulation and optimization of Raman suppression, with every 
 ## Context
 
 - **Stack**: Julia 1.12 + DifferentialEquations.jl + FFTW.jl + Optim.jl + PyPlot (matplotlib)
-- **Visualization**: `scripts/visualization.jl` (~1800 lines), fully overhauled in v1.0
+- **Visualization**: `scripts/visualization.jl` (~2069 lines), fully overhauled in v1.0, extended with cross-run comparison functions in Phase 6
 - **Optimization scripts**: `scripts/raman_optimization.jl` (5 run configs), `scripts/amplitude_optimization.jl`
+- **Comparison pipeline**: `scripts/run_comparison.jl` — re-runs 5 configs, generates 4 comparison PNGs + phase analysis
 - **Documentation**: All `src/` functions fully documented with physics descriptions (2026-03-26). Core simulation layer (GMMNLSE, adjoint, fibers, gain) has comprehensive docstrings.
 - **Runs**: Multiple fiber configs (SMF-28, HNLF) x (lengths, powers). Results to `results/raman/`
 - **Shipped v1.0**: Visualization overhaul — 3 phases, 6 plans, all plotting functions refactored
@@ -93,6 +101,8 @@ Physically correct simulation and optimization of Raman suppression, with every 
 | **[Phase 7/8] Raman response overflow fix** | `exp(-t/tau2)` overflows for `t<0` when `time_window > 45ps`. Fixed by clamping to `max(t,0)` in Raman response construction. | ✓ Good |
 | **[Phase 7/8] Auto-sizing time_window and Nt** | `setup_raman_problem`/`setup_amplitude_problem` auto-expand time_window and Nt when caller value is too small for dispersive walk-off + SPM broadening. Prevents silent attenuator absorption. | ✓ Good |
 | **[Phase 7/8] lambda_boundary reduced 10.0 to 1.0** | With correct time windows, heavy boundary penalty fights the optimizer. Reduced from 10.0 to 1.0. | ✓ Good |
+| **[Phase 6] Native wavelength grids in spectral overlay** | plot_spectral_overlay uses each run's own wavelength grid rather than interpolating to a common grid — avoids interpolation artifacts and preserves spectral resolution. | ✓ Good |
+| **[Phase 6] -40 dB signal mask for phase decomposition** | decompose_phase_polynomial uses same -40 dB threshold as plot_phase_diagnostic for consistency across visualization functions. | ✓ Good |
 
 ## Evolution
 
@@ -112,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after Phase 8 completion and sweep analysis*
+*Last updated: 2026-04-17 after S03 (Cross Run Comparison) completion*

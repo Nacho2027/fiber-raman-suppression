@@ -5,3 +5,6 @@
 {"id":"f1a7f659-4937-4028-a657-f0af1bddcff5","ts":"2026-04-17T01:04:24.370Z","severity":"warning","message":"[state] DB unavailable — using filesystem state derivation (degraded mode)","source":"workflow-logger","read":false}
 {"id":"7f16edf1-bde8-4081-b070-07b68ef47d54","ts":"2026-04-17T01:05:22.153Z","severity":"warning","message":"[state] DB unavailable — using filesystem state derivation (degraded mode)","source":"workflow-logger","read":false}
 {"id":"f1895e0d-758e-4f1c-93a3-99e13325445e","ts":"2026-04-17T01:06:13.838Z","severity":"warning","message":"[state] DB unavailable — using filesystem state derivation (degraded mode)","source":"workflow-logger","read":false}
+{"id":"b077c9df-9bef-4af5-ac61-ddaa13a77b04","ts":"2026-04-17T01:32:35.154Z","severity":"info","message":"Auto-mode started. Will loop until milestone complete.","source":"notify","read":false}
+{"id":"43d1f388-2c2e-49eb-a5cf-460bc52c736c","ts":"2026-04-17T01:32:35.154Z","severity":"info","message":"Dynamic routing: disabled — all tasks will use claude-code/claude-opus-4-6","source":"notify","read":false}
+{"id":"96ba92e4-6450-44f9-ab41-737cb546503c","ts":"2026-04-17T01:32:35.156Z","severity":"info","message":"Pre-flight: 2 milestones queued. All have full context.","source":"notify","read":false}
