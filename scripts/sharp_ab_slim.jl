@@ -176,6 +176,33 @@ function main()
     )
     @info "wrote $(out_path)"
     try FFTW.export_wisdom(SAS_WISDOM_PATH) catch _ end
+
+    # ── Standard output images (Project rule, 2026-04-17) ────────────────
+    # save_standard_set uses visualization.jl which runs its own forward
+    # solves; serialize to avoid FFTW/BLAS thrash.
+    include(joinpath(@__DIR__, "visualization.jl"))
+    include(joinpath(@__DIR__, "standard_images.jl"))
+    for (i, r) in enumerate(results)
+        λ = SAS_LAMBDAS[i]
+        λtag = replace(@sprintf("%.3f", λ), "." => "p")
+        tag = "sharp_ab_smf28_L2m_P0p2W_lambda$(λtag)"
+        # Rebuild the problem for this cell so we have the grid fiber/sim
+        # matching phi_opt (threadsafe — a fresh setup).
+        prob = make_sharp_problem(; SAS_CONFIG.kwargs...)
+        phi_mat = reshape(r.phi_opt, prob.sim["Nt"], prob.sim["M"])
+        try
+            save_standard_set(phi_mat, prob.uω0, prob.fiber, prob.sim,
+                              prob.band_mask, prob.Δf, prob.raman_threshold;
+                              tag        = tag,
+                              fiber_name = "SMF28",
+                              L_m        = 2.0,
+                              P_W        = 0.2,
+                              output_dir = SAS_OUT_DIR)
+        catch e
+            @warn "save_standard_set failed for λ=$(λ)" exception=(e, catch_backtrace())
+        end
+    end
+
     return out_path
 end
 
