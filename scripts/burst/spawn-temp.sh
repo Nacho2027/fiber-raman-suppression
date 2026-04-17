@@ -114,13 +114,48 @@ ensure_machine_image() {
 
 create_vm() {
     log "creating ephemeral VM: $VM_NAME ($MACHINE_TYPE)"
-    gcloud compute instances create "$VM_NAME" \
+    local create_out
+    if ! create_out=$(gcloud compute instances create "$VM_NAME" \
         --source-machine-image="$MACHINE_IMAGE" \
         --machine-type="$MACHINE_TYPE" \
         --zone="$ZONE" \
         --project="$PROJECT" \
         --labels="purpose=ephemeral,session-tag=${SESSION,,},spawned-by=burst-spawn-temp" \
-        >/dev/null
+        2>&1); then
+        echo "$create_out" >&2
+        # Friendly diagnostics for the common quota failure
+        if echo "$create_out" | grep -q "C3_CPUS" && echo "$create_out" | grep -q "Quota.*exceeded"; then
+            cat >&2 <<HINT
+
+────────────────────────────────────────────────────────────────────────
+HINT: C3_CPUS regional quota is exhausted.
+
+The machine image was built from a c3-highcpu-22 source, and GCE machine
+images are locked to compatible (NVMe-capable) families. Our only
+practical options are c3 or c3d, both of which use the C3_CPUS regional
+quota. The main burst VM (fiber-raman-burst, c3-highcpu-22) already
+consumes 22 vCPUs against the default 24-vCPU quota, so ephemerals
+cannot fit.
+
+To fix:
+
+  1. Open https://console.cloud.google.com/iam-admin/quotas
+     Project: riveralab · Region: us-east5 · Metric: "C3 CPUs"
+
+  2. Request an increase to 64 or 96 (typical approval time: a few
+     hours). Requesting 96 gives plenty of headroom for the main VM
+     plus ~3 concurrent ephemerals.
+
+  3. Once approved, re-run burst-spawn-temp unchanged.
+
+Alternative (not recommended): downsize the main burst VM to
+c3-highcpu-4 or -8 so ephemerals fit inside the existing 24-vCPU
+ceiling. This trades main-VM throughput for spawn capacity.
+────────────────────────────────────────────────────────────────────────
+HINT
+        fi
+        return 1
+    fi
     log "VM created; waiting for SSH..."
 
     local tries=0
