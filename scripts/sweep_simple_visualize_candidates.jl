@@ -102,10 +102,15 @@ function save_evolution_plots(phi_opt, uω0_base, fiber, sim, tag, title)
         uω0_shaped = @. uω0_base * cis(phi)
         sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_evo, sim)
 
-        plot_spectral_evolution(sol, sim, fiber_evo;
-            save_path = joinpath(outdir_c, "evolution_spectral_$label.png"))
-        plot_temporal_evolution(sol, sim, fiber_evo;
-            save_path = joinpath(outdir_c, "evolution_temporal_$label.png"))
+        fig_s = plot_spectral_evolution(sol, sim, fiber_evo)
+        savefig(joinpath(outdir_c, "evolution_spectral_$label.png"),
+                dpi=300, bbox_inches="tight")
+        close(fig_s)
+
+        fig_t = plot_temporal_evolution(sol, sim, fiber_evo)
+        savefig(joinpath(outdir_c, "evolution_temporal_$label.png"),
+                dpi=300, bbox_inches="tight")
+        close(fig_t)
         println("  wrote $tag/evolution_{spectral,temporal}_$label.png")
     end
 end
