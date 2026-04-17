@@ -27,8 +27,9 @@ New to the project? Start here:
 | HNLF   | **-74 dB**       | -51 dB | 12 points (4 lengths × 3 powers) |
 
 See [`results/RESULTS_SUMMARY.md`](results/RESULTS_SUMMARY.md) for a
-plain-language explanation, or [`results/images/presentation/`](results/images/presentation/)
-for figures.
+plain-language explanation. After running `make report`, presentation-quality
+figures land in `results/images/presentation/` — see
+[`docs/interpreting-plots.md`](docs/interpreting-plots.md) for a field guide.
 
 ## Happy path
 
