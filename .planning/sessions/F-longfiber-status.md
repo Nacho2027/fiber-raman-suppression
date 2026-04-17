@@ -9,6 +9,46 @@
 | Script implementation (6 files) | DONE | 2026-04-17 | 2026-04-17 | Executor agent delivered; all Julia scripts syntax-parsed + dry-include OK on burst VM |
 | Launcher ship | DONE | 2026-04-17 | 2026-04-17 | `scripts/longfiber_burst_launcher.sh`; sequential T4→T3→T5→T6, heavy-lock aware, safe auto-stop |
 | Burst VM queue launched | RUNNING | 2026-04-17T03:22Z | — | tmux `F-queue` on fiber-raman-burst |
+| Phase 16 completed | DONE | 2026-04-17T17:42Z | 2026-04-17T18:52Z | T5b 25-iter fresh + T6 validate + auto-chain; artifacts + FINDINGS committed |
+| Burst VM stopped | DONE | — | 2026-04-17T19:05Z | `gcloud compute instances stop` succeeded; `$0/hr` now |
+
+## Final results headline (2026-04-17T19:05Z)
+
+| Config | J (dB) |
+|---|---|
+| L=100m flat phase | -0.20 |
+| L=100m phi@2m warm-start (no re-opt) | -51.50 |
+| L=100m phi_opt (25 iter L-BFGS from warm) | **-54.77** |
+| L=50m flat phase | -1.91 |
+| L=50m phi@2m warm-start | -51.92 |
+| L=50m phi_opt (4 iter L-BFGS from warm) | **-60.74** |
+
+**Key physics thread for publication (per D-F-07):**
+1. **Shape universality**: phi optimized at L=2m maintains -51.50 dB at L=100m (50× opt horizon) — extending Phase 12's 15× to 50×.
+2. **Diminishing returns at long L**: at L=50m, L-BFGS yields +8.82 dB over warm-start; at L=100m only +3.26 dB. Optimization landscape flattens with L.
+3. **Non-quadratic structure**: a₂(100m)/a₂(2m) = 0.672 vs pure-GVD prediction 50. Fit R² ≈ 0 — the phase is NOT a polynomial. Signal of intrinsic nonlinear structural adaptation that shaping *must* preserve for long-fiber suppression.
+
+### Numerical discipline confirmed
+- Nt=32768, T=160ps (13% above T_min=139ps derived in research); aliasing 6.75e-11.
+- Energy drift at L=100m optimum: 4.91e-4 (well under 1% threshold).
+- BC edge fraction at L=100m optimum: 8.46e-6 (well under 1e-3).
+- Reltol=1e-8 (MultiModeNoise hardcode, tighter than 1e-7 target).
+
+### Artifacts committed on `sessions/F-longfiber`
+- `results/raman/phase16/FINDINGS.md` — headline summary (also above)
+- `results/raman/phase16/logs/T5b.log`, `T6.log` — main run logs
+- `results/raman/phase16/logs_run2/` — prior partial runs
+- `results/images/physics_16_0{1..5}_*.png` — 5 figures at 300 DPI
+- Source scripts (`scripts/longfiber_*.jl`, `scripts/longfiber_burst_launcher.sh`)
+
+### Open issues for Phase 17 / integrator
+1. Checkpoint callback `buf.iter` counts `fg!` evals, not Optim iterations — checkpoint stride is approximate. Fix: switch to Optim's own iter via `state[end].iteration` in the save path.
+2. Checkpoint-resume parity demo failed — Phase B of resume_demo exited at iter 0 because `longfiber_resume_from_ckpt` didn't find the expected file schema. Needs debugging if resume_demo functionality is required (optional per D-F-05 success criteria).
+3. Shared-code patch to `scripts/common.jl::setup_raman_problem` (auto_size kwarg) — proposed in D-F-04; still open for integrator.
+4. β_order = 3 for long-fiber runs (Phase 12 precedent, β₃ accumulates over 100m) — could refine findings; flip kwarg in drivers.
+5. L=200m continuation — staircase warm-start 2→10→30→50→100→200m is the textbook path (research §5). Deferred to Phase 17.
+6. HNLF @ L=100m — Phase 12 showed HNLF reach collapses by z=15m; confirm at 100m as a negative-result control.
+7. Multi-start at L=100m to test basin uniqueness.
 
 ## Burst VM state — 2026-04-17 ~03:22 UTC
 
