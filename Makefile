@@ -31,13 +31,13 @@ install:
 	$(JL) -e 'using Pkg; Pkg.instantiate()'
 
 test:
-	TEST_TIER=fast $(JL) -e 'using Pkg; Pkg.test()'
+	TEST_TIER=fast $(JL) test/runtests.jl
 
 test-slow:
-	TEST_TIER=slow $(JL) -t auto -e 'using Pkg; Pkg.test()'
+	TEST_TIER=slow $(JL) -t auto test/runtests.jl
 
 test-full:
-	TEST_TIER=full $(JL) -t auto -e 'using Pkg; Pkg.test()'
+	TEST_TIER=full $(JL) -t auto test/runtests.jl
 
 optimize:
 	$(JL) -t auto scripts/raman_optimization.jl
