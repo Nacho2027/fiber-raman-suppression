@@ -67,17 +67,19 @@ end
 # Plot 1 — Standard phase diagnostic (wrapped / unwrapped / group delay)
 # ─────────────────────────────────────────────────────────────────────────────
 
-function save_phase_plots(phi_opt, uω0, sim, tag, J_expected, N_phi_used, title)
+function save_phase_plots(phi_opt, uω0, sim, tag, J_expected, N_phi_used,
+                          title, fiber_name, L_m, P_cont_W)
     outdir_c = joinpath(OUTDIR, tag)
     mkpath(outdir_c)
 
-    metadata = [
-        ("title",      title),
-        ("N_phi_used", string(N_phi_used)),
-        ("J_expected", @sprintf("%.2f dB", J_expected)),
-    ]
+    metadata = (
+        fiber_name = fiber_name,
+        L_m        = L_m,
+        P_cont_W   = P_cont_W,
+        lambda0_nm = 1550.0,
+        fwhm_fs    = 185.0,
+    )
 
-    # Wrapped / unwrapped / group-delay
     plot_phase_diagnostic(phi_opt, uω0, sim;
         save_path = joinpath(outdir_c, "phase_diagnostic.png"),
         metadata  = metadata)
@@ -114,10 +116,17 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function save_comparison_plot(phi_opt, uω0_base, fiber, sim,
-                              band_mask, Δf, raman_threshold, tag, title)
+                              band_mask, Δf, raman_threshold, tag,
+                              fiber_name, L_m, P_cont_W)
     outdir_c = joinpath(OUTDIR, tag)
     mkpath(outdir_c)
-    metadata = [("title", title)]
+    metadata = (
+        fiber_name = fiber_name,
+        L_m        = L_m,
+        P_cont_W   = P_cont_W,
+        lambda0_nm = 1550.0,
+        fwhm_fs    = 185.0,
+    )
     plot_optimization_result_v2(
         zero(phi_opt), phi_opt, uω0_base, fiber, sim,
         band_mask, Δf, raman_threshold;
@@ -151,10 +160,12 @@ for cand in CANDIDATES
     println("  loaded phi_opt: length=$(length(phi_opt)), J_saved=$(J_actual) dB")
     println("  sim Nt=$(sim["Nt"])  time_window=$(sim["ts"][end]*2*1e12) ps")
 
-    save_phase_plots(phi_opt, uω0, sim, cand.tag, J_actual, N_phi_used, cand.title)
+    fname = String(cand.fiber)
+    save_phase_plots(phi_opt, uω0, sim, cand.tag, J_actual, N_phi_used,
+                     cand.title, fname, cand.L, cand.P)
     save_evolution_plots(phi_opt, uω0, fiber, sim, cand.tag, cand.title)
     save_comparison_plot(phi_opt, uω0, fiber, sim, band_mask, Δf,
-                         raman_threshold, cand.tag, cand.title)
+                         raman_threshold, cand.tag, fname, cand.L, cand.P)
 end
 
 println("\nAll candidates rendered under: $OUTDIR")
