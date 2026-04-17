@@ -145,8 +145,14 @@ function run_sweep1(; dry_run::Bool=false)
     c_prev = nothing
     B_prev = nothing
 
+    bw_bins_count = sum(bw_mask)
     for (lvl, N_phi) in enumerate(N_phi_levels)
         is_baseline = (N_phi == Nt)
+        if !is_baseline && N_phi > bw_bins_count
+            @info @sprintf("[sweep1 level %d/%d] N_phi=%d exceeds bandwidth bins=%d — skipping (physically meaningless: cannot have more shaper pixels than spectral bins)",
+                           lvl, length(N_phi_levels), N_phi, bw_bins_count)
+            continue
+        end
         kind = is_baseline ? :identity : :cubic
         @info @sprintf("[sweep1 level %d/%d] N_phi=%d kind=:%s", lvl, length(N_phi_levels), N_phi, kind)
 
