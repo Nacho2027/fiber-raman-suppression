@@ -13,6 +13,35 @@ A comprehensive fix of all plotting and visualization in the smf-gain-noise proj
 - **Backward compatibility**: Keep the same function signatures where possible, or provide clear migration.
 - **Output format**: PNG at 300 DPI for archival, must look good at both screen and print resolution.
 - **Performance**: Plotting should not add significant overhead to optimization runs.
+
+### Standard output images — mandatory for every optimization run
+
+**Every optimization driver that produces a `phi_opt` MUST, before exiting, call `save_standard_set(...)` from `scripts/standard_images.jl`.** This produces the image set the research group expects:
+
+1. `{tag}_phase_profile.png` — 6-panel before/after optimization comparison (wrapped + unwrapped + group delay × input/output)
+2. `{tag}_evolution.png` — colorful spectral-evolution waterfall of the optimized field
+3. `{tag}_phase_diagnostic.png` — wrapped/unwrapped/group-delay triplet of phi_opt alone
+4. `{tag}_evolution_unshaped.png` — matching waterfall with phi ≡ 0 for comparison
+
+Template:
+
+```julia
+include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
+
+# ... setup_raman_problem, run optimizer, produce phi_opt ...
+
+save_standard_set(phi_opt, uω0, fiber, sim,
+    band_mask, Δf, raman_threshold;
+    tag = "smf28_L2m_P0p2W",                    # filename prefix
+    fiber_name = "SMF28", L_m = 2.0, P_W = 0.2, # metadata for captions
+    output_dir = "results/raman/my_run/")
+```
+
+For runs that produced a `phi_opt` before this rule was in place, run `scripts/regenerate_standard_images.jl` (behind the heavy lock) to generate the standard set for every JLD2 under `results/raman/` that carries a phi_opt. Override the scan root via `REGEN_ROOT`.
+
+Drivers that skip this step are incomplete. Do not mark work "done" without the standard images on disk.
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:codebase/STACK.md -->
