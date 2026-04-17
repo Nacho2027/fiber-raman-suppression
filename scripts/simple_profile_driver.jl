@@ -1,15 +1,15 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 16 Plan 01 — Simple Phase Profile Stability Study — Driver
+# Phase 17 Plan 01 — Simple Phase Profile Stability Study — Driver
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Single entry point for the three compute stages of Phase 16:
+# Single entry point for the three compute stages of Phase 17:
 #
 #   julia -t auto --project=. scripts/simple_profile_driver.jl --stage=baseline
 #   julia -t auto --project=. scripts/simple_profile_driver.jl --stage=perturbation
 #   julia -t auto --project=. scripts/simple_profile_driver.jl --stage=transferability
 #
 # Stages are independent so each can be committed separately. Each stage emits
-# a single self-describing JLD2 under results/raman/phase16/.
+# a single self-describing JLD2 under results/raman/phase17/.
 #
 # Physics / research question:
 #   Is the SMF-28 L=0.5m P=0.05W J=-77.6 dB optimum a flat robust basin or a
@@ -47,7 +47,7 @@ ensure_deterministic_environment(verbose=true)
 # ─────────────────────────────────────────────────────────────────────────────
 
 const SP_VERSION = "1.0.0"
-const SP_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase16")
+const SP_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase17")
 const SP_SEED_BASE = 16042026
 const SP_N_SAMPLES = 20
 const SP_SIGMAS = [0.01, 0.05, 0.2, 0.5, 1.0]
@@ -109,7 +109,7 @@ end
     build_baseline_problem()
 
 Build the baseline (uω0, fiber, sim, band_mask, Δf, threshold) tuple via
-`setup_raman_problem` with Phase 16 baseline parameters. Deterministic and
+`setup_raman_problem` with Phase 17 baseline parameters. Deterministic and
 idempotent: calling it twice on the same machine produces identical arrays.
 """
 function build_baseline_problem()
@@ -178,7 +178,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function stage_baseline(; verbose::Bool=true)
-    verbose && @info "───── Phase 16 — Stage: BASELINE ─────"
+    verbose && @info "───── Phase 17 — Stage: BASELINE ─────"
     mkpath(SP_RESULTS_DIR)
     out_path = joinpath(SP_RESULTS_DIR, "baseline.jld2")
 
@@ -289,7 +289,7 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 function stage_perturbation(; verbose::Bool=true)
-    verbose && @info "───── Phase 16 — Stage: PERTURBATION ─────"
+    verbose && @info "───── Phase 17 — Stage: PERTURBATION ─────"
     baseline_path = joinpath(SP_RESULTS_DIR, "baseline.jld2")
     @assert isfile(baseline_path) "baseline.jld2 not found — run --stage=baseline first"
     out_path = joinpath(SP_RESULTS_DIR, "perturbation.jld2")
@@ -526,7 +526,7 @@ function build_target_problem(target::NamedTuple)
 end
 
 function stage_transferability(; verbose::Bool=true)
-    verbose && @info "───── Phase 16 — Stage: TRANSFERABILITY ─────"
+    verbose && @info "───── Phase 17 — Stage: TRANSFERABILITY ─────"
     baseline_path = joinpath(SP_RESULTS_DIR, "baseline.jld2")
     @assert isfile(baseline_path) "baseline.jld2 not found — run --stage=baseline first"
     out_path = joinpath(SP_RESULTS_DIR, "transferability.jld2")

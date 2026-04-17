@@ -1,16 +1,16 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 16 Plan 01 — Simple Phase Profile Stability Study — Simplicity Metrics
+# Phase 17 Plan 01 — Simple Phase Profile Stability Study — Simplicity Metrics
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 #   julia --project=. scripts/simple_profile_metrics.jl
 #
 # Consumes:
-#   results/raman/phase16/baseline.jld2              (required)
+#   results/raman/phase17/baseline.jld2              (required)
 #   results/raman/phase13/gauge_polynomial_analysis.jld2 (reference-set fallback)
 #   results/raman/sweeps/smf28/L*/opt_result.jld2    (reference-set primary, optional)
 #
 # Emits:
-#   results/raman/phase16/simplicity.jld2
+#   results/raman/phase17/simplicity.jld2
 #
 # Computes three simplicity metrics on each optimum:
 #   1. Total variation (TV) of gauge-fixed phase over input band
@@ -41,7 +41,7 @@ include(joinpath(@__DIR__, "phase13_primitives.jl"))
 # ─────────────────────────────────────────────────────────────────────────────
 
 const SPM_VERSION = "1.0.0"
-const SPM_RESULTS_DIR   = joinpath(@__DIR__, "..", "results", "raman", "phase16")
+const SPM_RESULTS_DIR   = joinpath(@__DIR__, "..", "results", "raman", "phase17")
 const SPM_PHASE13_DIR   = joinpath(@__DIR__, "..", "results", "raman", "phase13")
 const SPM_SWEEP_DIR     = joinpath(@__DIR__, "..", "results", "raman", "sweeps", "smf28")
 const SPM_SMOOTH_SIGMA_BINS = 5.0

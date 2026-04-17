@@ -1,18 +1,18 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 16 Plan 01 — Simple Phase Profile Stability Study — Synthesis
+# Phase 17 Plan 01 — Simple Phase Profile Stability Study — Synthesis
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 #   julia --project=. scripts/simple_profile_synthesis.jl
 #
-# Consumes (from results/raman/phase16/):
+# Consumes (from results/raman/phase17/):
 #   baseline.jld2, perturbation.jld2, transferability.jld2, simplicity.jld2
 #
 # Emits:
-#   results/images/phase16/phase16_01_perturbation_curve.png
-#   results/images/phase16/phase16_02_transferability_table.png
-#   results/images/phase16/phase16_03_simplicity_vs_suppression.png
-#   results/images/phase16/phase16_04_synthesis.png
-#   results/raman/phase16/SUMMARY.md
+#   results/images/phase17/phase17_01_perturbation_curve.png
+#   results/images/phase17/phase17_02_transferability_table.png
+#   results/images/phase17/phase17_03_simplicity_vs_suppression.png
+#   results/images/phase17/phase17_04_synthesis.png
+#   results/raman/phase17/SUMMARY.md
 #   .planning/notes/simple-profile-handoff-to-E.md
 #
 # Each figure is PNG at 300 DPI; SUMMARY.md follows the Phase 13 template.
@@ -33,8 +33,8 @@ using PyPlot
 # ─────────────────────────────────────────────────────────────────────────────
 
 const SPS_VERSION = "1.0.0"
-const SPS_IMAGE_DIR   = joinpath(@__DIR__, "..", "results", "images", "phase16")
-const SPS_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase16")
+const SPS_IMAGE_DIR   = joinpath(@__DIR__, "..", "results", "images", "phase17")
+const SPS_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase17")
 const SPS_NOTES_DIR   = joinpath(@__DIR__, "..", ".planning", "notes")
 const SPS_DPI = 300
 
@@ -98,7 +98,7 @@ function fig_perturbation(pert::Dict, J_baseline_dB::Real)
     ax.grid(true, which="both", alpha=0.3)
     ax.legend(loc="upper left")
 
-    out = joinpath(SPS_IMAGE_DIR, "phase16_01_perturbation_curve.png")
+    out = joinpath(SPS_IMAGE_DIR, "phase17_01_perturbation_curve.png")
     tight_layout()
     savefig(out; dpi=SPS_DPI)
     close(fig)
@@ -179,7 +179,7 @@ function fig_transferability(transfer::Dict, J_baseline_dB::Real)
     ax2.grid(true, axis="y", alpha=0.3)
 
     tight_layout()
-    out = joinpath(SPS_IMAGE_DIR, "phase16_02_transferability_table.png")
+    out = joinpath(SPS_IMAGE_DIR, "phase17_02_transferability_table.png")
     savefig(out; dpi=SPS_DPI)
     close(fig)
     return out
@@ -226,7 +226,7 @@ function fig_simplicity(simpl::Dict)
 
     fig.suptitle(@sprintf("Simplicity vs suppression — winner: %s", winner); fontweight="bold")
     tight_layout()
-    out = joinpath(SPS_IMAGE_DIR, "phase16_03_simplicity_vs_suppression.png")
+    out = joinpath(SPS_IMAGE_DIR, "phase17_03_simplicity_vs_suppression.png")
     savefig(out; dpi=SPS_DPI)
     close(fig)
     return out
@@ -333,7 +333,7 @@ function fig_synthesis(bl, pert, transfer, simpl, verdict::AbstractString)
     fig.suptitle(@sprintf("Is the L=0.5m P=0.05W optimum special?   VERDICT: %s", verdict);
         fontsize=15, fontweight="bold")
     tight_layout(rect=[0, 0, 1, 0.96])
-    out = joinpath(SPS_IMAGE_DIR, "phase16_04_synthesis.png")
+    out = joinpath(SPS_IMAGE_DIR, "phase17_04_synthesis.png")
     savefig(out; dpi=SPS_DPI)
     close(fig)
     return out
@@ -422,7 +422,7 @@ function write_summary(bl, pert, transfer, simpl, verdict_info, fig_paths)
         println(io, "verdict: ", verdict_info.verdict)
         println(io, "---")
         println(io)
-        println(io, "# Phase 16 — Simple Phase Profile Stability Study")
+        println(io, "# Phase 17 — Simple Phase Profile Stability Study")
         println(io)
         println(io, "## Headline Verdict")
         println(io)
@@ -472,7 +472,7 @@ function write_summary(bl, pert, transfer, simpl, verdict_info, fig_paths)
         for name in ["baseline.jld2", "perturbation.jld2", "transferability.jld2", "simplicity.jld2"]
             p = joinpath(SPS_RESULTS_DIR, name)
             mark = isfile(p) ? "✓" : "✗"
-            println(io, "- [$mark] `results/raman/phase16/$name`")
+            println(io, "- [$mark] `results/raman/phase17/$name`")
         end
         println(io)
         println(io, "## Hypothesis Summary Table")
@@ -565,11 +565,11 @@ function write_handoff(verdict_info, simpl)
         println(io)
         println(io, "## Artefacts")
         println(io)
-        println(io, "- `results/raman/phase16/baseline.jld2` — reference optimum + grid metadata")
-        println(io, "- `results/raman/phase16/perturbation.jld2` — basin-width data (100 samples)")
-        println(io, "- `results/raman/phase16/transferability.jld2` — 11-target transfer study")
-        println(io, "- `results/raman/phase16/simplicity.jld2` — TV / entropy / stationary metrics")
-        println(io, "- `results/images/phase16/phase16_04_synthesis.png` — 1-page summary figure")
+        println(io, "- `results/raman/phase17/baseline.jld2` — reference optimum + grid metadata")
+        println(io, "- `results/raman/phase17/perturbation.jld2` — basin-width data (100 samples)")
+        println(io, "- `results/raman/phase17/transferability.jld2` — 11-target transfer study")
+        println(io, "- `results/raman/phase17/simplicity.jld2` — TV / entropy / stationary metrics")
+        println(io, "- `results/images/phase17/phase17_04_synthesis.png` — 1-page summary figure")
     end
     @info "Handoff note written" path=out
     return out
