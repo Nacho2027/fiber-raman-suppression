@@ -76,7 +76,7 @@ const LF100_P_CONT     = 0.05
 const LF100_NT         = 32768
 const LF100_TIME_WIN   = 160.0
 const LF100_BETA_ORDER = 2
-const LF100_MAX_ITER   = 100
+const LF100_MAX_ITER   = parse(Int, get(ENV, "LF100_MAX_ITER", "100"))
 const LF100_CKPT_EVERY = 5
 const LF100_CKPT_TIME_GATE_S = 600.0   # 10 min
 # Reltol requested by research brief is 1e-7; MultiModeNoise solve_disp_mmf
