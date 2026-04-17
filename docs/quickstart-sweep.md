@@ -56,15 +56,39 @@ from the Makefile is the local-foreground equivalent — do NOT invoke
 `make sweep` via the wrapper (the sweep's `julia` call is the heavy
 payload; `make` just wraps it).
 
-If the lock is held, the wrapper prints the holder and exits. To wait
-instead:
+If the lock is held, the wrapper prints the holder and exits. You have
+three options:
 
-```bash
-WAIT_TIMEOUT_SEC=3600 burst-ssh "cd fiber-raman-suppression && \
-    ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/run_sweep.jl'"
-```
+1. **Wait for the lock** (good if the other job is close to done):
+   ```bash
+   WAIT_TIMEOUT_SEC=3600 burst-ssh "cd fiber-raman-suppression && \
+       ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/run_sweep.jl'"
+   ```
 
-The full wrapper reference is in [`scripts/burst/README.md`](../scripts/burst/README.md).
+2. **Spawn an ephemeral second VM** (good if you can't wait, and for
+   isolated reproducibility runs, quick experiments, or parallelizing a
+   multi-config sweep without disturbing the primary VM). Run this from
+   `claude-code-host`, NOT from inside the burst VM:
+   ```bash
+   ~/bin/burst-spawn-temp B-sweep2 'julia -t auto --project=. scripts/run_sweep.jl'
+   ```
+   The spawner creates a fresh VM from a machine image of
+   `fiber-raman-burst`, runs your job, and destroys the VM on exit (the
+   trap fires on success, Ctrl-C, and crash). There is also a 6-hour
+   auto-shutdown scheduled on the VM itself as a safety net. Billing is
+   ~$0.90/hr while running.
+
+   **Soft cap:** try to keep the number of concurrent ephemerals to ~2.
+   Check what's alive between work blocks:
+   ```bash
+   ~/bin/burst-list-ephemerals              # should be empty most of the time
+   ~/bin/burst-list-ephemerals --destroy    # cleanup safety net
+   ```
+
+3. **Yield and switch tasks.** Sometimes the right move is not compute.
+
+The full wrapper + spawner reference is in
+[`scripts/burst/README.md`](../scripts/burst/README.md).
 
 ## Step 3 — Monitor progress
 
