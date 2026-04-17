@@ -22,6 +22,7 @@ using Printf
 using Statistics
 using Logging
 using PyPlot
+using Dates
 
 const LR_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase_sweep_simple")
 
@@ -98,11 +99,14 @@ function analyze_sweep2()
     results = filter(r -> !haskey(r, "error"), results_all)
     @info "Sweep 2: $(length(results)) successful rows (of $(length(results_all)))"
 
+    # Helper: config dicts may use symbol or string keys
+    _cg(cfg, k) = haskey(cfg, Symbol(k)) ? cfg[Symbol(k)] : get(cfg, k, missing)
+
     # Group by (fiber, L, P) to find best J per operating point
     best_J_by_config = Dict{Tuple{String,Float64,Float64}, Float64}()
     for r in results
         cfg = r["config"]
-        key = (String(get(cfg, "fiber_preset", "")), Float64(cfg["L_fiber"]), Float64(cfg["P_cont"]))
+        key = (String(_cg(cfg, "fiber_preset")), Float64(_cg(cfg, "L_fiber")), Float64(_cg(cfg, "P_cont")))
         if !haskey(best_J_by_config, key) || r["J_final"] < best_J_by_config[key]
             best_J_by_config[key] = r["J_final"]
         end
@@ -113,12 +117,12 @@ function analyze_sweep2()
     @info "Pareto front: $(length(nd_idx)) non-dominated points"
 
     # --- Figure: Pareto scatter ---
-    fibers = unique(String(get(r["config"], "fiber_preset", "")) for r in results)
+    fibers = unique(String(_cg(r["config"], "fiber_preset")) for r in results)
     colormap = Dict(f => c for (f, c) in zip(fibers, ["#1f77b4", "#d62728", "#2ca02c", "#9467bd"]))
 
     fig, ax = plt.subplots(figsize=(8, 6))
     for r in results
-        f = String(get(r["config"], "fiber_preset", ""))
+        f = String(_cg(r["config"], "fiber_preset"))
         N_phi = r["N_phi"]
         m = N_phi == 16 ? "o" : "s"
         ax.scatter(r["J_final"], r["N_eff"], s=60, marker=m,
@@ -160,11 +164,13 @@ the best J at each (fiber, L, P) operating point. Ranks them by N_eff
 (simpler first).
 """
 function select_candidates(results, nd_idx)
+    _cg(cfg, k) = haskey(cfg, Symbol(k)) ? cfg[Symbol(k)] : get(cfg, k, missing)
+
     # Best J per (fiber, L, P)
     best_J = Dict{Tuple{String,Float64,Float64}, Float64}()
     for r in results
         cfg = r["config"]
-        key = (String(get(cfg, "fiber_preset", "")), Float64(cfg["L_fiber"]), Float64(cfg["P_cont"]))
+        key = (String(_cg(cfg, "fiber_preset")), Float64(_cg(cfg, "L_fiber")), Float64(_cg(cfg, "P_cont")))
         if !haskey(best_J, key) || r["J_final"] < best_J[key]
             best_J[key] = r["J_final"]
         end
@@ -174,7 +180,7 @@ function select_candidates(results, nd_idx)
     for i in nd_idx
         r = results[i]
         cfg = r["config"]
-        key = (String(get(cfg, "fiber_preset", "")), Float64(cfg["L_fiber"]), Float64(cfg["P_cont"]))
+        key = (String(_cg(cfg, "fiber_preset")), Float64(_cg(cfg, "L_fiber")), Float64(_cg(cfg, "P_cont")))
         J_best = best_J[key]
         Δ = r["J_final"] - J_best
         if Δ ≤ 3.0     # within 3 dB of best at that operating point
@@ -204,8 +210,9 @@ function write_handoff(candidates)
     push!(lines, "|---|-------|-------|-------|-----|--------|---------|-------|----|-------|")
     for (idx, (r, Δ)) in enumerate(candidates)
         cfg = r["config"]
-        fiber = String(get(cfg, "fiber_preset", ""))
-        L = cfg["L_fiber"]; P = cfg["P_cont"]
+        _cg(k) = haskey(cfg, Symbol(k)) ? cfg[Symbol(k)] : get(cfg, k, missing)
+        fiber = String(_cg("fiber_preset"))
+        L = Float64(_cg("L_fiber")); P = Float64(_cg("P_cont"))
         push!(lines, @sprintf("| %d | %s | %.2f | %.3f | %d | %.2f | %.2f | %.2f | %.2f | %.2e |",
                                idx, fiber, L, P, r["N_phi"], r["J_final"], Δ,
                                r["N_eff"], r["TV"], r["curvature"]))
