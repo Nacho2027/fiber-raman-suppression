@@ -33,7 +33,6 @@ using Dates
 ENV["MPLBACKEND"] = "Agg"
 using MultiModeNoise
 using Optim
-using Optim: LineSearches   # LineSearches is a transitive Optim dep; avoid touching Project.toml
 using JLD2
 using JSON3
 
@@ -611,11 +610,12 @@ function optimize_spectral_multivariable(
         end
     end
 
-    # Use BackTracking line-search rather than the Optim default HagerZhang:
-    # HagerZhang fails silently when the cost is highly anisotropic near the
-    # optimum (observed in the 16-01 demo — warm-start bailed at iter 47 with
-    # ‖∇J‖ ≈ 1.5, clearly not converged). BackTracking is more robust.
-    method_lbfgs = LBFGS(m=10, linesearch=LineSearches.BackTracking(order=3))
+    # Default linesearch (HagerZhang via Optim) — was replaced once with
+    # BackTracking but that did no better (cold-start accepted zero-length
+    # steps on the first attempt). Root cause of poor convergence is the
+    # log_cost gradient scaling near an optimum, not the linesearch choice.
+    # Demo now uses log_cost=false for multivar runs to avoid that pathology.
+    method_lbfgs = LBFGS(m=10)
 
     opts = Optim.Options(
         iterations = max_iter,

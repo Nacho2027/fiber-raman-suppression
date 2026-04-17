@@ -82,16 +82,19 @@ J0_dB = MultiModeNoise.lin_to_dB(J0_lin)
 # ═════════════════════════════════════════════════════════════════════════════
 
 @info "▶ Run B: joint phase+amplitude from cold start (tanh reparam, plain LBFGS)"
+# log_cost=false so the log-scale gradient amplification that caused
+# cold-start to accept a zero-length step in the previous demo does not kick
+# in. At J=7e-1 initial, linear-cost gradient is O(1) and well-conditioned.
 outB = run_multivar_optimization(
     ; DEMO_KW...,
     variables = (:phase, :amplitude),
-    max_iter = MAX_ITER,
+    max_iter = 2 * MAX_ITER,
     validate = false,
     δ_bound = 0.10,
     amp_param = :tanh,
     λ_gdd = 1e-4, λ_boundary = 1.0,
     λ_energy = 1.0, λ_tikhonov = 0.0, λ_tv = 0.0, λ_flat = 0.0,
-    log_cost = true,
+    log_cost = false,
     fiber_name = "SMF-28",
     save_prefix = joinpath(OUT_DIR, "mv_joint"),
 )
@@ -111,7 +114,7 @@ J_B_dB = MultiModeNoise.lin_to_dB(J_B_lin)
 outB_warm = run_multivar_optimization(
     ; DEMO_KW...,
     variables = (:phase, :amplitude),
-    max_iter = MAX_ITER,
+    max_iter = 2 * MAX_ITER,
     validate = false,
     δ_bound = 0.10,
     amp_param = :tanh,
