@@ -161,8 +161,11 @@ run_task "T4-100m-forward" "scripts/longfiber_forward_100m.jl" "light"
 t4_rc=$?
 log "T4 done (rc=$t4_rc)"
 
-# Task 3 (HEAVY because it does a short L-BFGS): L=50m stepping stone
-run_task "T3-50m-validate" "scripts/longfiber_validate_50m.jl" "heavy"
+# Task 3 (LIGHT): L=50m stepping stone. Originally tagged heavy but empirically
+# the L-BFGS completes in 5-15 min at Nt=16384 — below the CLAUDE.md Rule P5
+# heavy threshold when the grid is this modest. Keep it light so it does not
+# block behind multi-session sweep lock contention.
+run_task "T3-50m-validate" "scripts/longfiber_validate_50m.jl" "light"
 t3_rc=$?
 log "T3 done (rc=$t3_rc)"
 
