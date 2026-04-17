@@ -104,6 +104,10 @@ J_B_dB = MultiModeNoise.lin_to_dB(J_B_lin)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @info "▶ Run B-warm: phase+amplitude warm-started from phase-only optimum"
+# Warm-start uses LINEAR cost (not log) because starting at J≈2e-6 with
+# log_cost=true gives gradient scaling ~ 10/(J·ln10) ≈ 2e6 which breaks
+# L-BFGS line search. Linear cost near an optimum gives gradient proportional
+# to J — well-conditioned.
 outB_warm = run_multivar_optimization(
     ; DEMO_KW...,
     variables = (:phase, :amplitude),
@@ -115,7 +119,7 @@ outB_warm = run_multivar_optimization(
     A0 = ones(sim_A["Nt"], sim_A["M"]),
     λ_gdd = 1e-4, λ_boundary = 1.0,
     λ_energy = 1.0, λ_tikhonov = 0.0, λ_tv = 0.0, λ_flat = 0.0,
-    log_cost = true,
+    log_cost = false,                 # see comment above
     fiber_name = "SMF-28",
     save_prefix = joinpath(OUT_DIR, "mv_joint_warmstart"),
 )
