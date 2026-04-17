@@ -262,6 +262,8 @@ Run one (L, P, fiber) config at N_phi=16 (multi-start) then N_phi=64
 Each thread MUST run with its own deepcopy(fiber) — see CLAUDE.md.
 """
 function run_one_config_sweep2(; fiber_preset::Symbol, L_fiber::Real, P_cont::Real)
+    tid = Threads.threadid()
+    println(stderr, "[thr $tid] enter setup $(fiber_preset) L=$(L_fiber) P=$(P_cont)"); flush(stderr)
     uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
         fiber_preset = fiber_preset,
         β_order      = 3,
@@ -270,6 +272,7 @@ function run_one_config_sweep2(; fiber_preset::Symbol, L_fiber::Real, P_cont::Re
         Nt           = LR_BASELINE_NT,
         time_window  = LR_BASELINE_TW,
     )
+    println(stderr, "[thr $tid] setup done Nt=$(sim["Nt"]) $(fiber_preset) L=$(L_fiber) P=$(P_cont)"); flush(stderr)
     bw_mask = pulse_bandwidth_mask(uω0)
     Nt = sim["Nt"]
 
@@ -306,16 +309,20 @@ function run_one_config_sweep2(; fiber_preset::Symbol, L_fiber::Real, P_cont::Re
 end
 
 function run_sweep2(; dry_run::Bool=false)
-    @info "Sweep 2 ((L, P, fiber) × N_phi={16, 64}) — $(length(LR_SWEEP2_LS) * length(LR_SWEEP2_PS) * length(LR_SWEEP2_FIBERS)) configs"
+    println(stderr, "Sweep 2 ((L, P, fiber) × N_phi={16, 64})"); flush(stderr)
     # Build the config list
     configs = [(fiber, L, P) for fiber in LR_SWEEP2_FIBERS,
                                   L in LR_SWEEP2_LS,
                                   P in LR_SWEEP2_PS] |> vec
-    @info "  total configs = $(length(configs))"
+    println(stderr, "  total configs = $(length(configs))"); flush(stderr)
     dry_run && return configs
+
+    save_path = joinpath(LR_RESULTS_DIR, "sweep2_LP_fiber.jld2")
+    mkpath(LR_RESULTS_DIR)
 
     results = Vector{Dict{String,Any}}(undef, 2 * length(configs))
     done = Threads.Atomic{Int}(0)
+    save_lock = ReentrantLock()
     t0 = time()
 
     Threads.@threads for ci in eachindex(configs)
@@ -337,16 +344,29 @@ function run_sweep2(; dry_run::Bool=false)
         end
         Threads.atomic_add!(done, 1)
         pct = 100 * done[] / length(configs)
-        @info @sprintf("  [%3.1f%%  %d/%d]  %s L=%.2fm P=%.3fW elapsed=%.1fmin",
+        msg = @sprintf("  [%3.1f%%  %d/%d]  %s L=%.2fm P=%.3fW elapsed=%.1fmin",
                        pct, done[], length(configs),
                        String(fiber_preset), L, P, (time()-t0)/60)
+        lock(save_lock) do
+            println(stderr, msg); flush(stderr)
+            # Snapshot incremental save — drop unfilled slots for safety.
+            filled = [isassigned(results, i) for i in eachindex(results)]
+            safe_results = results[filled]
+            try
+                JLD2.jldsave(save_path; results=safe_results, run_tag=LR_RUN_TAG,
+                             configs=[Dict("fiber_preset"=>String(f), "L_fiber"=>L, "P_cont"=>P)
+                                      for (f, L, P) in configs])
+            catch e
+                println(stderr, "  (snapshot save failed: $e)"); flush(stderr)
+            end
+        end
     end
 
-    save_path = joinpath(LR_RESULTS_DIR, "sweep2_LP_fiber.jld2")
+    # Final full save
     JLD2.jldsave(save_path; results, run_tag=LR_RUN_TAG,
                  configs=[Dict("fiber_preset"=>String(f), "L_fiber"=>L, "P_cont"=>P)
                           for (f, L, P) in configs])
-    @info "Sweep 2 complete. Saved $(save_path) ($(length(results)) rows)."
+    println(stderr, "Sweep 2 complete. Saved $(save_path) ($(length(results)) rows)."); flush(stderr)
     return results
 end
 
@@ -359,7 +379,8 @@ function main(args::Vector{String})
     do_sweep2 = "--sweep2" in args || "--both" in args || isempty(args)
     dry_run = "--dry-run" in args
 
-    @info "Session E sweep driver" tag=LR_RUN_TAG threads=Threads.nthreads() dry_run=dry_run
+    println(stderr, "Session E sweep driver  tag=$LR_RUN_TAG  threads=$(Threads.nthreads())  dry_run=$dry_run")
+    flush(stderr)
 
     if do_sweep1
         run_sweep1(; dry_run=dry_run)
@@ -367,7 +388,7 @@ function main(args::Vector{String})
     if do_sweep2
         run_sweep2(; dry_run=dry_run)
     end
-    @info "Session E sweep driver complete."
+    println(stderr, "Session E sweep driver complete."); flush(stderr)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
