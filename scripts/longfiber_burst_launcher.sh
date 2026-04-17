@@ -45,14 +45,22 @@ cleanup() {
         rm -f "$LOCK_FILE"
         log "heavy lock released"
     fi
-    # Always stop the VM on cleanup
-    log "stopping burst VM"
-    # When running ON the burst VM, we can't call burst-stop (that's a claude-code-host helper).
-    # Use the underlying gcloud call; fall through if gcloud unavailable.
-    if command -v gcloud >/dev/null 2>&1; then
-        gcloud compute instances stop fiber-raman-burst --zone=us-east5-a --project=riveralab --quiet 2>&1 | tee -a "$LOG_DIR/queue.log" || true
+    # Stop the VM ONLY if no other tmux sessions with active julia work remain.
+    # This prevents us from killing Session E / Phase 14 / etc.
+    local other_tmux
+    other_tmux=$(tmux ls 2>/dev/null | grep -v "^F-queue:" | wc -l)
+    local running_julia
+    running_julia=$(pgrep -af julia 2>/dev/null | grep -v "$$" | grep -cv "bash -c" || echo 0)
+    log "shutdown check: other_tmux=$other_tmux running_julia=$running_julia"
+    if (( other_tmux == 0 )) && (( running_julia == 0 )); then
+        log "no other work detected — self-stopping burst VM"
+        if command -v gcloud >/dev/null 2>&1; then
+            gcloud compute instances stop fiber-raman-burst --zone=us-east5-a --project=riveralab --quiet 2>&1 | tee -a "$LOG_DIR/queue.log" || true
+        else
+            log "gcloud not found — skipping self-stop"
+        fi
     else
-        log "gcloud not found on this host — skipping self-stop; caller must burst-stop from claude-code-host"
+        log "other work still running — NOT self-stopping VM (caller should burst-stop from claude-code-host when safe)"
     fi
     log "queue finished with rc=$rc"
 }
