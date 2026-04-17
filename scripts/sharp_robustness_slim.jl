@@ -10,10 +10,10 @@
 # interpolated σ_3dB per lambda) + a single summary figure written by
 # sharp_ab_figures.jl.
 
-if !(@isdefined _SHARP_ROBUSTNESS_SLIM_LOADED)
-
 using LinearAlgebra, Statistics, Random, Printf, FFTW, JLD2
 using Base.Threads: @threads
+
+if !(@isdefined _SHARP_ROBUSTNESS_SLIM_LOADED)
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))

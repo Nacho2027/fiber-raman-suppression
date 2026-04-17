@@ -18,10 +18,10 @@
 # READ-ONLY consumer of existing scripts/{common,raman_optimization,
 # sharpness_optimization,determinism}.jl — shared files unchanged.
 
-if !(@isdefined _SHARP_AB_SLIM_LOADED)
-
 using LinearAlgebra, Statistics, Random, Printf, FFTW, JLD2, Dates
 using Base.Threads: @threads
+
+if !(@isdefined _SHARP_AB_SLIM_LOADED)
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))

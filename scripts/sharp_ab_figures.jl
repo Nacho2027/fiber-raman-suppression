@@ -5,12 +5,12 @@
 # Consumes sharp_ab_slim/ab_results.jld2 and sharp_ab_slim/robustness.jld2;
 # writes 3 figures + FINDINGS.md under results/raman/sharp_ab_slim/.
 
-if !(@isdefined _SHARP_AB_FIGURES_LOADED)
-
 ENV["MPLBACKEND"] = "Agg"
 
 using LinearAlgebra, Statistics, Printf, JLD2
 using PyPlot
+
+if !(@isdefined _SHARP_AB_FIGURES_LOADED)
 
 include(joinpath(@__DIR__, "common.jl"))
 
