@@ -1,27 +1,28 @@
 """
-Phase 8: Generate human-readable reports for sweep results.
+Generate per-point report cards and the top-level ranked summary from existing
+sweep JLD2 payloads. Does NOT re-run optimization.
 
-Post-hoc script that reads per-point JLD2 files and aggregate sweep data
-to produce:
-  1. Per-point report card PNGs (4-panel: spectrum, phase, convergence, metrics)
-  2. Per-point report.md with YAML frontmatter + human-readable summary
-  3. Per-fiber SWEEP_SUMMARY.md ranked by suppression quality
-  4. Combined SWEEP_REPORT.md with both fibers + multistart
+Reads each `_result.jld2` in `results/raman/sweeps/`, produces a 4-panel report
+card PNG plus a human-readable `report.md`, and writes `SWEEP_REPORT.md` with
+all points ranked by final suppression depth.
 
-Usage:
-  julia --project scripts/generate_sweep_reports.jl
+# Run
+    julia --project=. scripts/generate_sweep_reports.jl
 
-Reads from:
-  results/raman/sweeps/sweep_results_smf28.jld2
-  results/raman/sweeps/sweep_results_hnlf.jld2
-  results/raman/sweeps/multistart_L2m_P030W.jld2
-  results/raman/sweeps/<fiber>/L*_P*/opt_result.jld2
+# Inputs
+- Existing per-point `_result.jld2` files in `results/raman/sweeps/`.
+- `scripts/visualization.jl` plotting helpers.
 
-Writes to:
-  results/raman/sweeps/<fiber>/L*_P*/report_card.png
-  results/raman/sweeps/<fiber>/L*_P*/report.md
-  results/raman/sweeps/<fiber>/SWEEP_SUMMARY.md
-  results/raman/sweeps/SWEEP_REPORT.md
+# Outputs
+- `results/raman/sweeps/<fiber>/<L>_<P>/report_card.png` — 4-panel figure.
+- `results/raman/sweeps/<fiber>/<L>_<P>/report.md` — YAML front-matter + metrics.
+- `results/raman/sweeps/SWEEP_REPORT.md` — ranked summary of all points.
+
+# Runtime
+~2–5 minutes for a 24-point sweep. Pure I/O + matplotlib, no simulation.
+
+# Docs
+Docs: docs/interpreting-plots.md
 """
 
 ENV["MPLBACKEND"] = "Agg"

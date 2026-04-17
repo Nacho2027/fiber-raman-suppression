@@ -1,25 +1,29 @@
 """
-Cross-Run Comparison and Pattern Analysis (Phase 6)
+Re-run the 5 canonical production configurations and produce cross-run
+comparison figures (convergence overlay, spectral overlay, summary table,
+phase decomposition).
 
-Entry point for the Phase 6 cross-run comparison pipeline. Runs all 5
-optimization configs (re-generating JLD2 result files and updating
-manifest.json), then loads results and produces 4 comparison figures:
+Complements `raman_optimization.jl`: where that script targets a single
+canonical config, this one walks the 5 pre-registered configs used for all
+paper-style figures and saves a unified comparison set.
 
-  1. Summary table PNG  — fiber params, J values, soliton number N
-  2. Convergence overlay — J vs iteration for all 5 runs on shared axes
-  3. SMF-28 spectral overlay — optimized output spectra for SMF-28 runs
-  4. HNLF spectral overlay  — optimized output spectra for HNLF runs
+# Run
+    julia --project=. -t auto scripts/run_comparison.jl
 
-Also performs:
-  - Phase decomposition analysis (GDD/TOD polynomial fit + residual fraction)
-  - Soliton number N computation from peak power, and manifest.json update
+# Inputs
+- Pre-registered configs defined at top of file.
+- `scripts/common.jl` fiber presets and setup.
 
-Requires: visualization.jl functions from Plan 01:
-  compute_soliton_number, decompose_phase_polynomial,
-  plot_cross_run_summary_table, plot_convergence_overlay, plot_spectral_overlay
+# Outputs
+- `results/raman/<run_id>/_result.jld2` + `.json` — one per config.
+- `results/images/comparison_*.png` — overlay figures.
+- `results/images/summary_table.md` — J_before / J_after / Δ-dB / iterations.
 
-Usage:
-  julia --project scripts/run_comparison.jl
+# Runtime
+~25–40 minutes on a 4-core laptop. Burst VM strongly recommended.
+
+# Docs
+Docs: docs/quickstart-optimization.md
 """
 
 try using Revise catch end

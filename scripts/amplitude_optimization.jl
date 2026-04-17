@@ -1,19 +1,28 @@
 """
-Raman Suppression via Spectral Amplitude Optimization (SMF version)
+Spectral amplitude shaping (alternative to phase optimization).
 
-Optimizes the spectral AMPLITUDE A(ω) of an input pulse to minimize the fractional
-energy in a Raman-shifted wavelength band after propagation through a single-mode fiber.
+Optimizes the input spectral *amplitude* profile to suppress Raman transfer,
+subject to regularization that controls how aggressively the shaper can carve
+the pulse. Provided as an A/B point of comparison against phase-only
+optimization; phase is the default production path.
 
-Unlike phase optimization (which is energy-neutral), amplitude modulation can trivially
-reduce the cost by setting A→0. This script implements multiple anti-trivial-solution
-strategies:
-  1. Box constraints:      A ∈ [1-δ, 1+δ]
-  2. Energy preservation:  λ_E · (E_shaped/E_original - 1)²
-  3. Tikhonov penalty:     λ_T · ‖A - 1‖²
-  4. Total variation:      λ_TV · Σ √((A[i+1]-A[i])² + ε²)
-  5. Spectral flatness:    λ_flat · (1 - geomean(A)/mean(A))²  [optional]
+# Run
+    julia --project=. -t auto scripts/amplitude_optimization.jl
 
-Uses the adjoint method for efficient gradient computation.
+# Inputs
+- Config constants at top of file (regularization strategy, λ values).
+- `scripts/common.jl` fiber presets.
+
+# Outputs
+- `results/raman/amplitude/<run_id>/_result.jld2` — JLD2 payload.
+- `results/raman/amplitude/<run_id>/_result.json` — JSON sidecar.
+- `results/raman/amplitude/<run_id>/*.png` — comparison figures.
+
+# Runtime
+~5–10 minutes per regularization strategy on a 4-core laptop.
+
+# Docs
+Docs: docs/cost-function-physics.md
 """
 
 try using Revise catch end

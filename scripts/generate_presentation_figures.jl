@@ -1,16 +1,25 @@
 """
-Generate presentation-quality figures for advisor review.
+Build the advisor-ready presentation figures from existing run / sweep artifacts.
 
-Reads per-point JLD2 files directly (avoids broken aggregate JLD2).
-Produces:
-  1. L×P heatmaps for SMF-28 and HNLF (side-by-side)
-  2. N_sol vs J_after scatter plot (both fibers)
-  3. Before/after bar chart (linear vs log cost comparison)
-  4. Multistart robustness comparison
-  5. Best report cards (selected)
+Collates the 6–10 plots the lab uses in group meetings and paper drafts: best-
+suppression spectra, convergence overlays, heatmaps, phase decomposition. Reads
+from `results/raman/` and writes into `results/images/presentation/`.
 
-Usage:
-  julia --project scripts/generate_presentation_figures.jl
+# Run
+    julia --project=. scripts/generate_presentation_figures.jl
+
+# Inputs
+- Existing JLD2 payloads under `results/raman/` (per-run and sweeps).
+- `scripts/visualization.jl` plotting helpers.
+
+# Outputs
+- `results/images/presentation/*.png` — presentation-quality figures at 300 DPI.
+
+# Runtime
+~3–6 minutes. Pure plotting, no simulation.
+
+# Docs
+Docs: docs/interpreting-plots.md
 """
 
 ENV["MPLBACKEND"] = "Agg"

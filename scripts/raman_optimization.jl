@@ -1,13 +1,32 @@
 """
-Raman Suppression via Spectral Phase Optimization (SMF version)
+Raman suppression via spectral phase optimization — canonical SMF entry point.
 
-Optimizes the spectral phase of an input pulse to minimize the fractional energy
-in a Raman-shifted wavelength band after propagation through a single-mode fiber.
+Runs adjoint-gradient + L-BFGS to find the input spectral phase that minimizes
+the fractional pulse energy in a Raman-shifted band after propagation through a
+single-mode fiber. Uses user-defined fiber parameters (γ, β₂, β₃, …), no
+pre-computed NPZ eigenmode files needed.
 
-Uses user-defined fiber parameters (γ, β₂, β₃, ...) via
-`get_disp_fiber_params_user_defined` — no pre-computed NPZ eigenmode files needed.
+# Run
+    julia --project=. -t auto scripts/raman_optimization.jl
 
-Uses the adjoint method (already in MultiModeNoise) to compute gradients efficiently.
+# Inputs
+- Config constants at top of file (fiber preset, L, P, pulse FWHM, max_iter).
+- `scripts/common.jl` for `FIBER_PRESETS` and `setup_raman_problem`.
+- `scripts/determinism.jl` pins FFTW/BLAS threads for bit-identity runs.
+
+# Outputs
+- `results/raman/<run_id>/_result.jld2` — full JLD2 payload (φ_opt, uω0, uωf,
+  convergence history in dB, grid, fiber dict, metadata).
+- `results/raman/<run_id>/_result.json` — JSON sidecar with scalar metadata.
+- `results/raman/<run_id>/*.png` — three figures (spectral, phase, evolution).
+- `results/raman/manifest.json` — append-safe index of all runs.
+
+# Runtime
+~5 minutes on a 4-core laptop for the canonical SMF-28 config (L=2 m, P=0.2 W,
+Nt=2^13, max_iter=30). Scale linearly with `max_iter`; super-linearly with Nt.
+
+# Docs
+Docs: docs/quickstart-optimization.md
 """
 
 try using Revise catch end
