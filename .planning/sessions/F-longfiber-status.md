@@ -52,12 +52,34 @@ Logs at `~/fiber-raman-suppression/results/raman/phase16/logs/` on burst VM:
 
 `~/fiber-raman-suppression/results/raman/sweeps/smf28/L2m_P0.05W/opt_result.jld2` on burst VM, 207 KB, Session E sweep-generated. Loaded by T3 and T5 via `JLD2.@load`.
 
+## Incident — burst VM frozen (2026-04-17 ~04:28 UTC)
+
+SSH to `fiber-raman-burst` hung at 15s and 60s timeouts. `gcloud compute instances describe` reports `status: RUNNING`. Serial console last activity at 03:43:54Z — session-1446 started but never deactivated; no further kernel log for 45+ min. Strong signal of a hard lockup (OOM with blocked logger, or CPU stall).
+
+**Likely cause:** memory/CPU saturation from stacked heavy jobs —
+- Phase 14 A/B (since 2026-04-16T23:34Z, ~5h etime)
+- Session E `sweep` (since 01:42Z, ~3h etime)
+- Session E `E-sweep1` (since 03:10Z)
+- Session E `E-sweep1b` (since 03:32Z)
+- Session A `A-demo` (since 03:34Z)
+- Session D `D-transfer` (since 03:20Z)
+- Session C `C-test` (since 03:06Z)
+- Session F `F-queue` (since 03:40Z)
+
+All 7+ heavy julia processes simultaneously on a 22-core VM with 88 GB is far over the "one heavy at a time" budget in CLAUDE.md Rule P5. The violation wasn't mine alone — multiple sessions ignored the lock — but the cumulative load froze the VM.
+
+**Recovery options (not yet applied — cross-session impact):**
+1. `gcloud compute instances reset fiber-raman-burst` — hard reboot, loses all in-flight julia state across all sessions (Phase 14 A/B, Session E sweep results, any uncheckpointed work).
+2. `gcloud compute instances stop` + `start` — same effect, cleaner shutdown is not possible given kernel silence.
+3. Wait longer (low probability of spontaneous recovery given 45 min silence).
+
+Reset is the pragmatic path but the CLAUDE.md Executing-Actions-With-Care guidance explicitly flags this as needing user confirmation since it's destructive across session boundaries. Deferring to user.
+
 ## Remaining monitoring
 
-- Next checkpoint: ~30 min after launch (expect T4 result)
-- Subsequent checks pace with lock release / T5 progress
-- If T3 lock wait exceeds 12 h the launcher auto-times out — escalate then.
-- T5 full run: expect 2–8 h wall clock once lock acquired.
+- Awaiting user decision on VM reset.
+- If reset: pull fresh on burst VM, re-add `~/raman-wt-F` worktree, symlink `Manifest.toml` and `results/`, relaunch `F-queue` tmux. Session F queue is idempotent — T4 will redo forward solves, T3/T5/T6 will run clean.
+- Session F artifacts on claude-code-host and origin `sessions/F-longfiber` branch are intact regardless of VM state — no data loss local to Session F.
 
 ## Open items for integrator (Session G / user)
 
