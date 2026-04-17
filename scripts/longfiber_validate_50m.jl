@@ -45,6 +45,8 @@ include("longfiber_setup.jl")
 include("longfiber_checkpoint.jl")
 include("common.jl")
 include("raman_optimization.jl")
+include("visualization.jl")
+include("standard_images.jl")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
@@ -309,6 +311,17 @@ function lf50_run()
     # 8. Figure
     fig_path = joinpath(LF50_FIGURE_DIR, "physics_16_01_forward_50m.png")
     lf50_figure(out_flat.J_dB, out_warm.J_dB, out_opt.J_dB, f_trace, fig_path)
+
+    # 9. MANDATORY canonical image set (Project rule 2, 2026-04-17)
+    save_standard_set(
+        vec(phi_opt), uω0, fiber, sim,
+        band_mask, Δf, thr;
+        tag = "F_50m_opt",
+        fiber_name = "SMF28",
+        L_m = LF50_L,
+        P_W = LF50_P_CONT,
+        output_dir = joinpath(LF50_RESULTS_DIR, "standard_images_F_50m_opt"),
+    )
 
     return (
         pass_all = pass_energy_flat && pass_energy_warm && pass_warm_better &&

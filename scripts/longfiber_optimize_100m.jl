@@ -57,9 +57,30 @@ using Optim
 include("longfiber_setup.jl")
 include("longfiber_checkpoint.jl")
 include("common.jl")
+include("visualization.jl")    # needed by standard_images.jl
+include("standard_images.jl")
 # NOTE: intentionally NOT including raman_optimization.jl — we replicate the
 # fg! body locally so the checkpoint callback can be wired in without editing
 # the shared `optimize_spectral_phase` function.
+
+"""
+    lf100_save_standard_images(prob, phi_opt; tag, output_dir)
+
+Wrapper around `save_standard_set(...)` enforcing the Project-level rule
+that every driver producing a phi_opt MUST emit the canonical 4-PNG set.
+"""
+function lf100_save_standard_images(prob, phi_opt::AbstractVector{<:Real};
+        tag::AbstractString, output_dir::AbstractString)
+    save_standard_set(
+        phi_opt, prob.uω0, prob.fiber, prob.sim,
+        prob.band_mask, prob.Δf, prob.raman_threshold;
+        tag = tag,
+        fiber_name = "SMF28",
+        L_m = LF100_L,
+        P_W = LF100_P_CONT,
+        output_dir = output_dir,
+    )
+end
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
@@ -186,7 +207,7 @@ function lf100_build_problem()
 
     return (
         uω0 = uω0, fiber = fiber, sim = sim, band_mask = band_mask,
-        Δf  = Δf, phi_warm = phi_warm,
+        Δf  = Δf, phi_warm = phi_warm, raman_threshold = thr,
         cg = cg, config_hash = config_hash,
     )
 end
@@ -348,6 +369,11 @@ function lf100_mode_fresh()
 
     lf100_figure(run_fresh, nothing, 0,
         joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_100m.png"))
+
+    # MANDATORY canonical image set (Project rule 2, 2026-04-17).
+    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_100m_opt",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_opt"))
+
     return (run_fresh = run_fresh, run_resume = nothing)
 end
 
@@ -392,6 +418,9 @@ function lf100_mode_resume()
         saved_at       = now(),
     )
     @info "saved $out_path"
+
+    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_100m_resume",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_resume"))
 
     return (run_fresh = nothing, run_resume = run_resume)
 end
@@ -497,6 +526,10 @@ function lf100_mode_resume_demo()
     # Figure uses the resume_demo traces (Phase A + Phase B)
     lf100_figure(run_A, run_B, 15,
         joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_100m.png"))
+
+    # MANDATORY canonical image set (Project rule 2, 2026-04-17).
+    lf100_save_standard_images(prob, vec(phi_opt_ref); tag = "F_100m_opt",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_opt"))
 
     return (run_fresh = run_ref, run_resume = run_B, pass_resume = pass_resume)
 end
