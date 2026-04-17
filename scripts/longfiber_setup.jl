@@ -259,9 +259,11 @@ function setup_longfiber_problem(;
     Δf = fftshift(Δf_fft)
     band_mask = Δf_fft .< raman_threshold
 
-    # POSTCONDITIONS — the override we're working around
+    # POSTCONDITIONS — the override we're working around.
+    # MultiModeNoise.get_disp_sim_params stores sim["Δt"] and sim["time_window"] in
+    # PICOSECONDS (see src/helpers/helpers.jl:52). Do not multiply by 1e12.
     @assert sim["Nt"] == Nt "sim[Nt] ($(sim["Nt"])) ≠ requested Nt ($Nt) — MultiModeNoise override?"
-    tw_actual_ps = sim["Δt"] * Nt * 1e12
+    tw_actual_ps = sim["Δt"] * Nt
     @assert isapprox(tw_actual_ps, float(time_window); atol = 1e-6) "sim time_window ($(tw_actual_ps) ps) ≠ requested ($(time_window) ps)"
     @assert any(band_mask) "Raman band mask is empty — check raman_threshold and grid"
 
@@ -290,9 +292,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         β_order      = 2,
     )
     @info @sprintf("L=100 m: sim[Nt]=%d, Nt*Δt=%.3f ps, raman_bins=%d",
-        sim["Nt"], sim["Δt"] * sim["Nt"] * 1e12, sum(band_mask))
+        sim["Nt"], sim["Δt"] * sim["Nt"], sum(band_mask))
     @assert sim["Nt"] == 32768
-    @assert isapprox(sim["Δt"] * sim["Nt"] * 1e12, 160.0; atol = 1e-6)
+    @assert isapprox(sim["Δt"] * sim["Nt"], 160.0; atol = 1e-6)
 
     # Interpolation roundtrip test: same grid → identity
     phi_a = randn(8192)
