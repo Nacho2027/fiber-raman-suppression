@@ -65,10 +65,20 @@ function _try_load_sweep(subdir::AbstractString, L::Real, P::Real)
     end
     try
         d = JLD2.load(path)
+        # Phase 7 sweep schema uses `J_after` (linear). Older dumps may use
+        # `J_final_dB`. Try both.
+        J_dB = if haskey(d, "J_final_dB")
+            d["J_final_dB"]
+        elseif haskey(d, "J_after")
+            J_lin = d["J_after"]
+            10 * log10(max(J_lin, 1e-15))
+        else
+            NaN
+        end
         return (
             name = @sprintf("SMF-28 L=%.1fm P=%.2fW", L, P),
             L = L, P = P, fiber_name = "SMF-28",
-            J_after_dB = d["J_final_dB"],
+            J_after_dB = J_dB,
             phi_opt   = d["phi_opt"],
             uω0       = d["uomega0"],
             sim_omega0 = d["sim_omega0"],
