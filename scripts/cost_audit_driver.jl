@@ -93,7 +93,7 @@ function _setup_config(cfg::NamedTuple; Nt::Int=8192, strict_nt::Bool=true)
             @warn msg * " Continuing (strict_nt=false, integration-test mode)."
         end
     end
-    return uω0, fiber, sim, band_mask, Δf
+    return uω0, fiber, sim, band_mask, Δf, raman_threshold
 end
 
 function _iter_to_90pct_dB(f_trace_linear::AbstractVector)
@@ -197,7 +197,7 @@ function run_one(variant::Symbol, config_tag::Symbol;
         error("unknown config tag :$config_tag (expected :A :B :C)")
     cfg = CA_CONFIGS[cfg_idx]
 
-    uω0, fiber, sim, band_mask, _ = _setup_config(cfg; Nt=Nt, strict_nt=strict_nt)
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = _setup_config(cfg; Nt=Nt, strict_nt=strict_nt)
     setup_kwargs = (Nt=Nt, time_window=cfg.time_window, β_order=3,
         fiber_preset=cfg.fiber_preset, L_fiber=cfg.L_fiber, P_cont=cfg.P_cont)
 
