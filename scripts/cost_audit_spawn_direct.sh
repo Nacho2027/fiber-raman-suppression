@@ -95,6 +95,8 @@ for f in \
     scripts/cost_audit_analyze.jl \
     scripts/cost_audit_noise_aware.jl \
     scripts/cost_audit_run_batch.sh \
+    scripts/cost_audit_run_B_only.sh \
+    scripts/cost_audit_run_BC.sh \
     scripts/standard_images.jl \
     scripts/visualization.jl \
     scripts/common.jl \
