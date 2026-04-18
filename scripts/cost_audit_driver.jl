@@ -55,7 +55,11 @@ end
 
 const CA_CONFIGS = [
     (tag=:A, fiber_preset=:SMF28, L_fiber=0.5, P_cont=0.05, seed=42, time_window=5.0),
-    (tag=:B, fiber_preset=:SMF28, L_fiber=5.0, P_cont=0.2,  seed=43, time_window=45.0),
+    # Config B: time_window 150 ps (> auto-sizer's 135 ps SPM requirement for
+    # L=5m, P=0.2W at Nt=8192) so strict_nt can hold the grid constant across
+    # all four variants. Original 45.0 triggered an Nt 8192→16384 auto-grow
+    # that broke the fair-comparison protocol for the :sharp / :curvature runs.
+    (tag=:B, fiber_preset=:SMF28, L_fiber=5.0, P_cont=0.2,  seed=43, time_window=150.0),
     (tag=:C, fiber_preset=:HNLF,  L_fiber=1.0, P_cont=0.5,  seed=44, time_window=15.0),
 ]
 const CA_VARIANTS = [:linear, :log_dB, :sharp, :curvature]
