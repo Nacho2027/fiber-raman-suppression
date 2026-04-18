@@ -66,10 +66,11 @@ const CA_VARIANTS = [:linear, :log_dB, :sharp, :curvature]
 
 const CA_SIGMAS         = [0.01, 0.05, 0.1, 0.2]
 const CA_N_TRIALS       = 10
-const CA_NEV            = 32
-const CA_HESSIAN_EPS    = 1e-4
-const CA_ARPACK_TOL     = 1e-6
-const CA_ARPACK_MAXITER = 500
+const CA_NEV            = parse(Int,   get(ENV, "CA_NEV",            "32"))
+const CA_HESSIAN_EPS    = parse(Float64, get(ENV, "CA_HESSIAN_EPS",    "1e-4"))
+const CA_ARPACK_TOL     = parse(Float64, get(ENV, "CA_ARPACK_TOL",     "1e-6"))
+const CA_ARPACK_MAXITER = parse(Int,   get(ENV, "CA_ARPACK_MAXITER",  "500"))
+const CA_SKIP_HESSIAN   = get(ENV, "CA_SKIP_HESSIAN",  "0") == "1"
 const CA_RESULTS_ROOT   = joinpath(@__DIR__, "..", "results", "cost_audit")
 # CA_HEAVY_LOCK removed per Rule P5 update (2026-04-17) — burst-run-heavy owns
 # the lock now; in-Julia management would collide with the wrapper.
@@ -133,6 +134,11 @@ end
 function _hessian_top_k(setup_kwargs::NamedTuple, φ_opt::AbstractMatrix;
                         nev::Int=CA_NEV, eps::Real=CA_HESSIAN_EPS,
                         tol::Real=CA_ARPACK_TOL, maxiter::Int=CA_ARPACK_MAXITER)
+    if CA_SKIP_HESSIAN
+        @info "CA_SKIP_HESSIAN=1 → returning NaN eigenspectrum (nev=$nev)"
+        return (lambda_top=fill(NaN, nev), cond_proxy=NaN,
+                lambda_max=NaN, dnf=false)
+    end
     oracle, meta = build_oracle(setup_kwargs)
     P = build_gauge_projector(meta.omega, meta.input_band_mask)
     proj_oracle = phi_flat -> P(oracle(phi_flat))
