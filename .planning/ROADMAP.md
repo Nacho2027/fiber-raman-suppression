@@ -272,3 +272,15 @@ Plans:
 
 Plans:
 - [x] 17-01: Baseline reproduction + perturbation + transferability + simplicity + synthesis — COMPLETE 2026-04-17 (see 17-01-PLAN.md and `results/raman/phase17/SUMMARY.md`)
+
+### Phase 16 (Session H): Cost Function Head-to-Head Audit — compare linear, log-scale dB, sharpness-aware, and noise-aware cost variants across 3 (fiber, L, P) configs and recommend a default
+
+**Goal:** Recommend a project-wide default cost-function via head-to-head A/B/C/D on fixed configs.
+**Requirements**: See `.planning/phases/16-cost-audit/` and `.planning/sessions/H-cost-*.md`.
+**Depends on:** Phase 15
+**Plans:** 7/12 runs complete (merged 2026-04-19).
+
+Plans:
+- [x] Config A (SMF-28): **log_dB wins** — -75.8 dB in 10.6s vs linear -70.5 dB in 17s.
+- [~] Config B (HNLF): 3/4 complete; sharp variant DNF.
+- [ ] Config C (HNLF L=1m P=0.5W): 0/4 — two burst-VM hangs > 1 h. **Blocked** — needs shorter max_iter / reduced metric set. See `.planning/phases/18-cost-config-c/`.

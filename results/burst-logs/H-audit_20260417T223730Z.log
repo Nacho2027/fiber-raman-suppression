@@ -1,0 +1,575 @@
+== cost_audit_run_batch.sh :: 2026-04-17T22:37:30Z ==
+== hostname: fiber-raman-temp-h-audit-20260417t223623z
+== PATH: /home/ignaciojlizama/.juliaup/bin:/home/ignaciojlizama/.juliaup/bin:/home/ignaciojlizama/bin:/usr/local/bin:/usr/bin:/bin:/usr/games
+== [1/7] git sync skipped (COST_AUDIT_SKIP_GIT_SYNC=1, files delivered via scp)
+== [2/7] unit tests
+Precompiling packages...
+    426.8 ms  ✓ Reexport
+    514.0 ms  ✓ AbstractFFTs
+    576.3 ms  ✓ Preferences
+    443.1 ms  ✓ JLLWrappers
+    581.2 ms  ✓ FFTW_jll
+    993.1 ms  ✓ IntelOpenMP_jll
+   1048.6 ms  ✓ oneTBB_jll
+   1106.0 ms  ✓ MKL_jll
+   5296.3 ms  ✓ FFTW
+  9 dependencies successfully precompiled in 9 seconds. 27 already precompiled.
+Precompiling packages...
+   1118.5 ms  ✓ AbstractFFTs → AbstractFFTsTestExt
+  1 dependency successfully precompiled in 1 seconds. 9 already precompiled.
+Precompiling packages...
+    460.1 ms  ✓ Statistics
+  1 dependency successfully precompiled in 0 seconds
+Precompiling packages...
+    579.6 ms  ✓ IteratorInterfaceExtensions
+    615.4 ms  ✓ LaTeXStrings
+    624.9 ms  ✓ MuladdMacro
+    632.3 ms  ✓ ConcreteStructs
+    635.6 ms  ✓ StatsAPI
+    690.5 ms  ✓ ExprTools
+    747.5 ms  ✓ ChunkCodecCore
+    777.3 ms  ✓ WorkerUtilities
+    803.3 ms  ✓ PositiveFactorizations
+    973.6 ms  ✓ VersionParsing
+    999.8 ms  ✓ ADTypes
+    579.1 ms  ✓ UnPack
+    582.4 ms  ✓ Richardson
+    608.2 ms  ✓ IntegerMathUtils
+    574.2 ms  ✓ CommonSolve
+    778.3 ms  ✓ LatticeRules
+    683.7 ms  ✓ InverseFunctions
+   1421.8 ms  ✓ Combinatorics
+    632.2 ms  ✓ ManualMemory
+   1486.7 ms  ✓ OffsetArrays
+    572.9 ms  ✓ DataValueInterfaces
+    587.5 ms  ✓ SIMDTypes
+    637.8 ms  ✓ EnumX
+   1291.0 ms  ✓ FillArrays
+    576.4 ms  ✓ PtrArrays
+    594.2 ms  ✓ CompositionsBase
+   1068.2 ms  ✓ Requires
+    816.4 ms  ✓ DocStringExtensions
+   2292.3 ms  ✓ CEnum
+    822.6 ms  ✓ TranscodingStreams
+    554.2 ms  ✓ FastPower
+   1031.5 ms  ✓ InlineStrings
+    649.0 ms  ✓ HashArrayMappedTries
+    612.8 ms  ✓ InvertedIndices
+    711.3 ms  ✓ DelimitedFiles
+    532.3 ms  ✓ IfElse
+    677.0 ms  ✓ Inflate
+   2806.5 ms  ✓ FunctionWrappers
+    557.1 ms  ✓ CommonWorldInvalidations
+    570.6 ms  ✓ DataAPI
+    913.7 ms  ✓ EnzymeCore
+    585.6 ms  ✓ FastClosures
+    831.6 ms  ✓ Statistics → SparseArraysExt
+    647.9 ms  ✓ SciMLPublic
+    671.3 ms  ✓ StaticArraysCore
+   2419.8 ms  ✓ OrderedCollections
+    711.7 ms  ✓ ZipFile
+   4023.8 ms  ✓ ExproniconLite
+    864.7 ms  ✓ WoodburyMatrices
+   1111.3 ms  ✓ PDMats
+   2243.5 ms  ✓ NaNMath
+    732.2 ms  ✓ LoggingExtras
+   1469.2 ms  ✓ GenericSchur
+    980.2 ms  ✓ CpuId
+   2216.2 ms  ✓ ConstructionBase
+   3278.6 ms  ✓ IrrationalConstants
+    654.1 ms  ✓ PrecompileTools
+    873.4 ms  ✓ Rmath_jll
+    947.9 ms  ✓ Arpack_jll
+    922.9 ms  ✓ Zstd_jll
+   1864.6 ms  ✓ SentinelArrays
+    625.2 ms  ✓ TableTraits
+   1094.1 ms  ✓ OpenSpecFun_jll
+    985.0 ms  ✓ OpenBLAS32_jll
+   4759.8 ms  ✓ MacroTools
+   3069.1 ms  ✓ Crayons
+    704.1 ms  ✓ ChunkCodecLibZlib
+   2424.3 ms  ✓ StructUtils
+   2552.1 ms  ✓ StructTypes
+    590.3 ms  ✓ InverseFunctions → InverseFunctionsDatesExt
+    593.1 ms  ✓ FillArrays → FillArraysStatisticsExt
+    875.8 ms  ✓ Primes
+    807.8 ms  ✓ InverseFunctions → InverseFunctionsTestExt
+   1788.9 ms  ✓ SuiteSparse32_jll
+    555.5 ms  ✓ CompositionsBase → CompositionsBaseInverseFunctionsExt
+    679.9 ms  ✓ AliasTables
+   2435.5 ms  ✓ Compat
+    871.9 ms  ✓ FillArrays → FillArraysSparseArraysExt
+    676.9 ms  ✓ Ratios
+    721.2 ms  ✓ Adapt
+    717.0 ms  ✓ CodecZlib
+    707.4 ms  ✓ ScopedValues
+   4341.5 ms  ✓ FixedPointNumbers
+    704.1 ms  ✓ PooledArrays
+   2187.3 ms  ✓ RuntimeGeneratedFunctions
+    675.9 ms  ✓ ADTypes → ADTypesEnzymeCoreExt
+    654.5 ms  ✓ DiffResults
+   2735.4 ms  ✓ AlmostBlockDiagonals
+    560.9 ms  ✓ ConstructionBase → ConstructionBaseLinearAlgebraExt
+    842.8 ms  ✓ AxisAlgorithms
+    555.8 ms  ✓ ADTypes → ADTypesConstructionBaseExt
+    846.1 ms  ✓ FillArrays → FillArraysPDMatsExt
+    732.0 ms  ✓ SciMLLogging
+   1541.5 ms  ✓ Sobol
+   3031.3 ms  ✓ DifferentiationInterface
+    835.8 ms  ✓ LogExpFunctions
+   2731.5 ms  ✓ ThreadingUtilities
+   2191.8 ms  ✓ Missings
+    984.0 ms  ✓ Rmath
+    858.3 ms  ✓ Arpack
+    869.2 ms  ✓ ChunkCodecLibZstd
+   2433.3 ms  ✓ DataStructures
+   2443.7 ms  ✓ Jieko
+    808.5 ms  ✓ CommonSubexpressions
+    626.5 ms  ✓ StructUtils → StructUtilsStaticArraysCoreExt
+    909.7 ms  ✓ TruncatedStacktraces
+   2175.7 ms  ✓ RecipesBase
+   4874.8 ms  ✓ TimerOutputs
+    724.0 ms  ✓ Compat → CompatLinearAlgebraExt
+   1226.4 ms  ✓ SimpleTraits
+   2619.2 ms  ✓ StringManipulation
+    809.7 ms  ✓ Adapt → AdaptSparseArraysExt
+    684.8 ms  ✓ OffsetArrays → OffsetArraysAdaptExt
+    879.3 ms  ✓ GPUArraysCore
+    767.7 ms  ✓ EnzymeCore → AdaptExt
+    641.4 ms  ✓ Ratios → RatiosFixedPointNumbersExt
+   2874.0 ms  ✓ Tables
+   5085.8 ms  ✓ FileIO
+    591.3 ms  ✓ LogExpFunctions → LogExpFunctionsInverseFunctionsExt
+    808.3 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseArraysExt
+    674.7 ms  ✓ PoissonRandom
+    762.6 ms  ✓ SortingAlgorithms
+   1632.9 ms  ✓ Setfield
+   2988.0 ms  ✓ Sundials_jll
+   9436.5 ms  ✓ Krylov
+   2522.4 ms  ✓ ArrayInterface
+    534.9 ms  ✓ DifferentiationInterface → DifferentiationInterfaceGPUArraysCoreExt
+    561.0 ms  ✓ StructUtils → StructUtilsTablesExt
+   1462.3 ms  ✓ FilePathsBase
+   3300.1 ms  ✓ ColorTypes
+   2584.1 ms  ✓ QuadGK
+    791.5 ms  ✓ MaybeInplace
+   3439.9 ms  ✓ SpecialFunctions
+   1996.7 ms  ✓ NPZ
+   3146.4 ms  ✓ FunctionWrappersWrappers
+   4345.7 ms  ✓ Accessors
+    900.3 ms  ✓ ArrayInterface → ArrayInterfaceSparseArraysExt
+    722.4 ms  ✓ FastBroadcast
+    593.3 ms  ✓ ArrayInterface → ArrayInterfaceGPUArraysCoreExt
+   3332.3 ms  ✓ ChainRulesCore
+    778.1 ms  ✓ ArrayInterface → ArrayInterfaceStaticArraysCoreExt
+   1375.3 ms  ✓ FilePathsBase → FilePathsBaseMmapExt
+   1257.8 ms  ✓ ColorTypes → StyledStringsExt
+   7409.3 ms  ✓ SparseConnectivityTracer
+   1331.8 ms  ✓ MaybeInplace → MaybeInplaceSparseArraysExt
+   9113.5 ms  ✓ SparseMatrixColorings
+   2342.9 ms  ✓ FilePathsBase → FilePathsBaseTestExt
+   2468.6 ms  ✓ PreallocationTools
+   1126.7 ms  ✓ StochasticDiffEqLevyArea
+   1071.5 ms  ✓ DiffRules
+   1044.5 ms  ✓ Accessors → LinearAlgebraExt
+   1058.0 ms  ✓ Accessors → TestExt
+    704.4 ms  ✓ AbstractFFTs → AbstractFFTsChainRulesCoreExt
+   2231.6 ms  ✓ HypergeometricFunctions
+  10730.2 ms  ✓ Static
+    701.8 ms  ✓ DifferentiationInterface → DifferentiationInterfaceChainRulesCoreExt
+    818.3 ms  ✓ EnzymeCore → EnzymeCoreChainRulesCoreExt
+    868.0 ms  ✓ ADTypes → ADTypesChainRulesCoreExt
+   3946.3 ms  ✓ SciMLStructures
+   5735.7 ms  ✓ StatsBase
+    679.6 ms  ✓ ArrayInterface → ArrayInterfaceChainRulesCoreExt
+  11929.9 ms  ✓ StaticArrays
+    879.8 ms  ✓ FiniteDiff
+   2423.4 ms  ✓ ChainRulesCore → ChainRulesCoreSparseArraysExt
+   1035.9 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerChainRulesCoreExt
+   1228.4 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerLogExpFunctionsExt
+    911.9 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseConnectivityTracerExt
+   1880.6 ms  ✓ LogExpFunctions → LogExpFunctionsChainRulesCoreExt
+   1564.3 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerNaNMathExt
+    970.8 ms  ✓ DifferentiationInterface → DifferentiationInterfaceSparseMatrixColoringsExt
+   1022.0 ms  ✓ PreallocationTools → PreallocationToolsSparseConnectivityTracerExt
+   1683.1 ms  ✓ SparseConnectivityTracer → SparseConnectivityTracerSpecialFunctionsExt
+   2414.9 ms  ✓ SpecialFunctions → SpecialFunctionsChainRulesCoreExt
+    732.6 ms  ✓ BitTwiddlingConvenienceFunctions
+    942.5 ms  ✓ FastBroadcast → FastBroadcastStaticExt
+   1108.1 ms  ✓ PDMats → StatsBaseExt
+   1728.4 ms  ✓ CPUSummary
+    995.6 ms  ✓ ResettableStacks
+   8066.1 ms  ✓ Colors
+  15823.1 ms  ✓ Parsers
+   3548.4 ms  ✓ SymbolicIndexingInterface
+   4000.1 ms  ✓ SciMLOperators
+    879.6 ms  ✓ StaticArrays → StaticArraysStatisticsExt
+    985.8 ms  ✓ FillArrays → FillArraysStaticArraysExt
+    896.0 ms  ✓ ConstructionBase → ConstructionBaseStaticArraysExt
+    835.0 ms  ✓ Adapt → AdaptStaticArraysExt
+   4298.2 ms  ✓ StatsFuns
+   2926.9 ms  ✓ StaticArrays → StaticArraysChainRulesCoreExt
+   1304.2 ms  ✓ DifferentiationInterface → DifferentiationInterfaceStaticArraysExt
+   1017.9 ms  ✓ FiniteDiff → FiniteDiffStaticArraysExt
+   5023.1 ms  ✓ StaticArrayInterface
+   1330.7 ms  ✓ Accessors → StaticArraysExt
+   1382.4 ms  ✓ FiniteDiff → FiniteDiffSparseArraysExt
+   4043.0 ms  ✓ ArnoldiMethod
+    967.9 ms  ✓ DifferentiationInterface → DifferentiationInterfaceFiniteDiffExt
+  14545.1 ms  ✓ Moshi
+    976.2 ms  ✓ PolyesterWeave
+    643.5 ms  ✓ InlineStrings → ParsersExt
+   6872.9 ms  ✓ ForwardDiff
+    678.2 ms  ✓ SciMLOperators → SciMLOperatorsStaticArraysCoreExt
+   2231.7 ms  ✓ FastGaussQuadrature
+   1380.6 ms  ✓ HostCPUFeatures
+   1327.0 ms  ✓ SparseMatrixColorings → SparseMatrixColoringsColorsExt
+    645.2 ms  ✓ StatsFuns → StatsFunsInverseFunctionsExt
+   1010.6 ms  ✓ SciMLOperators → SciMLOperatorsSparseArraysExt
+    871.1 ms  ✓ StaticArrayInterface → StaticArrayInterfaceStaticArraysExt
+    672.1 ms  ✓ StaticArrayInterface → StaticArrayInterfaceOffsetArraysExt
+   1915.5 ms  ✓ StatsFuns → StatsFunsChainRulesCoreExt
+    688.6 ms  ✓ CloseOpenIntervals
+    835.5 ms  ✓ LayoutPointers
+   5104.2 ms  ✓ HCubature
+   2942.6 ms  ✓ FiniteDifferences
+    723.0 ms  ✓ FastPower → FastPowerForwardDiffExt
+   1061.3 ms  ✓ ForwardDiff → ForwardDiffStaticArraysExt
+   1623.8 ms  ✓ WeakRefStrings
+   4312.7 ms  ✓ Interpolations
+  12452.8 ms  ✓ Tullio
+   1807.8 ms  ✓ StrideArraysCore
+   2598.1 ms  ✓ PreallocationTools → PreallocationToolsForwardDiffExt
+   6772.5 ms  ✓ JSON
+   3183.8 ms  ✓ DifferentiationInterface → DifferentiationInterfaceForwardDiffExt
+   1494.3 ms  ✓ DifferentiationInterface → DifferentiationInterfaceFiniteDifferencesExt
+  13138.5 ms  ✓ QuasiMonteCarlo
+    746.6 ms  ✓ Tullio → TullioChainRulesCoreExt
+    676.7 ms  ✓ Tullio → TullioFillArraysExt
+   1343.8 ms  ✓ Interpolations → InterpolationsForwardDiffExt
+    926.4 ms  ✓ Polyester
+   7922.8 ms  ✓ RecursiveArrayTools
+   1229.1 ms  ✓ Conda
+   1188.0 ms  ✓ NLSolversBase
+   7714.3 ms  ✓ Distributions
+    811.1 ms  ✓ FastBroadcast → FastBroadcastPolyesterExt
+    705.7 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsStatisticsExt
+    725.5 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsFastBroadcastExt
+    796.8 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsTablesExt
+    774.6 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsForwardDiffExt
+   1031.1 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsSparseArraysExt
+   1601.3 ms  ✓ Distributions → DistributionsTestExt
+   1663.3 ms  ✓ QuasiMonteCarlo → QuasiMonteCarloDistributionsExt
+   1392.4 ms  ✓ RecursiveArrayTools → RecursiveArrayToolsFastBroadcastPolyesterExt
+  10926.9 ms  ✓ JSON3
+   8284.2 ms  ✓ Graphs
+   2661.6 ms  ✓ LineSearches
+   2561.3 ms  ✓ Distributions → DistributionsChainRulesCoreExt
+   1627.9 ms  ✓ MonteCarloIntegration
+   1374.0 ms  ✓ Graphs → GraphsSharedArraysExt
+   2937.3 ms  ✓ Optim
+  11744.5 ms  ✓ VectorizationBase
+  16182.2 ms  ✓ ArrayLayouts
+  30884.0 ms  ✓ PrettyTables
+   1192.7 ms  ✓ SymbolicIndexingInterface → SymbolicIndexingInterfacePrettyTablesExt
+   1709.5 ms  ✓ ArrayLayouts → ArrayLayoutsSparseArraysExt
+   2955.9 ms  ✓ SLEEFPirates
+   4239.8 ms  ✓ MatrixFactorizations
+   3663.3 ms  ✓ LazyArrays
+  31458.7 ms  ✓ ExponentialUtilities
+   1774.8 ms  ✓ LazyArrays → LazyArraysStaticArraysExt
+  37288.1 ms  ✓ JLD2
+  18118.7 ms  ✓ CSV
+   2049.6 ms  ✓ ExponentialUtilities → ExponentialUtilitiesStaticArraysExt
+   1520.0 ms  ✓ JLD2 → UnPackExt
+  17449.2 ms  ✓ SciMLBase
+  17920.5 ms  ✓ PyCall
+   1326.6 ms  ✓ SciMLBase → SciMLBaseDistributionsExt
+   1344.5 ms  ✓ SciMLBase → SciMLBaseDifferentiationInterfaceExt
+   1304.1 ms  ✓ SciMLBase → SciMLBasePyCallExt
+   1455.1 ms  ✓ SciMLBase → SciMLBaseChainRulesCoreExt
+   2020.5 ms  ✓ SciMLBase → SciMLBaseForwardDiffExt
+   3016.5 ms  ✓ PyPlot
+   2698.4 ms  ✓ Integrals
+   4217.9 ms  ✓ SciMLJacobianOperators
+   4459.5 ms  ✓ OptimizationBase
+    562.3 ms  ✓ OptimizationBase → OptimizationFiniteDiffExt
+   2411.0 ms  ✓ Integrals → IntegralsFastGaussQuadratureExt
+    643.4 ms  ✓ OptimizationBase → OptimizationForwardDiffExt
+  16473.2 ms  ✓ BandedMatrices
+   3219.8 ms  ✓ Integrals → IntegralsForwardDiffExt
+   1549.3 ms  ✓ OptimizationBase → OptimizationChainRulesCoreExt
+   3482.3 ms  ✓ Integrals → IntegralsDifferentiationInterfaceExt
+   1530.5 ms  ✓ FiniteDiff → FiniteDiffBandedMatricesExt
+   8831.8 ms  ✓ LinearSolve
+   1932.9 ms  ✓ ArrayInterface → ArrayInterfaceBandedMatricesExt
+   1965.7 ms  ✓ BandedMatrices → BandedMatricesSparseArraysExt
+   2142.8 ms  ✓ MatrixFactorizations → MatrixFactorizationsBandedMatricesExt
+   2851.5 ms  ✓ LazyArrays → LazyArraysBandedMatricesExt
+   1254.0 ms  ✓ LinearSolve → LinearSolveChainRulesCoreExt
+   5489.0 ms  ✓ LineSearch
+   2952.8 ms  ✓ LinearSolve → LinearSolveForwardDiffExt
+   3022.1 ms  ✓ LinearSolve → LinearSolveBandedMatricesExt
+   1239.4 ms  ✓ LineSearch → LineSearchLineSearchesExt
+   4192.3 ms  ✓ LinearSolve → LinearSolveSparseArraysExt
+  21719.7 ms  ✓ LoopVectorization
+   8801.0 ms  ✓ NonlinearSolveBase
+   1383.6 ms  ✓ LinearSolve → LinearSolveEnzymeExt
+   1156.8 ms  ✓ LoopVectorization → SpecialFunctionsExt
+   1151.7 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseChainRulesCoreExt
+   1419.9 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseLineSearchExt
+   1631.0 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseSparseMatrixColoringsExt
+   1725.7 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseSparseArraysExt
+   1938.6 ms  ✓ LoopVectorization → ForwardDiffExt
+   2161.7 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseLinearSolveExt
+   2399.5 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseBandedMatricesExt
+   8326.4 ms  ✓ FastAlmostBandedMatrices
+   4249.4 ms  ✓ BracketingNonlinearSolve
+   5193.6 ms  ✓ NonlinearSolveBase → NonlinearSolveBaseForwardDiffExt
+   1289.8 ms  ✓ BracketingNonlinearSolve → BracketingNonlinearSolveForwardDiffExt
+   1061.8 ms  ✓ BracketingNonlinearSolve → BracketingNonlinearSolveChainRulesCoreExt
+   2788.3 ms  ✓ LinearSolve → LinearSolveFastAlmostBandedMatricesExt
+   3250.4 ms  ✓ DiffEqBase
+   1216.4 ms  ✓ DiffEqBase → DiffEqBaseChainRulesCoreExt
+   7274.9 ms  ✓ NonlinearSolveSpectralMethods
+   1409.9 ms  ✓ DiffEqBase → DiffEqBaseSparseArraysExt
+   1154.0 ms  ✓ NonlinearSolveSpectralMethods → NonlinearSolveSpectralMethodsForwardDiffExt
+   2705.0 ms  ✓ DiffEqNoiseProcess
+   4813.3 ms  ✓ OrdinaryDiffEqCore
+   5457.6 ms  ✓ DiffEqBase → DiffEqBaseForwardDiffExt
+   5535.0 ms  ✓ DiffEqCallbacks
+   3315.1 ms  ✓ DiffEqNoiseProcess → DiffEqNoiseProcessOptimExt
+   9641.5 ms  ✓ SimpleNonlinearSolve
+   2902.3 ms  ✓ OrdinaryDiffEqCore → OrdinaryDiffEqCoreSparseArraysExt
+   3599.3 ms  ✓ OrdinaryDiffEqFunctionMap
+   4492.6 ms  ✓ OrdinaryDiffEqSymplecticRK
+   4727.3 ms  ✓ OrdinaryDiffEqStabilizedRK
+   4846.2 ms  ✓ OrdinaryDiffEqExplicitRK
+   4937.0 ms  ✓ OrdinaryDiffEqHighOrderRK
+   5877.0 ms  ✓ OrdinaryDiffEqSSPRK
+  17051.9 ms  ✓ NonlinearSolveQuasiNewton
+   4622.9 ms  ✓ OrdinaryDiffEqPRK
+   2302.6 ms  ✓ SimpleNonlinearSolve → SimpleNonlinearSolveChainRulesCoreExt
+   7574.8 ms  ✓ OrdinaryDiffEqLowOrderRK
+   4929.7 ms  ✓ OrdinaryDiffEqFeagin
+   4243.9 ms  ✓ OrdinaryDiffEqQPRK
+   5344.7 ms  ✓ OrdinaryDiffEqRKN
+   1785.0 ms  ✓ NonlinearSolveQuasiNewton → NonlinearSolveQuasiNewtonForwardDiffExt
+  44906.4 ms  ✓ DataFrames
+   4719.6 ms  ✓ OrdinaryDiffEqLowStorageRK
+   4594.3 ms  ✓ SteadyStateDiffEq
+   4802.8 ms  ✓ JumpProcesses
+   4149.6 ms  ✓ OrdinaryDiffEqLinear
+   2772.6 ms  ✓ OrdinaryDiffEqAdamsBashforthMoulton
+   1707.0 ms  ✓ JumpProcesses → JumpProcessesOrdinaryDiffEqCoreExt
+   4527.9 ms  ✓ OrdinaryDiffEqDifferentiation
+  10899.5 ms  ✓ OrdinaryDiffEqTsit5
+  16054.8 ms  ✓ Sundials
+   1869.3 ms  ✓ OrdinaryDiffEqDifferentiation → OrdinaryDiffEqDifferentiationSparseArraysExt
+   1856.2 ms  ✓ OrdinaryDiffEqNordsieck
+   2858.3 ms  ✓ StochasticDiffEqCore
+   2625.9 ms  ✓ StochasticDiffEqIIF
+   2634.1 ms  ✓ StochasticDiffEqLowOrder
+   2846.9 ms  ✓ StochasticDiffEqRODE
+   4369.5 ms  ✓ OrdinaryDiffEqExponentialRK
+   3835.4 ms  ✓ StochasticDiffEqMilstein
+   4314.6 ms  ✓ StochasticDiffEqHighOrder
+   5282.8 ms  ✓ OrdinaryDiffEqExtrapolation
+   4399.3 ms  ✓ StochasticDiffEqROCK
+  26570.2 ms  ✓ NonlinearSolveFirstOrder
+   4521.5 ms  ✓ BoundaryValueDiffEqCore
+  14260.1 ms  ✓ OrdinaryDiffEqRosenbrock
+   5873.5 ms  ✓ BoundaryValueDiffEqAscher
+  29324.6 ms  ✓ OrdinaryDiffEqVerner
+   6979.7 ms  ✓ BoundaryValueDiffEqMIRKN
+  34390.0 ms  ✓ NonlinearSolve
+   2318.2 ms  ✓ NonlinearSolve → NonlinearSolveSundialsExt
+   3379.4 ms  ✓ OrdinaryDiffEqNonlinearSolve
+   3222.8 ms  ✓ OrdinaryDiffEqStabilizedIRK
+   4024.8 ms  ✓ OrdinaryDiffEqIMEXMultistep
+   4361.9 ms  ✓ StochasticDiffEqWeak
+   4614.6 ms  ✓ StochasticDiffEqLeaping
+   4799.9 ms  ✓ OrdinaryDiffEqPDIRK
+   4960.3 ms  ✓ StochasticDiffEqImplicit
+   2965.2 ms  ✓ StochasticDiffEq
+  13842.5 ms  ✓ OrdinaryDiffEqSDIRK
+  18541.2 ms  ✓ OrdinaryDiffEqFIRK
+   8116.9 ms  ✓ OrdinaryDiffEqBDF
+  66877.0 ms  ✓ BoundaryValueDiffEqShooting
+  20560.1 ms  ✓ OrdinaryDiffEqDefault
+   4984.1 ms  ✓ DelayDiffEq
+   6031.8 ms  ✓ OrdinaryDiffEq
+   5023.9 ms  ✓ DelayDiffEq → DelayDiffEqStochasticDiffEqCoreExt
+ 102611.9 ms  ✓ BoundaryValueDiffEqFIRK
+ 116724.4 ms  ✓ BoundaryValueDiffEqMIRK
+   5932.3 ms  ✓ BoundaryValueDiffEq
+   8021.7 ms  ✓ DifferentialEquations
+  22093.8 ms  ✓ MultiModeNoise
+  384 dependencies successfully precompiled in 257 seconds. 51 already precompiled.
+┌ Warning: No working GUI backend found for matplotlib
+└ @ PyPlot ~/.julia/packages/PyPlot/G422O/src/init.jl:153
+[ Info: D-04 grad at idx=789: FD=-1.060674e-03 analytic=-1.060674e-03 rel_err=5.06e-13
+[ Info: D-04 grad at idx=984: FD=-1.248621e-03 analytic=-1.248621e-03 rel_err=1.01e-12
+[ Info: D-04 grad at idx=845: FD=-1.660249e-03 analytic=-1.660249e-03 rel_err=8.16e-13
+Test Summary:              | Pass  Total   Time
+Phase 16 cost audit — unit |    4      4  46.3s
+== [3/7] integration test
+┌ Warning: No working GUI backend found for matplotlib
+└ @ PyPlot ~/.julia/packages/PyPlot/G422O/src/init.jl:153
+variant=linear: Error During Test at /home/ignaciojlizama/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:46
+  Got exception outside of a @test
+  FieldError: type Float64 has no field `value`; Float64 has no fields at all.
+  Stacktrace:
+    [1] getproperty
+      @ ./Base_compiler.jl:54 [inlined]
+    [2] (::var"#513#514")(t::Float64)
+      @ Main ./none:-1
+    [3] iterate
+      @ ./generator.jl:48 [inlined]
+    [4] collect(itr::Base.Generator{Vector{Float64}, var"#513#514"})
+      @ Base ./array.jl:790
+    [5] run_one(variant::Symbol, config_tag::Symbol; max_iter::Int64, Nt::Int64, save::Bool, strict_nt::Bool, results_root::String)
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:220
+    [6] top-level scope
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:45
+    [7] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+    [8] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:46 [inlined]
+    [9] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [10] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:47 [inlined]
+   [11] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [12] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:50 [inlined]
+   [13] include(mod::Module, _path::String)
+      @ Base ./Base.jl:306
+   [14] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:317
+   [15] _start()
+      @ Base ./client.jl:550
+variant=log_dB: Error During Test at /home/ignaciojlizama/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:57
+  Got exception outside of a @test
+  FieldError: type Float64 has no field `value`; Float64 has no fields at all.
+  Stacktrace:
+    [1] getproperty
+      @ ./Base_compiler.jl:54 [inlined]
+    [2] (::var"#515#516")(t::Float64)
+      @ Main ./none:-1
+    [3] iterate
+      @ ./generator.jl:48 [inlined]
+    [4] collect(itr::Base.Generator{Vector{Float64}, var"#515#516"})
+      @ Base ./array.jl:790
+    [5] run_one(variant::Symbol, config_tag::Symbol; max_iter::Int64, Nt::Int64, save::Bool, strict_nt::Bool, results_root::String)
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:231
+    [6] top-level scope
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:45
+    [7] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+    [8] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:46 [inlined]
+    [9] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [10] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:58 [inlined]
+   [11] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [12] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:61 [inlined]
+   [13] include(mod::Module, _path::String)
+      @ Base ./Base.jl:306
+   [14] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:317
+   [15] _start()
+      @ Base ./client.jl:550
+variant=sharp: Error During Test at /home/ignaciojlizama/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:68
+  Got exception outside of a @test
+  MethodError: objects of type Float64 are not callable
+  The object of type `Float64` exists, but no method is defined for this combination of argument types when trying to treat it as a callable object.
+  Maybe you forgot to use an operator such as *, ^, %, / etc. ?
+  Stacktrace:
+    [1] _hessian_top_k(setup_kwargs::@NamedTuple{Nt::Int64, time_window::Float64, β_order::Int64, fiber_preset::Symbol, L_fiber::Float64, P_cont::Float64}, φ_opt::Matrix{Float64}; nev::Int64, eps::Float64, tol::Float64, maxiter::Int64)
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:155
+    [2] _hessian_top_k(setup_kwargs::@NamedTuple{Nt::Int64, time_window::Float64, β_order::Int64, fiber_preset::Symbol, L_fiber::Float64, P_cont::Float64}, φ_opt::Matrix{Float64})
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:129
+    [3] run_one(variant::Symbol, config_tag::Symbol; max_iter::Int64, Nt::Int64, save::Bool, strict_nt::Bool, results_root::String)
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:295
+    [4] top-level scope
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:45
+    [5] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+    [6] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:46 [inlined]
+    [7] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+    [8] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:69 [inlined]
+    [9] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [10] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:72 [inlined]
+   [11] include(mod::Module, _path::String)
+      @ Base ./Base.jl:306
+   [12] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:317
+   [13] _start()
+      @ Base ./client.jl:550
+[ Info: calibrate_gamma_curv: J0=4.777e-04 P0=2.008e-02 → γ_curv=2.379e-03 (target 10%)
+variant=curvature: Error During Test at /home/ignaciojlizama/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:79
+  Got exception outside of a @test
+  FieldError: type Array has no field `value`, available fields: `ref`, `size`
+  Stacktrace:
+    [1] getproperty
+      @ ./Base_compiler.jl:54 [inlined]
+    [2] (::var"#521#522"{Vector{Float64}})(state::Vector{OptimizationState{Float64, LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}}})
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:267
+    [3] update!(tr::Vector{OptimizationState{Float64, LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}}}, iteration::Int64, f_x::Float64, grnorm::Float64, dt::Dict{Any, Any}, store_trace::Bool, show_trace::Bool, show_every::Int64, callback::var"#521#522"{Vector{Float64}}, trace_simplex::Bool)
+      @ Optim ~/.julia/packages/Optim/gmigl/src/utilities/update.jl:25
+    [4] update!
+      @ ~/.julia/packages/Optim/gmigl/src/utilities/update.jl:13 [inlined]
+    [5] common_trace!(tr::Vector{OptimizationState{Float64, LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}}}, d::OnceDifferentiable{Float64, Vector{Float64}, Vector{Float64}}, state::Optim.LBFGSState{Vector{Float64}, Vector{Vector{Float64}}, Vector{Vector{Float64}}, Float64, Vector{Float64}}, iteration::Int64, method::LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}, options::Optim.Options{Float64, var"#521#522"{Vector{Float64}}}, curr_time::Float64)
+      @ Optim ~/.julia/packages/Optim/gmigl/src/utilities/trace.jl:20
+    [6] trace!
+      @ ~/.julia/packages/Optim/gmigl/src/multivariate/solvers/first_order/l_bfgs.jl:251 [inlined]
+    [7] optimize(d::OnceDifferentiable{Float64, Vector{Float64}, Vector{Float64}}, initial_x::Vector{Float64}, method::LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}, options::Optim.Options{Float64, var"#521#522"{Vector{Float64}}}, state::Optim.LBFGSState{Vector{Float64}, Vector{Vector{Float64}}, Vector{Vector{Float64}}, Float64, Vector{Float64}})
+      @ Optim ~/.julia/packages/Optim/gmigl/src/multivariate/optimize/optimize.jl:61
+    [8] optimize
+      @ ~/.julia/packages/Optim/gmigl/src/multivariate/optimize/optimize.jl:43 [inlined]
+    [9] optimize(f::NLSolversBase.InplaceObjective{Nothing, var"#523#524"{Int64, Int64, Matrix{ComplexF64}, Matrix{ComplexF64}, Float64, BitVector, Dict{String, Any}, Dict{String, Any}, Matrix{ComplexF64}}, Nothing, Nothing, Nothing}, initial_x::Vector{Float64}, method::LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}, options::Optim.Options{Float64, var"#521#522"{Vector{Float64}}}; inplace::Bool, autodiff::Symbol)
+      @ Optim ~/.julia/packages/Optim/gmigl/src/multivariate/optimize/interface.jl:274
+   [10] optimize(f::NLSolversBase.InplaceObjective{Nothing, var"#523#524"{Int64, Int64, Matrix{ComplexF64}, Matrix{ComplexF64}, Float64, BitVector, Dict{String, Any}, Dict{String, Any}, Matrix{ComplexF64}}, Nothing, Nothing, Nothing}, initial_x::Vector{Float64}, method::LBFGS{Nothing, LineSearches.InitialStatic{Float64}, LineSearches.HagerZhang{Float64, Base.RefValue{Bool}}, Returns{Nothing}}, options::Optim.Options{Float64, var"#521#522"{Vector{Float64}}})
+      @ Optim ~/.julia/packages/Optim/gmigl/src/multivariate/optimize/interface.jl:264
+   [11] run_one(variant::Symbol, config_tag::Symbol; max_iter::Int64, Nt::Int64, save::Bool, strict_nt::Bool, results_root::String)
+      @ Main ~/fiber-raman-suppression/scripts/cost_audit_driver.jl:277
+   [12] top-level scope
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:45
+   [13] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [14] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:46 [inlined]
+   [15] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [16] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:80 [inlined]
+   [17] macro expansion
+      @ ~/.julia/juliaup/julia-1.12.6+0.x64.linux.gnu/share/julia/stdlib/v1.12/Test/src/Test.jl:1777 [inlined]
+   [18] macro expansion
+      @ ~/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:83 [inlined]
+   [19] include(mod::Module, _path::String)
+      @ Base ./Base.jl:306
+   [20] exec_options(opts::Base.JLOptions)
+      @ Base ./client.jl:317
+   [21] _start()
+      @ Base ./client.jl:550
+Test Summary:                                                        | Error  Total     Time
+Phase 16 cost audit — integration on config A (Nt=1024, max_iter=10) |     4      4  1m19.2s
+  variants_run_config_A                                              |     4      4  1m19.2s
+    variant=linear                                                   |     1      1    51.6s
+    variant=log_dB                                                   |     1      1     0.6s
+    variant=sharp                                                    |     1      1    25.9s
+    variant=curvature                                                |     1      1     1.2s
+RNG of the outermost testset: Xoshiro(0xa26339d1d6ec2dd3, 0xce0742a7c3a908c8, 0x19d8768802177a33, 0xede71a3f517e1494, 0x0f050a2c66cf3b36)
+ERROR: LoadError: Some tests did not pass: 0 passed, 0 failed, 4 errored, 0 broken.
+in expression starting at /home/ignaciojlizama/fiber-raman-suppression/test/test_cost_audit_integration_A.jl:44

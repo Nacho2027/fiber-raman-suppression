@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Milestone complete
-stopped_at: "Completed 12-01-PLAN.md: long-fiber propagation reach, phi_opt interpolation, 3 diagnostic figures"
-last_updated: "2026-04-05T03:18:39.360Z"
+status: Executing Phase 16
+last_updated: "2026-04-17T03:52:20.728Z"
+last_activity: 2026-04-17
 progress:
-  total_phases: 11
-  completed_phases: 8
-  total_plans: 19
+  total_phases: 15
+  completed_phases: 2
+  total_plans: 11
   completed_plans: 17
-  percent: 89
+  percent: 100
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 12 — suppression-reach
+**Current focus:** Phase 16 — Cost Function Head-to-Head Audit
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 16 (Cost Function Head-to-Head Audit) — EXECUTING
+Plan: 1 of 2
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
@@ -99,6 +99,7 @@ The always-on `claude-code-host` (this machine) is `e2-standard-2` (2 vCPU, 8 GB
 - `burst-status` — check current state
 
 Workflow:
+
 1. Commit + push on claude-code-host: `git push`
 2. `burst-start && burst-ssh 'cd ~/fiber-raman-suppression && git pull && julia --threads=22 scripts/<thing>.jl'`
 3. `burst-ssh 'cd ~/fiber-raman-suppression && git add results/ && git commit -m "results" && git push'`
@@ -169,9 +170,11 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 13 added (2026-04-16): Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, Hessian eigenspectrum at L-BFGS optima; gates any Newton's method decision. See `.planning/notes/newton-vs-lbfgs-reframe.md` and `.planning/seeds/newton-method-implementation.md`.
 - Phase 14 added (2026-04-16): Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path `optimize_spectral_phase_sharp` parallel to existing L-BFGS; keeps original cost function unchanged; user directive is both paths must remain usable for A/B comparison.
 - Phase 15 added (2026-04-16): Deterministic Numerical Environment — user-directed. Fixes FFTW.MEASURE plan-selection non-determinism found in Phase 13 Plan 01 (max|Δφ| = 1.04 rad between identical-seed runs). Pins FFTW planner to ESTIMATE, sets FFTW/BLAS thread counts to 1. Runs before Phase 14 Plan 02 so A/B comparison is reproducible.
-- Phase 16 added (2026-04-17, session B): Repo Polish for Team Handoff — Session B autonomous workstream. README rewrite, docs/ suite (9 files), output format spec (JLD2 + JSON sidecar), Makefile, tiered regression tests (fast/slow/full), abandoned `compute_noise_map_modem` archived to `src/_archived/`. 7 plans executed, verifier passed 9/9 goal-backward criteria. 16 commits on `sessions/B-handoff`. Target "new team member productive in 15 min from clone" met. Session stood down 2026-04-19 for integration pass; see `.planning/sessions/B-standdown.md`.
-- Phase 17 added (2026-04-17, session D): Simple Phase Profile Stability Study — investigate striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (unusually simple unwrapped phase, TV<2 rad). Baseline reproduction + perturbation study + transferability sweep + simplicity quantification + synthesis figure. Fully autonomous on branch sessions/D-simple. Feeds Session E.
-- Phase 17-01 COMPLETE (2026-04-17, session D): verdict **SHARP_LUCKY**. Baseline reproduced at J=-76.86 dB (0.74 dB from reference). σ_3dB = 0.025 rad (below 0.05 threshold). 0/7 SMF-28 eval-only transfers within 3 dB of warm-reopt. Simplicity winner: stationary-point count (Pearson r=0.94 across 4 optima; baseline has 7, others 11–46). Secondary finding: simple phase is an excellent **warm-start initializer** (reaches -70 to -82 dB in 6–40 L-BFGS iter across 11 nearby (L, P, fiber) points, including HNLF at -79.5 dB). See `results/raman/phase17/SUMMARY.md` and `.planning/notes/simple-profile-handoff-to-E.md`.
+- Phase 16 added (2026-04-17, Session B): Repo Polish for Team Handoff — README rewrite, docs/ suite (9 files), output format spec (JLD2 + JSON sidecar), Makefile, tiered regression tests (fast/slow/full), abandoned `compute_noise_map_modem` archived to `src/_archived/`. 7 plans executed, verifier passed 9/9 goal-backward criteria. 16 commits on `sessions/B-handoff`. Merged 2026-04-19. See `.planning/sessions/B-standdown.md`.
+- Phase 16 added (2026-04-17, Session H): Cost Function Head-to-Head Audit — 4-variant × 3-config comparison (linear E_band/E_total, log-scale dB, sharpness-aware from Phase 14, noise-aware scaffold). Recommends project-wide default cost. Owned namespace: `scripts/cost_audit_*.jl`, `.planning/phases/16-cost-audit/`, `.planning/notes/cost-audit-*.md`, `.planning/sessions/H-cost-*.md`. 7/12 runs complete at merge; winner = log_dB. Config C blocked — see `.planning/phases/18-cost-config-c/CONTEXT.md`.
+- Phase 17 added (2026-04-17, Session D): Simple Phase Profile Stability Study — investigate striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (unusually simple unwrapped phase, TV<2 rad). Baseline reproduction + perturbation study + transferability sweep + simplicity quantification + synthesis figure. Fully autonomous on branch sessions/D-simple. Feeds Session E.
+- Phase 17-01 COMPLETE (2026-04-17, Session D): verdict **SHARP_LUCKY**. Baseline reproduced at J=-76.86 dB (0.74 dB from reference). σ_3dB = 0.025 rad (below 0.05 threshold). 0/7 SMF-28 eval-only transfers within 3 dB of warm-reopt. Simplicity winner: stationary-point count (Pearson r=0.94 across 4 optima; baseline has 7, others 11–46). Secondary finding: simple phase is an excellent **warm-start initializer** (reaches -70 to -82 dB in 6–40 L-BFGS iter across 11 nearby (L, P, fiber) points, including HNLF at -79.5 dB). See `results/raman/phase17/SUMMARY.md` and `.planning/notes/simple-profile-handoff-to-E.md`.
+- Integration pass 2026-04-19: merged B, D, F, E, A, G, H into main. Follow-up Phases 18-multivar-convergence-fix, 18-sharp-ab-execution, 18-cost-config-c opened. Session G parked with BIG_WARNING.md due to Opus-4.7-side breakage.
 
 ### Resolved Issues
 
@@ -189,7 +192,7 @@ Both fixes require re-running the sweep to get valid results.
 ## Session Continuity
 
 Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-17 - Consolidated parallel GSD-2 (`.gsd/`) tracking back into GSD v1 (`.planning/`). Salvaged unique content: `07-03-SUMMARY.md` (full parameter sweep launched on burst VM 2026-04-17T01:42Z, still running at consolidation time) and `.planning/notes/gsd2-salvaged-decisions.md`. Archive at `.planning/archive/gsd2-parallel-run-2026-04-17.tar.gz`.
+Last activity: 2026-04-17
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs
