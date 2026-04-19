@@ -274,27 +274,24 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
 
     # --- check 4: adjoint vs FD (Taylor directional test) ---
     #
-    # At a reported optimum, ∇J ≈ 0 so any ⟨g,d⟩ for a direction d in (or near)
-    # the minimum's null space is dominated by two kinds of noise:
-    #
-    #   1. DifferentialEquations.jl uses reltol ≈ 1e-6 by default; J values
-    #      inherit that relative precision. At J ~ 1e-6 this is absolute 1e-12,
-    #      which dominates centered FD at ε = 1e-5.
-    #   2. Near-flat directions in the SHARP_LUCKY optima (Phase 17 verdict,
-    #      σ_3dB ~ 0.025 rad) stay almost stationary even 0.5 rad out.
+    # The purpose here is to validate the ADJOINT IMPLEMENTATION, not to check
+    # that ∇J(φ_opt) ≈ 0 (which is what the optimizer's convergence criterion
+    # already guarantees). At the reported optima the gradient is tiny AND high-
+    # dimensional random directions mostly land in the minimum's null space
+    # ("SHARP_LUCKY" Phase-17 verdict: the optima have σ_3dB ~ 0.025 rad along
+    # sharp directions and are nearly flat everywhere else). Even a 2-rad shift
+    # off the optimum doesn't leave a 8192-dim null space.
     #
     # The robust textbook fix (Plessix 2006 §3.3; Griewank & Walther 2e §5.6)
-    # is to validate at a point where BOTH the gradient is well above noise and
-    # the FD step is large enough to escape solver discretization error. We
-    # shift by 2 rad RMS so J(φ_ref) is O(1) for any of the known optima, and
-    # use ε = 1e-3 — ε-truncation O(ε²·‖H‖) is then the dominant systematic
-    # error and is absorbed in the MARGINAL/SUSPECT band.
+    # is to evaluate the adjoint-vs-FD identity at a reference point where J is
+    # O(1) and the gradient is unambiguously non-zero. We use φ_ref = 0 —
+    # the unshaped pulse — which has J = J_before ≈ 0.3-0.7 and a gradient
+    # that's 3-5 orders of magnitude above solver noise. A correct adjoint MUST
+    # satisfy ρ → 1 at φ_ref = 0 regardless of whether φ_opt is optimal.
     #
-    #   φ_ref = φ_opt + 2.0·d        (d unit-norm, pulse-band-masked, fixed seed)
     #   ρ(ε) = [J(φ_ref+εd) − J(φ_ref−εd)] / (2·ε·⟨g_adj(φ_ref), d⟩)
     #
-    # This validates the adjoint IMPLEMENTATION, not ∇J(φ_opt). The
-    # stationarity of φ_opt is separately reported as grad_norm.
+    # The stationarity of φ_opt is separately reported as grad_norm.
     taylor_rho = NaN
     taylor_gd = NaN
     taylor_err = NaN
@@ -306,26 +303,28 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
         _, g_adj_opt = adjoint_grad_at_phi(φ, uω0, fiber, sim, band_mask)
         grad_norm = norm(g_adj_opt)
 
-        # 2. build reference direction d
+        # 2. reference point: unshaped pulse (phi = 0)
+        φ_ref = zeros(size(φ))
+        J_at_ref, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
+        grad_norm_ref = norm(g_adj_ref)
+
+        # 3. random unit-norm direction masked to the input-pulse spectral support
         Random.seed!(TAYLOR_SEED)
         spectral_power = vec(sum(abs2.(uω0), dims=2))
         sig_mask = spectral_power .> 0.001 * maximum(spectral_power)
-        d_full = zeros(size(φ))
-        for col in 1:size(φ, 2)
+        d_full = zeros(size(φ_ref))
+        for col in 1:size(φ_ref, 2)
             for i in eachindex(sig_mask)
                 sig_mask[i] && (d_full[i, col] = randn())
             end
         end
         d_full ./= max(norm(d_full), eps())
-
-        # 3. shift aggressively off the stationary point
-        φ_ref = φ .+ 2.0 .* d_full
-        J_at_ref, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
-        grad_norm_ref = norm(g_adj_ref)
         gd = dot(g_adj_ref, d_full)
 
-        # 4. centered FD at φ_ref with a step matched to solver reltol ≈ 1e-6
-        ε = 1e-3
+        # 4. centered FD at φ_ref. ε = 1e-5 is comfortable: J(0) ~ 0.5 with
+        # solver reltol 1e-6 → absolute J-noise ~ 5e-7; 2ε = 2e-5 divides it
+        # out to ~2e-2 absolute FD-noise. Compare to gd ~ O(1e-1) typically.
+        ε = 1e-5
         J_plus, _  = adjoint_grad_at_phi(φ_ref .+ ε .* d_full, uω0, fiber, sim, band_mask)
         J_minus, _ = adjoint_grad_at_phi(φ_ref .- ε .* d_full, uω0, fiber, sim, band_mask)
         fd_dir = (J_plus - J_minus) / (2ε)
@@ -499,18 +498,20 @@ function emit_markdown(out_path::String, tag::String, source::String, meta::Name
     push!(lines, @sprintf("- J_doubled = %.6e (%s)", r.J_doubled,
                            isnan(r.J_doubled) ? "n/a" : fmt_J_dB(r.J_doubled)))
     push!(lines, @sprintf("- Adjoint ‖g‖ at φ_opt = %.3e  (stationarity diagnostic — small is good)", r.grad_norm))
-    push!(lines, @sprintf("- Adjoint ‖g‖ at φ_ref = φ_opt+0.5·d = %.3e  (used for Taylor test)",
+    push!(lines, @sprintf("- Adjoint ‖g‖ at φ_ref = 0 (unshaped) = %.3e  (used for Taylor test)",
                           r.grad_norm_ref))
     push!(lines, @sprintf("- Taylor ⟨g,d⟩ at φ_ref = %.3e, |FD − ⟨g,d⟩| = %.3e",
                           r.taylor_gd, r.taylor_err))
     push!(lines, "")
-    push!(lines, "_Taylor test rationale: at φ_opt the adjoint gradient is near-zero " *
-                "(by definition of an optimum), so component-wise adjoint-vs-FD relative " *
-                "error would be floating-point noise. Following Plessix (Geophys. J. Int. " *
-                "167, 495, 2006) §3.3 and Griewank & Walther *Evaluating Derivatives* 2e " *
-                "§5.6, the adjoint is validated at a shifted reference point " *
-                "φ_ref = φ_opt + 0.5·d where d is a unit-norm random direction masked to " *
-                "the input-pulse spectral support._")
+    push!(lines, "_Taylor test rationale: at φ_opt the adjoint gradient is near-zero and " *
+                "random directions in a 8192-dim space mostly project onto flat null-space " *
+                "directions of the optimum (SHARP_LUCKY verdict, Phase 17), so adjoint-vs-FD " *
+                "relative error there is dominated by ODE-solver noise (reltol ≈ 1e-6). " *
+                "Following Plessix (Geophys. J. Int. 167, 495, 2006) §3.3 and Griewank & " *
+                "Walther *Evaluating Derivatives* 2e §5.6, the adjoint is validated at a " *
+                "reference point with J = O(1) and ‖g‖ well above solver noise. We use " *
+                "φ_ref = 0 (the unshaped pulse) with d a unit-norm random direction masked " *
+                "to the input-pulse spectral support (fixed seed 20260419)._")
     push!(lines, "")
     push!(lines, "_Generated by `scripts/validation/validate_results.jl` "
                * "on $(Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))_")
