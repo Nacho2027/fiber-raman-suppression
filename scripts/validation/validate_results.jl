@@ -273,45 +273,59 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
     edge_frac = fc.edge_frac
 
     # --- check 4: adjoint vs FD (Taylor directional test) ---
+    #
+    # AT a reported optimum, ∇J ≈ 0 so component-wise and directional relative
+    # errors explode on machine noise (cf. Plessix 2006, Griewank & Walther 2e
+    # §5.6). The research memo's stationary-point prescription is to evaluate
+    # the adjoint-vs-FD identity at a NON-stationary reference point. We do:
+    #
+    #   φ_ref = φ_opt + 0.5·d        (d unit-norm, pulse-band-masked, fixed seed)
+    #   ρ(ε) = [J(φ_ref+εd) − J(φ_ref−εd)] / (2·ε·⟨g_adj(φ_ref), d⟩)
+    #
+    # At φ_ref the gradient is O(J) and ρ → 1 as ε → 0 for a correct adjoint.
+    # This validates the adjoint IMPLEMENTATION (what we actually care about),
+    # not ∇J(φ_opt) which is a property of the optimizer's convergence.
+    #
+    # We also report grad_norm at φ_opt as a stationarity diagnostic — small
+    # values confirm the reported point is actually an L-BFGS local min.
     taylor_rho = NaN
     taylor_gd = NaN
     taylor_err = NaN
     grad_norm = NaN
+    grad_norm_ref = NaN
     if do_taylor
-        J_at_phi, g_adj = adjoint_grad_at_phi(φ, uω0, fiber, sim, band_mask)
-        grad_norm = norm(g_adj)
+        # 1. stationarity diagnostic at φ_opt
+        _, g_adj_opt = adjoint_grad_at_phi(φ, uω0, fiber, sim, band_mask)
+        grad_norm = norm(g_adj_opt)
 
-        # Random direction d masked to spectral support of the input pulse.
+        # 2. build reference direction d
         Random.seed!(TAYLOR_SEED)
         spectral_power = vec(sum(abs2.(uω0), dims=2))
         sig_mask = spectral_power .> 0.001 * maximum(spectral_power)
         d_full = zeros(size(φ))
         for col in 1:size(φ, 2)
             for i in eachindex(sig_mask)
-                if sig_mask[i]
-                    d_full[i, col] = randn()
-                end
+                sig_mask[i] && (d_full[i, col] = randn())
             end
         end
         d_full ./= max(norm(d_full), eps())
 
-        # Denominator: <g_adj, d>
-        gd = dot(g_adj, d_full)
+        # 3. shift off the stationary point so ⟨g,d⟩ is well above machine noise
+        φ_ref = φ .+ 0.5 .* d_full
+        _, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
+        grad_norm_ref = norm(g_adj_ref)
+        gd = dot(g_adj_ref, d_full)
 
-        # Centered FD of J along d
+        # 4. centered FD at φ_ref
         ε = TAYLOR_EPS
-        J_plus, _  = adjoint_grad_at_phi(φ .+ ε .* d_full, uω0, fiber, sim, band_mask)
-        J_minus, _ = adjoint_grad_at_phi(φ .- ε .* d_full, uω0, fiber, sim, band_mask)
+        J_plus, _  = adjoint_grad_at_phi(φ_ref .+ ε .* d_full, uω0, fiber, sim, band_mask)
+        J_minus, _ = adjoint_grad_at_phi(φ_ref .- ε .* d_full, uω0, fiber, sim, band_mask)
         fd_dir = (J_plus - J_minus) / (2ε)
 
         taylor_gd = gd
         taylor_err = abs(fd_dir - gd)
         if abs(gd) < 1e-14
-            # degenerate — the direction happened to be orthogonal to g_adj;
-            # fall back to reporting the absolute error as the trust metric,
-            # scaled by ||g_adj||·||d||. Gives an equivalent relative measure
-            # at stationary points.
-            denom = max(norm(g_adj), 1e-16)
+            denom = max(grad_norm_ref, 1e-16)
             taylor_rho = taylor_err / denom
         else
             taylor_rho = abs(fd_dir / gd - 1.0)
@@ -348,7 +362,7 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
         J_recomputed=J_recomputed,
         E_drift=E_drift, edge_frac=edge_frac,
         ΔJ_dB=ΔJ_dB, J_doubled=J_doubled,
-        grad_norm=grad_norm,
+        grad_norm=grad_norm, grad_norm_ref=grad_norm_ref,
         taylor_rho=taylor_rho, taylor_gd=taylor_gd, taylor_err=taylor_err,
     )
 end
@@ -467,7 +481,7 @@ function emit_markdown(out_path::String, tag::String, source::String, meta::Name
         push!(lines, "| 3 | Nt doubling | skipped | — | n/a |")
     end
     if !isnan(r.taylor_rho)
-        push!(lines, @sprintf("| 4 | Taylor \$\\|ρ − 1\\|\$ | %.3e | <1e-3 / <1e-2 / ≥1e-2 | **%s** |",
+        push!(lines, @sprintf("| 4 | Taylor \$\\|ρ − 1\\|\$ at φ_ref | %.3e | <1e-3 / <1e-2 / ≥1e-2 | **%s** |",
                               r.taylor_rho, v_TY))
     else
         push!(lines, "| 4 | Taylor test | skipped | — | n/a |")
@@ -476,9 +490,19 @@ function emit_markdown(out_path::String, tag::String, source::String, meta::Name
     push!(lines, "### Details")
     push!(lines, @sprintf("- J_doubled = %.6e (%s)", r.J_doubled,
                            isnan(r.J_doubled) ? "n/a" : fmt_J_dB(r.J_doubled)))
-    push!(lines, @sprintf("- Adjoint ‖g‖ at φ_opt = %.3e", r.grad_norm))
-    push!(lines, @sprintf("- Taylor ⟨g,d⟩ = %.3e, |FD − ⟨g,d⟩| = %.3e",
+    push!(lines, @sprintf("- Adjoint ‖g‖ at φ_opt = %.3e  (stationarity diagnostic — small is good)", r.grad_norm))
+    push!(lines, @sprintf("- Adjoint ‖g‖ at φ_ref = φ_opt+0.5·d = %.3e  (used for Taylor test)",
+                          r.grad_norm_ref))
+    push!(lines, @sprintf("- Taylor ⟨g,d⟩ at φ_ref = %.3e, |FD − ⟨g,d⟩| = %.3e",
                           r.taylor_gd, r.taylor_err))
+    push!(lines, "")
+    push!(lines, "_Taylor test rationale: at φ_opt the adjoint gradient is near-zero " *
+                "(by definition of an optimum), so component-wise adjoint-vs-FD relative " *
+                "error would be floating-point noise. Following Plessix (Geophys. J. Int. " *
+                "167, 495, 2006) §3.3 and Griewank & Walther *Evaluating Derivatives* 2e " *
+                "§5.6, the adjoint is validated at a shifted reference point " *
+                "φ_ref = φ_opt + 0.5·d where d is a unit-norm random direction masked to " *
+                "the input-pulse spectral support._")
     push!(lines, "")
     push!(lines, "_Generated by `scripts/validation/validate_results.jl` "
                * "on $(Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))_")
