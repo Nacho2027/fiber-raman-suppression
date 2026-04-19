@@ -274,25 +274,33 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
 
     # --- check 4: adjoint vs FD (Taylor directional test) ---
     #
-    # AT a reported optimum, ∇J ≈ 0 so component-wise and directional relative
-    # errors explode on machine noise (cf. Plessix 2006, Griewank & Walther 2e
-    # §5.6). The research memo's stationary-point prescription is to evaluate
-    # the adjoint-vs-FD identity at a NON-stationary reference point. We do:
+    # At a reported optimum, ∇J ≈ 0 so any ⟨g,d⟩ for a direction d in (or near)
+    # the minimum's null space is dominated by two kinds of noise:
     #
-    #   φ_ref = φ_opt + 0.5·d        (d unit-norm, pulse-band-masked, fixed seed)
+    #   1. DifferentialEquations.jl uses reltol ≈ 1e-6 by default; J values
+    #      inherit that relative precision. At J ~ 1e-6 this is absolute 1e-12,
+    #      which dominates centered FD at ε = 1e-5.
+    #   2. Near-flat directions in the SHARP_LUCKY optima (Phase 17 verdict,
+    #      σ_3dB ~ 0.025 rad) stay almost stationary even 0.5 rad out.
+    #
+    # The robust textbook fix (Plessix 2006 §3.3; Griewank & Walther 2e §5.6)
+    # is to validate at a point where BOTH the gradient is well above noise and
+    # the FD step is large enough to escape solver discretization error. We
+    # shift by 2 rad RMS so J(φ_ref) is O(1) for any of the known optima, and
+    # use ε = 1e-3 — ε-truncation O(ε²·‖H‖) is then the dominant systematic
+    # error and is absorbed in the MARGINAL/SUSPECT band.
+    #
+    #   φ_ref = φ_opt + 2.0·d        (d unit-norm, pulse-band-masked, fixed seed)
     #   ρ(ε) = [J(φ_ref+εd) − J(φ_ref−εd)] / (2·ε·⟨g_adj(φ_ref), d⟩)
     #
-    # At φ_ref the gradient is O(J) and ρ → 1 as ε → 0 for a correct adjoint.
-    # This validates the adjoint IMPLEMENTATION (what we actually care about),
-    # not ∇J(φ_opt) which is a property of the optimizer's convergence.
-    #
-    # We also report grad_norm at φ_opt as a stationarity diagnostic — small
-    # values confirm the reported point is actually an L-BFGS local min.
+    # This validates the adjoint IMPLEMENTATION, not ∇J(φ_opt). The
+    # stationarity of φ_opt is separately reported as grad_norm.
     taylor_rho = NaN
     taylor_gd = NaN
     taylor_err = NaN
     grad_norm = NaN
     grad_norm_ref = NaN
+    J_at_ref = NaN
     if do_taylor
         # 1. stationarity diagnostic at φ_opt
         _, g_adj_opt = adjoint_grad_at_phi(φ, uω0, fiber, sim, band_mask)
@@ -310,21 +318,21 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
         end
         d_full ./= max(norm(d_full), eps())
 
-        # 3. shift off the stationary point so ⟨g,d⟩ is well above machine noise
-        φ_ref = φ .+ 0.5 .* d_full
-        _, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
+        # 3. shift aggressively off the stationary point
+        φ_ref = φ .+ 2.0 .* d_full
+        J_at_ref, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
         grad_norm_ref = norm(g_adj_ref)
         gd = dot(g_adj_ref, d_full)
 
-        # 4. centered FD at φ_ref
-        ε = TAYLOR_EPS
+        # 4. centered FD at φ_ref with a step matched to solver reltol ≈ 1e-6
+        ε = 1e-3
         J_plus, _  = adjoint_grad_at_phi(φ_ref .+ ε .* d_full, uω0, fiber, sim, band_mask)
         J_minus, _ = adjoint_grad_at_phi(φ_ref .- ε .* d_full, uω0, fiber, sim, band_mask)
         fd_dir = (J_plus - J_minus) / (2ε)
 
         taylor_gd = gd
         taylor_err = abs(fd_dir - gd)
-        if abs(gd) < 1e-14
+        if abs(gd) < 1e-10
             denom = max(grad_norm_ref, 1e-16)
             taylor_rho = taylor_err / denom
         else
