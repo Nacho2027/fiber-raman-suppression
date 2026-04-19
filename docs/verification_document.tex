@@ -1172,6 +1172,250 @@ Re-running 4 high-boundary-energy points with $2\times$ wider windows confirmed 
 
 
 % ═════════════════════════════════════════════════════════════════════════
+\section{Integration Pass --- April 2026}
+\label{sec:april2026}
+
+Between 2026-04-16 and 2026-04-19 eight Claude-Code sessions ran in
+parallel to pressure-test the single-mode result, begin the multimode
+extension, and audit the cost-function and optimizer defaults. The raw
+synthesis is \texttt{results/SYNTHESIS-2026-04-19.md}; a physics audit
+filtering those claims is
+\texttt{results/PHYSICS\_AUDIT\_2026-04-19.md} (2026-04-19). This
+section records only the claims that survived the audit, with scope
+caveats where the audit narrowed the original framing.
+
+\subsection{Re-baselined single-mode suppression}
+\label{sec:april-rebaseline}
+
+\begin{keyresult}
+SMF-28, $L = 0.5$~m, $P = 0.05$~W, log-cost L-BFGS from a cold
+start: $J_\text{final} = -76.86$~dB in 21~iterations (25~s wall-time,
+converged flag \textsc{true}). Source:
+\texttt{results/raman/phase17/SUMMARY.md} L41--48;
+data artifact \texttt{results/raman/phase17/baseline.jld2}.
+\end{keyresult}
+
+The re-run matches the Phase~10 baseline within 1~dB. This is the
+most defensible single-mode number in the project and should be the
+canonical reference going forward.
+
+\subsection{Sharpness of the single-mode optimum}
+\label{sec:april-sigma3db}
+
+At the $-76.86$~dB baseline, a Gaussian perturbation of
+$\varphi_\text{opt}$ at standard deviation $\sigma$ (averaged over 20
+samples per $\sigma$, 5 values of $\sigma$) gives a
+\textbf{3~dB-degradation radius of $\sigma_{3\text{dB}} = 0.025$~rad}.
+Source: \texttt{results/raman/phase17/SUMMARY.md} L45;
+\texttt{results/raman/phase17/perturbation.jld2}.
+
+\begin{advisory}
+SLM calibration envelopes of $\geq 0.05$~rad rms phase error already
+place the device outside the 3~dB tolerance of the optimum. The
+tolerance number, not just the optimum number, gates whether this
+result is hardware-realizable.
+\end{advisory}
+
+\subsection{Warm-start transferability}
+\label{sec:april-warmstart}
+
+The baseline $\varphi_\text{opt}$ from
+(\text{SMF-28}, $L=0.5$~m, $P=0.05$~W) does \emph{not} transfer by
+direct evaluation: 0/7 SMF-28 (length, power) targets retain
+$J$ within 3~dB of warm-reopt. But L-BFGS re-optimised from the
+same seed reaches $-70$ to $-82$~dB in 6--40 iterations on 11/11
+nearby configs, \emph{including} HNLF at $-79.5$~dB (a fiber the
+baseline was never computed for). Source:
+\texttt{results/raman/phase17/SUMMARY.md} L22--28;
+\texttt{results/raman/phase17/transferability.jld2}.
+
+Interpretation: the simple phase profile lives in a \emph{manifold of
+nearby basins}. It is an initialisation prior, not a universal
+attractor --- a distinction that the first readings of the
+perturbation-robust $\sigma_{3\text{dB}}$ result sometimes collapsed.
+
+\subsection{Reduced-parameterisation Pareto front}
+\label{sec:april-pareto}
+
+A low-resolution spectral-phase parameterisation ($N_\varphi = 57$
+knots interpolated to $N_t$) produces Pareto-optimal candidates
+within 3~dB of the full-grid optimum at each $(L, P)$ point. Best:
+$(\text{SMF-28}, L=0.25\,\mathrm{m}, P=0.10\,\mathrm{W}) \to
+J_\text{final} = -82.33$~dB. Source:
+\texttt{results/raman/phase\_sweep\_simple/candidates.md} L12--14.
+
+\begin{advisory}
+A 57-dimensional decision space is small enough for a trust-region
+Newton method with an explicit Hessian. Combined with the
+Phase 13 indefinite-Hessian finding (§\ref{sec:april-hessian}), this
+opens the door to a second-order optimiser that the original
+$N_t \sim 10^4$ parameterisation made intractable.
+\end{advisory}
+
+\subsection{Hessian is indefinite at L-BFGS optima}
+\label{sec:april-hessian}
+
+At both canonical L-BFGS optima (SMF-28 $L{=}2$~m $P{=}0.2$~W and
+HNLF $L{=}0.5$~m $P{=}0.01$~W), finite-difference Hessian-vector
+product wrapped with Arpack gives:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Config & $|\lambda_\text{min}|/\lambda_\text{max}$ & Sign pattern \\
+\midrule
+SMF-28 canonical & $2.6\,\%$  & indefinite, 100\% same-sign wings \\
+HNLF canonical   & $0.41\,\%$ & indefinite, 100\% same-sign wings \\
+\bottomrule
+\end{tabular}
+\end{center}
+HVP Taylor-remainder slope $\approx 2$ (\texttt{test/test\_phase13\_hvp.jl}
+at commit \texttt{b962091}). Source:
+\texttt{results/raman/phase13/FINDINGS.md} L113--120;
+\texttt{results/raman/phase13/hessian\_smf28\_canonical.jld2},
+\texttt{results/raman/phase13/hessian\_hnlf\_canonical.jld2}.
+
+\begin{keyresult}
+L-BFGS is not stopping at a minimum; it is stopping at an
+\textbf{indefinite saddle} with robust (not numerical-noise-level)
+negative-curvature directions. Sharpness-aware regularisation or
+trust-region Newton on the 57-dim subspace
+(§\ref{sec:april-pareto}) is the principled next step.
+\end{keyresult}
+
+\subsection{Determinism}
+\label{sec:april-det}
+
+\texttt{FFTW.MEASURE} selects FFT algorithms by micro-timing and
+produces non-reproducible plans even at fixed \texttt{Random.seed!}:
+two runs on the same hardware give $\max|\Delta\varphi| = 1.04$~rad
+and $\Delta J = 1.83$~dB (\texttt{results/raman/phase13/determinism.md}).
+
+Switching to \texttt{FFTW.ESTIMATE} gives bit-identical $J$ across
+3 independent Julia processes at $+21.4\%$ wall-time cost on the
+SMF-28 $L{=}2$~m $P{=}0.2$~W benchmark. Source:
+\texttt{results/raman/phase15/benchmark.md} L20--27, L39. The switch is
+wired into the five main driver entry points.
+
+\subsection{Multimode optimizer is code-complete, physics-unexercised}
+\label{sec:april-mmf}
+
+An $M = 6$ GRIN-50 multimode Raman-suppression optimizer is committed:
+\texttt{src/mmf\_cost.jl}, \texttt{scripts/mmf\_*.jl},
+\texttt{test/test\_phase16\_mmf.jl}. 13/13 correctness tests pass:
+energy conservation under the thread-local \texttt{deepcopy(fiber)}
+pattern, $M{=}1$-limit agreement with the scalar optimizer, and
+finite-difference gradient check with relative error $< 0.5\%$ at
+$\varepsilon = 10^{-5}$ on 5 random indices.
+
+\begin{flagged}
+The only production baseline launched to date used $(\text{SMF-28},
+L{=}1\,\mathrm{m}, P{=}0.05\,\mathrm{W})$, which has
+$N_\text{sol} \approx 0.9$ (sub-soliton). The optimiser correctly
+returned $\Delta J = 0$~dB --- there is no Raman to suppress in this
+regime. \textbf{This is a negative control, not a science result.}
+The aggressive-regime baseline
+($L{=}2\,\mathrm{m}, P{=}0.5\,\mathrm{W}$, $N_\text{sol} \approx 2$--$3$)
+remains unrun as of 2026-04-19.
+\end{flagged}
+
+\subsection{Cost-function default: \texttt{log\_dB} on SMF-28, open elsewhere}
+\label{sec:april-cost}
+
+Session H ran 4 cost variants on 2 configs:
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Config & Variant & $J_\text{final}$ & wall (s) & converged \\
+\midrule
+A (SMF-28 canonical) & linear     & $-70.53$~dB & $16.9$ & yes \\
+A                    & log\_dB    & $\mathbf{-75.79}$~dB & $\mathbf{10.6}$ & \textbf{yes} \\
+A                    & sharp      & $-55.96$~dB & $537$  & yes \\
+A                    & curvature  & $-70.57$~dB & $14.2$ & yes \\
+B (HNLF, log\_dB)    & --- & \textsc{NaN} & \textsc{dnf} & --- \\
+B (all 4 variants)   & --- & \textsc{NaN} & \textsc{dnf} & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+Source: \texttt{results/cost\_audit/wall\_log.csv}.
+
+\begin{advisory}
+\texttt{log\_dB} wins on Config A (SMF-28) by $\sim 5$~dB at 60\%
+of the wall time. On Config B (HNLF, $L{=}1$~m, $P{=}0.5$~W) all four
+variants did not finish within budget --- this is the HNLF-hang open
+issue (\texttt{.planning/phases/18-cost-config-c/CONTEXT.md}). The
+\texttt{log\_dB} default is empirically justified on SMF-28 only.
+\end{advisory}
+
+\subsection{What did NOT survive the audit}
+\label{sec:april-wrong}
+
+Three claims from the original synthesis were demoted:
+
+\textbf{(W1) ``$a_2(100\,\mathrm{m})/a_2(2\,\mathrm{m}) = -3.30$ vs.\ pure-GVD-predicted $+50$ is a structural-adaptation fingerprint.''}
+The weighted quadratic fit of $\varphi_\text{opt}(\omega)$ over the
+$\pm 5$~THz signal band has $R^2 = 0.015$ at 100~m and $R^2 = 0.037$
+at 2~m. A quadratic model explaining $< 4\%$ of the variance does
+not constrain $a_2$; the extracted coefficients are fit noise, and
+their ratio is a ratio of noise. The sign flip is consistent with a
+true $a_2$ near zero perturbed by independent residuals at each
+length. The finding ``$\varphi_\text{opt}$ is not a low-order
+polynomial on the signal band'' \emph{is} defensible (matches Phase 9,
+\texttt{PHASE9\_FINDINGS.md} L19--29), but the
+GVD-scaling comparison is removed, not caveated. Fit code:
+\texttt{scripts/longfiber\_validate\_100m\_fix.jl} L54--79. Audit:
+\texttt{PHYSICS\_AUDIT\_2026-04-19.md} §W1.
+
+\textbf{(W2) 100~m L-BFGS ``optimum'' at $-54.77$~dB.}
+The number is energy-conserved (photon-drift $4.9 \times 10^{-4}$,
+edge-fraction $8.5 \times 10^{-6}$) but the convergence state is
+\texttt{converged = false} after 25 L-BFGS iterations with final
+$\|\nabla J\| = 0.48$. Report as a \emph{lower bound} from the
+2~m warm start, not as an optimum. Source:
+\texttt{results/raman/phase16/FINDINGS.md} L21--34.
+
+\textbf{(W3) Joint $\{\varphi, A, E\}$ L-BFGS shows physics at 38~dB gap.}
+Session A's cold-start joint optimizer reached $-16.78$~dB vs.\ the
+phase-only $-55.42$~dB reference on the same config. This is a
+preconditioning bug (mixed-unit decision variables confuse L-BFGS's
+implicit Hessian), not a physics result. Remains out of the canonical
+docs until Phase 18-multivar-convergence-fix lands. Source:
+\texttt{.planning/phases/16-multivar-optimizer/16-01-SUMMARY.md} L149--152.
+
+\subsection{Boundary-energy caveat on the SMF-28 $L = 2$~m canonical}
+\label{sec:april-boundary}
+
+The pre-integration canonical baseline of $-71.4$~dB on
+(SMF-28, $L{=}2$~m, $P{=}0.2$~W) was partially a time-window
+artefact: 14.4\% of the energy sat at the $T_\text{window}$ edges
+and re-running at $2\times$ wider window gave the honest $-65.8$~dB.
+This is already flagged once in \S\ref{sec:new_infra} (v3
+regression) but the baseline tables and presentation figures
+elsewhere in this document still quote $-71.4$~dB. Treat any
+canonical table in the project that references the $L{=}2$~m
+$P{=}0.2$~W point at $-71.4$~dB as requiring the honest-window
+caveat. Audit: \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §S2.
+
+\subsection{Scope limitation on the Taylor-remainder adjoint test}
+\label{sec:april-taylor}
+
+The Taylor-remainder test reported in §\ref{sec:validation} (slopes
+$2.00$, $2.04$) correctly certifies the adjoint gradient \emph{at the
+unshaped reference $\varphi \equiv 0$}, where $\|\nabla J\|$ sits
+3--5 orders of magnitude above the ODE-solver noise floor. At a
+converged $\varphi_\text{opt}$, however, $\|\nabla J\|$ falls below
+the $\mathrm{reltol} = 10^{-8}$ solver noise, and the slope-2
+criterion degenerates: the linear-in-$\varepsilon$ term in the Taylor
+expansion is dominated by noise rather than gradient signal. The
+Phase 18 numerical-trustworthiness audit (commits
+\texttt{2c95f60}, \texttt{2de3caf}, \texttt{1a78cc8}) recovered clean
+slope-2 behavior only by shifting the reference by $2$~rad along the
+steepest-descent direction with $\varepsilon = 10^{-3}$. The adjoint
+is correct; the test is simply unable to certify it at the optimum.
+Gradient correctness checks should therefore run at an unshaped or
+steepest-descent-shifted reference, never at a converged optimum.
+Audit: \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §S6.
+
+% ═════════════════════════════════════════════════════════════════════════
 \section*{Summary and Conclusions}
 
 \textbf{Overall confidence level:} \textcolor{green!60!black}{\textbf{High}}. The mathematical formulation is correct, the code faithfully implements the formulation, and the gradient is verified to $0.026\%$ relative error. All code reference line numbers are current as of v3 (2026-04-02).

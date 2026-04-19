@@ -297,4 +297,22 @@ between consecutive $\epsilon$ pairs: $2.01$, $2.07$, $2.09$ — all within the
 acceptance band $[1.4, 2.6]$, confirming the hand-derived adjoint of Section~2
 has no first-order bias.
 
+\paragraph{Where the Taylor-remainder test has no teeth (April 2026 audit).}
+Eq.~(\ref{eq:taylor_biased}) assumes $|\langle \nabla J,\,\delta\varphi\rangle|$
+is well above the ODE-solver noise floor. This holds at the unshaped
+reference $\varphi \equiv 0$, where $\|\nabla J\|$ sits 3--5 orders of
+magnitude above the solver floor. It does \emph{not} hold at a converged
+$\varphi_\text{opt}$: near a minimum, $\|\nabla J\|$ is below the
+$\sim 10^{-8}$ relative-tolerance solver noise, so the linear term in
+Eq.~(\ref{eq:taylor_expansion}) is dominated by noise and the slope-2
+criterion degenerates. The Phase 18 numerical-trustworthiness audit
+(commits \texttt{2c95f60}, \texttt{2de3caf}, \texttt{1a78cc8}) recovered
+a clean slope-2 signal only after shifting the reference by
+$2\,\mathrm{rad}$ along the steepest-descent direction and taking
+$\epsilon = 10^{-3}$. The adjoint is correct; the test is simply
+unable to certify it at the optimum. Verifications of correctness of
+$\nabla J$ should therefore be performed at an unshaped or
+steepest-descent-shifted reference, never at a converged optimum.
+See \texttt{results/PHYSICS\_AUDIT\_2026-04-19.md} §S6.
+
 \end{document}

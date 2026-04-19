@@ -992,9 +992,119 @@ These figures show actual results from our optimization sweep.
 Everything else is implementation details.
 \end{tcolorbox}
 
+% ═════════════════════════════════════════════════════════════════════════
+\section{What the April 2026 Parallel-Session Push Actually Showed}
+
+Between 2026-04-16 and 2026-04-19 eight Claude-Code sessions ran in
+parallel across a Mac laptop and two GCP VMs to pressure-test the
+single-mode Raman-suppression result and begin the multimode
+extension. The full synthesis is in
+\texttt{results/SYNTHESIS-2026-04-19.md}; the physics audit filtering
+those claims is in \texttt{results/PHYSICS\_AUDIT\_2026-04-19.md}.
+This section reports only the findings that survived the audit.
+
+\subsection{The suppression record, re-baselined}
+
+On SMF-28 at $L = 0.5$~m and $P = 0.05$~W, the canonical
+single-mode optimum is $J = -76.86$~dB (21 L-BFGS iterations, 25~s
+wall-time, converged). The re-run matched the original Phase 10
+baseline within 1~dB. Source: \texttt{results/raman/phase17/SUMMARY.md}
+lines 41--48; data at \texttt{results/raman/phase17/baseline.jld2}.
+
+\begin{intuition}
+The number is stable across re-runs, solver seeds, and the determinism
+fix (see §16.4). It is the most defensible single-mode number in
+this project.
+\end{intuition}
+
+\subsection{The optimum is on a razor's edge}
+
+How robust is that $-77$~dB? A 20-sample Gaussian perturbation of the
+optimal phase at each of five standard deviations gives a \textbf{3~dB
+degradation radius of $\sigma_{3\text{dB}} = 0.025$~rad}. That is
+\emph{sharp}: an SLM (spatial light modulator, the device you would
+actually use to put this phase on a pulse) with a typical calibration
+envelope of $\geq 0.05$~rad rms would already lose most of the
+suppression advantage.
+
+\begin{warning}
+``We found a $-77$~dB optimum'' and ``You can build a $-77$~dB shaper''
+are \emph{not} the same statement. The optimum sits in a narrow well.
+If you are going to use this in hardware, the tolerance number matters
+as much as the optimum number.
+\end{warning}
+
+\subsection{The simple phase is a good \emph{initialiser}, not a universal minimum}
+
+Two intuitions got tested against each other:
+\begin{description}
+  \item[``Simple phase is a universal attractor.''] Take the
+    $-77$~dB phase from $L = 0.5$~m / $P = 0.05$~W and
+    \emph{evaluate} (no re-optimisation) at 7 different
+    (length, power) targets on SMF-28. Result: 0/7 stayed within
+    3~dB of the warm-reopt value. The phase does not transfer as-is.
+  \item[``Simple phase is a good warm start.''] Same seed phase,
+    but now let L-BFGS re-optimise from it at each target. Result:
+    11/11 nearby (fiber, $L$, $P$) configurations reached $-70$ to
+    $-82$~dB in 6--40 iterations, \emph{including} HNLF at $-79.5$~dB
+    (a fiber the baseline was never computed for).
+\end{description}
+
+The right framing is the second one: the simple phase lives in a
+manifold of nearby basins, and moving to any of them takes a small
+number of L-BFGS iterations. The simplicity is an
+\emph{initialisation prior}, not a \emph{generalisation property}.
+
+\subsection{Determinism}
+
+Prior to this pass, two identical Julia processes with the same
+\texttt{Random.seed!(42)} would produce different $\varphi_{\text{opt}}$
+vectors (max $|\Delta\varphi| = 1.04$~rad, $\Delta J = 1.8$~dB).
+Root cause: the code built FFT plans with \texttt{FFTW.MEASURE}, which
+picks the fastest algorithm by \emph{timing} candidate plans under
+live kernel noise; different runs, different plans, different
+floating-point rounding, different L-BFGS trajectories.
+
+Switching the planner to \texttt{FFTW.ESTIMATE} (deterministic
+heuristic, no timing) gives \emph{bit-identical} $J$ across 3
+independent processes. Cost: $+21.4\%$ wall time on the SMF-28
+$L = 2$~m $P = 0.2$~W benchmark. Source:
+\texttt{results/raman/phase15/benchmark.md} lines 20--27, 39.
+
+\begin{intuition}
+If two supposedly-identical runs disagree, look at the FFT planner
+before you look at anything physical.
+\end{intuition}
+
+\subsection{What did \emph{not} survive}
+
+Three claims that appeared in the 48-hour synthesis did not make it
+through the audit:
+\begin{itemize}
+  \item A polynomial-fit comparison of $\varphi_{\text{opt}}$ between
+    $L = 2$~m and $L = 100$~m was used to argue for ``nonlinear
+    structural adaptation.'' The fit's $R^2$ was $0.015$ at 100~m
+    and $0.037$ at 2~m --- in both cases the quadratic model
+    explained less than 4\% of the phase variance, so the extracted
+    $a_2$ coefficients are noise. A ratio of noise is noise.
+    (See \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §W1.)
+  \item The 100~m L-BFGS ``optimum'' of $-54.77$~dB is a lower bound
+    (25 iter, $\|\nabla J\| = 0.48$, \texttt{converged = false}),
+    not a converged minimum. (Audit §S4.)
+  \item A joint $\{\varphi, A, E\}$ L-BFGS that regressed from
+    $-57$~dB to $-23$~dB is a preconditioning bug (mixed units), not
+    physics. (Audit §M1.)
+\end{itemize}
+
+These are flagged here because the April push was widely circulated,
+and future-you is likely to remember the numbers without remembering
+which ones survived. If you see any of these three cited anywhere,
+stop and check the audit.
+
+% ═════════════════════════════════════════════════════════════════════════
 \vspace{2em}
 \hrule
 \vspace{0.5em}
-{\small\textit{Written as a companion to the formal verification document. All equations verified against the codebase on 2026-04-02. Designed for first-principles understanding --- every equation traced from Maxwell's equations through the adjoint Lagrangian to the final gradient formula.}}
+{\small\textit{Written as a companion to the formal verification document. Core math verified against the codebase on 2026-04-02; April 2026 integration findings (§16) reconciled against the audit on 2026-04-19.}}
 
 \end{document}
