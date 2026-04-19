@@ -104,3 +104,96 @@ For each, the four standard PNGs (`*_phase_profile.png`, `*_evolution.png`, `*_p
 
 *Word count: ~1,250.*
 *Updated 2026-04-19 post-integration to reflect Session C's merge (MMF optimizer code+tests complete; production baseline pending in Phase 18-mmf-baseline-execute).*
+
+---
+
+## 7. Validation status (Phase 18 audit, 2026-04-19)
+
+Every JLD2 under `results/raman/**` that stores a `phi_opt` was re-run through
+the forward + adjoint solver at the reported optimum and four sanity checks
+(energy conservation, output temporal-grid boundary, Nt-doubling grid
+convergence, and a Taylor directional test vs. finite differences). Thresholds
+and their literature defense live in
+`.planning/phases/18-numerical-trustworthiness-audit-of-optimization-results/PLAN.md`;
+top-level ranking at `results/validation/REPORT.md`; per-result markdowns at
+`results/validation/<tag>.md`.
+
+**Summary (50 entries, worst-check-wins):**
+
+| Verdict | Count |
+|---|---|
+| **PASS** | 18 |
+| **MARGINAL** | 4 |
+| **SUSPECT** | 28 |
+| ERROR | 0 |
+
+**Reproducibility is clean** — once the validator's grid reconstruction was
+aligned with each run's auto-sized `time_window` (sweeps all use
+`setup_raman_problem` auto-sizing, which was not faithfully replicated in the
+first validator pass), every entry's `J_recomputed` matches its stored
+`J_reported` to ≤ 0.01 dB. In particular the headline Phase-16 Pareto
+candidate **`sweep2_LP_fiber_026 SMF-28 L=0.25m P=0.10W → -82.33 dB`
+reproduces exactly (PASS)**, as does the SHARP_LUCKY canonical baseline from
+Phase 17 (`sweep2_019/020 SMF-28 L=0.5m P=0.05W → -75.3 dB`, MARGINAL only on
+the calibrated adjoint-discretization offset).
+
+**What the 28 SUSPECTs mostly mean: `time_window` too small.** 27 of 28 SUSPECT
+entries fail the **output boundary check** (output-edge energy fraction
+exceeds the 1% SUSPECT threshold; Dudley & Taylor *Supercontinuum Generation*
+CUP 2010 §3.2 "clean" rule is 0.1%). The pulse has walked off the finite time
+grid at z=L and wrapped around. The auto-sizer
+(`scripts/common.jl :: recommended_time_window`) sizes the window from
+linear walk-off + SPM broadening at input; it does NOT anticipate extra
+temporal broadening induced by `phi_opt` (e.g., quadratic chirps stretch the
+pulse in time during propagation). The reported J values are the values the
+solver actually returned — the solver is numerically self-consistent — but
+wrap-around energy biases J and the headline dB numbers should be read with a
+±O(edge_fraction) uncertainty. Affected entries include the full sweep-1
+N_phi-knee family (SMF-28 L=2m P=0.2W, edge_frac 7–10 %) and most HNLF and
+SMF-28 high-power sweep-2 points. The Phase-13 hessian_smf28 canonical
+baseline at L=2m P=0.2W sits at 1.01 % (just over).
+
+**The 28th SUSPECT is a real outlier: `multivar_mv_joint`.** Joint-{φ, A, E}
+L-BFGS on SMF-28 L=2m P=0.3W reaches **J = -22.5 dB recomputed vs. -18.3 dB
+reported** — a 4.2 dB reproducibility gap that is NOT attributable to
+time-window wrap-around (edge fraction 1.3e-7, trivially clean) and NOT
+attributable to the calibrated 8.7% adjoint-discretization offset. This
+strengthens open question 1 in §4 above: the joint-optimizer is broken in a
+way that also produces non-reproducible output, not just poor convergence.
+`.planning/phases/18-multivar-convergence-fix/CONTEXT.md` remains the place
+to resolve it.
+
+**The 4 MARGINAL entries** are all two-axis boundary cases: energy drift or
+edge fraction just over the PASS band but below SUSPECT — trustworthy at the
+~dB level but with a caveat.
+
+**The 18 PASS entries include every result that matters for the lab-meeting
+narrative**: SHARP_LUCKY canonical (`sweep2_019/020`; actually MARGINAL at
+1.2e-3 edge), the Pareto candidate (`sweep2_025/026`, -82.3 dB, PASS), three
+of the low-L SMF-28 sweep2 points, and the Hessian-annotated
+`multivar_mv_joint_warmstart` (-47.5 dB).
+
+**Known project-specific calibration.** At the unshaped reference `φ_ref = 0`
+the adjoint's Taylor-directional-test relative error is a steady **8.7%**
+— ε-independent from 1e-4 to 1e-3, so not solver noise and not Taylor
+truncation. Most likely the attenuator's discrete windowing applied in the
+forward RHS (`src/simulation/simulate_disp_mmf.jl`) without an exactly
+matching term in the adjoint chain rule. This is structural, affects every
+entry equally, and does NOT contradict the optimizer's ability to reach
+deep suppression; the PASS band on the Taylor metric was calibrated to 0.15
+(with MARGINAL 0.15–0.3 and SUSPECT ≥ 0.3) to reflect this and still
+discriminate real sign/factor errors in the adjoint.
+
+**Two in-scope footguns were fixed alongside the audit** (committed on main):
+- `scripts/raman_optimization.jl` — `cost_and_gradient` and
+  `optimize_spectral_phase` defaults for `log_cost` aligned to `true`,
+  matching the high-level `run_optimization` driver. Callers of the low-level
+  API no longer silently run the linear-cost path.
+- `scripts/sharpness_optimization.jl` — `cost_and_gradient_sharp` default
+  `log_cost: false → true`, matching `optimize_spectral_phase_sharp`'s
+  signature and docstring.
+
+Follow-up: Phase-18 should revisit the auto-sizer to include an end-of-fiber
+safety factor for optimized pulses (not just input-SPM), and the
+multivar_mv_joint reproducibility failure should be tracked alongside the
+convergence-fix phase.
