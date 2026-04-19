@@ -74,7 +74,7 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     uωf_buffer::Union{Nothing,AbstractMatrix}=nothing,
     λ_gdd=0.0,
     λ_boundary=0.0,
-    log_cost::Bool=false)
+    log_cost::Bool=true)
 
     # PRECONDITIONS
     @assert size(φ) == size(uω0) "φ shape $(size(φ)) ≠ uω0 shape $(size(uω0))"
@@ -185,7 +185,7 @@ end
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false,
-    log_cost::Bool=false)
+    log_cost::Bool=true)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"

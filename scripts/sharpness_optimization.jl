@@ -335,7 +335,7 @@ function cost_and_gradient_sharp(phi, uω0, fiber, sim, band_mask;
                                  n_samples::Int = SO_DEFAULT_NSAMPLES,
                                  eps::Real = SO_DEFAULT_EPS,
                                  rng::AbstractRNG = Random.default_rng(),
-                                 log_cost::Bool = false,
+                                 log_cost::Bool = true,
                                  λ_gdd::Real = 0.0,
                                  λ_boundary::Real = 0.0,
                                  gauge_projector = nothing)

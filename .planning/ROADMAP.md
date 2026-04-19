@@ -284,3 +284,13 @@ Plans:
 - [x] Config A (SMF-28): **log_dB wins** — -75.8 dB in 10.6s vs linear -70.5 dB in 17s.
 - [~] Config B (HNLF): 3/4 complete; sharp variant DNF.
 - [ ] Config C (HNLF L=1m P=0.5W): 0/4 — two burst-VM hangs > 1 h. **Blocked** — needs shorter max_iter / reduced metric set. See `.planning/phases/18-cost-config-c/`.
+
+### Phase 18: Numerical trustworthiness audit of optimization results
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 17
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 18 to break down)
