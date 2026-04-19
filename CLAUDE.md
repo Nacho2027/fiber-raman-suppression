@@ -305,14 +305,17 @@ Drivers that skip this step are incomplete. Do not mark work "done" without the 
 <!-- GSD:workflow-start source:GSD defaults -->
 ## GSD Workflow Enforcement
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+**Strict mode is ON in this project.** `hooks.workflow_guard_strict: true` is set in `.planning/config.json`, so the `PreToolUse` guard at `~/.claude/hooks/gsd-workflow-guard.js` will **hard-deny** `Write`/`Edit` tool calls that target source files outside a GSD workflow context (no active `/gsd-*` skill and no Task subagent).
 
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
+Allow-list (always permitted, even outside GSD): `.planning/**`, `.gitignore`, `.env*`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `settings.json`.
 
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+When starting any edit on a tracked source file, route through:
+- `/gsd-fast` — trivial one-shot edits, no planning overhead
+- `/gsd-quick` — small fixes, doc updates, ad-hoc tasks with state tracking
+- `/gsd-debug` — investigation and bug fixing
+- `/gsd-execute-phase` — planned phase work
+
+If the user explicitly says "bypass GSD for this one" (or similar), flip `hooks.workflow_guard_strict` to `false` in `.planning/config.json` for the duration of the task, then flip it back. Do NOT silently work around the block any other way.
 <!-- GSD:workflow-end -->
 
 ## Multi-Machine Workflow
