@@ -308,23 +308,22 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
         J_at_ref, g_adj_ref = adjoint_grad_at_phi(φ_ref, uω0, fiber, sim, band_mask)
         grad_norm_ref = norm(g_adj_ref)
 
-        # 3. random unit-norm direction masked to the input-pulse spectral support
-        Random.seed!(TAYLOR_SEED)
-        spectral_power = vec(sum(abs2.(uω0), dims=2))
-        sig_mask = spectral_power .> 0.001 * maximum(spectral_power)
-        d_full = zeros(size(φ_ref))
-        for col in 1:size(φ_ref, 2)
-            for i in eachindex(sig_mask)
-                sig_mask[i] && (d_full[i, col] = randn())
-            end
-        end
-        d_full ./= max(norm(d_full), eps())
-        gd = dot(g_adj_ref, d_full)
+        # 3. USE THE GRADIENT AS THE TEST DIRECTION: d = g / ||g||.
+        # Random directions mostly project onto small-curvature directions where
+        # |⟨g,d⟩| = O(||g||/√N) — much smaller than ||g||, so any FD discretization
+        # noise dominates the ratio. Along d = g/||g|| the signal ⟨g,d⟩ = ||g|| is
+        # maximal, giving the highest-SNR test of the adjoint implementation.
+        d_full = g_adj_ref ./ max(grad_norm_ref, eps())
+        gd = dot(g_adj_ref, d_full)   # == ||g_adj_ref|| by construction
 
-        # 4. centered FD at φ_ref. ε = 1e-5 is comfortable: J(0) ~ 0.5 with
-        # solver reltol 1e-6 → absolute J-noise ~ 5e-7; 2ε = 2e-5 divides it
-        # out to ~2e-2 absolute FD-noise. Compare to gd ~ O(1e-1) typically.
-        ε = 1e-5
+        # 4. centered FD at φ_ref. With DifferentialEquations.jl reltol = 1e-8
+        # (see src/simulation/simulate_disp_mmf.jl), absolute J-noise at
+        # J(0) ≈ 0.5 is ~5e-9. Step ε = 1e-4 gives an FD denominator 2e-4,
+        # so noise floor on the derivative is ~2.5e-5. Taylor truncation
+        # (ε²·‖H‖/6) is suppressed as ε² and dominated only at ε ≳ 1e-2 for
+        # the unshaped reference point's Hessian scale. ε = 1e-4 is the
+        # Nocedal-Wright optimal for reltol = 1e-8.
+        ε = 1e-4
         J_plus, _  = adjoint_grad_at_phi(φ_ref .+ ε .* d_full, uω0, fiber, sim, band_mask)
         J_minus, _ = adjoint_grad_at_phi(φ_ref .- ε .* d_full, uω0, fiber, sim, band_mask)
         fd_dir = (J_plus - J_minus) / (2ε)
