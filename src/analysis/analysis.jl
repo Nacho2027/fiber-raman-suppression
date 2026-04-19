@@ -50,23 +50,6 @@ function compute_noise_map_modek(X, ∂Xkk∂u, U, ϕ, δF_in_ω)
     return var_X
 end
 
-# NOTE: compute_noise_map_modem is incomplete — the first @tullio has no operation,
-# and `no_derivative_term` / `excess_noise` are referenced before definition.
-# This function will error at runtime. It appears to be an abandoned refactoring.
-# Kept for reference but should not be called.
-function compute_noise_map_modem(X, ∂Xmm∂u, U, ϕ, δF_in_ω)
-    @tullio
-    @tullio shot_noise[i] := ϕ[i,k] * ϕ[i,k] * ϕ[i,k] * ϕ[i,k] * Xkkkk # shot noise for only one mode as well?
-    var_X = real.(shot_noise + excess_noise)
-
-    @tullio Xkkkk := conj(∂Xmm∂u[ω,j]) * ∂Xmm∂u[ω,j]
-    @tullio ∂Xmm∂u_U[ω] := ∂Xmm∂u[ω,j] * U[j]
-    @tullio XUkkkk := δF_in_ω[ω] * conj(∂Xmm∂u_U[ω]) * ∂Xmm∂u_U[ω]
-    @tullio excess_noise[i] := ϕ[i,k] * ϕ[i,k] * ϕ[i,k] * ϕ[i,k] * XUkkkk
-    var_X = real.(no_derivative_term + shot_noise + excess_noise)
-    return var_X
-end
-
 """
     compute_noise_map_modem_fsum(X, ∂Xmm∂u, U, δF_in_ω) -> Float64
 

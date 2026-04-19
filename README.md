@@ -1,106 +1,98 @@
 # Fiber Raman Suppression
 
-Adjoint-based spectral phase optimization for suppressing stimulated Raman scattering in optical fibers.
+Adjoint-based spectral phase optimization for suppressing stimulated Raman
+scattering in optical fibers.
 
-**Rivera Lab** | Cornell Applied & Engineering Physics | April 2026
+**Rivera Lab** | Cornell Applied & Engineering Physics
 
-## Overview
+## What this is (90 seconds)
 
-When ultrashort laser pulses propagate through optical fibers, Raman scattering transfers energy to longer wavelengths, degrading the pulse and adding quantum noise. This project optimizes the input spectral phase to minimize this energy transfer.
+When ultrashort laser pulses propagate through optical fibers, stimulated Raman
+scattering transfers energy to longer wavelengths, degrading the pulse and
+adding quantum noise. This repository optimizes the input spectral phase to
+suppress that energy transfer. Forward GNLSE simulation + backward adjoint solve
+gives exact gradients in ~2 seconds; L-BFGS converges in 20–60 iterations.
 
-**Key result:** 37-78 dB Raman suppression across 24 fiber configurations (0.5-5 m length, two fiber types), verified with boundary checks and multi-start robustness analysis.
+New to the project? Start here:
 
-**Method:** Forward GNLSE simulation + backward adjoint solve gives exact gradients of the Raman cost in ~2 seconds. L-BFGS optimization converges in 20-60 iterations. A log-scale cost function (optimizing in dB) was the critical innovation, improving suppression by 20-28 dB over linear-scale optimization.
+1. `make install` — install Julia dependencies.
+2. `make optimize` — run the canonical SMF-28 optimization (~5 min).
+3. Read [`docs/README.md`](docs/README.md) for the full documentation suite.
 
 ## Results at a glance
 
-| Fiber | Best suppression | Worst | Configurations |
-|-------|-----------------|-------|----------------|
-| SMF-28 | **-78 dB** | -37 dB | 12 points (4 lengths x 3 powers) |
-| HNLF | **-74 dB** | -51 dB | 12 points (4 lengths x 3 powers) |
+| Fiber  | Best suppression | Worst | Configurations               |
+|--------|------------------|-------|------------------------------|
+| SMF-28 | **-78 dB**       | -37 dB | 12 points (4 lengths × 3 powers) |
+| HNLF   | **-74 dB**       | -51 dB | 12 points (4 lengths × 3 powers) |
 
-See `results/RESULTS_SUMMARY.md` for a plain-language explanation, or `results/images/presentation/` for figures.
+See [`results/RESULTS_SUMMARY.md`](results/RESULTS_SUMMARY.md) for a
+plain-language explanation. After running `make report`, presentation-quality
+figures land in `results/images/presentation/` — see
+[`docs/interpreting-plots.md`](docs/interpreting-plots.md) for a field guide.
 
-## Quick start
+## Happy path
 
 ```bash
-# Install dependencies (first time only)
-julia --project -e 'using Pkg; Pkg.instantiate()'
-
-# Run the main optimization (5 configs, ~5 min)
-julia --project scripts/raman_optimization.jl
-
-# Run the full parameter sweep (24 points, ~2-3 hours)
-julia --project scripts/run_sweep.jl
-
-# Generate reports and figures from sweep results
-julia --project scripts/generate_sweep_reports.jl
-julia --project scripts/generate_presentation_figures.jl
+make install         # install Julia dependencies (one-time, ~2 min)
+make test            # run the fast tier regression tests (~30 s)
+make optimize        # run the canonical SMF-28 optimization (~5 min)
+make report          # regenerate figures and report cards from existing JLD2
 ```
 
-## Project structure
+For the full parameter sweep (2–3 h, strongly recommended on the burst VM):
 
-```
-src/                          Core Julia package (MultiModeNoise.jl)
-  simulation/                 GNLSE forward + adjoint solvers
-  gain_simulation/            YDFA gain model
-  analysis/                   Quantum noise variance decomposition
-  helpers/                    Parameter setup, grid construction
-
-scripts/                      Entry points and utilities
-  raman_optimization.jl       Main optimization pipeline
-  run_sweep.jl                L x P parameter sweep
-  generate_sweep_reports.jl   Per-point reports from JLD2 data
-  generate_presentation_figures.jl   Advisor-ready figures
-  visualization.jl            Shared plotting functions
-  common.jl                   Shared fiber presets and cost functions
-  amplitude_optimization.jl   Amplitude shaping (alternative approach)
-  benchmark_optimization.jl   Performance benchmarks
-
-docs/                         Documentation
-  companion_explainer.tex     Pedagogical math walkthrough (23 pages)
-  companion_explainer.pdf     Compiled PDF
-  verification_document.tex   Formal equation verification (32 pages)
-  verification_document.pdf   Compiled PDF
-
-results/
-  RESULTS_SUMMARY.md          Plain-language results explanation
-  raman/
-    MATHEMATICAL_FORMULATION.md   Equations with code references
-    sweeps/                   Sweep data, report cards, summaries
-  images/
-    presentation/             Advisor-ready figures
-
-notebooks/                    Jupyter notebooks (interactive exploration)
-test/                         Package tests
+```bash
+make sweep
 ```
 
-## Documentation
+Run `make` with no arguments to list every target.
 
-| Document | What it is | Pages |
-|----------|-----------|-------|
-| `results/RESULTS_SUMMARY.md` | Plain-language summary with glossary | - |
-| `docs/companion_explainer.pdf` | First-principles math walkthrough (undergrad level) | 23 |
-| `docs/verification_document.pdf` | Formal equation-by-equation code verification | 32 |
-| `results/raman/MATHEMATICAL_FORMULATION.md` | Equations mapped to code line numbers | - |
+## Where to go next
 
-## Key concepts
+| I want to...                                     | Read                                                  |
+|--------------------------------------------------|-------------------------------------------------------|
+| Install and run my first optimization            | [`docs/quickstart-optimization.md`](docs/quickstart-optimization.md) |
+| Launch a parameter sweep                         | [`docs/quickstart-sweep.md`](docs/quickstart-sweep.md) |
+| Understand the output file format (JLD2 + JSON)  | [`docs/output-format.md`](docs/output-format.md)      |
+| Interpret the plots                              | [`docs/interpreting-plots.md`](docs/interpreting-plots.md) |
+| Understand the cost function / adjoint / physics | [`docs/cost-function-physics.md`](docs/cost-function-physics.md) and [`docs/companion_explainer.pdf`](docs/companion_explainer.pdf) |
+| Extend with a new fiber preset                   | [`docs/adding-a-fiber-preset.md`](docs/adding-a-fiber-preset.md) |
+| Extend with a new optimization variable          | [`docs/adding-an-optimization-variable.md`](docs/adding-an-optimization-variable.md) |
+| Install troubleshooting                          | [`docs/installation.md`](docs/installation.md)        |
+| Full doc index                                   | [`docs/README.md`](docs/README.md)                    |
 
-- **GNLSE**: Generalized Nonlinear Schrodinger Equation — the wave equation for light in a fiber
-- **Adjoint method**: Compute gradients of the cost w.r.t. 8192 phase values in one backward simulation (instead of 16,384 forward simulations)
-- **Soliton number (N)**: Ratio of nonlinear to dispersive effects. N=1 is a soliton. N>2 leads to fission.
-- **Log-scale cost**: Optimizing 10*log10(J) instead of J keeps gradients O(1) as suppression deepens
+## Project layout
+
+```
+src/                Core Julia package (MultiModeNoise.jl): GNLSE forward +
+                    adjoint solvers, YDFA gain, mode solving
+scripts/            Entry points: `raman_optimization.jl`, `run_sweep.jl`,
+                    `generate_sweep_reports.jl`, `generate_presentation_figures.jl`,
+                    `amplitude_optimization.jl`, `run_comparison.jl`,
+                    `sharpness_optimization.jl`
+docs/               Markdown how-tos + LaTeX pedagogy (companion_explainer.pdf,
+                    verification_document.pdf, physics_verification.pdf)
+test/               Tiered regression test suite (fast / slow / full)
+results/            Run artifacts (JLD2 + JSON), figures, report cards
+notebooks/          Research scratchpads (not handoff material)
+Makefile            Convenience targets — see `make` with no arguments
+```
 
 ## Requirements
 
-- Julia >= 1.9.3 (recommended: 1.12.x)
-- Python 3.x with Matplotlib (for PyPlot; auto-installed by Conda.jl)
-- No GPU required
+- Julia ≥ 1.9.3 (recommended: 1.12.x). See [`docs/installation.md`](docs/installation.md).
+- Python 3.x with Matplotlib (auto-installed by Conda.jl via PyPlot).
+- No GPU required. Parameter sweeps benefit from a multicore burst VM.
 
 ## Attribution
 
-Built on Michael Horodynski's [MultiModeNoise.jl](https://github.com/michaelhorodynski/MultiModeNoise.jl) (shared September 2025). Extended with adjoint-based optimization, parameter sweeps, log-scale cost function, and comprehensive visualization.
+Built on Michael Horodynski's
+[MultiModeNoise.jl](https://github.com/michaelhorodynski/MultiModeNoise.jl)
+(shared September 2025). Extended with adjoint-based optimization, parameter
+sweeps, log-scale cost function, and comprehensive visualization.
 
 ## License
 
-Research code — not yet published. Contact Rivera Lab for collaboration inquiries.
+Research code — not yet published. Contact Rivera Lab for collaboration
+inquiries.

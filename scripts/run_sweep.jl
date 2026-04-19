@@ -1,28 +1,30 @@
 """
-Phase 7: Parameter Sweep — L×P Grid and Multi-Start Robustness Analysis
+Parameter sweep over (fiber length L, continuous-wave power P) — produces a
+J_final heatmap per fiber type.
 
-Runs L-BFGS Raman suppression optimization over a coarse grid of fiber lengths
-and launch powers for both SMF-28 (16 points: 4×4) and HNLF (16 points: 4×4).
-Then performs a 10-start multi-start robustness analysis on SMF-28 L=2m P=0.30W.
+Runs the canonical optimization at each (L, P) grid point, saves a per-point
+JLD2 + JSON pair, and aggregates into `sweep_results.jld2` + heatmap PNGs.
 
-Contents:
-  - Section 1: Constants (SW_ prefix to avoid const redefinition in REPL)
-  - Section 2: Grid definitions (SMF-28 and HNLF L×P grids)
-  - Section 3: Helper functions (compute_photon_number, compute_photon_drift,
-               compute_peak_power)
-  - Section 4: run_fiber_sweep — main sweep loop per fiber type
-  - Section 5: save_sweep_aggregate — aggregate JLD2 save
-  - Section 6: run_multistart — 10-start analysis on SMF-28 L=2m P=0.30W
-  - Section 7: Main entry point (guarded by PROGRAM_FILE check)
+# Run
+    julia --project=. -t auto scripts/run_sweep.jl
 
-Usage:
-  julia --project scripts/run_sweep.jl
+# Inputs
+- Grid definition near the top of file (L_values, P_values, fiber presets,
+  Nt floor, max_iter).
+- `scripts/common.jl` fiber presets.
 
-Results saved to:
-  results/raman/sweeps/smf28/   — per-point JLD2 files
-  results/raman/sweeps/hnlf/    — per-point JLD2 files
-  results/raman/sweeps/         — aggregate sweep_results_*.jld2 files
-  results/images/               — heatmap and histogram PNGs
+# Outputs
+- `results/raman/sweeps/<fiber>/<L>_<P>/_result.jld2` — per-point payload.
+- `results/raman/sweeps/<fiber>/<L>_<P>/_result.json` — per-point sidecar.
+- `results/raman/sweeps/sweep_results.jld2` — aggregated summary table.
+- `results/raman/sweeps/<fiber>_heatmap.png` — J_final heatmap.
+
+# Runtime
+~2–3 hours for the full 24-point grid (12 SMF-28 + 12 HNLF) on the burst VM
+(22 cores). Much longer on `claude-code-host` — burst VM strongly recommended.
+
+# Docs
+Docs: docs/quickstart-sweep.md
 """
 
 ENV["MPLBACKEND"] = "Agg"

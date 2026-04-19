@@ -251,12 +251,24 @@ Plans:
 Plans:
 - [x] 15-01: Pin FFTW planner to ESTIMATE, thread pins, src/simulation patch, regression test, benchmark — COMPLETE 2026-04-16 (7/7 bit-identity tests pass; +21.4% slowdown on SMF-28 canonical)
 
-### Phase 17: Simple Phase Profile Stability Study — investigate whether the striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (remarkably simple ~3-feature unwrapped phase, TV<2 rad) sits in a flat basin with large convergence radius (experimentally robust) or a coincidental sharp minimum. Baseline reproduction on burst VM, perturbation study, transferability sweep, simplicity quantification vs Phases 10/11/12 optima, synthesis figure. Feeds Session E. (SESSION D; Phase 16 claimed by Session C for MMF Raman work — renumbered to avoid collision per CLAUDE.md Rule P1.)
+### Phase 16: Repo Polish for Team Handoff (Session B)
+
+**Goal:** New team member productive in 15 min from clone: README rewrite, docs/ suite (9 files), output-format spec, Makefile, tiered regression tests (fast/slow/full).
+**Requirements**: See `docs/README.md` and `.planning/sessions/B-standdown.md`.
+**Depends on:** Phase 15
+**Plans:** 7 plans (all complete; 9/9 goal-backward criteria passed)
+
+Plans:
+- [x] 16-01..16-07: executed on sessions/B-handoff; 16 commits; merged 2026-04-19. See `.planning/sessions/B-standdown.md`.
+
+> **Numbering note (2026-04-19 integration pass):** "Phase 16" was independently claimed by Sessions B (repo polish), C (MMF Raman), and one of A/E/F/G/H (per-session sub-phase dirs). This is an artifact of parallel operation; each session's phase dir is self-contained under `.planning/phases/16-<topic>/`. Future phases after Phase 17 should resume at Phase 18+.
+
+### Phase 17: Simple Phase Profile Stability Study (Session D) — investigate whether the striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (remarkably simple ~3-feature unwrapped phase, TV<2 rad) sits in a flat basin with large convergence radius (experimentally robust) or a coincidental sharp minimum. Baseline reproduction on burst VM, perturbation study, transferability sweep, simplicity quantification vs Phases 10/11/12 optima, synthesis figure. Feeds Session E.
 
 **Goal:** Decide FLAT_ROBUST vs SHARP_LUCKY vs INCONCLUSIVE verdict on the L=0.5m P=0.05W optimum, with quantitative evidence on perturbation tolerance (σ_3dB), warm-start transferability, and simplicity-vs-suppression correlation.
 **Requirements**: See `.planning/phases/17-simple-phase-profile-stability-study-.../17-CONTEXT.md` and `.planning/sessions/D-simple-decisions.md`.
 **Depends on:** Phase 15 (determinism), Phase 13 primitives (gauge-fix, input_band_mask).
-**Plans:** 1 plan
+**Plans:** 1 plan (complete 2026-04-17; verdict SHARP_LUCKY).
 
 Plans:
-- [ ] 17-01: Baseline reproduction + perturbation + transferability + simplicity + synthesis (see 17-01-PLAN.md)
+- [x] 17-01: Baseline reproduction + perturbation + transferability + simplicity + synthesis — COMPLETE 2026-04-17 (see 17-01-PLAN.md and `results/raman/phase17/SUMMARY.md`)

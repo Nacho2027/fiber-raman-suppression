@@ -1,3 +1,31 @@
+"""
+Sharpness-aware (Hessian-in-cost) optimization entry point (Phase 14).
+
+Parallel path to the vanilla L-BFGS `raman_optimization.jl`: minimizes
+`J(φ) + λ · sharpness(H(φ))` where the sharpness term penalizes flat-minimum
+directions, producing optima that are more robust to shaper quantization and
+fiber-parameter drift. The vanilla cost function and optimizer entry points
+are untouched and remain available for A/B comparison.
+
+# Run
+    julia --project=. -t auto scripts/sharpness_optimization.jl
+
+# Inputs
+- Sharpness measure + λ at top of file.
+- `scripts/common.jl` fiber presets.
+
+# Outputs
+- `results/raman/phase14/<run_id>/_result.jld2` + `.json` — sharpness-aware run.
+- `results/raman/phase14/<run_id>/*.png` — robustness + Hessian-spectrum figures.
+
+# Runtime
+~10–20 minutes (Hessian eigensolve adds overhead vs vanilla L-BFGS). Burst VM
+recommended.
+
+# Docs
+Docs: docs/cost-function-physics.md
+"""
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Phase 14 — Sharpness-Aware (Hessian-in-Cost) Optimization
 # ═══════════════════════════════════════════════════════════════════════════════
