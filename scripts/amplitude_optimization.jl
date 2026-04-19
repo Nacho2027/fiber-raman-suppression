@@ -39,6 +39,7 @@ using Optim
 include("common.jl")
 include("visualization.jl")
 include(joinpath(@__DIR__, "determinism.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -822,6 +823,21 @@ function run_amplitude_optimization(;
     A_opt_final = reshape(result.minimizer, Nt, M)
     A_min, A_max = extrema(A_opt_final)
     @info @sprintf("═══ Done (%s, %.1f s) — J_final=%.6f, A∈[%.4f,%.4f] ═══", save_prefix, elapsed, result.minimum, A_min, A_max)
+
+    # Mandatory standard image set for the amplitude-shaped pulse.
+    # phi_opt = 0 because this driver shapes amplitude only; the shaping is
+    # carried by `uω0_amp_shaped` so the evolution + spectral plots reflect
+    # the optimized field.
+    uω0_amp_shaped = uω0 .* A_opt_final
+    save_standard_set(zeros(Nt, M), uω0_amp_shaped, fiber, sim,
+        band_mask, Δf, raman_threshold;
+        tag = basename(save_prefix),
+        fiber_name = run_meta.fiber_name,
+        L_m = run_meta.L_m,
+        P_W = run_meta.P_cont_W,
+        output_dir = dirname(save_prefix) == "" ? "." : dirname(save_prefix),
+        lambda0_nm = run_meta.lambda0_nm,
+        fwhm_fs = run_meta.fwhm_fs)
 
     return result, uω0, fiber, sim, band_mask, Δf
 end

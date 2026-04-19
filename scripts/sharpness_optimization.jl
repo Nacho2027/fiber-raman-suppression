@@ -86,6 +86,7 @@ using Optim
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()
 
 if !(@isdefined _SHARPNESS_OPTIMIZATION_LOADED)
@@ -521,6 +522,32 @@ function optimize_spectral_phase_sharp(prob, phi0;
         eps_sharpness = eps,
         result = result,
     )
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mandatory standard-image emit for sharp drivers (CLAUDE.md project rule).
+# Drivers that call `optimize_spectral_phase_sharp(prob, phi0)` MUST follow up
+# with this helper so the four canonical PNGs land on disk.
+# ─────────────────────────────────────────────────────────────────────────────
+function emit_sharp_standard_set(sharp_result, prob;
+                                  tag::String,
+                                  fiber_name::String,
+                                  L_m::Real,
+                                  P_W::Real,
+                                  output_dir::String,
+                                  lambda0_nm::Real = 1550.0,
+                                  fwhm_fs::Real = 185.0)
+    Δf            = prob.Δf
+    raman_thresh  = prob.raman_threshold
+    save_standard_set(sharp_result.phi_opt, prob.uω0, prob.fiber, prob.sim,
+        prob.band_mask, Δf, raman_thresh;
+        tag = tag,
+        fiber_name = fiber_name,
+        L_m = L_m,
+        P_W = P_W,
+        output_dir = output_dir,
+        lambda0_nm = lambda0_nm,
+        fwhm_fs = fwhm_fs)
 end
 
 end  # include guard

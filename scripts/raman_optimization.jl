@@ -44,6 +44,7 @@ using JSON3
 include("common.jl")
 include("visualization.jl")
 include(joinpath(@__DIR__, "determinism.jl"))
+include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -644,6 +645,17 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
             save_path="$(save_prefix)_phase.png", metadata=run_meta)
         close("all")
     end # do_plots
+
+    # Mandatory standard image set (CLAUDE.md project rule, post-2026-04-17).
+    save_standard_set(φ_after, uω0, fiber, sim,
+        band_mask, Δf, raman_threshold;
+        tag = basename(save_prefix),
+        fiber_name = run_meta.fiber_name,
+        L_m = run_meta.L_m,
+        P_W = run_meta.P_cont_W,
+        output_dir = dirname(save_prefix) == "" ? "." : dirname(save_prefix),
+        lambda0_nm = run_meta.lambda0_nm,
+        fwhm_fs = run_meta.fwhm_fs)
 
     return result, uω0, fiber, sim, band_mask, Δf
 end
