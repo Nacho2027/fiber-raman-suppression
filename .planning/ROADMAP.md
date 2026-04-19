@@ -250,3 +250,13 @@ Plans:
 
 Plans:
 - [x] 15-01: Pin FFTW planner to ESTIMATE, thread pins, src/simulation patch, regression test, benchmark — COMPLETE 2026-04-16 (7/7 bit-identity tests pass; +21.4% slowdown on SMF-28 canonical)
+
+### Phase 16: Repo Polish for Team Handoff
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)

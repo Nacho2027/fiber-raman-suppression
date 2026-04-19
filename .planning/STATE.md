@@ -169,6 +169,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 13 added (2026-04-16): Optimization Landscape Diagnostics — gauge-fixing, polynomial projection, Hessian eigenspectrum at L-BFGS optima; gates any Newton's method decision. See `.planning/notes/newton-vs-lbfgs-reframe.md` and `.planning/seeds/newton-method-implementation.md`.
 - Phase 14 added (2026-04-16): Sharpness-Aware (Hessian-in-Cost) Optimization — new optimizer path `optimize_spectral_phase_sharp` parallel to existing L-BFGS; keeps original cost function unchanged; user directive is both paths must remain usable for A/B comparison.
 - Phase 15 added (2026-04-16): Deterministic Numerical Environment — user-directed. Fixes FFTW.MEASURE plan-selection non-determinism found in Phase 13 Plan 01 (max|Δφ| = 1.04 rad between identical-seed runs). Pins FFTW planner to ESTIMATE, sets FFTW/BLAS thread counts to 1. Runs before Phase 14 Plan 02 so A/B comparison is reproducible.
+- Phase 16 added (2026-04-17): Repo Polish for Team Handoff — Session B autonomous workstream. README rewrite, docs/ suite (9 files), output format spec (JLD2 + JSON sidecar), Makefile, tiered regression tests (fast/slow/full), abandoned `compute_noise_map_modem` archived to `src/_archived/`. 7 plans executed, verifier passed 9/9 goal-backward criteria. 16 commits on `sessions/B-handoff`. Target "new team member productive in 15 min from clone" met. Session stood down 2026-04-19 for integration pass; see `.planning/sessions/B-standdown.md`.
 
 ### Resolved Issues
 
