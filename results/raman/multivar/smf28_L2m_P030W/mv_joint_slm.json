@@ -1,0 +1,81 @@
+{
+    "metrics": {
+        "iterations": 100,
+        "delta_J_dB": -16.77501943521427,
+        "converged": false,
+        "J_before": 0.7088909094749583,
+        "wall_time_s": 394.1361379623413,
+        "J_after": 0.014896267537532617
+    },
+    "fiber": {
+        "name": "SMF-28",
+        "betas": [
+        ],
+        "gamma_W_inv_m_inv": 0.0011,
+        "L_m": 2
+    },
+    "grid": {
+        "omega_grid": {
+            "units": "rad/ps",
+            "storage_key": "sim_omega0",
+            "ordering": "fftfreq"
+        },
+        "M": 1,
+        "time_window_ps": 36,
+        "Nt": 8192
+    },
+    "variables_enabled": [
+        "phase",
+        "amplitude"
+    ],
+    "shaped_input_formula": "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * c_m * uomega0(omega); alpha = sqrt(E_opt / E_ref)",
+    "pulse": {
+        "P_cont_W": 0.3,
+        "fwhm_fs": 185,
+        "lambda0_nm": 1550,
+        "rep_rate_Hz": 80500000
+    },
+    "provenance": {
+        "julia_version": "1.12.6",
+        "branch": "sessions/A-multivar",
+        "commit": "unknown",
+        "threads": 22
+    },
+    "outputs": {
+        "energy_E": {
+            "units": "arb.",
+            "storage_key": "E_opt"
+        },
+        "mode_coeffs": {
+            "units": "dimensionless complex",
+            "shape": [
+                1
+            ],
+            "storage_key": "c_opt"
+        },
+        "phase": {
+            "units": "rad",
+            "shape": [
+                8192,
+                1
+            ],
+            "storage_key": "phi_opt"
+        },
+        "amplitude": {
+            "units": "dimensionless",
+            "shape": [
+                8192,
+                1
+            ],
+            "storage_key": "amp_opt"
+        },
+        "energy_reference": {
+            "units": "arb.",
+            "storage_key": "E_ref"
+        }
+    },
+    "result_file": "mv_joint_result.jld2",
+    "generator": "scripts/multivar_optimization.jl (sessions/A-multivar)",
+    "schema_version": "1.0",
+    "generated_at": "2026-04-17T21:49:49.996"
+}
