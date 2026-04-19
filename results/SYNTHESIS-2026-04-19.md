@@ -9,7 +9,7 @@
 
 ## 1. Executive summary
 
-Across 7 parallel Claude Code sessions over ~48 hours we (a) reproduced the SMF-28 *simple-phase* baseline at -76.86 dB, (b) characterized its basin as **SHARP_LUCKY** with σ_3dB = 0.025 rad, (c) showed simple-phase is an excellent **warm-start initializer** that reaches -70 → -82 dB on 11 of 11 nearby (L, P, fiber) points, (d) extended propagation to **100 m** and discovered the warm-start phase is *universally transferable* (Δ shape across 50× length is small) and **NOT polynomial** (R²=0.015–0.037 against quadratic), (e) audited cost-function variants and crowned **`log_dB`** the project default (-75.8 dB in 10.6 s vs linear -70.5 dB in 17 s), and (f) shipped a complete repo-handoff (docs suite, Makefile, tiered tests, output-format spec). Three follow-up phases are open and one session (G-sharp-ab) was parked due to Opus-4.7-side issues.
+Across **8 parallel Claude Code sessions** over ~48 hours we (a) reproduced the SMF-28 *simple-phase* baseline at -76.86 dB, (b) characterized its basin as **SHARP_LUCKY** with σ_3dB = 0.025 rad, (c) showed simple-phase is an excellent **warm-start initializer** that reaches -70 → -82 dB on 11 of 11 nearby (L, P, fiber) points, (d) extended propagation to **100 m** and discovered the warm-start phase is *universally transferable* (Δ shape across 50× length is small) and **NOT polynomial** (R²=0.015–0.037 against quadratic), (e) audited cost-function variants and crowned **`log_dB`** the project default (-75.8 dB in 10.6 s vs linear -70.5 dB in 17 s), (f) **built and numerically validated an M=6 multimode-fiber Raman optimizer** (13/13 correctness tests pass; production baseline pending one burst-VM run), and (g) shipped a complete repo-handoff (docs suite, Makefile, tiered tests, output-format spec). **Four Phase-18 follow-ups** are open; one session (G-sharp-ab) was parked due to Opus-4.7-side issues.
 
 ---
 
@@ -28,10 +28,12 @@ Across 7 parallel Claude Code sessions over ~48 hours we (a) reproduced the SMF-
 | φ(ω) quadratic-fit R² at 100 m | **0.015–0.037** (i.e., not polynomial) | Phase 16 (F) | new |
 | a₂(100 m) / a₂(2 m) (vs GVD prediction +50) | **-3.30** | Phase 16 (F) | new |
 | Cost-audit winner (Config A SMF-28) | **`log_dB`** (-75.8 dB / 10.6 s) | Phase 16 (H) | new |
+| **MMF M=6 optimizer correctness (GRIN-50)** | **13/13 tests pass** (energy cons., M=1 limit, FD gradient) | Phase 16 (C) | new |
+| MMF baseline at sub-soliton config (L=1m P=0.05W) | ΔJ = **0 dB** — N_sol ≈ 0.9, physics (not a bug) | Phase 16 (C) | new |
 | Hessian indefiniteness at canonical optima | `|λ_min|/λ_max` = 2.6% (SMF), 0.41% (HNLF) | Phase 13 | already on main |
 | Determinism cost (FFTW.ESTIMATE pin) | bit-identical across runs at +21.4 % wall time | Phase 15 | already on main |
 
-**Bottom line for the talk.** Suppression of -75 to -82 dB is reachable on every configuration we examined when seeded with the simple-phase warm-start. The optimal phase is *not* a low-order polynomial chirp; it is a structural shape that survives 50× length scaling. Joint amplitude+phase optimization does NOT yet beat phase-only (open problem).
+**Bottom line for the talk.** Suppression of -75 to -82 dB is reachable on every **single-mode** configuration we examined when seeded with the simple-phase warm-start. The optimal phase is *not* a low-order polynomial chirp; it is a structural shape that survives 50× length scaling. Joint amplitude+phase optimization does NOT yet beat phase-only (open problem). The **multimode (M=6) optimizer is now code-complete and numerically validated** — the first Raman-regime MMF baseline is one burst-VM launch away (Phase 18-mmf-baseline-execute).
 
 ---
 
@@ -41,14 +43,14 @@ Across 7 parallel Claude Code sessions over ~48 hours we (a) reproduced the SMF-
 |---|---|---|---|
 | **A — multivar** | sessions/A-multivar | infra + convergence-bug writeup | `scripts/multivar_*.jl`, `.planning/phases/16-multivar-optimizer/16-01-SUMMARY.md` |
 | **B — handoff** | sessions/B-handoff | docs + Makefile + tests | `docs/*.md`, `Makefile`, `test/tier_{fast,slow,full}.jl`, `.planning/sessions/B-standdown.md` |
-| **C — multimode** | sessions/C-multimode | scaffolding only (not merged this pass) | branch only — see "Not merged" below |
+| **C — multimode** | sessions/C-multimode | M=6 MMF optimizer + 13/13 correctness tests | `scripts/mmf_*.jl`, `src/mmf_cost.jl`, `test/test_phase16_mmf.jl`, `.planning/phases/16-multimode-raman-suppression-baseline/`, `.planning/sessions/C-standdown.md` |
 | **D — simple** | sessions/D-simple | SHARP_LUCKY verdict + warm-start sweep | `results/raman/phase17/SUMMARY.md`, `scripts/simple_profile_*.jl` |
 | **E — sweep** | sessions/E-sweep | Pareto candidates + 132 standard images | `results/raman/phase_sweep_simple/{candidates.md,pareto.png,sweep[12]_*.jld2,standard_images/}` |
 | **F — longfiber** | sessions/F-longfiber | 100 m FINDINGS + 5 physics figures | `results/raman/phase16/FINDINGS.md`, `results/images/physics_16_*.png`, `scripts/longfiber_*.jl` |
 | **G — sharp-ab** | sessions/G-sharp-ab | scripts only, NOT validated | `scripts/sharp_ab_*.jl`, `.planning/phases/18-sharp-ab-execution/BIG_WARNING.md` |
 | **H — cost** | sessions/H-cost | log_dB winner + audit table (7/12) | `.planning/phases/16-cost-audit/`, `results/raman/phase16-cost-audit/` |
 
-All session branches except C are now merged into `main`.
+All 8 session branches are now merged into `main`.
 
 ---
 
@@ -61,6 +63,7 @@ These are real physics/engineering questions, not integration debt:
 3. **Does sharpness-aware optimization beat vanilla on shaper-quantization robustness?** Open since Phase 14; Session G prepared the A/B but never ran it. See `.planning/phases/18-sharp-ab-execution/CONTEXT.md`.
 4. **Why does HNLF L=1m P=0.5W (cost-audit Config C) hang the optimizer?** Session H burned 5 burst-VM hours on two consecutive hangs > 1 h each. Single-variant retry with shorter `max_iter` recommended. See `.planning/phases/18-cost-config-c/CONTEXT.md`.
 5. **Is N_φ=57 enough for full convergence?** Session E found N_φ=128 matches the full-resolution baseline at -68.01 dB; N_φ=57 finds -82.33 dB at the best Pareto point. The compressed parameterization opens the door for a second-order optimizer (Newton) that's intractable in the full ω-grid.
+6. **How does Raman suppression scale to M=6 multimode fibers?** Session C's M=6 optimizer is code-complete and numerically validated on GRIN-50, but the one production run used a sub-soliton config that correctly left the optimizer no headroom. The aggressive-regime baseline (L=2m P=0.5W → N_sol ≈ 2–3) is the first MMF physics question to answer. Expected signatures + full re-launch procedure in `.planning/phases/18-mmf-baseline-execute/CONTEXT.md`. Directly relevant to the Rivera-lab quantum-noise program (arXiv:2509.03482).
 
 ---
 
@@ -77,7 +80,11 @@ Combine three findings: Session E's evidence that N_φ=57 captures the optimum; 
 
 Ungated by any merge from this integration pass. Owns: `scripts/newton_*.jl`, `.planning/phases/19-*/`.
 
-**Parallel work:** the three Phase-18 follow-ups (multivar-convergence-fix, sharp-ab-execution, cost-config-c) can be picked up independently — they don't block Newton.
+**Parallel work:** four Phase-18 follow-ups can be picked up independently — they don't block Newton:
+- `18-multivar-convergence-fix` — Session A's joint-{φ, A, E} L-BFGS bug.
+- `18-sharp-ab-execution` — Session G's unrun sharpness A/B (Opus-4.7-parked).
+- `18-cost-config-c` — Session H's HNLF L=1m P=0.5W hang.
+- `18-mmf-baseline-execute` — relaunch Session C's aggressive M=6 config (Rivera-lab-relevant).
 
 ---
 
@@ -95,4 +102,5 @@ For each, the four standard PNGs (`*_phase_profile.png`, `*_evolution.png`, `*_p
 
 ---
 
-*Word count: ~1,150.*
+*Word count: ~1,250.*
+*Updated 2026-04-19 post-integration to reflect Session C's merge (MMF optimizer code+tests complete; production baseline pending in Phase 18-mmf-baseline-execute).*
