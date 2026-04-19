@@ -234,13 +234,16 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
             λ0=meta.λ0, rep_rate=meta.rep_rate,
         )
     else
-        # Replicate sweep_simple_run.jl defaults: Nt=2^14, time_window=10 ps
+        # Replicate sweep_simple_run.jl defaults: Nt=2^14, time_window=10 ps,
+        # β_order=3 (so preset betas of length 2 are allowed).
         Nt_guess = meta.Nt > 0 ? meta.Nt : 2^14
         tw_guess = 10.0
+        β_order_e = length(FIBER_PRESETS[meta.fiber_preset].betas) + 1
         uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
             fiber_preset=meta.fiber_preset,
             L_fiber=meta.L_fiber, P_cont=meta.P_cont,
             pulse_fwhm=meta.pulse_fwhm, Nt=Nt_guess, time_window=tw_guess,
+            β_order=β_order_e,
             λ0=meta.λ0, pulse_rep_rate=meta.rep_rate,
         )
         # Patch meta with the ACTUAL post-auto-size values (captured for markdown)
@@ -606,8 +609,12 @@ function collect_entries()
             P_cont = Float64(_get(cfg, "P_cont",
                               _get(entry, "P_cont", NaN)))
             Nt_e = Int(_get(entry, "Nt", 16384))
+            # time_window_ps is NOT stored in sweep entries. Leaving as NaN
+            # triggers the auto-size reconstruction path in run_four_checks,
+            # matching sweep_simple_run.jl's setup_raman_problem call
+            # (Nt=2^14, time_window=10 ps; auto-sizes per SMF/HNLF + L + P).
             tw_e = Float64(_get(entry, "time_window_ps",
-                           _get(cfg, "time_window_ps", 40.0)))
+                           _get(cfg, "time_window_ps", NaN)))
             fwhm_e = Float64(_get(entry, "fwhm_fs",
                              _get(cfg, "fwhm_fs", 185.0))) * 1e-15
             kind = _get(cfg, "kind", "unknown")
