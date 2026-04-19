@@ -321,9 +321,10 @@ function run_four_checks(φ_opt::AbstractArray, meta::NamedTuple;
         # J(0) ≈ 0.5 is ~5e-9. Step ε = 1e-4 gives an FD denominator 2e-4,
         # so noise floor on the derivative is ~2.5e-5. Taylor truncation
         # (ε²·‖H‖/6) is suppressed as ε² and dominated only at ε ≳ 1e-2 for
-        # the unshaped reference point's Hessian scale. ε = 1e-4 is the
-        # Nocedal-Wright optimal for reltol = 1e-8.
-        ε = 1e-4
+        # the unshaped reference point's Hessian scale. Empirically on this
+        # project ε = 1e-3 (i.e. ~√(reltol·J/‖H‖)) is sweet — noise 3e-6,
+        # truncation 1e-7, both ≪ typical ⟨g,d⟩ ≈ ‖g‖ ≈ 1e-2.
+        ε = 1e-3
         J_plus, _  = adjoint_grad_at_phi(φ_ref .+ ε .* d_full, uω0, fiber, sim, band_mask)
         J_minus, _ = adjoint_grad_at_phi(φ_ref .- ε .* d_full, uω0, fiber, sim, band_mask)
         fd_dir = (J_plus - J_minus) / (2ε)
