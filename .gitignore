@@ -2,6 +2,9 @@
 .planning/
 .claude/
 
+# Machine-specific MCP server config (paths differ per host)
+.mcp.json
+
 # macOS
 .DS_Store
 
