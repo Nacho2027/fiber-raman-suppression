@@ -112,4 +112,12 @@ None.
 
 ## Commits
 
-To be filled by T6 below.
+- `49a2509` — `docs(20): propagate Phase 19 audit refinements into canonical .tex`
+  - 8 files changed, 756 insertions(+), 12 deletions(-)
+  - All 6 tasks bundled into a single commit per plan T6.
+
+## Notes for Verifier / Orchestrator
+
+- `.planning/config.json` flip cycle: strict `true` → `false` → `true`. The on-disk value at commit time is `true`. The flip itself was not committed (git diff was empty after the second flip), so no follow-up flip-back commit was needed.
+- `.planning/STATE.md` was modified by the orchestrator pre-spawn (Phase 19 completion bump from 11 → 12 phases). It is NOT staged in this plan's commit; the orchestrator will fold it into the phase-completion commit.
+- pdflatex exit codes were 1 for `companion_explainer` and `verification_document` due to pre-existing missing image files (`fig*.png`, `evolution_*.png` not present at the cwd). pdftex.def emitted draft boxes and continued; PDFs are usable. Zero non-image `^!` lines in any of the three .log files.
