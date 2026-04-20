@@ -42,7 +42,8 @@ function _run_baselines(ops, tasks)
         @info "Running baseline" op=op.id seed=task.seed
         rec = run_record(op, task.flavor, task.strength, op.x_seed, task.seed;
                          max_iter = S22R_SMOKE ? 8 : S22_MAX_ITER,
-                         log_cost = true)
+                         log_cost = true,
+                         compute_hessian = false)
         base[task.op_key] = rec
     end
     return base
@@ -60,7 +61,8 @@ function _run_flavors(ops, tasks, baselines)
             @info "Task start" idx=i op=op.id flavor=String(task.flavor) strength=task.strength
             records[i] = run_record(op, task.flavor, task.strength, x0, task.seed;
                                     max_iter = S22R_SMOKE ? 8 : S22_MAX_ITER,
-                                    log_cost = true)
+                                    log_cost = true,
+                                    compute_hessian = false)
             @info "Task done" idx=i tag=records[i]["tag"] J_plain_dB=records[i]["J_plain_dB"] sigma_3dB=records[i]["sigma_3dB"]
         catch e
             @warn "Task failed" idx=i op=op.id flavor=String(task.flavor) strength=task.strength exception=(e, catch_backtrace())

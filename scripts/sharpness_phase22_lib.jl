@@ -424,8 +424,66 @@ function flavor_label(flavor::Symbol)
     return string(flavor)
 end
 
+function _set_hessian_fields!(record::Dict{String, Any}, hess_valid::Bool, hess_error::AbstractString, hess)
+    record["hessian_status"] = hess_valid ? "ok" : (hess_error == "not evaluated" ? "pending" : "failed")
+    record["hessian_valid"] = hess_valid
+    record["hessian_error"] = hess_error
+    record["hessian_lambda_top"] = hess.lambda_top
+    record["hessian_lambda_bottom"] = hess.lambda_bottom
+    record["hessian_lambda_max"] = hess.lambda_max
+    record["hessian_lambda_min"] = hess.lambda_min
+    record["hessian_ratio_absmin_to_max"] = hess.ratio_absmin_to_max
+    record["hessian_indefinite"] = hess.indefinite
+    record["hessian_niter_top"] = hess.niter_top
+    record["hessian_niter_bottom"] = hess.niter_bottom
+    return record
+end
+
+function _empty_hessian_payload()
+    return (
+        lambda_top = Float64[],
+        lambda_bottom = Float64[],
+        lambda_max = NaN,
+        lambda_min = NaN,
+        ratio_absmin_to_max = NaN,
+        indefinite = false,
+        niter_top = -1,
+        niter_bottom = -1,
+        V_top = zeros(Float64, 0, 0),
+        V_bottom = zeros(Float64, 0, 0),
+    )
+end
+
+function save_record(record::Dict{String, Any})
+    out_path = get(record, "record_path", joinpath(S22_RUNS_DIR, "$(record["tag"]).jld2"))
+    jldsave(out_path; record)
+    record["record_path"] = out_path
+    return out_path
+end
+
+function attach_hessian!(record::Dict{String, Any}, op)
+    get(record, "failed", false) && return record
+    prob = _copy_prob(op.prob)
+    x_opt = Vector{Float64}(record["x_opt"])
+    tag = record["tag"]
+    hess_valid = true
+    hess_error = ""
+    hess = _empty_hessian_payload()
+    try
+        hess = hessian_eigspectrum(x_opt, op, prob)
+    catch e
+        hess_valid = false
+        hess_error = string(typeof(e), ": ", e)
+        @warn "Hessian eigenspectrum failed; preserving optimization record without geometry fields" tag=tag exception=(e, catch_backtrace())
+    end
+    _set_hessian_fields!(record, hess_valid, hess_error, hess)
+    save_record(record)
+    return record
+end
+
 function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed::Integer;
-                    max_iter::Int=S22_MAX_ITER, log_cost::Bool=true)
+                    max_iter::Int=S22_MAX_ITER, log_cost::Bool=true,
+                    compute_hessian::Bool=false)
     prob = _copy_prob(op.prob)
     tag = run_tag(op, flavor, strength)
     t0 = time()
@@ -486,27 +544,6 @@ function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed
     wall_s = time() - t0
     sigma = sigma_scan(phi_opt, prob; seed=seed + 200_000)
     J_plain_dB = _eval_plain_J_dB(phi_opt, prob)
-    hess_valid = true
-    hess_error = ""
-    hess = (
-        lambda_top = Float64[],
-        lambda_bottom = Float64[],
-        lambda_max = NaN,
-        lambda_min = NaN,
-        ratio_absmin_to_max = NaN,
-        indefinite = false,
-        niter_top = -1,
-        niter_bottom = -1,
-        V_top = zeros(Float64, length(x_opt), 0),
-        V_bottom = zeros(Float64, length(x_opt), 0),
-    )
-    try
-        hess = hessian_eigspectrum(x_opt, op, prob)
-    catch e
-        hess_valid = false
-        hess_error = string(typeof(e), ": ", e)
-        @warn "Hessian eigenspectrum failed; preserving optimization record without geometry fields" tag=tag exception=(e, catch_backtrace())
-    end
 
     record = Dict{String, Any}(
         "version" => S22_VERSION,
@@ -538,16 +575,6 @@ function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed
         "sigma_scan_median_delta_J_dB" => sigma.median_delta_J_dB,
         "sigma_scan_mean_delta_J_dB" => sigma.mean_delta_J_dB,
         "sigma_3dB" => sigma.sigma_3dB,
-        "hessian_valid" => hess_valid,
-        "hessian_error" => hess_error,
-        "hessian_lambda_top" => hess.lambda_top,
-        "hessian_lambda_bottom" => hess.lambda_bottom,
-        "hessian_lambda_max" => hess.lambda_max,
-        "hessian_lambda_min" => hess.lambda_min,
-        "hessian_ratio_absmin_to_max" => hess.ratio_absmin_to_max,
-        "hessian_indefinite" => hess.indefinite,
-        "hessian_niter_top" => hess.niter_top,
-        "hessian_niter_bottom" => hess.niter_bottom,
         "basis_kind" => hasproperty(op, :basis_kind) ? String(op.basis_kind) : "identity",
         "N_phi" => hasproperty(op, :N_phi) ? op.N_phi : op.Nt,
         "standard_image_dir" => S22_IMAGES_DIR,
@@ -555,10 +582,10 @@ function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed
         "fftw_nthreads" => FFTW.get_num_threads(),
         "blas_nthreads" => BLAS.get_num_threads(),
     )
+    _set_hessian_fields!(record, false, "not evaluated", _empty_hessian_payload())
+    compute_hessian && attach_hessian!(record, op)
 
-    out_path = joinpath(S22_RUNS_DIR, "$(tag).jld2")
-    jldsave(out_path; record)
-    record["record_path"] = out_path
+    save_record(record)
     return record
 end
 

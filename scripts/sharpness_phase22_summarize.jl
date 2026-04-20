@@ -28,8 +28,13 @@ const S22S_PARETO_PATH = joinpath(S22_RESULTS_DIR, "phase22_pareto.png")
 
 function _load_records()
     path = joinpath(S22_RESULTS_DIR, S22S_SMOKE ? "phase22_results_smoke.jld2" : "phase22_results.jld2")
-    d = JLD2.load(path)
-    return d["records"], path
+    if isfile(path)
+        d = JLD2.load(path)
+        return d["records"], path
+    end
+    run_paths = sort(filter(p -> endswith(p, ".jld2"), readdir(S22_RUNS_DIR; join=true)))
+    records = [JLD2.load(run_path)["record"] for run_path in run_paths]
+    return records, "$(S22_RUNS_DIR)/*.jld2"
 end
 
 _successful(records) = [r for r in records if !get(r, "failed", false)]
@@ -102,7 +107,7 @@ function _indefiniteness_table(records)
         j = @sprintf("%.2f", Float64(r["J_plain_dB"]))
         s3 = isfinite(r["sigma_3dB"]) ? @sprintf("%.3f", Float64(r["sigma_3dB"])) : "NaN"
         hvalid = get(r, "hessian_valid", true)
-        hstat = hvalid ? "ok" : "NA"
+        hstat = get(r, "hessian_status", hvalid ? "ok" : "NA")
         ind = hvalid ? (Bool(r["hessian_indefinite"]) ? "YES" : "NO") : "NA"
         ratio = hvalid && isfinite(r["hessian_ratio_absmin_to_max"]) ? @sprintf("%.3e", Float64(r["hessian_ratio_absmin_to_max"])) : "NaN"
         push!(lines, "| $(op) | $(r["flavor_label"]) | $(strength) | $(j) | $(s3) | $(hstat) | $(ind) | $(ratio) |")
