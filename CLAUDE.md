@@ -318,6 +318,49 @@ When starting any edit on a tracked source file, route through:
 If the user explicitly says "bypass GSD for this one" (or similar), flip `hooks.workflow_guard_strict` to `false` in `.planning/config.json` for the duration of the task, then flip it back. Do NOT silently work around the block any other way.
 <!-- GSD:workflow-end -->
 
+## Codex Runtime Constraints
+
+**Context:** On 2026-04-20 a Codex-on-VM session executing Phase 28 produced:
+- A single `integrate(phase28-34)` commit spanning **7 phases**
+- No `manifest.json` in `.planning/phases/28-*/`
+- No atomic per-plan commits
+- No visible `spawn_agent(gsd-executor, ...)` handoff
+
+Codex's skill adapter translates Claude's `Task(...)` → `spawn_agent(...)`, but in practice it sometimes silently falls back to inline execution. Heavy orchestrators (`plan-phase`, `execute-phase`, `autonomous`) lose their plan-check / verifier / atomic-commit protocol when this happens, leaving the phase uninauditable.
+
+### Whitelist — Codex MAY invoke these skills
+
+Single-scope, inline-safe, no named subagents required:
+
+- `$gsd-fast`, `$gsd-quick`, `$gsd-note`, `$gsd-add-todo`, `$gsd-add-backlog`
+- `$gsd-progress`, `$gsd-stats`, `$gsd-check-todos`, `$gsd-help`, `$gsd-status`
+- `$gsd-explore`, `$gsd-spike`, `$gsd-sketch`, `$gsd-plant-seed`
+- `$gsd-research-phase` (standalone research only — DO NOT chain to plan or execute)
+
+### Blacklist — Codex MUST NOT invoke these skills
+
+Require subagent orchestration (`gsd-planner`, `gsd-phase-researcher`, `gsd-executor`, `gsd-plan-checker`, `gsd-verifier`, etc.):
+
+- `$gsd-plan-phase`, `$gsd-execute-phase`, `$gsd-execute-plan`
+- `$gsd-autonomous`, `$gsd-plan-review-convergence`
+- `$gsd-verify-work`, `$gsd-review`, `$gsd-ship`, `$gsd-debug`
+- `$gsd-audit-fix`, `$gsd-audit-milestone`, `$gsd-audit-uat`, `$gsd-code-review`
+- `$gsd-ingest-docs`, `$gsd-new-milestone`, `$gsd-new-project`
+
+If a Codex session determines it needs a blacklisted skill, it MUST stop and return this exact phrase:
+
+> "This task requires the `[name]` skill, which depends on named subagent orchestration. Codex's adapter is unreliable for this. Please re-run in Claude Code."
+
+**Do NOT** silently execute inline. **Do NOT** manually replicate the skill's workflow (no hand-writing `PHASE-SUMMARY.md`, no fabricating `manifest.json`, no batch-committing multiple plans). Return control to the user.
+
+### Verification after any Codex session touching `.planning/phases/`
+
+```bash
+bash scripts/check-phase-integrity.sh <phase-number>
+```
+
+Exits 0 if protocol was followed, 1 if violations detected. Run before ending any Codex session that touched phase artifacts; run on any phase you suspect was commit-bombed.
+
 ## Multi-Machine Workflow
 
 This project runs on **multiple machines** (local Mac + GCP claude-code-host + occasional bursts on fiber-raman-burst). The same repo is cloned on each machine. Without discipline, divergent commits on different machines produce merge conflicts.
