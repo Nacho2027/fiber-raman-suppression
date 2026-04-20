@@ -1083,10 +1083,16 @@ through the audit:
 \begin{itemize}
   \item A polynomial-fit comparison of $\varphi_{\text{opt}}$ between
     $L = 2$~m and $L = 100$~m was used to argue for ``nonlinear
-    structural adaptation.'' The fit's $R^2$ was $0.015$ at 100~m
-    and $0.037$ at 2~m --- in both cases the quadratic model
-    explained less than 4\% of the phase variance, so the extracted
-    $a_2$ coefficients are noise. A ratio of noise is noise.
+    structural adaptation.'' The weighted quadratic fit's $R^2$ was
+    $0.015$ at 100~m and $0.037$ at 2~m --- in both cases the
+    quadratic model explained less than 4\% of the weighted
+    variance on the signal band, so $96$--$98\%$ of
+    $\varphi_{\text{opt}}(\omega)$ is non-quadratic residual
+    structure orthogonal to $\{1, \omega, \omega^2\}$. The extracted
+    $a_2$ is the projection of a non-quadratic signal onto a
+    misspecified basis; its sign and magnitude have no scaling-law
+    content, and the sign-flip across $L$ is the direct consequence
+    of the underlying coefficient being near zero.
     (See \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §W1.)
   \item The 100~m L-BFGS ``optimum'' of $-54.77$~dB is a lower bound
     (25 iter, $\|\nabla J\| = 0.48$, \texttt{converged = false}),

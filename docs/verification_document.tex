@@ -1180,9 +1180,14 @@ parallel to pressure-test the single-mode result, begin the multimode
 extension, and audit the cost-function and optimizer defaults. The raw
 synthesis is \texttt{results/SYNTHESIS-2026-04-19.md}; a physics audit
 filtering those claims is
-\texttt{results/PHYSICS\_AUDIT\_2026-04-19.md} (2026-04-19). This
-section records only the claims that survived the audit, with scope
-caveats where the audit narrowed the original framing.
+\texttt{results/PHYSICS\_AUDIT\_2026-04-19.md} (2026-04-19).
+An independent numerical-trustworthiness audit re-ran every JLD2 under
+\texttt{results/raman/} on a validator-controlled grid and is reported
+at \texttt{results/validation/REPORT.md} (2026-04-19) --- its findings
+drive the boundary-energy and Hessian-anchoring caveats in
+§\ref{sec:april-boundary} and §\ref{sec:april-hessian}. This section
+records only the claims that survived both audits, with scope caveats
+where either narrowed the original framing.
 
 \subsection{Re-baselined single-mode suppression}
 \label{sec:april-rebaseline}
@@ -1282,6 +1287,30 @@ trust-region Newton on the 57-dim subspace
 (§\ref{sec:april-pareto}) is the principled next step.
 \end{keyresult}
 
+\begin{flagged}
+\textbf{Caveat on the dB anchoring of the Hessian-study optima
+(Phase 18 cross-check, 2026-04-19).}
+The Phase 18 numerical-trustworthiness audit
+(\texttt{results/validation/REPORT.md}) re-ran the saved
+\texttt{phase13/hessian\_smf28\_canonical.jld2} and
+\texttt{phase13/hessian\_hnlf\_canonical.jld2} on a
+validator-controlled grid and recovered $J = -48.2$~dB (SMF-28)
+and $J = -44.0$~dB (HNLF), versus the $-60.5$~dB and $-74.4$~dB
+originally reported in the JLD2 metadata. The discrepancy is the
+time-window edge-bleed artefact discussed in
+§\ref{sec:april-boundary} (output edge fraction $1.0\%$ and
+$2.1\%$, just past the SUSPECT threshold).
+\emph{The eigenstructure result above is unaffected}: the saved
+$\varphi_\text{opt}$ files are true stationary points on the
+recomputed grid (adjoint $\|g\| \sim 10^{-5}$), so the Hessian
+was computed at a real optimum --- just at a different $J$ value
+than originally quoted. When citing this result alongside a dB
+number, use the recomputed values $-48.2$~dB / $-44.0$~dB; when
+citing only the eigenstructure, the original ratios stand.
+Audit: \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §X1. Source:
+\texttt{results/validation/phase13\_hessian\_\{smf28,hnlf\}.md}.
+\end{flagged}
+
 \subsection{Determinism}
 \label{sec:april-det}
 
@@ -1354,11 +1383,13 @@ Three claims from the original synthesis were demoted:
 \textbf{(W1) ``$a_2(100\,\mathrm{m})/a_2(2\,\mathrm{m}) = -3.30$ vs.\ pure-GVD-predicted $+50$ is a structural-adaptation fingerprint.''}
 The weighted quadratic fit of $\varphi_\text{opt}(\omega)$ over the
 $\pm 5$~THz signal band has $R^2 = 0.015$ at 100~m and $R^2 = 0.037$
-at 2~m. A quadratic model explaining $< 4\%$ of the variance does
-not constrain $a_2$; the extracted coefficients are fit noise, and
-their ratio is a ratio of noise. The sign flip is consistent with a
-true $a_2$ near zero perturbed by independent residuals at each
-length. The finding ``$\varphi_\text{opt}$ is not a low-order
+at 2~m. A quadratic model explaining $< 4\%$ of the weighted
+variance is misspecified: $96$--$98\%$ of $\varphi_\text{opt}(\omega)$
+on the signal band is non-quadratic residual structure orthogonal to
+$\{1, \omega, \omega^2\}$. The extracted $a_2$ is the projection of
+a non-quadratic signal onto that misspecified basis. The sign flip
+across $L$ is the direct consequence of the underlying coefficient
+being near zero --- exactly what $R^2 \to 0$ reports. The finding ``$\varphi_\text{opt}$ is not a low-order
 polynomial on the signal band'' \emph{is} defensible (matches Phase 9,
 \texttt{PHASE9\_FINDINGS.md} L19--29), but the
 GVD-scaling comparison is removed, not caveated. Fit code:
