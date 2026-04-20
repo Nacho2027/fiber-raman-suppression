@@ -173,4 +173,18 @@ include(joinpath(_ROOT, "scripts", "common.jl"))
         @test st2 == st1
     end
 
+    @testset "Pulse form validation" begin
+        sim = Dict(
+            "M" => 1,
+            "Nt" => 8,
+            "ts" => collect(range(-1.0, 1.0; length=8)),
+        )
+        u0_modes = [1.0]
+
+        @test_throws ArgumentError MultiModeNoise.get_initial_state(
+            u0_modes, 0.1, 185e-15, 80.5e6, "lorentzian", sim)
+        @test_throws ArgumentError MultiModeNoise.get_initial_state_gain_smf(
+            u0_modes, 0.1, 185e-15, 80.5e6, "lorentzian", sim)
+    end
+
 end

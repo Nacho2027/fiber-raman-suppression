@@ -227,7 +227,7 @@ Drivers that skip this step are incomplete. Do not mark work "done" without the 
 - Location: `src/gain_simulation/gain.jl`
 - Contains: `YDFAParams` struct, cross-section interpolation from NPZ data, gain computation
 - Depends on: `NPZ`, `Interpolations`
-- Used by: `simulate_disp_gain_smf.jl` and `simulate_disp_gain_mmf.jl`
+- Used by: `simulate_disp_gain_mmf.jl`
 - Purpose: Quantum noise map computation
 - Location: `src/analysis/analysis.jl`, `src/analysis/plotting.jl`
 - Contains: Noise variance decomposition (shot noise, excess noise, derivative terms) via `Tullio` tensor contractions
@@ -297,7 +297,7 @@ Drivers that skip this step are incomplete. Do not mark work "done" without the 
 - **Include-based composition (scripts)**: Scripts use `include()` with manual include guards rather than proper module imports. This is a pragmatic choice for research code but creates fragile dependency chains.
 - **Interaction picture formulation**: Separating linear dispersion from nonlinear effects allows the ODE solver to use larger step sizes, critical for performance with large `Nt` grids.
 - **Adjoint method for gradients**: Rather than automatic differentiation (which would struggle with the ODE solver), the codebase implements a hand-derived adjoint equation for gradient computation. This is exact and efficient but requires maintaining a separate adjoint ODE.
-- **Two gain implementations**: `simulate_disp_gain_smf.jl` appears twice (one in `src/simulation/`, one standalone). The version in `src/simulation/` uses a `compute_gain!` placeholder; the standalone has the full YDFA model dispatching on `YDFAParams`.
+- **Single live gain implementation**: `simulate_disp_gain_mmf.jl` is the gain-enabled propagation path currently used by the project. The stale placeholder `src/simulation/simulate_disp_gain_smf.jl` was removed in Phase 25 after it was confirmed to be dead code.
 - **L-BFGS optimization**: Uses `Optim.jl` with L-BFGS for the spectral phase/amplitude optimization. The `only_fg!()` interface computes cost and gradient simultaneously (since both come from the same forward-adjoint pass).
 ## Cross-Cutting Concerns
 <!-- GSD:architecture-end -->

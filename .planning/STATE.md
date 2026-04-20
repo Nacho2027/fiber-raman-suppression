@@ -181,6 +181,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 22 added (2026-04-20): Sharpness-aware cost function research — implement and compare three flavors (SAM worst-case, Hessian-trace penalty via Hutchinson HVP, Monte-Carlo Gaussian robust), sweep regularization on SMF-28 canonical + Pareto Nφ=57 operating points. Measure J_dB + σ_3dB + Hessian eigenspectrum to produce depth/robustness Pareto. Overnight Mac session -t 8, session tag S-sharpness.
 - Phase 23 added (2026-04-20): Matched quadratic-chirp 100m baseline — settle audit §S5. Decide whether Session F's −51.5 dB warm-start transfer at L=100m is genuine nonlinear structural adaptation or trivially explained by any sufficiently-dispersive pre-chirp. Overnight Mac session -t 8, session tag M-matched100m.
 - Phase 24 added (2026-04-20): Canonical docs polish + PDF rebuild — fold Phase 21/22/23 results into `docs/verification_document.tex` + `docs/companion_explainer.tex`, add meaningful diagrams, fix rendering bugs, tighten literature anchoring. Dormant-then-fires after sibling sessions land SUMMARY commits. Session tag D-docs.
+- Phase 25 added (2026-04-20): Project-wide bug squash and concern triage — re-audit STATE/CONCERNS against live code, fix low-risk correctness and stale-doc issues, and plant seeds for structural hazards that need dedicated phases.
 
 ### Resolved Issues
 
@@ -192,8 +193,9 @@ Both fixes require re-running the sweep to get valid results.
 
 ### Open Concerns
 
-- compute_noise_map_modem in src/analysis/analysis.jl is broken (empty @tullio, undefined vars) — marked abandoned, do not call
-- README.md at project root is stale (references MMF squeezing, not Raman suppression)
+- `fiber["zsave"]` mutation remains a real thread-safety hazard for any new parallel driver that forgets `deepcopy(fiber)`; this needs a dedicated structural fix, not another documentation warning.
+- `using PyPlot` at `src/MultiModeNoise.jl` module load still makes non-plotting code paths depend on a working matplotlib/PyCall install.
+- No automated CI gate runs the fast tier on push/PR; regressions still rely on manual discipline.
 
 ## Session Continuity
 

@@ -143,6 +143,8 @@ function get_initial_state(u0_modes, P_cont, fwhm, rep_rate, pulse_form, sim)
         τ = fwhm / 1.7627
         u0_norm .= sech.(-ts / τ)
         P_peak = 0.881374 * P_cont / fwhm / rep_rate
+    else
+        throw(ArgumentError("unsupported pulse_form=$(repr(pulse_form)); expected \"gauss\" or \"sech_sq\""))
     end
     u0_norm .*= u0_modes'
     u0_norm /= √maximum(sum(abs2.(u0_norm), dims=2))

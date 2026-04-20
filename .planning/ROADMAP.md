@@ -354,3 +354,13 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 24 to break down)
+
+### Phase 25: Project-wide bug squash and concern triage
+
+**Goal:** Re-audit the codebase for real bugs and stale project guidance, fix the low-risk correctness/documentation issues that can be resolved safely in-place, and seed the larger architectural hazards instead of papering over them.
+**Requirements**: Derived from `.planning/STATE.md` open concerns and `.planning/codebase/CONCERNS.md`
+**Depends on:** Phase 24
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 25-01-PLAN.md — Audit bug reports against live code, patch real correctness/staleness issues, run fast-tier verification, seed unresolved structural hazards

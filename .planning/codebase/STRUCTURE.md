@@ -17,7 +17,6 @@ fiber-raman-suppression/
 │   │   ├── simulate_disp_mmf.jl       # Forward RHS `disp_mmf!` + preallocator
 │   │   ├── sensitivity_disp_mmf.jl    # Adjoint RHS `adjoint_disp_mmf!`
 │   │   ├── simulate_disp_gain_mmf.jl  # Forward + YDFA gain (MMF)
-│   │   ├── simulate_disp_gain_smf.jl  # Forward + YDFA gain (SMF)
 │   │   ├── simulate_mmf.jl            # Fiber-mode solver without dispersion (Session C reference)
 │   │   └── fibers.jl                  # GRIN eigensolver + overlap tensor γ[i,j,k,l]
 │   ├── gain_simulation/

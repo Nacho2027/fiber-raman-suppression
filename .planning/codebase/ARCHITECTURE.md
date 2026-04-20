@@ -25,7 +25,7 @@
 - Contains:
   - `simulate_disp_mmf.jl` — forward RHS `disp_mmf!`, `get_p_disp_mmf`, `solve_disp_mmf`
   - `sensitivity_disp_mmf.jl` — adjoint RHS `adjoint_disp_mmf!`, `solve_adjoint_disp_mmf`, `calc_δs!`
-  - `simulate_disp_gain_mmf.jl`, `simulate_disp_gain_smf.jl` — variants with `compute_gain!` hook
+  - `simulate_disp_gain_mmf.jl` — gain-enabled propagation path with `compute_gain` dispatch
   - `simulate_mmf.jl` — fiber-mode-only solver (no dispersion; Session C reference)
   - `fibers.jl` — GRIN dielectric profile, finite-difference Helmholtz eigensolver, overlap tensor `γ[i,j,k,l]`
 - Depends on: `DifferentialEquations.jl` (Tsit5, Vern9), `FFTW.jl` (preplanned MEASURE), `Tullio.jl` + `LoopVectorization`, `Arpack.jl`, `SparseArrays`, `FiniteDifferences`, `LinearAlgebra`
@@ -46,7 +46,7 @@
 - Purpose: Yb³⁺ rate-equation gain for SMF/MMF amplifier runs.
 - Location: `src/gain_simulation/gain.jl` with companion data `Yb_absorption.npz`, `Yb_emission.npz`
 - Contains: `YDFAParams` struct (only typed struct in the codebase), cross-section interpolation, `compute_gain!`
-- Used by: `simulate_disp_gain_{smf,mmf}.jl`, notebooks
+- Used by: `simulate_disp_gain_mmf.jl`, notebooks
 
 **Quantum-noise analysis:**
 - Purpose: Shot/excess/derivative noise decomposition via mode-overlap Tullio contractions.

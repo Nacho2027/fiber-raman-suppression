@@ -52,17 +52,15 @@ const BENCHMARK_JLD2 = joinpath(BENCHMARK_DIR, "benchmark.jld2")
 
 const SIM_FILES = [
     joinpath(PROJECT_ROOT, "src", "simulation", "simulate_disp_mmf.jl"),
-    joinpath(PROJECT_ROOT, "src", "simulation", "simulate_disp_gain_smf.jl"),
     joinpath(PROJECT_ROOT, "src", "simulation", "simulate_disp_gain_mmf.jl"),
     joinpath(PROJECT_ROOT, "src", "simulation", "sensitivity_disp_mmf.jl"),
 ]
 
 const N_RUNS = 3                   # timed runs per leg
-# Total `flags=FFTW.X` sites across the 4 simulation files. Verified on-disk
-# at Phase 15 Plan 01 completion: 4 + 4 + 4 + 6 = 18. The Phase 15 PLAN.md
-# mentioned 16 as an approximate estimate; the actual code has 18 sites, all
-# of which were switched ESTIMATE by commit 1caa08d and are asserted here.
-const EXPECTED_FLAG_COUNT = 18
+# Total `flags=FFTW.X` sites across the 3 live simulation files. The dead
+# `simulate_disp_gain_smf.jl` placeholder path was removed in Phase 25, so the
+# benchmark only swaps flags in code that is still part of the project.
+const EXPECTED_FLAG_COUNT = 14
 
 mkpath(BENCHMARK_DIR)
 
