@@ -63,7 +63,6 @@ function _run_flavors(ops, tasks, baselines)
                                     log_cost = true)
             @info "Task done" idx=i tag=records[i]["tag"] J_plain_dB=records[i]["J_plain_dB"] sigma_3dB=records[i]["sigma_3dB"]
         catch e
-            bt = sprint(showerror, e, catch_backtrace())
             @warn "Task failed" idx=i op=op.id flavor=String(task.flavor) strength=task.strength exception=(e, catch_backtrace())
             tag = run_tag(op, task.flavor, task.strength)
             fail = Dict{String, Any}(
@@ -76,7 +75,7 @@ function _run_flavors(ops, tasks, baselines)
                 "strength" => task.strength,
                 "seed" => task.seed,
                 "failed" => true,
-                "error" => bt,
+                "error" => string(typeof(e), ": ", e),
             )
             out_path = joinpath(S22_RUNS_DIR, "$(tag).jld2")
             jldsave(out_path; record=fail)

@@ -87,6 +87,28 @@ const S22_OP_PARETO57 = (
 
 lin_to_dB_safe(x) = 10 * log10(max(x, 1e-15))
 
+struct S22HVPOperator{F, V}
+    n::Int
+    oracle::F
+    x0::V
+    eps::Float64
+end
+
+Base.size(H::S22HVPOperator) = (H.n, H.n)
+Base.size(H::S22HVPOperator, d::Integer) = d <= 2 ? H.n : 1
+Base.eltype(::S22HVPOperator{F, V}) where {F, V} = Float64
+LinearAlgebra.issymmetric(::S22HVPOperator) = true
+LinearAlgebra.ishermitian(::S22HVPOperator) = true
+
+function LinearAlgebra.mul!(y::AbstractVector, H::S22HVPOperator, v::AbstractVector)
+    if norm(v) <= 1e-15
+        fill!(y, 0.0)
+    else
+        y .= fd_hvp(H.x0, collect(v), H.oracle; eps=H.eps)
+    end
+    return y
+end
+
 function _mkdirs()
     mkpath(S22_RESULTS_DIR)
     mkpath(S22_RUNS_DIR)
@@ -337,18 +359,19 @@ function hessian_eigspectrum(x_opt::AbstractVector, op, prob;
             V_bottom = V_bot,
         )
     else
-        H_op = HVPOperator(length(x_opt), oracle, collect(x_opt), Float64(eps))
+        nev_eff = min(nev, 10)
+        H_op = S22HVPOperator(length(x_opt), oracle, collect(x_opt), Float64(eps))
         λ_top, V_top, niter_top = try
-            Arpack.eigs(H_op; nev=nev, which=:LR, maxiter=500, tol=1e-7)
+            Arpack.eigs(H_op; nev=nev_eff, which=:LR, maxiter=500, tol=1e-7)
         catch e
             @warn "Arpack top wing failed; retrying with reduced nev / looser tol" exception=(e, catch_backtrace())
-            Arpack.eigs(H_op; nev=max(6, min(10, nev)), which=:LR, maxiter=1500, tol=1e-6)
+            Arpack.eigs(H_op; nev=max(6, min(8, nev_eff)), which=:LR, maxiter=1500, tol=1e-6)
         end
         λ_bot, V_bot, niter_bot = try
-            Arpack.eigs(H_op; nev=nev, which=:SR, maxiter=500, tol=1e-7)
+            Arpack.eigs(H_op; nev=nev_eff, which=:SR, maxiter=500, tol=1e-7)
         catch e
             @warn "Arpack bottom wing failed; retrying with reduced nev / looser tol" exception=(e, catch_backtrace())
-            Arpack.eigs(H_op; nev=max(6, min(10, nev)), which=:SR, maxiter=1500, tol=1e-6)
+            Arpack.eigs(H_op; nev=max(6, min(8, nev_eff)), which=:SR, maxiter=1500, tol=1e-6)
         end
 
         top = real.(collect(λ_top))
