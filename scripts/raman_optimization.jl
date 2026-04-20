@@ -116,20 +116,8 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     @assert isfinite(J) "cost is not finite: $J"
     @assert all(isfinite, ∂J_∂φ) "gradient contains NaN/Inf"
 
-    # Log-scale cost: J_dB = 10·log10(J), gradient scaled by chain rule.
-    # Keeps gradient O(1) as J→0, preventing L-BFGS stall at deep suppression.
-    if log_cost
-        J_clamped = max(J, 1e-15)
-        J_phys = 10.0 * log10(J_clamped)
-        log_scale = 10.0 / (J_clamped * log(10.0))
-        ∂J_∂φ_scaled = ∂J_∂φ .* log_scale
-    else
-        J_phys = J
-        ∂J_∂φ_scaled = ∂J_∂φ
-    end
-
-    J_total = J_phys
-    grad_total = copy(∂J_∂φ_scaled)
+    J_total = J
+    grad_total = copy(∂J_∂φ)
 
     # ── GDD penalty: ∫(d²φ/dω²)² dω, scaled by Δω⁻³ for N-independence ──
     if λ_gdd > 0
@@ -171,6 +159,15 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
             grad_boundary_ω = coeff .* imag.(conj.(uω0_shaped) .* fft(mask_edge .* ut0, 1))
             grad_total .+= grad_boundary_ω
         end
+    end
+
+    # Log-scale the entire regularized objective so the returned gradient matches
+    # the scalar objective seen by L-BFGS.
+    if log_cost
+        J_clamped = max(J_total, 1e-15)
+        log_scale = 10.0 / (J_clamped * log(10.0))
+        grad_total .*= log_scale
+        J_total = 10.0 * log10(J_clamped)
     end
 
     @assert isfinite(J_total) "regularized cost is not finite: $J_total"
@@ -329,7 +326,7 @@ function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
     J_gdd = zeros(length(gdd_range))
     for (i, gdd) in enumerate(gdd_range)
         φ_perturbed = φ_opt .+ 0.5 .* gdd .* ω2 .* ones(1, M)
-        J_gdd[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask)
+        J_gdd[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
     end
 
     # TOD sweep: φ_chirp(ω) = ⅙ · TOD · ω³
@@ -337,7 +334,7 @@ function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
     J_tod = zeros(length(tod_range))
     for (i, tod) in enumerate(tod_range)
         φ_perturbed = φ_opt .+ (tod / 6.0) .* ω3 .* ones(1, M)
-        J_tod[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask)
+        J_tod[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
     end
 
     return gdd_range, J_gdd, tod_range, J_tod

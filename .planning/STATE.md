@@ -65,6 +65,7 @@ Next: Multimode (M>1) simulations for quantum noise analysis
 | 260331-ph8 | Phase 8: Sweep point reporting (report cards, summaries, combined report) | 2026-03-31 | 00e5833 |
 | 260415-u4s | Benchmark threading opportunities across simulation codebase | 2026-04-16 | d1c5bd9 |
 | 260420-oyg | Independent numerics audit (second opinion on Phase 27, originally labeled Phase 25 before integration rename) — phase docs updated in place, 2 new seeds planted | 2026-04-20 | 530f214 |
+| 260420-rqo | Fix numerics audit bugs: pre-attenuator edge fraction, regularized log-cost scaling, chirp sensitivity plotting | 2026-04-20 | pending |
 
 ## Critical Context for Future Agents
 
@@ -206,6 +207,7 @@ Both fixes require re-running the sweep to get valid results.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260420-iwc | Force-add S-sharpness Phase 22 artifacts + sync Mac ↔ VM | 2026-04-20 | 7e9b965 | [260420-iwc-sync-phase22-artifacts](./quick/260420-iwc-sync-phase22-artifacts/) |
+| 260420-rqo | Fix numerics audit bugs: pre-attenuator edge fraction, regularized log-cost scaling, chirp sensitivity plotting | 2026-04-20 | pending | [260420-rqo-fix-numerics-audit-bugs-pre-attenuator-e](./quick/260420-rqo-fix-numerics-audit-bugs-pre-attenuator-e/) |
 
 ## Session Continuity
 

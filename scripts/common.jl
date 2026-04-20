@@ -292,8 +292,15 @@ function check_boundary_conditions(ut_z, sim; threshold=1e-6)
 
     Nt = sim["Nt"]
     n_edge = max(1, Nt ÷ 20)  # 5% of grid on each side
-    E_total = sum(abs2.(ut_z))
-    E_edges = sum(abs2.(ut_z[1:n_edge, :])) + sum(abs2.(ut_z[end-n_edge+1:end, :]))
+    ut_physical = ut_z
+    if haskey(sim, "attenuator")
+        attenuator = sim["attenuator"]
+        @assert size(attenuator) == size(ut_z) "attenuator shape must match field shape"
+        # Recover the physical pre-attenuator field before measuring edge energy.
+        ut_physical = ut_z ./ max.(attenuator, sqrt(eps(Float64)))
+    end
+    E_total = sum(abs2.(ut_physical))
+    E_edges = sum(abs2.(ut_physical[1:n_edge, :])) + sum(abs2.(ut_physical[end-n_edge+1:end, :]))
     edge_frac = E_edges / max(E_total, eps())
     return edge_frac < threshold, edge_frac
 end
