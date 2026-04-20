@@ -45,7 +45,6 @@ function phase13_run_one(cfg)
     phi_seed_old = recovery_key_or_nothing(old, ["phi_opt", "phi"])
     phi_seed_old === nothing && error("no phi_opt found in $(cfg.source)")
 
-    attempt_floors = [cfg.min_time_window_ps, 2 * cfg.min_time_window_ps]
     chosen = nothing
     result = nothing
     phi_opt = nothing
@@ -58,18 +57,18 @@ function phase13_run_one(cfg)
     raman_threshold = nothing
     started = time()
 
-    for tw_floor in attempt_floors
-        honest = recovery_find_honest_grid(;
-            fiber_preset=cfg.fiber_preset,
-            L_fiber=cfg.L_fiber,
-            P_cont=cfg.P_cont,
-            β_order=cfg.β_order,
-            phi_seeds=[phi_seed_old],
-            old_Nt=cfg.old_Nt,
-            old_tw_ps=cfg.old_tw_ps,
-            min_time_window_ps=tw_floor,
-        )
+    honest = recovery_find_honest_grid(;
+        fiber_preset=cfg.fiber_preset,
+        L_fiber=cfg.L_fiber,
+        P_cont=cfg.P_cont,
+        β_order=cfg.β_order,
+        phi_seeds=[phi_seed_old],
+        old_Nt=cfg.old_Nt,
+        old_tw_ps=cfg.old_tw_ps,
+        min_time_window_ps=cfg.min_time_window_ps,
+    )
 
+    for _attempt in 1:2
         uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
             fiber_preset=cfg.fiber_preset,
             L_fiber=cfg.L_fiber,
@@ -87,12 +86,14 @@ function phase13_run_one(cfg)
         metrics = recovery_forward_metrics(uω0, phi_opt, deepcopy(fiber), sim, band_mask)
         chosen = honest
         metrics.edge_frac < 1e-3 && break
+
+        honest = (
+            Nt = recovery_nt_for_window(2 * honest.time_window_ps),
+            time_window_ps = 2 * honest.time_window_ps,
+        )
     end
 
     tag = lowercase(@sprintf("phase21_phase13_%s_l%0.2fm_p%0.3fw", cfg.key, cfg.L_fiber, cfg.P_cont))
-    images = recovery_save_standard_set(phi_opt, uω0, deepcopy(fiber), sim, band_mask, Δf, raman_threshold;
-        tag=tag, fiber_name=cfg.fiber_name, L_m=cfg.L_fiber, P_W=cfg.P_cont)
-
     jld2_path = joinpath(PH13_RESULTS_DIR, @sprintf("%s_reanchor.jld2", cfg.key))
     JLD2.jldsave(jld2_path;
         phi_opt=phi_opt,
@@ -105,6 +106,7 @@ function phase13_run_one(cfg)
         Nt=chosen.Nt,
         time_window_ps=chosen.time_window_ps,
         wall_s=time() - started,
+        tag=tag,
     )
 
     md_path = joinpath(PH13_RESULTS_DIR, @sprintf("%s_reanchor.md", cfg.key))
@@ -128,8 +130,24 @@ function phase13_run_one(cfg)
         "iterations" => Optim.iterations(result),
         "converged" => Optim.f_converged(result),
         "jld2" => jld2_path,
-        "images" => images,
+        "tag" => tag,
     )
+end
+
+function phase13_generate_images(results)
+    for cfg in PH13_CONFIGS
+        d = JLD2.load(joinpath(PH13_RESULTS_DIR, @sprintf("%s_reanchor.jld2", cfg.key)))
+        uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
+            fiber_preset=cfg.fiber_preset,
+            L_fiber=cfg.L_fiber,
+            P_cont=cfg.P_cont,
+            Nt=Int(d["Nt"]),
+            time_window=Float64(d["time_window_ps"]),
+            β_order=cfg.β_order,
+        )
+        recovery_save_standard_set(d["phi_opt"], uω0, deepcopy(fiber), sim, band_mask, Δf, raman_threshold;
+            tag=String(d["tag"]), fiber_name=cfg.fiber_name, L_m=cfg.L_fiber, P_W=cfg.P_cont)
+    end
 end
 
 function main()
@@ -138,6 +156,7 @@ function main()
     @threads for i in eachindex(PH13_CONFIGS)
         results[i] = phase13_run_one(PH13_CONFIGS[i])
     end
+    phase13_generate_images(results)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
