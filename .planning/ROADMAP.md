@@ -314,3 +314,43 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 20 to break down)
+
+### Phase 21: Numerical recovery of Phase 18 SUSPECT results — re-run Sweep-1, Session F 100m, Phase 13 Hessian re-anchor, opportunistic MMF aggressive regime, all at honest Nt/time-window (edge fraction < 0.1%)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 20
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 21 to break down)
+
+### Phase 22: Sharpness-aware cost function research — implement and compare SAM / Hessian-trace-penalty / Monte-Carlo-Gaussian flavors, sweep regularization, measure J_dB + σ_3dB + Hessian eigenspectrum across flavors to produce depth/robustness Pareto
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 21
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 22 to break down)
+
+### Phase 23: Matched quadratic-chirp 100m baseline — decide whether the −51.5 dB warm-start transfer at L=100m is genuine nonlinear structural adaptation or trivially explained by any sufficiently-dispersive pre-chirp (settles audit §S5)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 22
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 23 to break down)
+
+### Phase 24: Canonical docs polish and PDF rebuild — fold Phase 21/22/23 results into verification_document.tex + companion_explainer.tex with new diagrams, bug fixes, tightened literature anchoring; rebuild PDFs via two-pass pdflatex
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 23
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 24 to break down)
