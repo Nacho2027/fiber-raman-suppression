@@ -64,6 +64,7 @@ Next: Multimode (M>1) simulations for quantum noise analysis
 | 260331-gh0 | Fix SPM formula in recommended_time_window, max_iter 30→60, quality reporting | 2026-03-31 | 279d8ef |
 | 260331-ph8 | Phase 8: Sweep point reporting (report cards, summaries, combined report) | 2026-03-31 | 00e5833 |
 | 260415-u4s | Benchmark threading opportunities across simulation codebase | 2026-04-16 | d1c5bd9 |
+| 260420-oyg | Independent numerics audit (second opinion on Phase 27, originally labeled Phase 25 before integration rename) — phase docs updated in place, 2 new seeds planted | 2026-04-20 | 530f214 |
 
 ## Critical Context for Future Agents
 
@@ -183,6 +184,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 24 added (2026-04-20): Canonical docs polish + PDF rebuild — fold Phase 21/22/23 results into `docs/verification_document.tex` + `docs/companion_explainer.tex`, add meaningful diagrams, fix rendering bugs, tighten literature anchoring. Dormant-then-fires after sibling sessions land SUMMARY commits. Session tag D-docs.
 - Phase 25 added (2026-04-20): Project-wide bug squash and concern triage — re-audit STATE/CONCERNS against live code, fix low-risk correctness and stale-doc issues, and plant seeds for structural hazards that need dedicated phases.
 - Phase 26 added (2026-04-20): Verification document bug reconciliation — audit the bug list embedded in `docs/verification_document.tex`, fix stale or misleading claims in the writeup, and seed the implementation gaps that remain genuinely open.
+- Phase 27 added (2026-04-20): Numerical analysis audit and CS 4220 application roadmap — crosswalk the Cornell CS 4220 numerical-analysis material against the Raman-suppression codebase, identify numerics blockers/opportunities, write a report, and plant future-phase seeds for larger improvements. (Originally numbered Phase 25 on the numerics session branch; renumbered to 27 at integration to resolve collision with bugsquash Phase 25/26.)
 
 ### Resolved Issues
 
