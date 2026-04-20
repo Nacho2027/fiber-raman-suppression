@@ -177,7 +177,7 @@ Final log shows 0 undefined references in all three docs.
 
 Single commit on `sessions/D-docs`:
 
-- Hash: `<see git log>`
+- Hash: `f2c7a4b`
 - Message: `docs(24.2): fix misquotes + integrate external research + physics appendix`
 - Files changed: 5 tex/pdf + 3 markdown (plan, summary, physics appendix)
 - Pushed: `origin/sessions/D-docs`
