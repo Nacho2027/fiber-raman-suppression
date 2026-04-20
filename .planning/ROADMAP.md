@@ -374,3 +374,19 @@ Plans:
 
 Plans:
 - [x] 26-01-PLAN.md — Audit verification-document bug claims, patch stale writeup sections, seed unresolved implementation gaps, and verify by code/doc cross-check
+
+### Phase 27: Numerical analysis audit and CS 4220 application roadmap
+
+**Goal:** Produce a numerics-focused audit of the codebase, grounded in Cornell CS 4220 course material, that explains what numerical-analysis ideas apply here, what is currently going wrong, what should be improved next, and which larger opportunities deserve their own future phases.
+**Requirements**: Derived research phase — no mapped product requirement IDs
+**Depends on:** Phase 24
+**Success Criteria** (what must be TRUE):
+  1. A written report maps the most relevant CS 4220 topics to concrete opportunities and blockers in this codebase
+  2. The report distinguishes near-term numerics fixes from larger future work, with explicit rationale
+  3. Current blockers and planning/codebase drift that undermine numerical trust are documented with evidence
+  4. Seeds are planted in `.planning/seeds/` for ideas large enough to deserve their own phase
+  5. No shared source files under `src/` are refactored as part of this phase
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 27-01-PLAN.md — Research CS 4220 numerics material, audit current solver/optimizer numerics, write report, and plant future-phase seeds
