@@ -18,7 +18,8 @@
 \let\origincludegraphics\includegraphics
 \renewcommand{\includegraphics}[2][]{%
   \IfFileExists{#2}{\origincludegraphics[#1]{#2}}{%
-    \fbox{\parbox{0.6\linewidth}{\centering\textit{figure not available in build environment:}\\\texttt{#2}}}}}
+    \IfFileExists{figures/#2}{\origincludegraphics[#1]{figures/#2}}{%
+      \fbox{\parbox{0.6\linewidth}{\centering\textit{figure not available in build environment:}\\\detokenize{#2}}}}}}
 \usepackage{float}
 \usepackage{tikz}
 \usepackage{tcolorbox}
@@ -71,6 +72,36 @@ This document explains every piece of math in the Raman suppression optimization
 
 \medskip\noindent\textbf{Prerequisite:} Fourier transforms, basic complex numbers, the wave equation. That's it.
 \end{abstract}
+
+\begin{tcolorbox}[colback=yellow!8,colframe=orange!60!black,title=\textbf{Overnight update --- 2026-04-19/20}]
+Three parallel sessions re-ran the April integration results on an
+honest grid (Phase 21), added a sharpness-aware optimiser sweep with
+Hessian spectra (Phase 22), and ran a matched-quadratic baseline at
+$L=100$~m (Phase 23). Three surprises, front-loaded here so you don't
+need the rest of the doc to know what happened:
+\begin{enumerate}[leftmargin=*,topsep=2pt]
+  \item \textbf{The $-76.86$~dB SMF-28 single-mode optimum is stable.}
+        Phase 21 reproduced it on a validator-controlled grid; Phase 22
+        reproduced it again under the plain log-dB objective
+        ($-76.86$~dB, $\sigma_{3\text{dB}}=0.025$~rad).
+  \item \textbf{We tried to flatten the basin --- and failed.}
+        Phase 22 regularised 26 optima across $\{\texttt{plain},
+        \texttt{MC}, \texttt{SAM}, \texttt{trH}\}$; \emph{every single
+        one remained Hessian-indefinite}. The best shaper-tolerance buy is
+        $\texttt{trH}$ regularisation: $+0.058$~rad of $\sigma_{3\text{dB}}$
+        for a $10.08$~dB depth cost on the canonical point.
+  \item \textbf{The 100~m ``50$\times$ transferability'' story is
+        pre-chirp, not structural phase adaptation.}
+        Phase 23 ran a pure-quadratic baseline: $\text{GDD}=+4$~ps$^2$
+        matches the live warm-start to within $0.46$~dB. What we
+        thought was a nonlinear structural fingerprint turns out to be
+        generic dispersive pre-chirp.
+\end{enumerate}
+\textbf{One re-anchoring.} The Phase 13 Hessian-study optima re-anchor
+to $-66.61$~dB (SMF-28) and $-86.68$~dB (HNLF) under the honest
+grid --- the eigenstructure verdict (indefinite saddles) survives
+unchanged. Details in §\ref{sec:april2026-companion}.
+\end{tcolorbox}
 
 \tableofcontents
 \newpage
@@ -1043,6 +1074,7 @@ Everything else is implementation details.
 
 % ═════════════════════════════════════════════════════════════════════════
 \section{What the April 2026 Parallel-Session Push Actually Showed}
+\label{sec:april2026-companion}
 
 Between 2026-04-16 and 2026-04-19 eight Claude-Code sessions ran in
 parallel across a Mac laptop and two GCP VMs to pressure-test the
@@ -1083,6 +1115,42 @@ If you are going to use this in hardware, the tolerance number matters
 as much as the optimum number.
 \end{warning}
 
+\paragraph{We tried to widen the well. The well did not cooperate.}
+If the basin is narrow, the obvious thing to try is a regulariser
+that rewards a flatter landscape around the optimum. Phase 22 ran
+four such recipes --- a Monte-Carlo shaker
+(\texttt{MC}), a Sharpness-Aware Minimisation descent direction
+(\texttt{SAM}), and a Hessian-trace penalty (\texttt{trH}) ---
+against the plain log-dB objective on two operating points, and
+resolved the local Hessian spectrum at every recovered optimum.
+The robustness Pareto does move: the \texttt{trH} regulariser widens
+$\sigma_{3\text{dB}}$ from $0.025$~rad to $0.083$~rad
+($+0.058$~rad) on the canonical point, but you pay $10$~dB of depth
+for the privilege. Cheaper trades exist --- \texttt{MC} at
+$\lambda{=}7.5\times10^{-2}$ gets $+0.014$~rad of tolerance for
+$3.85$~dB of depth --- but here is the surprise:
+
+\begin{intuition}
+Every single one of the 26 regularised optima was still
+\emph{Hessian-indefinite}. None of the four flavours converted the
+saddle into a positive-definite minimum. Whatever is going on with
+the landscape here, flattening it locally is not enough. The
+indefinite-saddle geometry looks like a property of the Raman-cost
+constraint structure, not an artefact of the plain objective.
+\end{intuition}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{phase22_pareto.png}
+\caption{Phase 22 depth--tolerance Pareto. Colour is regularisation
+flavour, size is strength. SAM (green cluster) gives no tolerance
+gain relative to the plain baseline; \texttt{trH} (red) has the
+largest dynamic range; \texttt{MC} (blue) offers cheaper lower-$\sigma$
+trades. Every marker is still Hessian-indefinite
+(\texttt{results/raman/phase22/SUMMARY.md}).}
+\label{fig:phase22_pareto}
+\end{figure}
+
 \subsection{The simple phase is a good \emph{initialiser}, not a universal minimum}
 
 Two intuitions got tested against each other:
@@ -1103,6 +1171,15 @@ The right framing is the second one: the simple phase lives in a
 manifold of nearby basins, and moving to any of them takes a small
 number of L-BFGS iterations. The simplicity is an
 \emph{initialisation prior}, not a \emph{generalisation property}.
+
+\begin{warning}
+This ``good warm start within a few L-BFGS iterations''
+result was tested on 11 \emph{nearby} $(L, P)$ configurations. It
+does \emph{not} extend to the $L = 100$~m extrapolation discussed
+at the end of this section (§\ref{sec:companion-100m-pre-chirp}):
+that suppression turned out to be generic dispersive pre-chirp,
+not a transfer of the non-quadratic structure.
+\end{warning}
 
 \subsection{Determinism}
 
@@ -1125,10 +1202,51 @@ If two supposedly-identical runs disagree, look at the FFT planner
 before you look at anything physical.
 \end{intuition}
 
+\subsection{The 100~m transfer is pre-chirp, not structural}
+\label{sec:companion-100m-pre-chirp}
+
+Earlier drafts treated the 100~m warm-start result as evidence that
+the non-quadratic spectral-phase structure found at $L{=}2$~m carries
+across $50\times$ the fiber length. Phase 23 put that claim to a
+matched-quadratic test. On the current reproducible main-checkout
+state, the evaluation-only warm-start at $L{=}100$~m gives
+$J = -45.52$~dB (the historical Phase 16 number was $-51.50$~dB;
+the $\sim 6$~dB gap is unexplained but plausibly another windowing
+artefact on the old stored run). Against that live number, a pure
+GDD quadratic phase --- one number, nothing else --- reproduces the
+suppression almost exactly: $\text{GDD} = +4$~ps$^2 \to J = -45.06$~dB
+(only $0.46$~dB shy), and a more trajectory-similar
+$\text{GDD} = +1$~ps$^2 \to J = -44.35$~dB. Every trusted run is
+clean on energy drift and on the boundary-condition edge check.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{phase23_warm_vs_gdd_p1_overlay.png}
+\caption{The warm-start $\varphi_{\text{opt}}$@$L{=}2$~m propagated
+through 100~m of SMF-28 (blue) sits essentially on top of a pure
+$+1$~ps$^2$ quadratic chirp (orange) both in spectral evolution and
+endpoint suppression (gap $=1.17$~dB).
+\texttt{.planning/phases/23-matched-baseline/images/phase23\_warm\_vs\_gdd\_p1\_overlay.png}.}
+\label{fig:phase23_overlay}
+\end{figure}
+
+\begin{intuition}
+``A complicated non-polynomial phase that takes 20 L-BFGS iterations
+to find, and transfers across $50\times$ the fiber length'' was a
+much better advisor-meeting story than ``you can get essentially the
+same suppression with a single dispersive pre-chirp.'' But the
+matched-quadratic baseline is cleaner. The honest framing of the
+100~m result is: the 2~m warm-start happens to contain roughly the
+right amount of GDD for 100~m, and the GDD alone is doing the
+suppression. The non-polynomial residual is real --- the quadratic
+fit has $R^2 < 0.04$ on the signal band --- but it is not what is
+buying the depth at 100~m.
+\end{intuition}
+
 \subsection{What did \emph{not} survive}
 
-Three claims that appeared in the 48-hour synthesis did not make it
-through the audit:
+Claims that appeared in the 48-hour synthesis and subsequent
+overnight results did not make it through the audit:
 \begin{itemize}
   \item A polynomial-fit comparison of $\varphi_{\text{opt}}$ between
     $L = 2$~m and $L = 100$~m was used to argue for ``nonlinear
@@ -1145,15 +1263,35 @@ through the audit:
     (See \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §W1.)
   \item The 100~m L-BFGS ``optimum'' of $-54.77$~dB is a lower bound
     (25 iter, $\|\nabla J\| = 0.48$, \texttt{converged = false}),
-    not a converged minimum. (Audit §S4.)
+    not a converged minimum. Phase 21 independently reproduced the
+    same number on an honest grid, so the energy-conservation
+    story survives; the lower-bound caveat remains. (Audit §S4;
+    Phase 21 reanchor \texttt{results/raman/phase21/longfiber100m/}.)
   \item A joint $\{\varphi, A, E\}$ L-BFGS that regressed from
     $-57$~dB to $-23$~dB is a preconditioning bug (mixed units), not
     physics. (Audit §M1.)
+  \item The ``$50\times$ length transfer is evidence of nonlinear
+    structural adaptation'' framing. Phase 23's matched-quadratic
+    baseline shows that a generic GDD already reaches within
+    $0.5$--$1.2$~dB of the warm-start suppression at 100~m; the
+    extra non-polynomial structure is not doing the work.
+    (See §\ref{sec:companion-100m-pre-chirp}.)
+  \item The Sweep-1 knee story at $(\text{SMF-28}, L=2$~m$, P=0.2$~W$)$
+    as a function of the simple-phase parameterisation size
+    $N_\varphi$. Phase 21's honest recovery got every recovered
+    point to output edge fraction $\geq 5\%$, even at
+    $N_t{=}65{,}536, T{=}216$~ps; the best any point reached was
+    $-66.03$~dB, weaker than the original $-68$~dB claim and still
+    not pulse-contained. The $L=0.25$~m, $P=0.10$~W reduced
+    parameterisation (Pareto-57) cross-validates independently in
+    Phase 22 ($-82.56$~dB vs. original $-82.33$~dB) and \emph{does}
+    stand, but the $L=2$~m, $P=0.2$~W knee does not.
+    (\texttt{.planning/phases/21-numerical-recovery/SUMMARY.md}.)
 \end{itemize}
 
 These are flagged here because the April push was widely circulated,
 and future-you is likely to remember the numbers without remembering
-which ones survived. If you see any of these three cited anywhere,
+which ones survived. If you see any of these cited anywhere,
 stop and check the audit.
 
 % ═════════════════════════════════════════════════════════════════════════
