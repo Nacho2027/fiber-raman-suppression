@@ -26,7 +26,7 @@ function main()
     phi === nothing && error("could not find phi_opt-like key in $(LONG100_FULL); keys=$(full_keys)")
 
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
-        fiber_preset=:SMF28,
+        fiber_preset=:SMF28_beta2_only,
         L_fiber=100.0,
         P_cont=0.05,
         Nt=32768,
