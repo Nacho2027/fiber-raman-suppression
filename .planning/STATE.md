@@ -195,10 +195,16 @@ Both fixes require re-running the sweep to get valid results.
 - compute_noise_map_modem in src/analysis/analysis.jl is broken (empty @tullio, undefined vars) — marked abandoned, do not call
 - README.md at project root is stale (references MMF squeezing, not Raman suppression)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260420-iwc | Force-add S-sharpness Phase 22 artifacts + sync Mac ↔ VM | 2026-04-20 | 7e9b965 | [260420-iwc-sync-phase22-artifacts](./quick/260420-iwc-sync-phase22-artifacts/) |
+
 ## Session Continuity
 
 Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-20
+Last activity: 2026-04-20 - Completed quick task 260420-iwc: force-add Phase 22 sharpness research to main, rsync remaining .planning/ to VM
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs
