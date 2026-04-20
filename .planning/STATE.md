@@ -65,6 +65,7 @@ Next: Multimode (M>1) simulations for quantum noise analysis
 | 260331-ph8 | Phase 8: Sweep point reporting (report cards, summaries, combined report) | 2026-03-31 | 00e5833 |
 | 260415-u4s | Benchmark threading opportunities across simulation codebase | 2026-04-16 | d1c5bd9 |
 | 260420-oyg | Independent numerics audit (second opinion on Phase 27, originally labeled Phase 25 before integration rename) — phase docs updated in place, 2 new seeds planted | 2026-04-20 | 530f214 |
+| 260420-rqo | Fix numerics audit bugs: pre-attenuator edge fraction, regularized log-cost scaling, chirp sensitivity plotting | 2026-04-20 | pending |
 
 ## Critical Context for Future Agents
 
@@ -185,6 +186,13 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 25 added (2026-04-20): Project-wide bug squash and concern triage — re-audit STATE/CONCERNS against live code, fix low-risk correctness and stale-doc issues, and plant seeds for structural hazards that need dedicated phases.
 - Phase 26 added (2026-04-20): Verification document bug reconciliation — audit the bug list embedded in `docs/verification_document.tex`, fix stale or misleading claims in the writeup, and seed the implementation gaps that remain genuinely open.
 - Phase 27 added (2026-04-20): Numerical analysis audit and CS 4220 application roadmap — crosswalk the Cornell CS 4220 numerical-analysis material against the Raman-suppression codebase, identify numerics blockers/opportunities, write a report, and plant future-phase seeds for larger improvements. (Originally numbered Phase 25 on the numerics session branch; renumbered to 27 at integration to resolve collision with bugsquash Phase 25/26.)
+- Phase 28 added (2026-04-20): Conditioning and backward-error framework for Raman optimization — scoped as the numerics-governance contract phase. Deliverables locked: trust-report schema, conditioning audit targets, error taxonomy, and implementation waves for future numerical acceptance gates.
+- Phase 29 added (2026-04-20): Performance modeling and roofline audit for the FFT-adjoint pipeline — scoped as the performance-methodology phase. Deliverables locked: kernel inventory, roofline/Amdahl benchmark protocol, and tuning decision criteria.
+- Phase 30 added (2026-04-20): Continuation and homotopy schedules for hard Raman regimes — scoped as the path-following methodology phase. Deliverables locked: continuation ladders, failure detectors, trust checks, and cold-start comparison protocol.
+- Phase 31 added (2026-04-20): Reduced-basis and regularized phase parameterization — scoped as the model-selection phase. Deliverables locked: basis families, DCT reuse path, metrics, and execution waves for restricted-vs-full-grid optimization.
+- Phase 32 added (2026-04-20): Extrapolation and acceleration for parameter studies and continuation — scoped as the sequence-acceleration phase. Deliverables locked: candidate study families, acceleration methods, trust gates, and stop criteria for "not worth it."
+- Phase 33 added (2026-04-20): Globalized second-order optimization for Raman suppression — scoped as the safeguarded-curvature phase. Deliverables locked: globalization family, benchmark set, honest failure accounting, and execution waves.
+- Phase 34 added (2026-04-20): Truncated-Newton Krylov preconditioning path — scoped as the matrix-free second-order extension phase. Deliverables locked: truncated-Newton architecture, Krylov/preconditioning experiments, and comparison contract versus L-BFGS/globalized second-order.
 
 ### Resolved Issues
 
@@ -206,6 +214,7 @@ Both fixes require re-running the sweep to get valid results.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260420-iwc | Force-add S-sharpness Phase 22 artifacts + sync Mac ↔ VM | 2026-04-20 | 7e9b965 | [260420-iwc-sync-phase22-artifacts](./quick/260420-iwc-sync-phase22-artifacts/) |
+| 260420-rqo | Fix numerics audit bugs: pre-attenuator edge fraction, regularized log-cost scaling, chirp sensitivity plotting | 2026-04-20 | pending | [260420-rqo-fix-numerics-audit-bugs-pre-attenuator-e](./quick/260420-rqo-fix-numerics-audit-bugs-pre-attenuator-e/) |
 
 ## Session Continuity
 

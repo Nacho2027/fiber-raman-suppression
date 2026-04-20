@@ -44,6 +44,7 @@ using JSON3
 include("common.jl")
 include("visualization.jl")
 include(joinpath(@__DIR__, "determinism.jl"))
+include(joinpath(@__DIR__, "numerical_trust.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()
 
@@ -116,20 +117,8 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     @assert isfinite(J) "cost is not finite: $J"
     @assert all(isfinite, ∂J_∂φ) "gradient contains NaN/Inf"
 
-    # Log-scale cost: J_dB = 10·log10(J), gradient scaled by chain rule.
-    # Keeps gradient O(1) as J→0, preventing L-BFGS stall at deep suppression.
-    if log_cost
-        J_clamped = max(J, 1e-15)
-        J_phys = 10.0 * log10(J_clamped)
-        log_scale = 10.0 / (J_clamped * log(10.0))
-        ∂J_∂φ_scaled = ∂J_∂φ .* log_scale
-    else
-        J_phys = J
-        ∂J_∂φ_scaled = ∂J_∂φ
-    end
-
-    J_total = J_phys
-    grad_total = copy(∂J_∂φ_scaled)
+    J_total = J
+    grad_total = copy(∂J_∂φ)
 
     # ── GDD penalty: ∫(d²φ/dω²)² dω, scaled by Δω⁻³ for N-independence ──
     if λ_gdd > 0
@@ -171,6 +160,15 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
             grad_boundary_ω = coeff .* imag.(conj.(uω0_shaped) .* fft(mask_edge .* ut0, 1))
             grad_total .+= grad_boundary_ω
         end
+    end
+
+    # Log-scale the entire regularized objective so the returned gradient matches
+    # the scalar objective seen by L-BFGS.
+    if log_cost
+        J_clamped = max(J_total, 1e-15)
+        log_scale = 10.0 / (J_clamped * log(10.0))
+        grad_total .*= log_scale
+        J_total = 10.0 * log10(J_clamped)
     end
 
     @assert isfinite(J_total) "regularized cost is not finite: $J_total"
@@ -265,6 +263,7 @@ function validate_gradient(uω0_base, fiber, sim, band_mask; n_checks=5, ε=1e-5
     indices = significant[rand(1:length(significant), min(n_checks, length(significant)))]
     @info "Gradient validation (ε = $ε)"
     lines = [@sprintf("  %5s  %12s  %12s  %10s", "index", "adjoint", "fin. diff.", "rel. error")]
+    rel_errors = Float64[]
 
     for idx in indices
         φ_plus = copy(φ_test)
@@ -278,10 +277,17 @@ function validate_gradient(uω0_base, fiber, sim, band_mask; n_checks=5, ε=1e-5
         fd_grad = (J_plus - J_minus) / (2ε)
         adj_grad = grad[idx, 1]
         rel_err = abs(adj_grad - fd_grad) / max(abs(adj_grad), abs(fd_grad), 1e-15)
+        push!(rel_errors, rel_err)
 
         push!(lines, @sprintf("  %5d  %12.6e  %12.6e  %10.2e", idx, adj_grad, fd_grad, rel_err))
     end
     @debug join(lines, "\n")
+    return (
+        max_rel_err = isempty(rel_errors) ? NaN : maximum(rel_errors),
+        mean_rel_err = isempty(rel_errors) ? NaN : mean(rel_errors),
+        n_checks = length(rel_errors),
+        epsilon = ε,
+    )
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,7 +335,7 @@ function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
     J_gdd = zeros(length(gdd_range))
     for (i, gdd) in enumerate(gdd_range)
         φ_perturbed = φ_opt .+ 0.5 .* gdd .* ω2 .* ones(1, M)
-        J_gdd[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask)
+        J_gdd[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
     end
 
     # TOD sweep: φ_chirp(ω) = ⅙ · TOD · ω³
@@ -337,7 +343,7 @@ function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
     J_tod = zeros(length(tod_range))
     for (i, tod) in enumerate(tod_range)
         φ_perturbed = φ_opt .+ (tod / 6.0) .* ω3 .* ones(1, M)
-        J_tod[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask)
+        J_tod[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
     end
 
     return gdd_range, J_gdd, tod_range, J_tod
@@ -438,7 +444,9 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     if validate
         @info "Gradient Validation"
-        validate_gradient(uω0, fiber, sim, band_mask; n_checks=3)
+        grad_validation = validate_gradient(uω0, fiber, sim, band_mask; n_checks=3)
+    else
+        grad_validation = nothing
     end
 
     @info "Optimization" λ_gdd=λ_gdd_val λ_boundary=λ_boundary
@@ -450,8 +458,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     φ_after = reshape(result.minimizer, Nt, M)
 
     # ── Run summary table ──
-    J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask)
-    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask)
+    J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask; log_cost=false)
+    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask; log_cost=false)
     ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
 
     # Boundary check on optimized input pulse
@@ -519,6 +527,20 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         @warn "Boundary energy is too high — increase time_window or Nt"
     end
 
+    det_status = deterministic_environment_status()
+    trust_report = build_numerical_trust_report(
+        det_status=det_status,
+        edge_input_frac=bc_input_frac,
+        edge_output_frac=bc_output_frac,
+        energy_drift=E_conservation,
+        gradient_validation=grad_validation,
+        log_cost=log_cost,
+        λ_gdd=λ_gdd_val,
+        λ_boundary=λ_boundary,
+        objective_label="single-mode Raman spectral phase optimization")
+    trust_md_path = write_numerical_trust_report("$(save_prefix)_trust.md", trust_report)
+    @info "Saved numerical trust report to $trust_md_path"
+
     # ── Result serialization (XRUN-01) ──
     jld2_path = "$(save_prefix)_result.jld2"
     # Store convergence history in dB. If log_cost=true, f_trace is already dB.
@@ -560,6 +582,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         bc_output_frac    = bc_output_frac,
         bc_input_ok       = bc_input_ok,
         bc_output_ok      = bc_output_ok,
+        trust_report      = trust_report,
+        trust_report_md   = trust_md_path,
         # Simulation context (for Phase 6 grid compatibility checks)
         band_mask    = band_mask,
         sim_Dt       = sim["Δt"],
@@ -586,6 +610,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         "grad_norm"      => grad_norm,
         "E_conservation" => E_conservation,
         "bc_ok"          => bc_input_ok && bc_output_ok,
+        "trust_overall"  => trust_report["overall_verdict"],
+        "trust_report_md"=> trust_md_path,
         "result_file"    => jld2_path,
     )
 

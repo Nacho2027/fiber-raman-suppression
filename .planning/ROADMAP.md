@@ -390,3 +390,73 @@ Plans:
 
 Plans:
 - [x] 27-01-PLAN.md — Research CS 4220 numerics material, audit current solver/optimizer numerics, write report, and plant future-phase seeds
+
+### Phase 28: Conditioning and backward-error framework for Raman optimization
+
+**Goal:** Convert the numerics-governance seed into a concrete trust-contract phase with standardized error taxonomy, run-report requirements, conditioning audit targets, and implementation order for numerical acceptance gates.
+**Requirements**: Derived from Phase 27 numerics-governance recommendation and second-opinion addendum
+**Depends on:** Phase 27
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 28-01-PLAN.md — Define trust-report schema, conditioning audit targets, error conventions, and the future implementation plan for numerical governance
+
+### Phase 29: Performance modeling and roofline audit for the FFT-adjoint pipeline
+
+**Goal:** Turn the performance-modeling seed into an execution-ready benchmark phase with explicit kernels, bottleneck hypotheses, measurement protocol, and decision criteria for when tuning or more hardware is actually worth it.
+**Requirements**: Derived from Phase 27 NMDS performance/roofline recommendations
+**Depends on:** Phase 27
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 29-01-PLAN.md — Research FFT/adjoint performance kernels, define roofline/Amdahl benchmark protocol, and lock the implementation scope for the future execution pass
+
+### Phase 30: Continuation and homotopy schedules for hard Raman regimes
+
+**Goal:** Promote the continuation seed into a practical methodology phase with explicit homotopy ladders, path-failure detectors, trust checks, and benchmark comparisons against cold-start optimization in hard regimes.
+**Requirements**: Derived from Phase 27 continuation recommendation
+**Depends on:** Phase 28
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 30-01-PLAN.md — Define continuation variables, schedule rules, failure detectors, and benchmark set for hard-regime path-following
+
+### Phase 31: Reduced-basis and regularized phase parameterization
+
+**Goal:** Turn the reduced-basis seed into an execution-ready model-selection phase that compares full-grid phase optimization against explicit basis restrictions and regularization families, anchored to the repo's existing DCT infrastructure.
+**Requirements**: Derived from Phase 27 regularization/model-selection recommendation
+**Depends on:** Phase 28
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 31-01-PLAN.md — Define basis families, evaluation metrics, and execution waves for reduced-basis versus full-grid phase optimization
+
+### Phase 32: Extrapolation and acceleration for parameter studies and continuation
+
+**Goal:** Turn the acceleration seed into a concrete study phase that selects the first worthwhile sequence families, the right trust metrics, and a stop rule for when acceleration complexity is not justified.
+**Requirements**: Derived from Phase 27 NMDS acceleration recommendation
+**Depends on:** Phase 29, Phase 30
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 32-01-PLAN.md — Choose candidate study families, acceleration methods, trust gates, and execution ordering for the acceleration comparison phase
+
+### Phase 33: Globalized second-order optimization for Raman suppression
+
+**Goal:** Promote the globalization seed into a real optimizer phase with safeguarded step-acceptance policy, benchmark set, honest failure accounting, and a clear boundary between direction computation and globalization mechanics.
+**Requirements**: Derived from Phase 27 globalization recommendation
+**Depends on:** Phase 28, Phase 30, Phase 31
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 33-01-PLAN.md — Select globalization strategy family, benchmark configs, trust metrics, and execution waves for safeguarded second-order optimization
+
+### Phase 34: Truncated-Newton Krylov preconditioning path
+
+**Goal:** Convert the matrix-free second-order seed into an execution-ready solver phase with Krylov inner-solve design, preconditioning candidates, HVP reuse contract, and comparison criteria against L-BFGS and safeguarded second-order baselines.
+**Requirements**: Derived from Phase 27 Krylov/Lanczos extension recommendation
+**Depends on:** Phase 28, Phase 33
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 34-01-PLAN.md — Define truncated-Newton architecture, Krylov/preconditioning experiments, and benchmark/verification contract

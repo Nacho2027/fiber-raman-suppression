@@ -98,6 +98,10 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
         @test 1.7 < slope < 2.3
     end
 
+    @testset "Phase 27 numerics regressions" begin
+        include(joinpath(_ROOT, "test", "test_phase27_numerics_regressions.jl"))
+    end
+
     # Phase 13 tests live in their own files and use their own setup blocks.
     @testset "Phase 13 primitives" begin
         include(joinpath(_ROOT, "test", "test_phase13_primitives.jl"))
