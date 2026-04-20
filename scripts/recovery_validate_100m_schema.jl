@@ -11,16 +11,19 @@ using Logging
 
 include(joinpath(@__DIR__, "recovery_common.jl"))
 
-const LONG100_SOURCE = joinpath(@__DIR__, "..", "results", "raman", "phase16", "100m_validate_fixed.jld2")
+const LONG100_SUMMARY = joinpath(@__DIR__, "..", "results", "raman", "phase16", "100m_validate_fixed.jld2")
+const LONG100_FULL = joinpath(@__DIR__, "..", "results", "raman", "phase16", "100m_opt_full_result.jld2")
 const LONG100_RESULTS_DIR = recovery_result_path("longfiber100m")
 
 function main()
     mkpath(LONG100_RESULTS_DIR)
-    d = JLD2.load(LONG100_SOURCE)
-    keys_sorted = sort!(collect(keys(d)))
+    summary = JLD2.load(LONG100_SUMMARY)
+    summary_keys = sort!(collect(keys(summary)))
+    full = JLD2.load(LONG100_FULL)
+    full_keys = sort!(collect(keys(full)))
 
-    phi = recovery_key_or_nothing(d, ["phi_opt", "phi", "x"])
-    phi === nothing && error("could not find phi_opt-like key in $(LONG100_SOURCE); keys=$(keys_sorted)")
+    phi = recovery_key_or_nothing(full, ["phi_opt", "phi", "x"])
+    phi === nothing && error("could not find phi_opt-like key in $(LONG100_FULL); keys=$(full_keys)")
 
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
         fiber_preset=:SMF28,
@@ -40,37 +43,44 @@ function main()
 
     out_jld2 = joinpath(LONG100_RESULTS_DIR, "sessionf_100m_normalized.jld2")
     JLD2.jldsave(out_jld2;
-        source=LONG100_SOURCE,
-        source_keys=keys_sorted,
+        summary_source=LONG100_SUMMARY,
+        summary_keys=summary_keys,
+        full_source=LONG100_FULL,
+        full_keys=full_keys,
         phi_opt=phi_opt,
         J_honest_lin=metrics.J_lin,
         J_honest_dB=metrics.J_dB,
         edge_frac=metrics.edge_frac,
         energy_drift=metrics.energy_drift,
-        stored_converged=recovery_key_or_nothing(d, ["converged"]),
-        stored_J_opt_dB=recovery_key_or_nothing(d, ["J_opt_dB", "J_lin_dB"]),
-        stored_J_warm_dB=recovery_key_or_nothing(d, ["J_warm_dB"]),
-        stored_J_flat_dB=recovery_key_or_nothing(d, ["J_flat_dB"]),
+        stored_converged=recovery_key_or_nothing(summary, ["converged"]),
+        stored_J_opt_dB=recovery_key_or_nothing(summary, ["J_opt_dB", "J_lin_dB"]),
+        stored_J_warm_dB=recovery_key_or_nothing(summary, ["J_warm_dB"]),
+        stored_J_flat_dB=recovery_key_or_nothing(summary, ["J_flat_dB"]),
     )
 
     report = String[
         "# Session F 100m schema validation",
         "",
-        @sprintf("Source: `%s`", LONG100_SOURCE),
+        @sprintf("Summary source: `%s`", LONG100_SUMMARY),
+        @sprintf("Full-state source: `%s`", LONG100_FULL),
         "",
-        "## Schema keys",
+        "## Summary keys",
         "",
-        join(["- `$k`" for k in keys_sorted], "\n"),
+        join(["- `$k`" for k in summary_keys], "\n"),
+        "",
+        "## Full-state keys",
+        "",
+        join(["- `$k`" for k in full_keys], "\n"),
         "",
         "## Honest validation",
         "",
         @sprintf("- Honest J: %.2f dB", metrics.J_dB),
         @sprintf("- Edge fraction: %.3e", metrics.edge_frac),
         @sprintf("- Energy drift: %.3e", metrics.energy_drift),
-        @sprintf("- Stored converged flag: %s", string(recovery_key_or_nothing(d, ["converged"]))),
-        @sprintf("- Stored J_opt_dB: %s", string(recovery_key_or_nothing(d, ["J_opt_dB", "J_lin_dB"]))),
+        @sprintf("- Stored converged flag: %s", string(recovery_key_or_nothing(summary, ["converged"]))),
+        @sprintf("- Stored J_opt_dB: %s", string(recovery_key_or_nothing(summary, ["J_opt_dB", "J_lin_dB"]))),
         "",
-        "Verdict note: if `converged=false`, this remains a best-achieved lower bound rather than a certified optimum, even though the pulse-containment gate passes.",
+        "Verdict note: `100m_validate_fixed.jld2` is a scalar summary, not a standalone validation container. Honest validation must pair it with `100m_opt_full_result.jld2` to recover the actual phase state.",
     ]
     recovery_write_markdown(joinpath(LONG100_RESULTS_DIR, "sessionf_100m_validation.md"), report)
 end
