@@ -364,3 +364,13 @@ Plans:
 
 Plans:
 - [x] 25-01-PLAN.md — Audit bug reports against live code, patch real correctness/staleness issues, run fast-tier verification, seed unresolved structural hazards
+
+### Phase 26: Verification document bug reconciliation
+
+**Goal:** Reconcile the bug list embedded in `docs/verification_document.tex` against the live codebase and canonical findings, fixing stale or misleading document claims and seeding the remaining structural bugs that still need implementation work.
+**Requirements**: Derived from `docs/verification_document.tex` issue/advisory sections
+**Depends on:** Phase 25
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 26-01-PLAN.md — Audit verification-document bug claims, patch stale writeup sections, seed unresolved implementation gaps, and verify by code/doc cross-check
