@@ -65,6 +65,7 @@ function phase13_run_one(cfg)
         β_order=cfg.β_order,
     )
     phi0 = recovery_seed_to_grid(phi_seed_old, cfg.old_Nt, cfg.old_tw_ps, honest.Nt, honest.time_window_ps)
+    phi0 = recovery_remove_linear_phase(phi0, uω0, sim)
 
     started = time()
     result = optimize_spectral_phase(uω0, deepcopy(fiber), sim, band_mask;

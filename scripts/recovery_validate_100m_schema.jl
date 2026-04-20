@@ -31,6 +31,7 @@ function main()
         β_order=2,
     )
     phi_opt = recovery_scalarize_phi(phi, sim["Nt"])
+    phi_opt = recovery_remove_linear_phase(phi_opt, uω0, sim)
     metrics = recovery_forward_metrics(uω0, phi_opt, deepcopy(fiber), sim, band_mask)
 
     tag = "phase21_sessionf_100m_smf28_l100m_p0p05w"

@@ -50,6 +50,7 @@ function sweep1_run_level(nphi::Int, row, honest)
     )
 
     phi_seed = recovery_seed_to_grid(row["phi_opt"], SWEEP1_OLD_NT, SWEEP1_OLD_TW_PS, honest.Nt, honest.time_window_ps)
+    phi_seed = recovery_remove_linear_phase(phi_seed, uω0, sim)
     started = time()
 
     if nphi == honest.Nt

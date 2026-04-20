@@ -138,6 +138,33 @@ function recovery_seed_to_grid(phi_seed, old_Nt, old_tw_ps, Nt, tw_ps)
     return longfiber_interpolate_phi(phi_seed, old_Nt, old_tw_ps, Nt, tw_ps)
 end
 
+function recovery_active_band_mask(uω0; threshold=1e-3)
+    amp = vec(sum(abs.(uω0), dims=2))
+    amax = maximum(amp)
+    return amp .>= threshold * max(amax, eps())
+end
+
+"""
+    recovery_remove_linear_phase(phi, uω0, sim)
+
+Gauge-fix a seed by subtracting a weighted affine fit in frequency over the
+input spectral support. This prevents the honest-grid search from inflating the
+time window purely because an old `phi_opt` carries an arbitrary group delay.
+"""
+function recovery_remove_linear_phase(phi, uω0, sim)
+    phi_vec = vec(phi)
+    mask = recovery_active_band_mask(uω0)
+    fs = fftfreq(sim["Nt"], 1 / sim["Δt"])
+    ω = 2π .* fs
+    w = vec(sum(abs.(uω0), dims=2))
+    use = findall(mask)
+    X = hcat(ones(length(use)), ω[use])
+    W = Diagonal(w[use])
+    coeffs = (X' * W * X) \ (X' * W * phi_vec[use])
+    fitted = coeffs[1] .+ coeffs[2] .* ω
+    return reshape(phi_vec .- fitted, sim["Nt"], 1)
+end
+
 function recovery_fiber_params(fiber_preset::Symbol)
     preset = get_fiber_preset(fiber_preset)
     return (
@@ -194,6 +221,7 @@ function recovery_find_honest_grid(;
         seed_edges = Float64[]
         for phi_seed in phi_seeds
             phi0 = recovery_seed_to_grid(phi_seed, old_Nt, old_tw_ps, Nt, tw)
+            phi0 = recovery_remove_linear_phase(phi0, uω0, sim)
             push!(seed_edges, recovery_forward_metrics(uω0, phi0, fiber, sim, band_mask).edge_frac)
         end
         max_seed_edge = isempty(seed_edges) ? 0.0 : maximum(seed_edges)
