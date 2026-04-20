@@ -183,4 +183,7 @@ stopped again. Final state: TERMINATED.")
 
 ## Commits
 
-Recorded after T8 lands (next section).
+- `6b4dadb` — `docs(24): fold Phase 21/22/23 overnight results into canonical .tex`
+  - 12 files changed, 853 insertions(+), 37 deletions(-)
+  - Pushed to `origin/sessions/D-docs`.
+  - See commit body for the full inventory.
