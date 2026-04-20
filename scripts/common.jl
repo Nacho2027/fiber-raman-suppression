@@ -1,3 +1,4 @@
+# Shared setup and analysis helpers for single-mode fiber optimization scripts.
 """
 Common utilities shared across fiber optimization scripts.
 
