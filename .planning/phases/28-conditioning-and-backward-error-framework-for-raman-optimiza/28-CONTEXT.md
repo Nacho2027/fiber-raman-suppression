@@ -1,8 +1,8 @@
 # Phase 28 Context — Conditioning and backward-error framework for Raman optimization
 
 **Gathered:** 2026-04-20  
-**Status:** Complete  
-**Mode:** Autonomous seed promotion / phase-definition only
+**Status:** Ready for execution  
+**Mode:** Strict GSD execution (discuss --auto → plan → execute → verify)
 
 ## Phase Boundary
 
@@ -19,8 +19,15 @@ are trusted.
   attenuation, energy drift, gradient-check status, and cost-surface coherence.
 - Error taxonomy uses forward / backward / mixed error language rather than
   vague "looks stable" reporting.
-- This phase stays planning-side only; instrumentation code lands in its future
-  execution pass.
+- Phase 28's first execution slice is intentionally narrow:
+  - create a reusable `scripts/numerical_trust.jl` utility,
+  - wire the trust report into the canonical single-mode optimizer path in
+    `scripts/raman_optimization.jl`,
+  - align the heavy validation audit in `scripts/validation/validate_results.jl`
+    to the shared thresholds,
+  - add dedicated regression coverage under `test/`.
+- Do not broaden this pass into amplitude, multivariable, or MMF-wide rollout.
+  Those inherit the contract later once the canonical SMF path is stable.
 
 ## Canonical Inputs
 
@@ -31,3 +38,5 @@ are trusted.
 - `scripts/raman_optimization.jl`
 - `scripts/validation/validate_results.jl`
 - `scripts/determinism.jl`
+- `scripts/polish_output_format.jl`
+- `test/test_phase27_numerics_regressions.jl`

@@ -35,14 +35,15 @@ using JLD2
 using MultiModeNoise
 
 include(joinpath(@__DIR__, "..", "common.jl"))
+include(joinpath(@__DIR__, "..", "numerical_trust.jl"))
 include(joinpath(@__DIR__, "..", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Thresholds (defense: PLAN.md)
 # ─────────────────────────────────────────────────────────────────────────────
 
-const E_PASS, E_MARGINAL       = 1e-4, 1e-3
-const BC_PASS, BC_MARGINAL     = 1e-3, 1e-2
+const E_PASS, E_MARGINAL       = TRUST_THRESHOLDS.energy_drift_pass, TRUST_THRESHOLDS.energy_drift_marginal
+const BC_PASS, BC_MARGINAL     = TRUST_THRESHOLDS.edge_frac_pass, TRUST_THRESHOLDS.edge_frac_marginal
 const ΔJDB_PASS, ΔJDB_MARGINAL = 0.3, 1.0   # dB
 const TAYLOR_PASS, TAYLOR_MARGINAL = 1.5e-1, 3e-1
 
