@@ -1,4 +1,4 @@
-# Phase 28 Research — Saddle-Rich Nonconvex Optimization and Reachable Minima
+# Phase 35 Research — Saddle-Rich Nonconvex Optimization and Reachable Minima
 
 **Researched:** 2026-04-20  
 **Confidence:** High on the geometry framing and method ranking; medium on
@@ -143,7 +143,7 @@ method and its global performance."
 Bibliographic landing page: https://EconPapers.repec.org/RePEc:cor:louvrp:1927
 
 Why it matters here:
-- if Phase 28 finds that minima do exist but are hard to enter stably, cubic
+- if Phase 35 finds that minima do exist but are hard to enter stably, cubic
   regularization is the cleanest "serious next method" to recommend.
 - it naturally handles indefinite Hessians better than raw Newton steps.
 
@@ -171,7 +171,7 @@ Lookahead." https://proceedings.mlr.press/v235/yu24q.html
 Why it matters here:
 - Phase 22's empirical result that SAM did not solve the geometry problem is
   consistent with the literature.
-- this reinforces that Phase 28 should not recommend "do more SAM" as the
+- this reinforces that Phase 35 should not recommend "do more SAM" as the
   main next move.
 
 ## Prescriptive Guidance for This Repo
@@ -186,9 +186,9 @@ That is a better question than "can Newton beat L-BFGS?" because it separates:
 - geometry of the objective,
 - from method choice.
 
-### Best next algorithm to prototype after Phase 28
+### Best next algorithm to prototype after Phase 35
 
-If Phase 28 confirms that competitive solutions remain saddles while lower-depth
+If Phase 35 confirms that competitive solutions remain saddles while lower-depth
 reduced models become minima, the next optimizer should be:
 
 - **reduced-basis Newton-CG or trust-region / cubic-regularized Newton**,

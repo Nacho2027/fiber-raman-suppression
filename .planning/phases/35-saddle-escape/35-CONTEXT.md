@@ -1,4 +1,4 @@
-# Phase 28: Saddle escape and genuine minima reachability study — Context
+# Phase 35: Saddle escape and genuine minima reachability study — Context
 
 **Gathered:** 2026-04-20  
 **Status:** Ready for execution  
@@ -39,9 +39,9 @@ The deliverable is a report that states plainly whether genuine minima are:
 
 ### Session namespace and file ownership
 
-- New code lives only under `scripts/saddle_phase28_*`.
+- New code lives only under `scripts/saddle_phase35_*`.
 - New planning artifacts live only under
-  `.planning/phases/28-saddle-escape-and-genuine-minima-reachability-study-determin/`.
+  `.planning/phases/35-saddle-escape`.
 - Shared files remain read-only.
 
 ### Primary local dataset
@@ -75,8 +75,8 @@ The deliverable is a report that states plainly whether genuine minima are:
 
 - Any new run that produces a fresh `phi_opt` must call
   `save_standard_set(...)`.
-- All Phase 28 standard images go under:
-  `results/raman/phase28/images/`
+- All Phase 35 standard images go under:
+  `results/raman/phase35/images/`
 - Tag convention:
   - `smf28_canonical_nphi64_escape_pos_a0p050`
   - `smf28_canonical_nphi64_escape_neg_a0p050`
@@ -129,7 +129,7 @@ The deliverable is a report that states plainly whether genuine minima are:
 
 - The `N_phi` ladder is classified by Hessian sign structure in control space.
 - At least one negative-curvature escape study is run on a competitive saddle.
-- Every new `phi_opt` produced in Phase 28 has a full standard-image set.
+- Every new `phi_opt` produced in Phase 35 has a full standard-image set.
 - The final report gives a clear verdict on whether genuine minima are
   reachable in physically relevant `J_dB` territory.
 - The report recommends a concrete next optimizer path for the repo and

@@ -1,4 +1,4 @@
-# Phase 28 Report — Genuine Minima Reachability vs. Saddle-Dominated Raman Optima
+# Phase 35 Report — Genuine Minima Reachability vs. Saddle-Dominated Raman Optima
 
 ## Executive Verdict
 
@@ -21,7 +21,7 @@ The high-performing branch appears to be a **strict-saddle branch**. True
 minima show up only after aggressive control-space restriction, and they are
 roughly **20 dB worse** than the competitive saddle branch.
 
-## What Phase 28 Measured
+## What Phase 35 Measured
 
 ### 1. Reduced-basis Hessian ladder at the canonical SMF-28 point
 
@@ -65,7 +65,7 @@ different geometric object.
 ### 2. Negative-curvature escape from the `N_phi = 128` saddle
 
 The best-performing dense ladder point was the `N_phi = 128` saddle at
-`-68.01 dB`. Phase 28 perturbed it along the most negative eigenvectors and
+`-68.01 dB`. Phase 35 perturbed it along the most negative eigenvectors and
 re-ran the original low-resolution optimizer.
 
 Results:
@@ -78,7 +78,7 @@ Results:
 | `smf28_canonical_nphi128_escape_pos_a0p050` | 1 | 0.05 | + | -68.20 | -0.19 | indefinite | -2.952e-06 |
 
 All fresh `phi_opt` outputs were saved with the mandatory standard image set
-under `results/raman/phase28/images/`.
+under `results/raman/phase35/images/`.
 
 ### Interpretation of the escape study
 
@@ -111,7 +111,7 @@ the solution quality degrades substantially.**
 ### Why Phase 22 did not fix it
 
 Phase 22 already showed that robustness regularization alone does not change the
-headline geometry. Phase 28 now explains why:
+headline geometry. Phase 35 now explains why:
 
 - the problem is not merely that the saddles are too sharp,
 - it is that the high-performing branch itself remains on the indefinite side
@@ -137,9 +137,9 @@ The best next serious method is:
 
 Why this is the right next step:
 
-- Phase 28 shows minima exist in low dimension, so continuation has something
+- Phase 35 shows minima exist in low dimension, so continuation has something
   real to follow.
-- Phase 28 also shows that simply escaping one saddle in the high-performing
+- Phase 35 also shows that simply escaping one saddle in the high-performing
   branch lands at another saddle, so the method needs repeated curvature-aware
   basin management, not one perturbation.
 - Phase 27 already argued that any second-order rollout must include
@@ -154,7 +154,7 @@ Add a near-convergence escape wrapper to the existing optimizer:
 3. if `lambda_min < 0`, take a signed negative-curvature step,
 4. restart first-order optimization.
 
-Phase 28 showed this is useful, but it should be described as
+Phase 35 showed this is useful, but it should be described as
 **"better-saddle hunting"**, not as a proven minimum finder.
 
 ### Why not recommend SAM / more sharpness as the answer?
@@ -163,7 +163,7 @@ Because both project evidence and the literature say it is the wrong level of
 explanation here:
 
 - Phase 22: robust optima remained indefinite.
-- Phase 28: explicit negative-curvature escape also remained on indefinite
+- Phase 35: explicit negative-curvature escape also remained on indefinite
   points, even after improving depth.
 - The geometry problem is stronger than "insufficient flatness."
 
@@ -199,8 +199,8 @@ Both are too crude for what the data now shows.
 
 ## Deliverables
 
-- `results/raman/phase28/phase28_results.jld2`
-- `results/raman/phase28/ladder_summary.md`
-- `results/raman/phase28/escape_summary.md`
-- `results/raman/phase28/images/*`
-- `scripts/saddle_phase28_run.jl`
+- `results/raman/phase35/phase35_results.jld2`
+- `results/raman/phase35/ladder_summary.md`
+- `results/raman/phase35/escape_summary.md`
+- `results/raman/phase35/images/*`
+- `scripts/saddle_phase35_run.jl`

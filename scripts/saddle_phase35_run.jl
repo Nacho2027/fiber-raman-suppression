@@ -1,14 +1,14 @@
 """
-Phase 28 runner — reduced-basis Hessian ladder + negative-curvature escape.
+Phase 35 runner — reduced-basis Hessian ladder + negative-curvature escape.
 
 Usage:
-  julia -t 8 --project=. scripts/saddle_phase28_run.jl
+  julia -t 8 --project=. scripts/saddle_phase35_run.jl
 
 Outputs:
-  - results/raman/phase28/phase28_results.jld2
-  - results/raman/phase28/ladder_summary.md
-  - results/raman/phase28/escape_summary.md
-  - results/raman/phase28/images/*  (standard image sets for fresh phi_opt)
+  - results/raman/phase35/phase35_results.jld2
+  - results/raman/phase35/ladder_summary.md
+  - results/raman/phase35/escape_summary.md
+  - results/raman/phase35/images/*  (standard image sets for fresh phi_opt)
 """
 
 ENV["MPLBACKEND"] = "Agg"
@@ -29,7 +29,7 @@ include(joinpath(@__DIR__, "determinism.jl"))
 ensure_deterministic_environment()
 ensure_deterministic_fftw()
 
-const P28_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase28")
+const P28_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase35")
 const P28_IMAGES_DIR = joinpath(P28_RESULTS_DIR, "images")
 const P28_SWEEP1_PATH = joinpath(@__DIR__, "..", "results", "raman",
                                  "phase_sweep_simple", "sweep1_Nphi.jld2")
@@ -266,7 +266,7 @@ end
 
 function write_ladder_summary(path, ladder, fullspace_J_dB)
     open(path, "w") do io
-        println(io, "# Phase 28 Ladder Summary")
+        println(io, "# Phase 35 Ladder Summary")
         println(io)
         println(io, "| N_phi | J_dB | classification | lambda_min | lambda_max | |lambda_min|/lambda_max |")
         println(io, "|---:|---:|---|---:|---:|---:|")
@@ -285,7 +285,7 @@ end
 
 function write_escape_summary(path, candidate, escape_runs)
     open(path, "w") do io
-        println(io, "# Phase 28 Escape Summary")
+        println(io, "# Phase 35 Escape Summary")
         println(io)
         @printf(io, "Baseline candidate: `N_phi = %d`, `J_dB = %.2f`, class `%s`\n\n",
                 candidate["N_phi"], candidate["J_dB"], candidate["classification"])
@@ -338,7 +338,7 @@ function main()
     write_ladder_summary(ladder_path, ladder, full_row["J_final"])
     write_escape_summary(escape_path, candidate, escape_runs)
 
-    out_path = joinpath(P28_RESULTS_DIR, "phase28_results.jld2")
+    out_path = joinpath(P28_RESULTS_DIR, "phase35_results.jld2")
     JLD2.jldsave(out_path;
         created_at = string(Dates.now()),
         dense_ladder = ladder,
@@ -349,7 +349,7 @@ function main()
         escape_runs = escape_runs,
         image_dir = P28_IMAGES_DIR,
     )
-    @info "Phase 28 results written" path=out_path
+    @info "Phase 35 results written" path=out_path
     return out_path
 end
 

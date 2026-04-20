@@ -1,4 +1,4 @@
-# Phase 28 Ladder Summary
+# Phase 35 Ladder Summary
 
 | N_phi | J_dB | classification | lambda_min | lambda_max | |lambda_min|/lambda_max |
 |---:|---:|---|---:|---:|---:|
