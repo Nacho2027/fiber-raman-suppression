@@ -294,3 +294,23 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 18 to break down)
+
+### Phase 19: Physics audit 2026-04-19 — verdict-classify every claim in SYNTHESIS-2026-04-19 + Phase 13/15/16/17 sessions, with mandatory diagnosis of Session F 100m anomaly (a2 wrong sign, R²<0.04)
+
+**Goal:** Produce results/PHYSICS_AUDIT_2026-04-19.md with each substantive physics claim classified as defensible / shaky / wrong, sourced to file:line, phase summaries, validation markdowns, or new burst-VM verification runs. Diagnose the Session F 100m three-failure-mode anomaly. Flag any existing docs/*.tex claim that contradicts what survives.
+**Requirements**: All forward-solve verification runs go through ~/bin/burst-run-heavy (Rule P5). Burst VM stopped on completion. Heavy literature research on chirped-pulse Raman suppression, gauge transformations in NLSE optimization, GVD scaling of optimal chirp.
+**Depends on:** Phase 18
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 19 to break down)
+
+### Phase 20: Canonical docs update — propagate audit verdicts into docs/companion_explainer.tex, docs/physics_verification.tex, docs/verification_document.tex with PDF rebuild
+
+**Goal:** Edit the three canonical .tex files so only defensible claims enter as new assertions, shaky claims enter with explicit caveat, wrong claims do NOT enter. Every new assertion sourced to file:line, phase summary, or validation markdown. Rebuild each .pdf with two pdflatex passes. Commit .tex + .pdf together.
+**Requirements**: Audit verdicts from Phase 19 are the input. Voice consistency: companion_explainer = undergrad pedagogical, physics_verification = derivations reference, verification_document = full verification artifact. results/raman/*.md is INPUT-ONLY.
+**Depends on:** Phase 19
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 20 to break down)

@@ -29,7 +29,7 @@ optimizer state.
 Only the `.tex` LaTeX sources under `docs/` are canonical; the markdown
 under `results/raman/` is input-only and was not edited.
 
-**Counts.** 8 defensible · 6 shaky · 3 wrong · 2 missing-data (keep out).
+**Counts (post-rev-2 update 2026-04-19 PM).** 7 defensible · 7 shaky · 3 wrong · 2 missing-data (keep out). One finding (D5, Hessian indefiniteness at L-BFGS optima) was demoted from defensible to shaky-with-caveat after the Phase 18 cross-check (see §X1 below) — the eigenstructure verdict (|λmin|/λmax = 2.6%/0.41%, indefinite, 100% same-sign wings) survives, but the dB anchoring of the canonical Hessian-study optima was time-window-affected and is overstated by 12–30 dB.
 
 ---
 
@@ -189,20 +189,25 @@ Source of claim: `results/raman/phase16/FINDINGS.md:58–67`; fit code at
 The fit is a weighted least-squares quadratic on the ±5 THz signal band
 (2349 / 32768 = 7.2 % of bins) with weight = analytic sech² amplitude.
 **The reported R² is 0.015 at 100 m and 0.037 at 2 m.** A fit that
-explains < 4 % of the variance is noise-dominated; the extracted a₂ is
-a ratio of two residual-noise-level coefficients, not a physical
-quadratic component of the phase.
+explains < 4 % of the weighted variance is fitting a *misspecified*
+model: 96–98 % of φ_opt(ω) on the signal band is non-quadratic
+residual structure orthogonal to {1, ω, ω²}. The extracted a₂ is the
+projection of the underlying φ_opt onto the quadratic subspace under
+that misspecification — there is no physical reason that projection
+should obey GVD scaling, because the underlying phase isn't a
+GVD-style chirp on this band. The sign-flip across L = 2 m vs.
+L = 100 m is the giveaway: a real quadratic component perturbed by
+small residuals does not flip sign across length unless the true
+component is near zero, which is exactly what R² → 0 reports.
 
-The ratio "−3.30 vs. +50" is therefore a comparison of (a) a ratio of
-noise and (b) the L-scaling prediction of a model (pure-GVD
-pre-compensation) that the phase visibly does not follow. The sign
-flip is the tell — a real quadratic coefficient perturbed by noise
-does not change sign unless the true coefficient is near zero, which
-is exactly what R² → 0 says. Doc treatment: the finding "φ_opt is not
-explained by a low-order polynomial over the signal band" is
-**defensible on its own** (matches Phase 9 and Phase 13 at
-`PHASE9_FINDINGS.md:19–29`). The GVD-scaling comparison should be
-**removed**, not caveated.
+The ratio "−3.30 vs. +50" is therefore a comparison between (a) two
+projections of a non-quadratic signal onto a misspecified basis and
+(b) the L-scaling prediction of a different physical model (pure-GVD
+pre-compensation) that the data visibly do not follow. Doc treatment:
+the finding "φ_opt is not explained by a low-order polynomial over
+the signal band" is **defensible on its own** (matches Phase 9 and
+Phase 13 at `PHASE9_FINDINGS.md:19–29`). The GVD-scaling comparison
+should be **removed**, not caveated.
 
 ### W2. "a₂ ratio signals publishable physics (D-F-07)"
 
@@ -223,6 +228,51 @@ but the r = 0.94 should not be quoted without the sample size, because
 stated without n it reads as a strong statistical result. Doc
 treatment: demote "Pearson r = 0.94" to "4-point trend consistent with
 low-Φ_NL = simpler phase", or omit.
+
+---
+
+## Cross-check against Phase 18 reproducibility audit (§X1)
+
+The Phase 18 numerical-trustworthiness audit
+(`results/validation/REPORT.md`, generated 2026-04-19 20:55 on
+fiber-raman-burst) re-ran every JLD2 result that stores a
+`phi_opt` through the forward solver on a validator-controlled
+grid and compared `J_recomputed` against the run's `J_reported`.
+Two of the configs that anchor §D5 of this audit (Hessian
+indefiniteness at L-BFGS optima) come back as **SUSPECT** under
+that audit, and the discrepancy is non-trivial:
+
+| Config | Source JLD2 | J reported | J recomputed | edge frac | Adjoint ‖g‖ at φ_opt |
+|---|---|---|---|---|---|
+| `phase13_hessian_smf28` | `results/raman/phase13/hessian_smf28_canonical.jld2` | -60.54 dB | **-48.25 dB** | 1.01% | 1.15e-05 |
+| `phase13_hessian_hnlf`  | `results/raman/phase13/hessian_hnlf_canonical.jld2`  | -74.45 dB | **-44.00 dB** | 2.10% | 4.83e-05 |
+
+Sources: `results/validation/phase13_hessian_smf28.md`,
+`results/validation/phase13_hessian_hnlf.md` (commit
+`f7b2891`).
+
+**What this means.** The 12.3 dB and 30.4 dB gaps between J_reported
+and J_recomputed are the time-window-edge artifact discussed in §S2
+of this audit, applied to the Hessian-study configs themselves. Both
+saved `φ_opt` files give a *small* adjoint gradient norm on the
+recomputed grid (‖g‖ ~ 1e-5, three to four orders of magnitude below
+‖g‖ at the unshaped reference) — i.e., they are true stationary
+points on that grid, just at a different J value than originally
+reported. The Phase 13 eigenstructure analysis was performed at
+exactly these `φ_opt` files, so the eigenvalue ratios it reports
+(SMF-28 |λmin|/λmax = 2.6%, HNLF = 0.41%, both 100% same-sign on
+each wing over 20 eigenpairs) describe the curvature at a *real*
+stationary point. The saddle verdict is robust to the dB
+re-anchoring.
+
+**Consequence for D5 and for the docs.** D5 (Hessian is indefinite
+at L-BFGS optima) is demoted from **defensible** to **shaky with
+caveat** in the count. The eigenstructure conclusion stands
+unchanged. The dB number quoted alongside it is overstated by
+12–30 dB. Phase 20 must propagate the caveat into
+`docs/verification_document.tex` §sec:april-hessian: the
+indefinite-saddle finding is correct; the implied "the L-BFGS
+optimum is at -60.5 dB" headline is a time-window artefact.
 
 ---
 
@@ -255,19 +305,56 @@ Never ran (`BIG_WARNING.md`). No data. Stays out.
 
 ---
 
+## Literature anchor — what is and is not in the published record
+
+A targeted literature scan (2024–2026 nonlinear-fiber, ultrafast,
+and Raman-suppression venues; also pre-2024 spectral-phase
+shaping foundational work) finds **no published precedent for
+spectral-phase-only Raman suppression below approximately
+−40 dB on single-mode silica fiber at sub-meter to multi-meter
+lengths in the soliton regime.** The closest comparison anchors
+are:
+
+- A. M. Weiner, *Femtosecond pulse shaping using spatial light
+  modulators*, Rev. Sci. Instrum. **71**, 1929 (2000) — the
+  canonical reference for shaper hardware and the kinds of
+  spectral-phase patterns that are physically implementable.
+  Establishes the σ ~ 0.01–0.1 rad calibration envelope range
+  that gates §D2 of this audit.
+- L. G. Wright, D. N. Christodoulides, F. W. Wise,
+  *Controllable spatiotemporal nonlinear effects in multimode
+  fibres*, Nat. Photonics **9**, 306 (2015); and the
+  Wright-group APL Photonics review series 2019–2020 — the
+  closest pedigree on multimode nonlinear pulse propagation,
+  relevant to the MMF extension (§D7) but not specifically to
+  Raman suppression.
+- J. M. Dudley, J. R. Taylor (eds.), *Supercontinuum Generation
+  in Optical Fibers*, Cambridge UP 2010, §3.2 — establishes
+  the "clean" output-edge energy threshold (0.1%) used by the
+  Phase 18 validator and discussed in §S2 and §X1 of this
+  audit.
+
+The lack of a direct precedent means the −76.86 dB headline
+(§D1) and the −82.33 dB Pareto candidate (§D4) are
+**genuinely novel claims**, which is positive for the lab-meeting
+narrative but also means the audit's caveat discipline (sharpness
+σ_3dB, warm-start framing, time-window honesty) is the only line
+between novelty and overclaiming. Doc treatment: the canonical
+docs should reflect the novelty without inviting peer-review
+pushback by quoting suppression depths that the audit has not
+defended (e.g., the −60.5 dB Phase 13 anchoring should not be
+quoted as a benchmark in a paper).
+
+---
+
 ## Docs update plan (Phase 2)
 
-- **companion_explainer.tex**: append a short §16 "What 48 hours of
-  parallel sessions added" — the four undergrad-accessible findings
-  (D1, D2, D3, D8), one paragraph each, no new math. Do not mention
-  a₂ ratios.
-- **physics_verification.tex**: append §5 adjoint-verification
-  limitation (S6) — one paragraph, scope the Taylor-slope-2 claim.
-- **verification_document.tex**: (i) new §9 "Integration pass
-  (April 2026)" reporting D1–D8 with their scope caveats; (ii) new
-  §6.3 item recording the corrected framing of the 100 m result
-  (S4 + S5 + W1); (iii) add `honest-suppression` flag to the
-  baseline table row for SMF-28 L=2 m P=0.2 W.
+- **companion_explainer.tex** §16.5 ("What did *not* survive"): refine the W1 bullet from "ratio of noise" wording to the "misspecified quadratic model — 96–98 % of φ_opt is non-quadratic residual structure on the signal band" wording. No new content otherwise; the four undergrad-accessible findings (D1, D2, D3, D8/D6) and the three "what didn't survive" bullets stay as-is.
+- **physics_verification.tex** §"Verification of the adjoint gradient via Taylor remainder": no change — the existing "April 2026 audit" scope-limitation paragraph (already in the file at lines 300–316) correctly captures S6.
+- **verification_document.tex** §sec:april-wrong: refine the W1 paragraph wording in the same way as companion_explainer (preserve the verdict, swap the framing).
+- **verification_document.tex** §sec:april-hessian: append a one-paragraph J-anchoring caveat citing §X1 of this audit and the two Phase 18 validation files. The eigenstructure verdict (|λmin|/λmax = 2.6%/0.41%, indefinite, 100% same-sign wings) is correct as stated; the implied -60.5 dB / -74.4 dB anchoring of the canonical optima is overstated by 12–30 dB due to time-window edge bleed. The recomputed honest values are -48.2 dB (SMF-28) and -44.0 dB (HNLF) — quote those alongside the eigenstructure result.
+- **verification_document.tex** §sec:april2026 (Integration Pass intro): append a one-line cross-reference to the Phase 18 reproducibility audit at `results/validation/REPORT.md` so the reader knows the integration-pass numbers have been independently re-run on a controlled grid.
+- All five edits go on a single commit with PDF rebuild (two pdflatex passes per .tex file). Rebuild script: `cd docs && for f in companion_explainer physics_verification verification_document; do pdflatex -interaction=nonstopmode $f.tex; pdflatex -interaction=nonstopmode $f.tex; done`. Phase 20 owns the rebuild.
 
 ---
 

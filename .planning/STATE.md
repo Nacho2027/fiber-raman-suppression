@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Executing Phase 16
-last_updated: "2026-04-17T03:52:20.728Z"
-last_activity: 2026-04-17
+status: Ready to execute
+last_updated: "2026-04-20T02:16:09.279Z"
+last_activity: 2026-04-20
 progress:
-  total_phases: 15
-  completed_phases: 2
-  total_plans: 11
-  completed_plans: 17
+  total_phases: 25
+  completed_phases: 11
+  total_plans: 25
+  completed_plans: 25
   percent: 100
 ---
 
@@ -175,6 +175,8 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 17 added (2026-04-17, Session D): Simple Phase Profile Stability Study — investigate striking SMF-28 L=0.5m P=0.050W J=-77.6dB result (unusually simple unwrapped phase, TV<2 rad). Baseline reproduction + perturbation study + transferability sweep + simplicity quantification + synthesis figure. Fully autonomous on branch sessions/D-simple. Feeds Session E.
 - Phase 17-01 COMPLETE (2026-04-17, Session D): verdict **SHARP_LUCKY**. Baseline reproduced at J=-76.86 dB (0.74 dB from reference). σ_3dB = 0.025 rad (below 0.05 threshold). 0/7 SMF-28 eval-only transfers within 3 dB of warm-reopt. Simplicity winner: stationary-point count (Pearson r=0.94 across 4 optima; baseline has 7, others 11–46). Secondary finding: simple phase is an excellent **warm-start initializer** (reaches -70 to -82 dB in 6–40 L-BFGS iter across 11 nearby (L, P, fiber) points, including HNLF at -79.5 dB). See `results/raman/phase17/SUMMARY.md` and `.planning/notes/simple-profile-handoff-to-E.md`.
 - Integration pass 2026-04-19: merged B, D, F, E, A, G, H into main. Follow-up Phases 18-multivar-convergence-fix, 18-sharp-ab-execution, 18-cost-config-c opened. Session G parked with BIG_WARNING.md due to Opus-4.7-side breakage.
+- Phase 19 added (2026-04-19): Physics audit 2026-04-19 — verdict-classify every claim in SYNTHESIS-2026-04-19 + Phase 13/15/16/17 sessions; mandatory diagnosis of Session F 100m anomaly (a2 wrong sign + R²<0.04). Output: `results/PHYSICS_AUDIT_2026-04-19.md`.
+- Phase 20 added (2026-04-19): Canonical docs update — propagate audit verdicts into `docs/companion_explainer.tex`, `docs/physics_verification.tex`, `docs/verification_document.tex`; rebuild PDFs (two pdflatex passes); commit .tex + .pdf together. Depends on Phase 19.
 
 ### Resolved Issues
 
@@ -192,7 +194,7 @@ Both fixes require re-running the sweep to get valid results.
 ## Session Continuity
 
 Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-17
+Last activity: 2026-04-20
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs
