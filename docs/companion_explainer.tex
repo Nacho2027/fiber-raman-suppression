@@ -12,6 +12,13 @@
 \usepackage{enumitem}
 \usepackage{fancyhdr}
 \usepackage{graphicx}
+% Gracefully handle missing figure files. If the file is present, render
+% at the requested size; if not, show a framed placeholder so the build
+% succeeds on any machine.
+\let\origincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{%
+  \IfFileExists{#2}{\origincludegraphics[#1]{#2}}{%
+    \fbox{\parbox{0.6\linewidth}{\centering\textit{figure not available in build environment:}\\\texttt{#2}}}}}
 \usepackage{float}
 \usepackage{tikz}
 \usepackage{tcolorbox}
@@ -246,7 +253,7 @@ J[\varphi] = \frac{\displaystyle\sum_{\omega\in\mathcal{B}}|u_L(\omega)|^2}{\dis
 where $\mathcal{B}$ = frequencies shifted $> 5$~THz red of pump. $J = 0$ is perfect suppression.
 \end{keyeq}
 
-In decibels: $J_{\text{dB}} = 10\log_{10}(J)$. Our best: $-78$~dB $= 1.6\times10^{-8}$.
+In decibels: $J_{\text{dB}} = 10\log_{10}(J)$. Our current best: around $-82$~dB on SMF-28 at the short-fiber Pareto point ($L=0.25$~m, $P=0.10$~W, from the 2026-04 parameter sweep) and around $-77$~dB at the $L=0.5$~m canonical config. These are $1\times10^{-8}$ level Raman fractions --- essentially all the pulse energy stays out of the Raman band.
 
 \subsection{The Landscape}
 
@@ -976,6 +983,48 @@ These figures show actual results from our optimization sweep.
 \caption{Pushing the limits: 5~m of SMF-28 at 0.10~W. The unshaped pulse (right) shows massive spectral broadening by $z = 1$~m. The optimized pulse (left) keeps the spectrum contained through 5~m, though some leakage appears past $z = 3$~m --- this is where the input phase's influence starts to fade.}
 \label{fig:evolution_5m}
 \end{figure}
+
+\subsection{Long-fiber extension (100~m)}
+\label{sec:longfiber}
+
+One of the more surprising results from the 2026-04 campaign is how far
+the \emph{shape} of the optimised phase transfers across fibre length.
+Take the $\varphi_\text{opt}$ we found for 2~m of SMF-28 at $P=0.05$~W
+(found by a normal L-BFGS run in seconds), resample it onto a 100~m
+simulation grid without changing anything else, and then just \emph{evaluate}
+$J$ at 100~m without running the optimiser: you get $J = -51.5$~dB. No new
+optimisation --- the same phase pattern that suppressed Raman in 2~m also
+suppresses it in 100~m, which is 50$\times$ further.
+
+If you then let L-BFGS re-optimise from that warm start at 100~m, it digs
+out another $\sim$3~dB to reach $J = -54.8$~dB after 25 iterations
+(that run hit the wall clock rather than converging, so the ``-54.8~dB'' is
+a lower bound on what the configuration can actually reach). And if you
+look at the shape of $\varphi_\text{opt}(\omega)$ over the pulse bandwidth,
+it is \emph{not} a low-order polynomial --- a weighted quadratic fit
+captures under 4\% of the variance, meaning the phase shape that does the
+suppression is structurally non-polynomial, not just a chirp.
+
+\begin{intuition}
+The usual undergrad story for pre-compensating GVD is ``apply a quadratic
+phase $\varphi_\text{GVD}(\omega) = -\tfrac{1}{2}\beta_2 L \omega^2$ and
+the pulse stays together.'' Here the optimised phase is NOT close to that
+quadratic --- its $a_2$ coefficient is 2--4 orders of magnitude smaller
+than $-\beta_2 L/2$ at both 2~m and 100~m. Raman suppression is a
+different regime from dispersion compensation, and the optimiser has
+found something richer than a chirp.
+\end{intuition}
+
+\begin{warning}
+Don't over-interpret the 100~m number yet. The simulation window (160~ps)
+is smaller than the Stokes-band walk-off at 100~m
+($|\beta_2|\cdot L \cdot \Delta\omega_R \approx 177$~ps), so the
+\emph{un-shaped} reference bleeds some Stokes energy into the window's
+super-Gaussian attenuator. The shaped runs are fine (they don't generate
+much Stokes), but the $\Delta J$ between shaped and un-shaped is an
+under-estimate of the real advantage. A 320~ps re-run is the cheap fix;
+it is on the follow-up list.
+\end{warning}
 
 
 % ═════════════════════════════════════════════════════════════════════════

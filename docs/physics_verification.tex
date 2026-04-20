@@ -1,9 +1,12 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
-\usepackage{physics}
 \usepackage{parskip}
 \usepackage[hidelinks]{hyperref}
+
+% Local fallbacks for the physics package (unavailable in some TeX Live builds)
+\providecommand{\pdv}[2]{\frac{\partial #1}{\partial #2}}
+\providecommand{\dv}[2]{\frac{d #1}{d #2}}
 
 \title{Physics Derivations for Fiber Raman Suppression}
 \author{}
@@ -314,5 +317,68 @@ unable to certify it at the optimum. Verifications of correctness of
 $\nabla J$ should therefore be performed at an unshaped or
 steepest-descent-shifted reference, never at a converged optimum.
 See \texttt{results/PHYSICS\_AUDIT\_2026-04-19.md} §S6.
+
+\section{Gauge symmetry of $J$ and its consequences for the Hessian}
+\label{sec:gauge}
+
+The cost
+\(J[\varphi] = E_\text{band}(L)/E_\text{total}(L)\) is invariant under the
+two-parameter gauge transformation
+\begin{equation}
+  \varphi(\omega) \;\mapsto\; \varphi(\omega) + C + \alpha\,(\omega - \bar\omega),
+  \label{eq:gauge}
+\end{equation}
+where $C$ is a global phase (no physical effect) and $\alpha$ re-times the
+pulse relative to the simulation window (no effect on total propagation
+because the fiber ODE is autonomous in $z$; the band mask is specified in
+absolute frequency so $E_\text{band}$ sees the same spectrum after the shift).
+This is verified symbolically by noting that adding $C + \alpha\omega$ to
+$\varphi$ multiplies $u_0(\omega)$ by $e^{i(C + \alpha\omega)}$: the global
+$e^{iC}$ cancels in $|u|^2$; the linear $e^{i\alpha\omega}$ induces a temporal
+translation $t \mapsto t - \alpha$ that commutes with the autonomous forward
+RHS and with the spectral band mask.
+
+\paragraph{Hessian consequence.}
+Eq.~(\ref{eq:gauge}) implies the Hessian
+$H[\varphi] \equiv \partial^2 J / \partial\varphi\,\partial\varphi^\top$
+has two exact zero eigenvalues, with eigenvectors spanning the gauge
+subspace $\{\mathbf{1},\, \omega - \bar\omega\}$. Any numerical eigensolver
+applied to $H$ must therefore return two near-zero modes to be trusted.
+Phase 13 used a matrix-free HVP (symmetric central-difference,
+$\epsilon = 10^{-4}$, Taylor-remainder slope $\approx 2$, validated in
+\texttt{test/test\_phase13\_hvp.jl}) with Arpack Lanczos on the
+$:\texttt{LR}$ and $:\texttt{SR}$ wings to report the 20 largest and
+smallest eigenvalues of $H$ at the SMF-28 and HNLF canonical optima.
+
+The reported spectra are \emph{both} sign-definite on their respective wings
+(all 20 of $\lambda_\text{top}$ positive, all 20 of $\lambda_\text{bottom}$
+negative), with
+\begin{align*}
+  \text{SMF-28:}\quad & \lambda_\text{max} = +1.074\times10^{-5}, \qquad
+                        \lambda_\text{min} = -2.794\times10^{-7},\qquad
+                        |\lambda_\text{min}|/\lambda_\text{max} = 2.6\%. \\
+  \text{HNLF:}\quad & \lambda_\text{max} = +5.078\times10^{-5}, \qquad
+                       \lambda_\text{min} = -2.091\times10^{-7},\qquad
+                       |\lambda_\text{min}|/\lambda_\text{max} = 0.41\%.
+\end{align*}
+The Hessian is \textbf{indefinite}. L-BFGS is halting at a \emph{saddle}, not
+a local minimum. The two gauge null-modes predicted by
+Eq.~(\ref{eq:gauge}) sit in the $\lambda \approx 0$ window that matrix-free
+Lanczos cannot resolve without shift-invert; their presence was confirmed
+indirectly by projecting $\{\mathbf{1},\omega-\bar\omega\}$ onto the
+bottom-20 subspace and measuring a small residual norm
+($\lVert P_\text{bot}\mathbf{1}\rVert \approx 0.06$ SMF / $0.04$ HNLF). This
+is exactly what is expected if the gauge modes have $\lambda = 0$ and
+therefore lie between $\lambda_\text{top}[20] \approx 10^{-6}$ and
+$\lambda_\text{bottom}[20] \approx -10^{-7}$.
+
+\paragraph{Where this leaves the gradient.}
+The adjoint gradient (Section~2, Taylor-slope test) is correct
+\emph{at every $\varphi$}: saddles do not make the gradient wrong, they just
+mean L-BFGS's convergence criterion (small gradient norm) is a weaker
+guarantee than it is for strictly convex or generically-smooth Morse
+landscapes. Data and code:
+\texttt{results/raman/phase13/hessian\_\{smf28,hnlf\}\_canonical.jld2};
+commit \texttt{b962091} for the HVP validation.
 
 \end{document}
