@@ -13,13 +13,15 @@ that the detailed non-quadratic `phi_opt` structure transfers across a 50×
 length increase. Phase 23 exists to settle that point with a controlled
 baseline.
 
-The governing physics is straightforward. At `L = 100 m`, `P_cont = 0.05 W`,
-and SMF-28 `β₂ < 0`, the propagation is strongly dispersion-dominated on the
-simulation-length scale. A large input quadratic spectral phase broadens the
-pulse temporally before substantial nonlinear phase accumulates, which lowers
-peak power and can suppress Raman-band energy transfer simply by keeping the
-pulse below the effective nonlinear threshold over much of the fiber. That
-means a generic quadratic chirp is a serious null model and cannot be skipped.
+The governing physics is straightforward, but one bookkeeping point matters:
+`P_cont = 0.05 W` is average power, and the pulse generator converts that to a
+multi-kilowatt launch peak power for the 185 fs, 80.5 MHz sech² pulse. So the
+100 m run is not a "weakly nonlinear" launch condition. Even so, a large input
+quadratic spectral phase broadens the pulse temporally before the strongest
+compression event, lowers peak power over much of the span, and can suppress
+Raman-band energy transfer without needing detailed non-quadratic structure.
+That means a generic quadratic chirp is a serious null model and cannot be
+skipped.
 
 The right comparison is not "does a quadratic fit explain `phi_opt(ω)`?" The
 audit already showed the low-order polynomial fit is misspecified (`R² ≈ 0.02`
