@@ -134,27 +134,42 @@ end
 function main()
     mkpath(SWEEP1_RESULTS_DIR)
     rows = sweep1_load_rows()
-    phi_seeds = [rows[n]["phi_opt"] for n in [SWEEP1_BASE_LEVELS; 16384]]
-    honest = recovery_find_honest_grid(;
-        fiber_preset=SWEEP1_FIBER,
-        L_fiber=SWEEP1_L,
-        P_cont=SWEEP1_P,
-        β_order=SWEEP1_BETA_ORDER,
-        phi_seeds=phi_seeds,
-        old_Nt=SWEEP1_OLD_NT,
-        old_tw_ps=SWEEP1_OLD_TW_PS,
-        min_time_window_ps=48.0,
-    )
+    attempt_windows = [108.0, 216.0]
+    final_results = nothing
+    final_honest = nothing
 
-    sweep_levels = [SWEEP1_BASE_LEVELS; honest.Nt]
-    results = Vector{Any}(undef, length(sweep_levels))
-    @threads for i in eachindex(sweep_levels)
-        nphi = sweep_levels[i]
-        seed_row = nphi == honest.Nt ? rows[16384] : rows[nphi]
-        results[i] = sweep1_run_level(nphi, seed_row, honest)
+    for tw_floor in attempt_windows
+        honest = recovery_find_honest_grid(;
+            fiber_preset=SWEEP1_FIBER,
+            L_fiber=SWEEP1_L,
+            P_cont=SWEEP1_P,
+            β_order=SWEEP1_BETA_ORDER,
+            phi_seeds=Any[],
+            old_Nt=SWEEP1_OLD_NT,
+            old_tw_ps=SWEEP1_OLD_TW_PS,
+            min_time_window_ps=tw_floor,
+        )
+
+        sweep_levels = [SWEEP1_BASE_LEVELS; honest.Nt]
+        results = Vector{Any}(undef, length(sweep_levels))
+        @threads for i in eachindex(sweep_levels)
+            nphi = sweep_levels[i]
+            seed_row = nphi == honest.Nt ? rows[16384] : rows[nphi]
+            results[i] = sweep1_run_level(nphi, seed_row, honest)
+        end
+
+        max_edge = maximum([r["edge_frac"] for r in results])
+        @info @sprintf("Sweep-1 attempt tw_floor=%.1f ps completed with max recovered edge=%.3e",
+            tw_floor, max_edge)
+
+        final_results = results
+        final_honest = honest
+        if max_edge < 1e-3
+            break
+        end
     end
 
-    write_sweep1_summary(results, honest)
+    write_sweep1_summary(final_results, final_honest)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
