@@ -115,7 +115,7 @@ Rivera Lab, Cornell University}
 \thispagestyle{empty}
 
 \begin{abstract}
-This document presents an independent, equation-by-equation verification of the mathematical formulation and Julia implementation of an adjoint-based spectral phase optimization system for Raman suppression in single-mode optical fiber. We re-derive every key equation from first principles, audit the source code in the \texttt{smf-gain-noise/} repository against these derivations, and assess whether the overall research approach is sound. The verification covers: (1)~the forward Generalized Nonlinear Schr\"odinger Equation (GNLSE) in the interaction picture, (2)~the cost function and its Wirtinger derivative, (3)~the adjoint equation for reverse-mode sensitivity analysis, (4)~the chain rule through the spectral phase mask, (5)~the regularization terms and their gradients, and (6)~the numerical methods and validation tests. We find that \textbf{the core mathematical formulation is correct}, with the adjoint gradient verified to $0.026\%$ relative error against finite differences. We identify one \textbf{non-critical inconsistency} (cost reported in dB to L-BFGS while gradient is in linear scale) and several \textbf{advisory items} regarding regularization choices, attenuator treatment in the adjoint, and the physical realizability of optimized phase profiles.
+This document presents an independent, equation-by-equation verification of the mathematical formulation and Julia implementation of an adjoint-based spectral phase optimization system for Raman suppression in single-mode optical fiber. We re-derive every key equation from first principles, audit the source code in the \texttt{smf-gain-noise/} repository against these derivations, and assess whether the overall research approach is sound. The verification covers: (1)~the forward Generalized Nonlinear Schr\"odinger Equation (GNLSE) in the interaction picture, (2)~the cost function and its Wirtinger derivative, (3)~the adjoint equation for reverse-mode sensitivity analysis, (4)~the chain rule through the spectral phase mask, (5)~the regularization terms and their gradients, and (6)~the numerical methods and validation tests. We find that \textbf{the core mathematical formulation is correct}, with the adjoint gradient verified to $0.026\%$ relative error against finite differences. The original cost/gradient scale bug is now resolved via the log-scale objective with the proper chain-rule factor; the main remaining open concern in the single-mode path is the forward attenuator not being carried through the adjoint exactly. Additional advisory items concern regularization interpretation and the physical realizability of some optimized phase profiles.
 \medskip\noindent\textbf{v3 update (2026-04-02):} All 13 stale line numbers re-verified. Adjoint solver updated from Vern9/1e-10 to Tsit5/1e-8. Added: log-scale cost function (Section~\ref{sec:new_infra}), Raman response overflow fix, auto-sizing time windows, boundary verification results, TikZ diagrams, and sweep result figures. SPM formula corrected (was missing 0.86/$T_0$ factor).
 \end{abstract}
 
@@ -871,12 +871,12 @@ framing. Standard images:
 \end{flagged}
 
 \begin{flagged}
-\textbf{Issue 3: Formulation document mentions smoothness, Tikhonov, GDD, and TOD penalties, but code only implements GDD and boundary penalties (R5).} The formulation document (Section headers reference smoothness and Tikhonov regularization) is outdated relative to the current code. The code implements only:
+\textbf{Issue 3: Penalty discussion needs scope clarification.} Earlier revisions of this document described the \emph{phase-only} Raman optimizer as if it implemented a broader family of smoothness / Tikhonov / TOD-style penalties. In the current codebase, the single-mode phase-only path in \texttt{scripts/raman\_optimization.jl} implements only:
 \begin{itemize}
 \item GDD penalty: $J_{\text{GDD}} = \lambda_{\text{GDD}} \sum_i (d^2\varphi/d\omega^2)_i^2 \cdot \Delta\omega$
 \item Boundary penalty: $J_{\text{boundary}} = \lambda_b \cdot E_{\text{edges}}/E_{\text{total,input}}$
 \end{itemize}
-This discrepancy should be resolved by updating the formulation document.
+Other regularizers \emph{do} exist elsewhere in the repo --- for example the amplitude-only and multivariable paths implement Tikhonov / TV / flatness penalties on amplitude-like controls --- but those are different optimizers, not part of the core phase-only formulation being verified in this section. TOD appears in this project as a \emph{diagnostic chirp sweep} and polynomial decomposition basis, not as a production penalty term in the phase-only cost. The discrepancy is therefore a documentation-scope bug, not a missing-code bug.
 \end{flagged}
 
 \subsection{Correct but Could Be Improved}
@@ -1238,14 +1238,14 @@ These factors are confirmed correct by the finite-difference gradient check.
 90 & Gradient formula & Y & $2\Real(\lambda_0^* \cdot iu_0)$ \\
 97--112 & GDD penalty + gradient & Y & Verified derivation \\
 114--137 & Boundary penalty + grad & Y & Verified derivation \\
-179--198 & L-BFGS interface & $\star$ & Cost in dB, grad in linear \\
+179--198 & L-BFGS interface & Y & Log-scale cost with chain-rule-scaled gradient \\
 212--243 & \texttt{validate\_gradient} & Y & Central FD, correct \\
 272--302 & \texttt{chirp\_sensitivity} & Y & GDD/TOD sweeps correct \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-$\star$ = Issue 1 (non-critical). See Section~6.2.
+$\star$ = Attenuator is functionally correct but not in the adjoint. See Issue~2.
 
 \subsection{common.jl (Shared Functions)}
 

@@ -24,6 +24,8 @@ These no longer need tracking:
 | Non-deterministic FFTW planner | Pinned to `ESTIMATE` for reproducibility via `scripts/determinism.jl::ensure_deterministic_environment()`; validated bit-identical cross-process (Phase 15). Cost: +21.4% runtime. | `scripts/determinism.jl`, Phase 15 merge |
 | Standard-image set not produced by drivers | Project-level rule in `CLAUDE.md` mandates `save_standard_set(...)` at the end of every driver producing `phi_opt`. Most drivers wired (see Partial Wiring below). Legacy drivers patched in commit `12cea85`. | `scripts/standard_images.jl` (158 LoC) |
 | README minimal (7 lines, Windows paths) | Session B docs suite replaced it along with 9 supporting docs + Makefile | commit `eb691df` |
+| Duplicate `simulate_disp_gain_smf.jl` placeholder | Deleted in Phase 25. `scripts/phase15_benchmark.jl` now swaps FFTW planner flags only in the three live simulation files, and codebase docs were updated to stop advertising the dead SMF gain file. | Phase 25 |
+| `pulse_form` silent fallthrough | Fixed in Phase 25. `get_initial_state` and `get_initial_state_gain_smf` now throw `ArgumentError` for unsupported pulse shapes, and `test/tier_fast.jl` covers the regression. | Phase 25 |
 
 ## Critical Issues
 
@@ -36,13 +38,10 @@ These no longer need tracking:
 - **Fix approach (true fix):** Stop mutating `fiber` from callers. Either (a) refactor `setup_raman_problem` and solve entry points to consume `zsave` as a keyword arg that never writes back, or (b) make `fiber` immutable (convert to a `NamedTuple` or typed struct). Option (b) also lets the type checker catch `fiber["Dw"]` typos at parse time (see MEDIUM issue below).
 - **Fix approach (stopgap):** Add a `@test` in `test/tier_fast.jl` that asserts `fiber` is unmutated after a representative optimize / propagate call (Session C's Phase 16 test set has something close — extend to all solve entry points). Catches the specific regression "someone removed the deepcopy."
 
-### Duplicate `simulate_disp_gain_smf.jl` with placeholder gain is still present
+### Resolved 2026-04-20 — dead `simulate_disp_gain_smf.jl` placeholder removed
 
-- **Issue:** The 2026-04-05 audit flagged this as dead code. **Still present on main** as `src/simulation/simulate_disp_gain_smf.jl` (79 LoC). It defines `disp_gain_smf!`, `get_p_disp_gain_smf`, `get_initial_state_gain_smf`, and `compute_gain!(gω, uω, gain_template)` — the last has identical Number/non-Number branches (lines 57–63 of the original audit).
-- `src/MultiModeNoise.jl` does NOT include this file (only includes `simulate_disp_mmf.jl`, `sensitivity_disp_mmf.jl`, `simulate_disp_gain_mmf.jl`, `fibers.jl`). The working gain model is the MMF version with `compute_gain(uω, pGain::YDFAParams, Pp)` dispatch (`src/simulation/simulate_disp_gain_mmf.jl:93`).
-- **Impact:** Confusing. If someone adds `include("simulation/simulate_disp_gain_smf.jl")` to `MultiModeNoise.jl`, they get immediate method-redefinition errors. The file's docstring even points readers at the MMF version (`simulate_disp_gain_smf.jl:64`).
-- **Severity:** HIGH (trap door for future contributors)
-- **Fix approach:** Delete `src/simulation/simulate_disp_gain_smf.jl`. Git history preserves it if ever needed. The MMF version subsumes its features.
+- **What changed:** The unused placeholder file was deleted, the Phase 15 benchmark stopped editing it, and the codebase docs no longer advertise it as a live module.
+- **Why this mattered:** It was a future-contributor trap: one extra `include(...)` would have produced method redefinition conflicts and two competing stories about where gain propagation really lived.
 
 ### Burst-VM lockup risk — wrapper is mandatory but not fully machine-enforced
 
@@ -198,8 +197,8 @@ These no longer need tracking:
 |------|-------|-------|-------------------------|
 | Parameter typing | `fiber` and `sim` are `Dict{String,Any}`. `fiber["Dw"]` typo → runtime `KeyError`. | All `src/simulation/*.jl` | Unchanged |
 | ODE parameter tuples | `get_p_disp_mmf` returns a 28+-element unnamed tuple; destructured positionally in every RHS. One reordering breaks everything. | `src/simulation/simulate_disp_mmf.jl:13,85` | Unchanged |
-| `get_initial_state` duplication | Copy-pasted across `simulate_disp_mmf.jl`, `simulate_disp_gain_mmf.jl`. | `src/simulation/` | Reduced from 3× to 2× (the dead `simulate_disp_gain_smf.jl` is still a third copy — see HIGH item above) |
-| `pulse_form` silent fallthrough | If `pulse_form ∉ {"gauss", "sech_sq"}`, produces zero-amplitude pulse with undefined `P_peak`. | `src/simulation/simulate_disp_mmf.jl:150-165` | Unchanged |
+| `get_initial_state` duplication | Copy-pasted across `simulate_disp_mmf.jl`, `simulate_disp_gain_mmf.jl`. | `src/simulation/` | Still duplicated, but reduced to the 2 live implementations |
+| `pulse_form` silent fallthrough | Unsupported pulse forms now throw `ArgumentError` in both live pulse constructors. | `src/simulation/simulate_disp_mmf.jl`, `src/simulation/simulate_disp_gain_mmf.jl` | Fixed 2026-04-20 |
 | Fiber preset duplication | `scripts/raman_optimization.jl:486-491` redefines `SMF28_GAMMA`, `SMF28_BETAS` as `const`, duplicating `FIBER_PRESETS` dict in `scripts/common.jl`. | `scripts/raman_optimization.jl` | Unchanged |
 | Hardcoded physical constants | `2.99792458e8`, Planck constant in 4+ locations with precision differences (`6.62607e-34` vs `6.62607015e-34`) | `src/helpers/helpers.jl`, `src/gain_simulation/gain.jl` | Unchanged |
 | Duplicate `using FiniteDifferences` | `src/MultiModeNoise.jl` lines 6 and 13 — `using FiniteDifferences` appears twice. | `src/MultiModeNoise.jl` | **Still present** (verified: lines appear once each at lines 28 and 25 of current file — looks like it's been cleaned; re-verify) |
@@ -214,7 +213,7 @@ These no longer need tracking:
 The project rule (CLAUDE.md top section) is: *"Every optimization driver that produces a `phi_opt` MUST, before exiting, call `save_standard_set(...)`"*. Most drivers comply. Verified grep:
 
 - **Wired:** `amplitude_optimization.jl`, `cost_audit_driver.jl`, `longfiber_optimize_100m.jl`, `longfiber_validate_50m.jl`, `mmf_joint_optimization.jl`, `mmf_m1_limit_run.jl`, `mmf_raman_optimization.jl`, `mmf_run_phase16_aggressive.jl`, `multivar_demo.jl`, `sharp_ab_slim.jl`, `sharpness_optimization.jl`, `raman_optimization.jl`, `sweep_simple_*.jl`.
-- **Not wired (and they do produce `phi_opt`):** `scripts/benchmark_optimization.jl`, `scripts/multivar_optimization.jl` (driver path, vs the demo which is wired), `scripts/sharp_robustness_slim.jl`, `scripts/sharp_ab_figures.jl`. `test_optimization.jl` is a test file, not a driver, so exempt.
+- **Audit correction:** `scripts/sharp_robustness_slim.jl` and `scripts/sharp_ab_figures.jl` were previously misclassified here. They are post-processing scripts that consume existing optima; they do not themselves produce a fresh `phi_opt`, so the mandatory `save_standard_set(...)` rule does not apply to them.
 - **Severity:** MEDIUM (non-compliant drivers ship phi_opt without the standard PNG set; advisor won't have the expected visuals)
 - **Fix approach:** Add `save_standard_set(...)` call at the end of each non-wired driver. For `multivar_optimization.jl`, also handle the joint-space `(φ, A, E)` result correctly — the standard set is phase-centric; amplitude rendering may need an extension.
 
