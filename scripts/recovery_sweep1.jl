@@ -76,8 +76,6 @@ function sweep1_run_level(nphi::Int, row, honest)
 
     metrics = recovery_forward_metrics(uω0, phi_opt, deepcopy(fiber), sim, band_mask)
     tag = lowercase(@sprintf("phase21_sweep1_smf28_l2p00m_p0p200w_nphi%d", nphi))
-    images = recovery_save_standard_set(phi_opt, uω0, deepcopy(fiber), sim, band_mask, Δf, raman_threshold;
-        tag=tag, fiber_name="SMF-28", L_m=SWEEP1_L, P_W=SWEEP1_P)
 
     out_path = joinpath(SWEEP1_RESULTS_DIR, @sprintf("nphi_%05d.jld2", nphi))
     JLD2.jldsave(out_path;
@@ -93,6 +91,7 @@ function sweep1_run_level(nphi::Int, row, honest)
         Nt=honest.Nt,
         time_window_ps=honest.time_window_ps,
         wall_s=time() - started,
+        tag=tag,
     )
 
     return Dict(
@@ -103,8 +102,24 @@ function sweep1_run_level(nphi::Int, row, honest)
         "iterations" => iterations,
         "converged" => converged,
         "jld2" => out_path,
-        "images" => images,
+        "tag" => tag,
     )
+end
+
+function sweep1_generate_images(results, honest)
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
+        fiber_preset=SWEEP1_FIBER,
+        L_fiber=SWEEP1_L,
+        P_cont=SWEEP1_P,
+        Nt=honest.Nt,
+        time_window=honest.time_window_ps,
+        β_order=SWEEP1_BETA_ORDER,
+    )
+    for r in sort(results, by = x -> x["nphi"])
+        d = JLD2.load(r["jld2"])
+        recovery_save_standard_set(d["phi_opt"], uω0, deepcopy(fiber), sim, band_mask, Δf, raman_threshold;
+            tag=r["tag"], fiber_name="SMF-28", L_m=SWEEP1_L, P_W=SWEEP1_P)
+    end
 end
 
 function write_sweep1_summary(results, honest)
@@ -169,6 +184,7 @@ function main()
         end
     end
 
+    sweep1_generate_images(final_results, final_honest)
     write_sweep1_summary(final_results, final_honest)
 end
 
