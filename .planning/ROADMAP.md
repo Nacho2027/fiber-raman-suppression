@@ -390,3 +390,18 @@ Plans:
 
 Plans:
 - [x] 27-01-PLAN.md — Research CS 4220 numerics material, audit current solver/optimizer numerics, write report, and plant future-phase seeds
+
+### Phase 28: Saddle escape and genuine minima reachability study — determine whether reachable Raman optima include true minima or only Hessian-indefinite saddles, and identify optimizer paths that can reliably reach minima-quality solutions if they exist
+
+**Goal:** Determine whether genuine minima exist anywhere near the competitive SMF-28 Raman-suppression branch, or whether the good solutions remain saddle-dominated even after negative-curvature escape. Convert that into a concrete optimizer recommendation and advisor-meeting narrative.
+**Requirements**: Derived research phase — no mapped product requirement IDs
+**Depends on:** Phase 27
+**Success Criteria** (what must be TRUE):
+  1. The canonical reduced-basis `N_phi` ladder is classified by Hessian sign structure, not just by final `J_dB`
+  2. At least one competitive saddle is perturbed along negative curvature and re-optimized with mandatory standard-image output
+  3. The final report states plainly whether genuine minima exist only after severe depth loss, are reachable in competitive territory, or remain unsupported by the evidence
+  4. The report recommends a specific next optimizer path for the repo and explains why
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 28-01-PLAN.md — Run reduced-basis Hessian ladder, perform negative-curvature escape study, and write the reachability report

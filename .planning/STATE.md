@@ -185,6 +185,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 25 added (2026-04-20): Project-wide bug squash and concern triage — re-audit STATE/CONCERNS against live code, fix low-risk correctness and stale-doc issues, and plant seeds for structural hazards that need dedicated phases.
 - Phase 26 added (2026-04-20): Verification document bug reconciliation — audit the bug list embedded in `docs/verification_document.tex`, fix stale or misleading claims in the writeup, and seed the implementation gaps that remain genuinely open.
 - Phase 27 added (2026-04-20): Numerical analysis audit and CS 4220 application roadmap — crosswalk the Cornell CS 4220 numerical-analysis material against the Raman-suppression codebase, identify numerics blockers/opportunities, write a report, and plant future-phase seeds for larger improvements. (Originally numbered Phase 25 on the numerics session branch; renumbered to 27 at integration to resolve collision with bugsquash Phase 25/26.)
+- Phase 28 added (2026-04-20): Saddle escape and genuine minima reachability study — determine whether reachable Raman optima include true minima or only Hessian-indefinite saddles, and identify optimizer paths that can reliably reach minima-quality solutions if they exist. Anchors on Phase 13 and Phase 22 findings and feeds advisor-meeting narrative on Newton/saddle-free methods.
 
 ### Resolved Issues
 
