@@ -45,33 +45,49 @@ function phase13_run_one(cfg)
     phi_seed_old = recovery_key_or_nothing(old, ["phi_opt", "phi"])
     phi_seed_old === nothing && error("no phi_opt found in $(cfg.source)")
 
-    honest = recovery_find_honest_grid(;
-        fiber_preset=cfg.fiber_preset,
-        L_fiber=cfg.L_fiber,
-        P_cont=cfg.P_cont,
-        β_order=cfg.β_order,
-        phi_seeds=[phi_seed_old],
-        old_Nt=cfg.old_Nt,
-        old_tw_ps=cfg.old_tw_ps,
-        min_time_window_ps=cfg.min_time_window_ps,
-    )
-
-    uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
-        fiber_preset=cfg.fiber_preset,
-        L_fiber=cfg.L_fiber,
-        P_cont=cfg.P_cont,
-        Nt=honest.Nt,
-        time_window=honest.time_window_ps,
-        β_order=cfg.β_order,
-    )
-    phi0 = recovery_seed_to_grid(phi_seed_old, cfg.old_Nt, cfg.old_tw_ps, honest.Nt, honest.time_window_ps)
-    phi0 = recovery_remove_linear_phase(phi0, uω0, sim)
-
+    attempt_floors = [cfg.min_time_window_ps, 2 * cfg.min_time_window_ps]
+    chosen = nothing
+    result = nothing
+    phi_opt = nothing
+    metrics = nothing
+    uω0 = nothing
+    fiber = nothing
+    sim = nothing
+    band_mask = nothing
+    Δf = nothing
+    raman_threshold = nothing
     started = time()
-    result = optimize_spectral_phase(uω0, deepcopy(fiber), sim, band_mask;
-        φ0=phi0, max_iter=50, store_trace=true, log_cost=true)
-    phi_opt = reshape(Optim.minimizer(result), honest.Nt, 1)
-    metrics = recovery_forward_metrics(uω0, phi_opt, deepcopy(fiber), sim, band_mask)
+
+    for tw_floor in attempt_floors
+        honest = recovery_find_honest_grid(;
+            fiber_preset=cfg.fiber_preset,
+            L_fiber=cfg.L_fiber,
+            P_cont=cfg.P_cont,
+            β_order=cfg.β_order,
+            phi_seeds=[phi_seed_old],
+            old_Nt=cfg.old_Nt,
+            old_tw_ps=cfg.old_tw_ps,
+            min_time_window_ps=tw_floor,
+        )
+
+        uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_longfiber_problem(;
+            fiber_preset=cfg.fiber_preset,
+            L_fiber=cfg.L_fiber,
+            P_cont=cfg.P_cont,
+            Nt=honest.Nt,
+            time_window=honest.time_window_ps,
+            β_order=cfg.β_order,
+        )
+        phi0 = recovery_seed_to_grid(phi_seed_old, cfg.old_Nt, cfg.old_tw_ps, honest.Nt, honest.time_window_ps)
+        phi0 = recovery_remove_linear_phase(phi0, uω0, sim)
+
+        result = optimize_spectral_phase(uω0, deepcopy(fiber), sim, band_mask;
+            φ0=phi0, max_iter=50, store_trace=true, log_cost=true)
+        phi_opt = reshape(Optim.minimizer(result), honest.Nt, 1)
+        metrics = recovery_forward_metrics(uω0, phi_opt, deepcopy(fiber), sim, band_mask)
+        chosen = honest
+        metrics.edge_frac < 1e-3 && break
+    end
 
     tag = lowercase(@sprintf("phase21_phase13_%s_l%0.2fm_p%0.3fw", cfg.key, cfg.L_fiber, cfg.P_cont))
     images = recovery_save_standard_set(phi_opt, uω0, deepcopy(fiber), sim, band_mask, Δf, raman_threshold;
@@ -86,8 +102,8 @@ function phase13_run_one(cfg)
         energy_drift=metrics.energy_drift,
         iterations=Optim.iterations(result),
         converged=Optim.f_converged(result),
-        Nt=honest.Nt,
-        time_window_ps=honest.time_window_ps,
+        Nt=chosen.Nt,
+        time_window_ps=chosen.time_window_ps,
         wall_s=time() - started,
     )
 
@@ -95,7 +111,7 @@ function phase13_run_one(cfg)
     recovery_write_markdown(md_path, [
         @sprintf("# Phase 13 re-anchor — %s", cfg.fiber_name),
         "",
-        @sprintf("Honest grid: Nt=%d, time_window=%.1f ps", honest.Nt, honest.time_window_ps),
+        @sprintf("Honest grid attempt: Nt=%d, time_window=%.1f ps", chosen.Nt, chosen.time_window_ps),
         @sprintf("Recovered J: %.2f dB", metrics.J_dB),
         @sprintf("Edge fraction: %.3e", metrics.edge_frac),
         @sprintf("Energy drift: %.3e", metrics.energy_drift),
