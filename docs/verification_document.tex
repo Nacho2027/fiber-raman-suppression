@@ -704,7 +704,8 @@ sit in the $\lambda \approx 0$ gap that matrix-free Arpack cannot resolve
 (shift-invert requires factoring $H - \sigma I$, unavailable here). Their
 existence is inferred from projecting $\{\mathbf{1}, \omega-\bar\omega\}$
 onto the returned bottom subspace; see \texttt{physics\_verification.tex}
-\S\ref{sec:gauge} and \texttt{results/raman/phase13/FINDINGS.md}.
+\S``Gauge symmetry of $J$ and its consequences for the Hessian''
+and \texttt{results/raman/phase13/FINDINGS.md}.
 
 This supersedes any earlier statement in this document that the 10/10
 multistart convergence with 10.9\,dB spread indicates a ``well-behaved
@@ -761,15 +762,65 @@ suppression essentially exactly:
   \item best trajectory-matching quadratic: $\text{GDD} = +1.00$~ps$^2
     \to J = -44.35$~dB ($+1.17$~dB shy);
 \end{itemize}
-with all trusted runs clean on BC edge and energy drift. The
-suppression at 100~m is therefore \textbf{generic dispersive
-pre-chirp}: a simple GDD already gets essentially all of the effect.
+with all trusted runs clean on BC edge and energy drift (warm
+start: BC $9.09\times10^{-7}$, $\Delta E / E = 2.41\times10^{-3}$;
+matched $+4$~ps$^2$: BC $3.23\times10^{-6}$, $\Delta E / E =
+1.92\times10^{-7}$; matched $+1$~ps$^2$: BC $2.84\times10^{-7}$,
+$\Delta E / E = 4.63\times10^{-4}$).
+
+The mechanism is explicit. For the canonical $L{=}100$~m,
+$P{=}0.05$~W, $185$~fs sech$^2$ pulse: $T_0 = 185/1.763
+\approx 105$~fs, $P_\text{peak} \approx 2959$~W,
+$N_\text{sol} = \sqrt{\gamma P_\text{peak} T_0^2 / |\beta_2|}
+\approx 1.4$, $L_D = T_0^2 / |\beta_2| \approx 0.507$~m,
+$L_\text{NL} = 1/(\gamma P_\text{peak}) \approx 0.260$~m. A
+$+4$~ps$^2$ pre-chirp stretches the sech$^2$ by a factor
+$\approx 362$ (asymptotic large-chirp limit, $|GDD|/T_0^2 \gg 1$),
+to a duration $\sim 38$~ps and peak power $\sim 8$~W. Over the
+100~m fiber only $|\beta_2| L = 2.17$~ps$^2$ of dispersion
+accumulates --- partial compensation of the $+4$~ps$^2$ pre-chirp
+--- so the pulse stays stretched throughout propagation. The
+integrated nonlinear phase $\Phi_\text{NL} = \gamma
+P_\text{peak,stretched} L \approx 1.3$~rad is comparable to the
+canonical short-fiber case ($L{=}0.5$~m,
+$\Phi_\text{NL} \approx 1.63$~rad). Under this picture the
+$-45$~dB suppression at 100~m is \emph{dispersive stretching below
+the Raman gain threshold at every $z$}, not a transferred
+non-quadratic fingerprint. Only $\sim 0.5$~dB of the 45~dB ---
+the gap between the endpoint-matching $+4$~ps$^2$ result
+($-45.06$~dB) and the trajectory-matching $+1$~ps$^2$ result
+($-44.35$~dB) --- is attributable to a non-quadratic residual.
+Full arithmetic: see
+\texttt{.planning/phases/24-docs-overnight-integration/24-PHYSICS-VERIFICATION.md}.
+
+The \emph{mechanism} (large-dispersion pre-chirp suppressing Raman
+by keeping instantaneous peak power below the gain threshold) is
+standing design wisdom in the Mamyshev-oscillator community (Liu
+et al., \emph{Optica} \textbf{4}, 649 (2017) on the megawatt-class
+Mamyshev oscillator;
+\href{https://wise.research.engineering.cornell.edu/guide-main/pulse-evolutions/mamyshev-oscillator/}{Wise
+group Mamyshev design guide}). Phase 23's matched-quadratic result
+is a quantitative instance of that qualitative observation; our
+novelty lies in the \emph{depth} of suppression on sub-meter to
+multi-meter silica at few-hundred-femtosecond widths, not in the
+mechanism itself.
+
 The earlier framing that the non-quadratic warm-start structure
 ``transfers across $50\times$ the length'' does not survive this
 matched baseline --- the quadratic component alone accounts for the
 observed depth to within the user's $\sim 3$~dB kill threshold. Source:
 \texttt{.planning/phases/23-matched-baseline/SUMMARY.md}; data bundle
 \texttt{results/raman/phase23/matched\_quadratic\_100m.jld2}.
+
+\begin{center}
+\includegraphics[width=0.82\textwidth]{phase21_100m_phase_profile.png}
+\end{center}
+\emph{Phase 21 honest-grid reproduction of Session~F's 100~m
+warm-start optimum: $J = -54.77$~dB, BC edge $8.47\times10^{-6}$,
+$\Delta E / E \le 4.91\times10^{-4}$. Four-panel standard image set
+(input/output spectrum, wrapped/unwrapped phase, group delay). This
+is the lower-bound anchor for the 100~m discussion; the overlay
+below shows how a pure quadratic reproduces the suppression.}
 
 \begin{center}
 \includegraphics[width=0.92\textwidth]{phase23_warm_vs_gdd_p1_overlay.png}
@@ -1498,6 +1549,24 @@ spectrum or curvature study.}
 \subsection{Flattening the basin: sharpness-aware regularisation (Phase 22)}
 \label{sec:april-sharpness}
 
+Two distinct facts are in play here, and the existing
+literature-audit companion (\texttt{physics\_verification.tex},
+\S``Gauge symmetry of $J$ and its consequences for the Hessian'')
+already makes them separately but the overnight-update prose
+conflates them. Restated cleanly: the two-parameter gauge family
+$\varphi \mapsto \varphi + C + \alpha (\omega - \bar\omega)$
+produces two \emph{exact zero} Hessian eigenvalues spanning
+$\{\mathbf{1}, \omega - \bar\omega\}$; this is topological and
+holds for any cost with this symmetry. Indefiniteness
+($|\lambda_\text{min}|/\lambda_\text{max} > 0$) is an
+\emph{additional} empirical fact about the non-gauge eigenvalues,
+arising from Kerr, Raman, and dispersion curvature rather than
+from the gauge redundancy. L-BFGS halts at a saddle (not a
+gauge-flat minimum) because of (b), not (a). The Phase 22 result
+that all 26 regularised optima remain indefinite is therefore a
+statement about the physics-induced curvature, not the gauge
+structure.
+
 Phase 13 (\S\ref{sec:april-hessian}) showed that L-BFGS stops at an
 indefinite saddle, not a minimum. The natural follow-up is: does
 \emph{any} regulariser convert these saddles into positive-definite
@@ -1519,6 +1588,26 @@ constraint landscape, not a numerical artefact. Source:
 \texttt{results/raman/phase22/SUMMARY.md}.
 \end{keyresult}
 
+\begin{advisory}
+\textbf{Caveat on the flat-basin claim.} The published trH-regularisation
+literature (Liu, \emph{Neurocomputing} 536, arXiv:2208.05924, 2023; Ju,
+\emph{Noise Stability Optimization}, arXiv:2306.08553, 2023) assumes a
+positive-semidefinite Hessian: on a non-negative loss, penalising
+$+\lambda \cdot \mathrm{Tr}(H)$ pushes the optimiser toward flatter
+\emph{positive-curvature} directions. Our Hessian is \emph{indefinite}
+($|\lambda_\text{min}|/\lambda_\text{max} \approx 2.6\%$ SMF, Phase 13).
+On an indefinite spectrum, $\mathrm{Tr}(H) = \sum_i \lambda_i$ is signed
+and can be reduced in two ways: \emph{(a)} by shrinking positive
+eigenvalues (the intended effect --- a genuinely flatter basin in the
+positive-curvature subspace), or \emph{(b)} by sharpening negative
+eigenvalues (an unintended effect --- a steeper saddle). The empirical
+$+0.058$~rad $\sigma_{3\text{dB}}$ gain at $\lambda_{\text{trH}}{=}3\times10^{-3}$
+on the canonical point is a real, measured result. Which of (a) or (b)
+produced it was \emph{not} diagnosed here; a Lanczos spectrum at the
+trH optimum would settle it. The flat-basin mechanism claim is therefore
+provisional until that follow-up is run.
+\end{advisory}
+
 \begin{center}
 \includegraphics[width=0.92\textwidth]{phase22_pareto.png}
 \end{center}
@@ -1536,29 +1625,59 @@ Operating point & Flavour / strength & $J$ (dB) & $\sigma_{3\text{dB}}$ (rad) & 
 \midrule
 Canonical ($L{=}0.5$~m, $P{=}0.05$~W) & plain                       & $-76.86$ & $0.025$ & $5.54\times10^{-3}$ \\
 Canonical                             & MC, $\lambda{=}7.5\times10^{-2}$   & $-73.01$ & $0.039$ & $1.36\times10^{-2}$ \\
+Canonical                             & trH, $\lambda{=}1\times10^{-3}$    & $-73.83$ & $0.037$ & (see table footnote) \\
 Canonical                             & trH, $\lambda{=}3\times10^{-3}$    & $-66.79$ & $0.083$ & $1.08\times10^{-2}$ \\
 Pareto-57 ($L{=}0.25$~m, $P{=}0.10$~W) & plain                      & $-82.56$ & $0.011$ & $2.38\times10^{-1}$ \\
+Pareto-57                             & MC, $\lambda{=}7.5\times10^{-2}$   & $-67.98$ & $0.077$ & $7.87\times10^{-2}$ \\
 Pareto-57                             & trH, $\lambda{=}1\times10^{-3}$    & $-66.44$ & $0.077$ & $9.84\times10^{-2}$ \\
 Pareto-57                             & trH, $\lambda{=}3\times10^{-3}$    & $-69.38$ & $0.043$ & $5.69\times10^{-2}$ \\
 \bottomrule
 \end{tabular}
 \end{center}
+\emph{Footnote.} $|\lambda_\text{min}|/\lambda_\text{max}$ for the
+\texttt{trH}, $\lambda{=}1\times10^{-3}$ canonical row was not
+reported in the Phase 22 artefact; it is omitted here rather than
+back-filled.
 
 \begin{advisory}
-\textbf{Practical takeaway.} SAM fell out of contention across both
-operating points (best $\sigma$-shift $\leq 0.006$~rad). The default
+\textbf{Practical takeaway.} SAM's null result is consistent with
+three known SAM failure modes operating simultaneously on our
+landscape:
+\emph{(i)} our setting is deterministic (no minibatch
+$m$-sharpness), and Andriushchenko \& Flammarion (ICML 2022,
+arXiv:2206.06232) show that deterministic SAM loses the
+$m$-sharpness signal that justifies the method in deep learning;
+\emph{(ii)} indefinite saddles are known to admit
+``hallucinate-minimiser'' pathologies where SAM's shifted gradient
+vanishes at non-stationary points of the original loss
+(arXiv:2509.21818, 2025); \emph{(iii)} the two-parameter gauge
+symmetry ($\varphi \mapsto \varphi + C + \alpha(\omega -
+\bar\omega)$, \S\ref{sec:april-hessian}) makes the $\rho$-ball
+perturbation budget partially-null: components along the gauge
+directions cost radius but leave $J$ invariant. Observed
+$\sigma$-shifts stayed $\leq 0.006$~rad across both operating
+points --- exactly what these three mechanisms predict. The default
 \texttt{log\_dB} plain optimiser remains recommended when depth is the
 priority. When shaper-calibration tolerance matters more than depth,
 \texttt{trH} is the single-knob tolerance-tuning regulariser with the
 widest dynamic range: on the canonical point, $\lambda_{\text{trH}}{=}3\times10^{-3}$
 buys a $+0.058$~rad increase in $\sigma_{3\text{dB}}$ for a $10.08$~dB
-depth cost; on Pareto-57 the cheapest trade is
-$\lambda_{\text{trH}}{=}3\times10^{-3}$ at $13.18$~dB for a
-$+0.032$~rad tolerance gain. The Pareto-57 plain optimum cross-validates
+depth cost; on Pareto-57 the Pareto frontier is richer:
+\texttt{MC}, $\lambda{=}7.5\times10^{-2}$ gives $+0.066$~rad tolerance
+at $14.58$~dB depth cost (the best combined trade);
+\texttt{trH}, $\lambda{=}1\times10^{-3}$ gives matched $+0.066$~rad
+tolerance at $16.12$~dB (the \texttt{trH} equivalent);
+\texttt{trH}, $\lambda{=}3\times10^{-3}$ gives only
+$+0.032$~rad at $13.18$~dB (the cheapest depth-cost point, but
+dominated in tolerance by the \texttt{MC} option). The Pareto-57 plain optimum cross-validates
 the reduced-parameterisation candidate: its $-82.56$~dB matches the
 original Phase~7 $-82.33$~dB (§\ref{sec:april-pareto}) within $0.23$~dB,
 so the $N_\varphi{=}57$ knot parameterisation survives the Phase 21
-Sweep-1 retirement.
+Sweep-1 retirement. (Phase 21 re-anchored the Sweep-1 $L{=}2$~m,
+$P{=}0.2$~W point --- retired on edge-fraction criteria --- to
+$J = -66.03$~dB on the honest $N_t{=}16{,}384$, $T{=}54$~ps grid;
+it is a different optimum from the Phase 22 Pareto-57 plain
+baseline, which operates at the reduced parameterisation.)
 \end{advisory}
 
 \subsection{Determinism}

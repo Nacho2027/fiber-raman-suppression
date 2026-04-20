@@ -43,6 +43,7 @@
 \newtcolorbox{keyeq}{colback=green!5,colframe=green!50!black,title=\textbf{Key Equation}}
 \newtcolorbox{mlbox}{colback=orange!5,colframe=orange!50!black,title=\textbf{ML Connection}}
 \newtcolorbox{warning}{colback=red!5,colframe=red!50!black,title=\textbf{Watch Out}}
+\newtcolorbox{update}[1]{colback=cyan!5,colframe=cyan!60!black,title=\textbf{Overnight update --- #1}}
 
 % ─── Header/Footer ────────────────────────────────────────────────────────
 \pagestyle{fancy}
@@ -73,7 +74,7 @@ This document explains every piece of math in the Raman suppression optimization
 \medskip\noindent\textbf{Prerequisite:} Fourier transforms, basic complex numbers, the wave equation. That's it.
 \end{abstract}
 
-\begin{tcolorbox}[colback=yellow!8,colframe=orange!60!black,title=\textbf{Overnight update --- 2026-04-19/20}]
+\begin{update}{2026-04-19/20}
 Three parallel sessions re-ran the April integration results on an
 honest grid (Phase 21), added a sharpness-aware optimiser sweep with
 Hessian spectra (Phase 22), and ran a matched-quadratic baseline at
@@ -81,9 +82,15 @@ $L=100$~m (Phase 23). Three surprises, front-loaded here so you don't
 need the rest of the doc to know what happened:
 \begin{enumerate}[leftmargin=*,topsep=2pt]
   \item \textbf{The $-76.86$~dB SMF-28 single-mode optimum is stable.}
-        Phase 21 reproduced it on a validator-controlled grid; Phase 22
-        reproduced it again under the plain log-dB objective
-        ($-76.86$~dB, $\sigma_{3\text{dB}}=0.025$~rad).
+        Phase 22's \texttt{plain} regularisation row on the canonical
+        $(L{=}0.5~\text{m}, P{=}0.05~\text{W})$ point recovered
+        $J = -76.86$~dB, $\sigma_{3\text{dB}} = 0.025$~rad under the
+        honest log-dB objective --- Phase 21's independent honest-grid
+        re-anchoring covered a \emph{different} operating point
+        ($L{=}2$~m, $P{=}0.2$~W, re-anchored to $-66.61$~dB, see
+        verification document \S``Hessian is indefinite at L-BFGS
+        optima'') and reproduced Session~F's 100~m warm start at
+        $-54.77$~dB, not the canonical optimum.
   \item \textbf{We tried to flatten the basin --- and failed.}
         Phase 22 regularised 26 optima across $\{\texttt{plain},
         \texttt{MC}, \texttt{SAM}, \texttt{trH}\}$; \emph{every single
@@ -101,7 +108,7 @@ need the rest of the doc to know what happened:
 to $-66.61$~dB (SMF-28) and $-86.68$~dB (HNLF) under the honest
 grid --- the eigenstructure verdict (indefinite saddles) survives
 unchanged. Details in §\ref{sec:april2026-companion}.
-\end{tcolorbox}
+\end{update}
 
 \tableofcontents
 \newpage
@@ -1129,6 +1136,11 @@ $\sigma_{3\text{dB}}$ from $0.025$~rad to $0.083$~rad
 for the privilege. Cheaper trades exist --- \texttt{MC} at
 $\lambda{=}7.5\times10^{-2}$ gets $+0.014$~rad of tolerance for
 $3.85$~dB of depth --- but here is the surprise:
+On Pareto-57 the cheapest trade is not \texttt{trH} ---
+Monte-Carlo input perturbation at $\lambda = 7.5\times10^{-2}$ gives
+$J = -67.98$~dB at $\sigma_{3\text{dB}} = 0.077$~rad ($+0.066$~rad
+over the plain baseline), a cheaper tolerance-per-dB trade than any
+\texttt{trH} row at this operating point.
 
 \begin{intuition}
 Every single one of the 26 regularised optima was still
@@ -1218,6 +1230,36 @@ suppression almost exactly: $\text{GDD} = +4$~ps$^2 \to J = -45.06$~dB
 (only $0.46$~dB shy), and a more trajectory-similar
 $\text{GDD} = +1$~ps$^2 \to J = -44.35$~dB. Every trusted run is
 clean on energy drift and on the boundary-condition edge check.
+
+Here is the mechanism in plain language. The canonical 185-fs sech$^2$
+pulse at $P = 0.05$~W peak has $T_0 \approx 105$~fs and $P_\text{peak}
+\approx 2959$~W. Plugging into the soliton number formula gives
+$N_\text{sol} = \sqrt{\gamma P_\text{peak} T_0^2 / |\beta_2|} \approx
+1.4$: the pulse is just barely a fundamental soliton. The dispersion
+length $L_D \approx 0.5$~m and the nonlinear length $L_\text{NL}
+\approx 0.26$~m are both sub-meter --- at the canonical 0.5~m fiber
+the pulse does its nonlinear dance exactly once.
+The Phase 23 matched-quadratic optimum applies a $+4$~ps$^2$ GDD
+pre-chirp, which makes the pulse about $360\times$ longer before it
+enters the fiber --- roughly 38~ps instead of 185~fs --- and drops
+the peak power by the same factor (energy is conserved), from 2959~W
+to about 8~W. Over the 100~m fiber the pulse accumulates only
+$|\beta_2|L \approx 2$~ps$^2$ of extra dispersion, which partly
+compensates the $+4$~ps$^2$ pre-chirp but doesn't unstretch the
+pulse. So through the full 100~m the pulse stays stretched to tens
+of picoseconds, the instantaneous peak power stays around 10~W, and
+the Raman-gain drive is tiny at every $z$. This is the same
+mechanism Cornell's Wise group has used to build high-power fiber
+oscillators since 2017 (the Mamyshev oscillator architecture):
+deliberately stretch the pulse with large dispersion, do the
+nonlinear transformation on a weak stretched pulse, then recompress.
+The non-quadratic piece of the optimised phase accounts for only
+about half a dB of the 45~dB suppression at 100~m; the rest is
+straightforward linear dispersion. What we previously called
+``non-polynomial structural adaptation across $50\times$ the fiber
+length'' was the pulse shaper applying roughly the right amount of
+GDD to match a Mamyshev-style stretched-pulse regime; it was not a
+transferred nonlinear fingerprint. We retract that earlier framing.
 
 \begin{figure}[H]
 \centering
