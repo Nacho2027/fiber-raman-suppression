@@ -20,7 +20,8 @@
 \let\origincludegraphics\includegraphics
 \renewcommand{\includegraphics}[2][]{%
   \IfFileExists{#2}{\origincludegraphics[#1]{#2}}{%
-    \fbox{\parbox{0.6\linewidth}{\centering\textit{figure not available in build environment:}\\\texttt{#2}}}}}
+    \IfFileExists{figures/#2}{\origincludegraphics[#1]{figures/#2}}{%
+      \fbox{\parbox{0.6\linewidth}{\centering\textit{figure not available in build environment:}\\\detokenize{#2}}}}}}
 \usepackage{float}
 \usepackage{listings}
 \usepackage[textsize=footnotesize,textwidth=2.2cm,disable]{todonotes}
@@ -703,7 +704,8 @@ sit in the $\lambda \approx 0$ gap that matrix-free Arpack cannot resolve
 (shift-invert requires factoring $H - \sigma I$, unavailable here). Their
 existence is inferred from projecting $\{\mathbf{1}, \omega-\bar\omega\}$
 onto the returned bottom subspace; see \texttt{physics\_verification.tex}
-\S\ref{sec:gauge} and \texttt{results/raman/phase13/FINDINGS.md}.
+\S``Gauge symmetry of $J$ and its consequences for the Hessian''
+and \texttt{results/raman/phase13/FINDINGS.md}.
 
 This supersedes any earlier statement in this document that the 10/10
 multistart convergence with 10.9\,dB spread indicates a ``well-behaved
@@ -729,22 +731,118 @@ iterations. Artefact: \texttt{results/raman/phase17/SUMMARY.md}.
 \end{advisory}
 
 \begin{advisory}
-\textbf{New (v4): Long-fiber extension at $L=100$\,m (Phase~16 / Session~F).}
-Re-optimising the SMF-28 $L=2$\,m $P=0.05$\,W warm-start phase on a 100~m
-fiber (Nt~$=32{,}768$, $T=160$~ps, 25 L-BFGS iterations, run hit wall clock,
+\textbf{New (v4, updated 2026-04-20 with Phase 21 and Phase 23):
+Long-fiber extension at $L=100$\,m.} Re-optimising the
+SMF-28 $L=2$\,m $P=0.05$\,W warm-start phase on a 100~m fiber
+(Nt~$=32{,}768$, $T=160$~ps, 25 L-BFGS iterations, run hit wall clock,
 $\lVert\nabla J\rVert = 0.48$, converged flag \texttt{false}) reached
-$J = -54.77$\,dB. The un-re-optimised warm-start evaluation at 100~m already
-gave $J = -51.50$\,dB, meaning the 2~m phase shape \emph{transfers across
-50$\times$ the length} before any new optimisation. Energy conservation in
-both shaped cases is clean (photon-number drift $\le 2\times10^{-3}$, edge
-fraction $\le 10^{-5}$).
+$J = -54.77$\,dB. Phase 21's independent honest rerun reproduced this
+number exactly (BC edge $8.47\times10^{-6}$, $\Delta E / E \le
+4.91\times10^{-4}$), confirming the $-54.77$~dB figure as a
+\emph{lower bound from the 2~m warm start}, not a converged optimum.
+Energy conservation in both shaped cases is clean. (Schema note: the
+usable $\varphi_\text{opt}$ for this run lives in
+\texttt{results/raman/phase16/100m\_opt\_full\_result.jld2}; the
+scalar-summary artefact \texttt{100m\_validate\_fixed.jld2} lacks
+the full state. Artefact:
+\texttt{.planning/phases/21-numerical-recovery/SUMMARY.md};
+\texttt{results/raman/phase21/longfiber100m/sessionf\_100m\_validation.md}.)
+
+\textbf{Phase 23 matched-quadratic baseline --- retracts the ``50$\times$
+transfer'' framing.} On the reproducible main-checkout state the
+\emph{warm-start-only} (un-re-optimised) evaluation at 100~m gives
+$J = -45.52$~dB, not the historical $-51.50$~dB recorded in Phase 16;
+the $\sim 6$~dB discrepancy is unexplained but plausibly another
+windowing effect on the stored Phase 16 artefact. Against that live
+warm-start number, a pure quadratic spectral phase reproduces the
+suppression essentially exactly:
+\begin{itemize}[leftmargin=*,topsep=2pt]
+  \item best trusted quadratic by endpoint $J$: $\text{GDD} = +4.00$~ps$^2
+    \to J = -45.06$~dB (only $+0.46$~dB shy of the live warm-start);
+  \item best trajectory-matching quadratic: $\text{GDD} = +1.00$~ps$^2
+    \to J = -44.35$~dB ($+1.17$~dB shy);
+\end{itemize}
+with all trusted runs clean on BC edge and energy drift (warm
+start: BC $9.09\times10^{-7}$, $\Delta E / E = 2.41\times10^{-3}$;
+matched $+4$~ps$^2$: BC $3.23\times10^{-6}$, $\Delta E / E =
+1.92\times10^{-7}$; matched $+1$~ps$^2$: BC $2.84\times10^{-7}$,
+$\Delta E / E = 4.63\times10^{-4}$).
+
+The mechanism is explicit. For the canonical $L{=}100$~m,
+$P{=}0.05$~W, $185$~fs sech$^2$ pulse: $T_0 = 185/1.763
+\approx 105$~fs, $P_\text{peak} \approx 2959$~W,
+$N_\text{sol} = \sqrt{\gamma P_\text{peak} T_0^2 / |\beta_2|}
+\approx 1.4$, $L_D = T_0^2 / |\beta_2| \approx 0.507$~m,
+$L_\text{NL} = 1/(\gamma P_\text{peak}) \approx 0.260$~m. A
+$+4$~ps$^2$ pre-chirp stretches the sech$^2$ by a factor
+$\approx 362$ (asymptotic large-chirp limit, $|GDD|/T_0^2 \gg 1$),
+to a duration $\sim 38$~ps and peak power $\sim 8$~W. Over the
+100~m fiber only $|\beta_2| L = 2.17$~ps$^2$ of dispersion
+accumulates --- partial compensation of the $+4$~ps$^2$ pre-chirp
+--- so the pulse stays stretched throughout propagation. The
+integrated nonlinear phase $\Phi_\text{NL} = \gamma
+P_\text{peak,stretched} L \approx 1.3$~rad is comparable to the
+canonical short-fiber case ($L{=}0.5$~m,
+$\Phi_\text{NL} \approx 1.63$~rad). Under this picture the
+$-45$~dB suppression at 100~m is \emph{dispersive stretching below
+the Raman gain threshold at every $z$}, not a transferred
+non-quadratic fingerprint. Only $\sim 0.5$~dB of the 45~dB ---
+the gap between the endpoint-matching $+4$~ps$^2$ result
+($-45.06$~dB) and the trajectory-matching $+1$~ps$^2$ result
+($-44.35$~dB) --- is attributable to a non-quadratic residual.
+Full arithmetic: see
+\texttt{.planning/phases/24-docs-overnight-integration/24-PHYSICS-VERIFICATION.md}.
+
+The \emph{mechanism} (large-dispersion pre-chirp suppressing Raman
+by keeping instantaneous peak power below the gain threshold) is
+standing design wisdom in the Mamyshev-oscillator community (Liu
+et al., \emph{Optica} \textbf{4}, 649 (2017) on the megawatt-class
+Mamyshev oscillator;
+\href{https://wise.research.engineering.cornell.edu/guide-main/pulse-evolutions/mamyshev-oscillator/}{Wise
+group Mamyshev design guide}). Phase 23's matched-quadratic result
+is a quantitative instance of that qualitative observation; our
+novelty lies in the \emph{depth} of suppression on sub-meter to
+multi-meter silica at few-hundred-femtosecond widths, not in the
+mechanism itself.
+
+The earlier framing that the non-quadratic warm-start structure
+``transfers across $50\times$ the length'' does not survive this
+matched baseline --- the quadratic component alone accounts for the
+observed depth to within the user's $\sim 3$~dB kill threshold. Source:
+\texttt{.planning/phases/23-matched-baseline/SUMMARY.md}; data bundle
+\texttt{results/raman/phase23/matched\_quadratic\_100m.jld2}.
+
+\begin{center}
+\includegraphics[width=0.82\textwidth]{phase21_100m_phase_profile.png}
+\end{center}
+\emph{Phase 21 honest-grid reproduction of Session~F's 100~m
+warm-start optimum: $J = -54.77$~dB, BC edge $8.47\times10^{-6}$,
+$\Delta E / E \le 4.91\times10^{-4}$. Four-panel standard image set
+(input/output spectrum, wrapped/unwrapped phase, group delay). This
+is the lower-bound anchor for the 100~m discussion; the overlay
+below shows how a pure quadratic reproduces the suppression.}
+
+\begin{center}
+\includegraphics[width=0.92\textwidth]{phase23_warm_vs_gdd_p1_overlay.png}
+\end{center}
+\emph{Warm-start $\varphi_\text{opt}$@2m (blue) vs the matched
+$\text{GDD}{=}+1$~ps$^2$ quadratic chirp (orange) at 100~m. The
+trajectory is visually similar and the endpoint suppression is within
+$1.17$~dB: the 100~m transferability is accounted for by the
+quadratic component.}
 
 Weighted quadratic fit (by analytic sech$^2$ amplitude over the $\pm 5$~THz
 signal band) to $\varphi_\text{opt}(\omega)$ yields $R^2 = 0.015$ at 100~m
 and $R^2 = 0.037$ at 2~m --- the optimal phase is \textbf{not a low-order
 polynomial chirp}: $\lesssim$4\% of the bandwidth-weighted variance is
-captured by a quadratic. The structural non-polynomial component is the
-physics thread worth following.
+captured by a quadratic. This \emph{non-polynomial} finding is
+independently defensible from the Phase 23 matched-quadratic result: at
+100~m the endpoint $J$ is reached by generic pre-chirp, but
+$\varphi_\text{opt}(\omega)$ itself is not a polynomial approximation
+of that pre-chirp on the signal band --- the non-quadratic residual
+structure does not change the endpoint depth but does characterise
+what L-BFGS is parameterising. The physics thread worth following is
+this non-polynomial residual, not the $a_2$-scaling reading below.
 
 \textbf{Caveat (time window).} At 100~m the Stokes-band walk-off
 $|\beta_2|\,L\,\Delta\omega_R \approx 177$~ps exceeds the 160~ps window,
@@ -763,7 +861,9 @@ is not a physically meaningful descriptor of $\varphi_\text{opt}$, and the
 absolute $|a_2|$ is 2--4 orders of magnitude below what pure-GVD
 pre-compensation ($a_2 = -\beta_2 L/2$) would predict at either length. The
 defensible finding is the non-polynomial one above, not the $a_2$-ratio
-framing.
+framing. Standard images:
+\texttt{.planning/phases/21-numerical-recovery/images/phase21\_sessionf\_100m\_*\_phase\_profile.png};
+\texttt{.planning/phases/23-matched-baseline/images/phase23\_warm\_vs\_\{gdd\_p1,matched\}\_overlay.png}.
 \end{advisory}
 
 \begin{flagged}
@@ -1400,27 +1500,185 @@ trust-region Newton on the 57-dim subspace
 
 \begin{flagged}
 \textbf{Caveat on the dB anchoring of the Hessian-study optima
-(Phase 18 cross-check, 2026-04-19).}
-The Phase 18 numerical-trustworthiness audit
-(\texttt{results/validation/REPORT.md}) re-ran the saved
+(Phase 21 honest recovery, 2026-04-20 --- supersedes Phase 18 numbers).}
+Two audits re-ran the saved
 \texttt{phase13/hessian\_smf28\_canonical.jld2} and
-\texttt{phase13/hessian\_hnlf\_canonical.jld2} on a
-validator-controlled grid and recovered $J = -48.2$~dB (SMF-28)
-and $J = -44.0$~dB (HNLF), versus the $-60.5$~dB and $-74.4$~dB
-originally reported in the JLD2 metadata. The discrepancy is the
-time-window edge-bleed artefact discussed in
-§\ref{sec:april-boundary} (output edge fraction $1.0\%$ and
-$2.1\%$, just past the SUSPECT threshold).
+\texttt{phase13/hessian\_hnlf\_canonical.jld2} from the stored
+$\varphi_\text{opt}$ states. The numbers originally reported in the
+JLD2 metadata were $-60.5$~dB (SMF-28) and $-74.4$~dB (HNLF); the
+Phase 18 numerical-trustworthiness audit
+(\texttt{results/validation/REPORT.md}, 2026-04-19) reported
+$-48.2$~dB / $-44.0$~dB on its validator grid. \textbf{The
+authoritative anchors for the canonical docs are the Phase 21
+numerical-recovery values}:
+\begin{itemize}[leftmargin=*,topsep=2pt]
+\item \textbf{SMF-28 canonical}: $J = -66.61$~dB at
+  $N_t = 16{,}384$, $T = 54$~ps, output edge fraction
+  $8.10\times10^{-4}$, converged.
+\item \textbf{HNLF canonical}: $J = -86.68$~dB at
+  $N_t = 65{,}536$, $T = 320$~ps, output edge fraction
+  $2.24\times10^{-4}$, 50-iteration run, \texttt{converged = false}.
+  Note: HNLF required a substantially larger time window than the
+  Phase 18 validator used, which is why the Phase 18 HNLF number
+  was itself under-windowed; the honest HNLF anchor is \emph{deeper}
+  than originally reported, not shallower.
+\end{itemize}
 \emph{The eigenstructure result above is unaffected}: the saved
 $\varphi_\text{opt}$ files are true stationary points on the
-recomputed grid (adjoint $\|g\| \sim 10^{-5}$), so the Hessian
-was computed at a real optimum --- just at a different $J$ value
-than originally quoted. When citing this result alongside a dB
-number, use the recomputed values $-48.2$~dB / $-44.0$~dB; when
-citing only the eigenstructure, the original ratios stand.
-Audit: \texttt{PHYSICS\_AUDIT\_2026-04-19.md} §X1. Source:
-\texttt{results/validation/phase13\_hessian\_\{smf28,hnlf\}.md}.
+honest grid (adjoint $\|g\| \sim 10^{-5}$), so the Hessian was
+computed at a real optimum --- just at $J$ values deeper than the
+pre-recovery quotes. When citing this result alongside a dB
+number, use $-66.61$~dB (SMF-28) / $-86.68$~dB (HNLF); when citing
+only the eigenstructure, the original ratios stand. Source:
+\texttt{.planning/phases/21-numerical-recovery/SUMMARY.md};
+\texttt{results/raman/phase21/phase13/smf28\_reanchor.md};
+\texttt{results/raman/phase21/phase13/hnlf\_reanchor.md}.
+Standard images:
+\texttt{.planning/phases/21-numerical-recovery/images/phase21\_phase13\_\{smf28,hnlf\}\_*\_phase\_profile.png}.
+
+\begin{center}
+\includegraphics[width=0.82\textwidth]{phase21_recovered_smf28_phase_profile.png}
+\end{center}
+\emph{Recovered SMF-28 canonical optimum at $L{=}2$~m, $P{=}0.2$~W on the
+honest $N_t{=}16{,}384$, $T{=}54$~ps grid: $J = -66.61$~dB (Phase 21).
+Four-panel standard image set (input/output spectrum, wrapped/unwrapped
+phase, group delay). This is the reference for any subsequent Hessian
+spectrum or curvature study.}
 \end{flagged}
+
+\subsection{Flattening the basin: sharpness-aware regularisation (Phase 22)}
+\label{sec:april-sharpness}
+
+Two distinct facts are in play here, and the existing
+literature-audit companion (\texttt{physics\_verification.tex},
+\S``Gauge symmetry of $J$ and its consequences for the Hessian'')
+already makes them separately but the overnight-update prose
+conflates them. Restated cleanly: the two-parameter gauge family
+$\varphi \mapsto \varphi + C + \alpha (\omega - \bar\omega)$
+produces two \emph{exact zero} Hessian eigenvalues spanning
+$\{\mathbf{1}, \omega - \bar\omega\}$; this is topological and
+holds for any cost with this symmetry. Indefiniteness
+($|\lambda_\text{min}|/\lambda_\text{max} > 0$) is an
+\emph{additional} empirical fact about the non-gauge eigenvalues,
+arising from Kerr, Raman, and dispersion curvature rather than
+from the gauge redundancy. L-BFGS halts at a saddle (not a
+gauge-flat minimum) because of (b), not (a). The Phase 22 result
+that all 26 regularised optima remain indefinite is therefore a
+statement about the physics-induced curvature, not the gauge
+structure.
+
+Phase 13 (\S\ref{sec:april-hessian}) showed that L-BFGS stops at an
+indefinite saddle, not a minimum. The natural follow-up is: does
+\emph{any} regulariser convert these saddles into positive-definite
+minima, and at what depth cost? Phase 22 (\texttt{sessions/S-sharpness})
+ran a 26-point sweep over four regularisation flavours
+($\{\texttt{plain}, \texttt{MC}, \texttt{SAM}, \texttt{trH}\}$) on two
+operating points (the canonical SMF-28 $L{=}0.5$~m $P{=}0.05$~W and
+the reduced-parameterisation Pareto-57 candidate $L{=}0.25$~m
+$P{=}0.10$~W), resolving the Hessian spectrum at every recovered
+optimum.
+
+\begin{keyresult}
+All 26 regularised optima remained Hessian-indefinite. No flavour
+and no strength converted the saddle into a positive-definite
+minimum. The regularisation Pareto is real --- tolerance
+$\sigma_{3\text{dB}}$ can be widened at a dB-depth cost --- but the
+indefinite-saddle geometry appears to be a property of the
+constraint landscape, not a numerical artefact. Source:
+\texttt{results/raman/phase22/SUMMARY.md}.
+\end{keyresult}
+
+\begin{advisory}
+\textbf{Caveat on the flat-basin claim.} The published trH-regularisation
+literature (Liu, \emph{Neurocomputing} 536, arXiv:2208.05924, 2023; Ju,
+\emph{Noise Stability Optimization}, arXiv:2306.08553, 2023) assumes a
+positive-semidefinite Hessian: on a non-negative loss, penalising
+$+\lambda \cdot \mathrm{Tr}(H)$ pushes the optimiser toward flatter
+\emph{positive-curvature} directions. Our Hessian is \emph{indefinite}
+($|\lambda_\text{min}|/\lambda_\text{max} \approx 2.6\%$ SMF, Phase 13).
+On an indefinite spectrum, $\mathrm{Tr}(H) = \sum_i \lambda_i$ is signed
+and can be reduced in two ways: \emph{(a)} by shrinking positive
+eigenvalues (the intended effect --- a genuinely flatter basin in the
+positive-curvature subspace), or \emph{(b)} by sharpening negative
+eigenvalues (an unintended effect --- a steeper saddle). The empirical
+$+0.058$~rad $\sigma_{3\text{dB}}$ gain at $\lambda_{\text{trH}}{=}3\times10^{-3}$
+on the canonical point is a real, measured result. Which of (a) or (b)
+produced it was \emph{not} diagnosed here; a Lanczos spectrum at the
+trH optimum would settle it. The flat-basin mechanism claim is therefore
+provisional until that follow-up is run.
+\end{advisory}
+
+\begin{center}
+\includegraphics[width=0.92\textwidth]{phase22_pareto.png}
+\end{center}
+\emph{Phase 22 depth--tolerance Pareto. Each marker is a recovered
+optimum; colour indicates regularisation flavour, size indicates
+strength. On both operating points, widening
+$\sigma_{3\text{dB}}$ costs dB depth; SAM points cluster near the
+plain baseline and provide no robustness gain; \texttt{trH} gives
+the largest tolerance-for-depth trade.}
+
+\begin{center}
+\begin{tabular}{llrrr}
+\toprule
+Operating point & Flavour / strength & $J$ (dB) & $\sigma_{3\text{dB}}$ (rad) & $|\lambda_\text{min}|/\lambda_\text{max}$ \\
+\midrule
+Canonical ($L{=}0.5$~m, $P{=}0.05$~W) & plain                       & $-76.86$ & $0.025$ & $5.54\times10^{-3}$ \\
+Canonical                             & MC, $\lambda{=}7.5\times10^{-2}$   & $-73.01$ & $0.039$ & $1.36\times10^{-2}$ \\
+Canonical                             & trH, $\lambda{=}1\times10^{-3}$    & $-73.83$ & $0.037$ & (see table footnote) \\
+Canonical                             & trH, $\lambda{=}3\times10^{-3}$    & $-66.79$ & $0.083$ & $1.08\times10^{-2}$ \\
+Pareto-57 ($L{=}0.25$~m, $P{=}0.10$~W) & plain                      & $-82.56$ & $0.011$ & $2.38\times10^{-1}$ \\
+Pareto-57                             & MC, $\lambda{=}7.5\times10^{-2}$   & $-67.98$ & $0.077$ & $7.87\times10^{-2}$ \\
+Pareto-57                             & trH, $\lambda{=}1\times10^{-3}$    & $-66.44$ & $0.077$ & $9.84\times10^{-2}$ \\
+Pareto-57                             & trH, $\lambda{=}3\times10^{-3}$    & $-69.38$ & $0.043$ & $5.69\times10^{-2}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\emph{Footnote.} $|\lambda_\text{min}|/\lambda_\text{max}$ for the
+\texttt{trH}, $\lambda{=}1\times10^{-3}$ canonical row was not
+reported in the Phase 22 artefact; it is omitted here rather than
+back-filled.
+
+\begin{advisory}
+\textbf{Practical takeaway.} SAM's null result is consistent with
+three known SAM failure modes operating simultaneously on our
+landscape:
+\emph{(i)} our setting is deterministic (no minibatch
+$m$-sharpness), and Andriushchenko \& Flammarion (ICML 2022,
+arXiv:2206.06232) show that deterministic SAM loses the
+$m$-sharpness signal that justifies the method in deep learning;
+\emph{(ii)} indefinite saddles are known to admit
+``hallucinate-minimiser'' pathologies where SAM's shifted gradient
+vanishes at non-stationary points of the original loss
+(arXiv:2509.21818, 2025); \emph{(iii)} the two-parameter gauge
+symmetry ($\varphi \mapsto \varphi + C + \alpha(\omega -
+\bar\omega)$, \S\ref{sec:april-hessian}) makes the $\rho$-ball
+perturbation budget partially-null: components along the gauge
+directions cost radius but leave $J$ invariant. Observed
+$\sigma$-shifts stayed $\leq 0.006$~rad across both operating
+points --- exactly what these three mechanisms predict. The default
+\texttt{log\_dB} plain optimiser remains recommended when depth is the
+priority. When shaper-calibration tolerance matters more than depth,
+\texttt{trH} is the single-knob tolerance-tuning regulariser with the
+widest dynamic range: on the canonical point, $\lambda_{\text{trH}}{=}3\times10^{-3}$
+buys a $+0.058$~rad increase in $\sigma_{3\text{dB}}$ for a $10.08$~dB
+depth cost; on Pareto-57 the Pareto frontier is richer:
+\texttt{MC}, $\lambda{=}7.5\times10^{-2}$ gives $+0.066$~rad tolerance
+at $14.58$~dB depth cost (the best combined trade);
+\texttt{trH}, $\lambda{=}1\times10^{-3}$ gives matched $+0.066$~rad
+tolerance at $16.12$~dB (the \texttt{trH} equivalent);
+\texttt{trH}, $\lambda{=}3\times10^{-3}$ gives only
+$+0.032$~rad at $13.18$~dB (the cheapest depth-cost point, but
+dominated in tolerance by the \texttt{MC} option). The Pareto-57 plain optimum cross-validates
+the reduced-parameterisation candidate: its $-82.56$~dB matches the
+original Phase~7 $-82.33$~dB (§\ref{sec:april-pareto}) within $0.23$~dB,
+so the $N_\varphi{=}57$ knot parameterisation survives the Phase 21
+Sweep-1 retirement. (Phase 21 re-anchored the Sweep-1 $L{=}2$~m,
+$P{=}0.2$~W point --- retired on edge-fraction criteria --- to
+$J = -66.03$~dB on the honest $N_t{=}16{,}384$, $T{=}54$~ps grid;
+it is a different optimum from the Phase 22 Pareto-57 plain
+baseline, which operates at the reduced parameterisation.)
+\end{advisory}
 
 \subsection{Determinism}
 \label{sec:april-det}
@@ -1509,11 +1767,18 @@ GVD-scaling comparison is removed, not caveated. Fit code:
 
 \textbf{(W2) 100~m L-BFGS ``optimum'' at $-54.77$~dB.}
 The number is energy-conserved (photon-drift $4.9 \times 10^{-4}$,
-edge-fraction $8.5 \times 10^{-6}$) but the convergence state is
+edge-fraction $8.5 \times 10^{-6}$) and Phase~21 reproduced it
+exactly on an independent honest grid, but the convergence state is
 \texttt{converged = false} after 25 L-BFGS iterations with final
 $\|\nabla J\| = 0.48$. Report as a \emph{lower bound} from the
-2~m warm start, not as an optimum. Source:
-\texttt{results/raman/phase16/FINDINGS.md} L21--34.
+2~m warm start, not as an optimum. The physics framing is further
+refined by Phase 23 (see the 100~m advisory in §\ref{sec:critical}):
+the suppression is generic pre-chirp, and
+a matched quadratic $+4$~ps$^2$ reaches $-45.06$~dB against the live
+warm-start at $-45.52$~dB. Source:
+\texttt{results/raman/phase16/FINDINGS.md} L21--34;
+\texttt{.planning/phases/21-numerical-recovery/SUMMARY.md};
+\texttt{.planning/phases/23-matched-baseline/SUMMARY.md}.
 
 \textbf{(W3) Joint $\{\varphi, A, E\}$ L-BFGS shows physics at 38~dB gap.}
 Session A's cold-start joint optimizer reached $-16.78$~dB vs.\ the
