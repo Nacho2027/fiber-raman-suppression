@@ -485,8 +485,28 @@ function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed
 
     wall_s = time() - t0
     sigma = sigma_scan(phi_opt, prob; seed=seed + 200_000)
-    hess = hessian_eigspectrum(x_opt, op, prob)
     J_plain_dB = _eval_plain_J_dB(phi_opt, prob)
+    hess_valid = true
+    hess_error = ""
+    hess = (
+        lambda_top = Float64[],
+        lambda_bottom = Float64[],
+        lambda_max = NaN,
+        lambda_min = NaN,
+        ratio_absmin_to_max = NaN,
+        indefinite = false,
+        niter_top = -1,
+        niter_bottom = -1,
+        V_top = zeros(Float64, length(x_opt), 0),
+        V_bottom = zeros(Float64, length(x_opt), 0),
+    )
+    try
+        hess = hessian_eigspectrum(x_opt, op, prob)
+    catch e
+        hess_valid = false
+        hess_error = string(typeof(e), ": ", e)
+        @warn "Hessian eigenspectrum failed; preserving optimization record without geometry fields" tag=tag exception=(e, catch_backtrace())
+    end
 
     record = Dict{String, Any}(
         "version" => S22_VERSION,
@@ -518,6 +538,8 @@ function run_record(op, flavor::Symbol, strength::Real, x0::AbstractVector, seed
         "sigma_scan_median_delta_J_dB" => sigma.median_delta_J_dB,
         "sigma_scan_mean_delta_J_dB" => sigma.mean_delta_J_dB,
         "sigma_3dB" => sigma.sigma_3dB,
+        "hessian_valid" => hess_valid,
+        "hessian_error" => hess_error,
         "hessian_lambda_top" => hess.lambda_top,
         "hessian_lambda_bottom" => hess.lambda_bottom,
         "hessian_lambda_max" => hess.lambda_max,

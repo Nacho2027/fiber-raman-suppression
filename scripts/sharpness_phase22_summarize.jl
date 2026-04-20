@@ -86,7 +86,7 @@ end
 
 function _sorted_table_rows(records)
     recs = _successful(records)
-    rows = [r for r in recs if haskey(r, "hessian_indefinite")]
+    rows = [r for r in recs if haskey(r, "sigma_3dB")]
     sort!(rows; by = r -> (r["op_id"], r["flavor"], Float64(r["strength"])))
     return rows
 end
@@ -94,16 +94,18 @@ end
 function _indefiniteness_table(records)
     rows = _sorted_table_rows(records)
     lines = String[]
-    push!(lines, "| Operating Point | Flavor | Strength | J_dB | sigma_3dB | Indefinite? | |lambda_min|/lambda_max |")
-    push!(lines, "|---|---|---:|---:|---:|:---:|---:|")
+    push!(lines, "| Operating Point | Flavor | Strength | J_dB | sigma_3dB | Hessian | Indefinite? | |lambda_min|/lambda_max |")
+    push!(lines, "|---|---|---:|---:|---:|---|:---:|---:|")
     for r in rows
         op = r["op_id"] == "smf28_canonical" ? "canonical" : "pareto57"
         strength = r["flavor"] == "plain" ? "0" : @sprintf("%.3e", Float64(r["strength"]))
         j = @sprintf("%.2f", Float64(r["J_plain_dB"]))
         s3 = isfinite(r["sigma_3dB"]) ? @sprintf("%.3f", Float64(r["sigma_3dB"])) : "NaN"
-        ind = Bool(r["hessian_indefinite"]) ? "YES" : "NO"
-        ratio = isfinite(r["hessian_ratio_absmin_to_max"]) ? @sprintf("%.3e", Float64(r["hessian_ratio_absmin_to_max"])) : "NaN"
-        push!(lines, "| $(op) | $(r["flavor_label"]) | $(strength) | $(j) | $(s3) | $(ind) | $(ratio) |")
+        hvalid = get(r, "hessian_valid", true)
+        hstat = hvalid ? "ok" : "NA"
+        ind = hvalid ? (Bool(r["hessian_indefinite"]) ? "YES" : "NO") : "NA"
+        ratio = hvalid && isfinite(r["hessian_ratio_absmin_to_max"]) ? @sprintf("%.3e", Float64(r["hessian_ratio_absmin_to_max"])) : "NaN"
+        push!(lines, "| $(op) | $(r["flavor_label"]) | $(strength) | $(j) | $(s3) | $(hstat) | $(ind) | $(ratio) |")
     end
     return join(lines, "\n")
 end
@@ -119,10 +121,9 @@ function _verdict(records)
     base_p = _baseline_for(records, "smf28_pareto57")
     best_c = _best_by_sigma(records, "smf28_canonical")
     best_p = _best_by_sigma(records, "smf28_pareto57")
-    flat_any = any(r -> !get(r, "failed", false) && haskey(r, "hessian_indefinite") && !Bool(r["hessian_indefinite"]),
-                   records)
-    all_indef = all(r -> get(r, "failed", false) || !haskey(r, "hessian_indefinite") || Bool(r["hessian_indefinite"]),
-                    records)
+    geom = [r for r in _successful(records) if get(r, "hessian_valid", true)]
+    flat_any = any(r -> !Bool(r["hessian_indefinite"]), geom)
+    all_indef = !isempty(geom) && all(r -> Bool(r["hessian_indefinite"]), geom)
 
     gain_c = isnothing(best_c) ? NaN : Float64(best_c["sigma_3dB"]) - Float64(base_c["sigma_3dB"])
     gain_p = isnothing(best_p) ? NaN : Float64(best_p["sigma_3dB"]) - Float64(base_p["sigma_3dB"])
@@ -130,10 +131,12 @@ function _verdict(records)
     loss_p = isnothing(best_p) ? NaN : Float64(best_p["J_plain_dB"]) - Float64(base_p["J_plain_dB"])
 
     lines = String[]
-    if all_indef
-        push!(lines, "Across the completed Phase 22 sweep, every measured optimum remained Hessian-indefinite in the optimized control space. That is the main geometry result: flattening the basin, when it happened at all, did not convert these optima into clean positive-definite minima.")
+    if isempty(geom)
+        push!(lines, "The optimization sweep completed, but no Hessian eigenspectra converged cleanly enough to support a landscape-geometry verdict. The depth-versus-tolerance Pareto is still valid; the saddle-versus-minimum question remains unresolved in this batch.")
+    elseif all_indef
+        push!(lines, "Across the resolved Hessian spectra in the completed Phase 22 sweep, every measured optimum remained Hessian-indefinite in the optimized control space. That is the main geometry result: flattening the basin, when it happened at all, did not convert these optima into clean positive-definite minima.")
     elseif flat_any
-        push!(lines, "At least one regularized solution became positive-definite in the optimized control space. That means the sharpness penalty did more than widen the perturbation tolerance; it changed the local landscape class from saddle-like to minimum-like.")
+        push!(lines, "At least one regularized solution became positive-definite within the subset of runs whose Hessian spectrum converged. That means the sharpness penalty did more than widen the perturbation tolerance; it changed the local landscape class from saddle-like to minimum-like.")
     end
 
     if isfinite(gain_c) || isfinite(gain_p)
@@ -166,6 +169,8 @@ function _summary_md(records, bundle_path::AbstractString)
     table_md = _indefiniteness_table(records)
     successful = length(_successful(records))
     failed = length(records) - successful
+    hessian_valid = count(r -> !get(r, "failed", false) && get(r, "hessian_valid", true), records)
+    hessian_missing = count(r -> !get(r, "failed", false) && !get(r, "hessian_valid", true), records)
 
     lines = String[]
     push!(lines, "# Phase 22 Summary")
@@ -184,6 +189,7 @@ function _summary_md(records, bundle_path::AbstractString)
     push!(lines, "- Pareto plot: `$(S22S_PARETO_PATH)`")
     push!(lines, "- Standard images: `$(S22_IMAGES_DIR)`")
     push!(lines, "- Completed records: `$(successful)` successful / `$(failed)` failed")
+    push!(lines, "- Hessian spectra: `$(hessian_valid)` resolved / `$(hessian_missing)` unresolved")
     push!(lines, "")
     push!(lines, "## Pareto Plot")
     push!(lines, "")
