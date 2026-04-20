@@ -193,6 +193,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 32 added (2026-04-20): Extrapolation and acceleration for parameter studies and continuation — scoped as the sequence-acceleration phase. Deliverables locked: candidate study families, acceleration methods, trust gates, and stop criteria for "not worth it."
 - Phase 33 added (2026-04-20): Globalized second-order optimization for Raman suppression — scoped as the safeguarded-curvature phase. Deliverables locked: globalization family, benchmark set, honest failure accounting, and execution waves.
 - Phase 34 added (2026-04-20): Truncated-Newton Krylov preconditioning path — scoped as the matrix-free second-order extension phase. Deliverables locked: truncated-Newton architecture, Krylov/preconditioning experiments, and comparison contract versus L-BFGS/globalized second-order.
+- Phase 35 added (2026-04-20): Saddle escape and genuine minima reachability study — determine whether genuine minima exist in reachable Raman territory. Verdict: saddles everywhere in competitive dB; recommendation: reduced-basis continuation plus a globalized second-order method with explicit negative-curvature handling.
 
 ### Resolved Issues
 
