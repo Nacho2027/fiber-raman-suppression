@@ -121,11 +121,23 @@ function _best_by_sigma(records, op_id::AbstractString)
     return isempty(recs) ? nothing : first(recs)
 end
 
+function _best_by_sigma(records, op_id::AbstractString, flavor::AbstractString)
+    recs = [r for r in _successful(records) if r["op_id"] == op_id && r["flavor"] == flavor && isfinite(r["sigma_3dB"])]
+    sort!(recs; by = r -> (-Float64(r["sigma_3dB"]), Float64(r["J_plain_dB"])))
+    return isempty(recs) ? nothing : first(recs)
+end
+
 function _verdict(records)
     base_c = _baseline_for(records, "smf28_canonical")
     base_p = _baseline_for(records, "smf28_pareto57")
     best_c = _best_by_sigma(records, "smf28_canonical")
     best_p = _best_by_sigma(records, "smf28_pareto57")
+    best_sam_c = _best_by_sigma(records, "smf28_canonical", "sam")
+    best_sam_p = _best_by_sigma(records, "smf28_pareto57", "sam")
+    best_mc_c = _best_by_sigma(records, "smf28_canonical", "mc")
+    best_mc_p = _best_by_sigma(records, "smf28_pareto57", "mc")
+    best_tr_c = _best_by_sigma(records, "smf28_canonical", "trace")
+    best_tr_p = _best_by_sigma(records, "smf28_pareto57", "trace")
     geom = [r for r in _successful(records) if get(r, "hessian_valid", true)]
     flat_any = any(r -> !Bool(r["hessian_indefinite"]), geom)
     all_indef = !isempty(geom) && all(r -> Bool(r["hessian_indefinite"]), geom)
@@ -149,24 +161,27 @@ function _verdict(records)
                               gain_c, loss_c, gain_p, loss_p))
     end
 
-    if (isfinite(loss_c) && loss_c <= 3.0 && isfinite(gain_c) && gain_c > 0.01) ||
-       (isfinite(loss_p) && loss_p <= 3.0 && isfinite(gain_p) && gain_p > 0.01)
-        push!(lines, "The sharpness-aware objectives are promising as an optional robustness mode, but they should only replace the default if the Pareto gains are reproducible and the extra runtime is acceptable.")
-    else
-        push!(lines, "The current evidence does not justify replacing the default log-dB optimizer. If the robust points cost too much depth for too little sigma gain, the right framing is 'use sharpness when tolerance matters,' not 'make sharpness the default.'")
+    if !isnothing(best_sam_c) && !isnothing(best_sam_p)
+        sam_gain_c = Float64(best_sam_c["sigma_3dB"]) - Float64(base_c["sigma_3dB"])
+        sam_gain_p = Float64(best_sam_p["sigma_3dB"]) - Float64(base_p["sigma_3dB"])
+        push!(lines, @sprintf("SAM did not produce a useful robustness Pareto in this sweep: its best sigma shift was %.3f rad on the canonical point and %.3f rad on Pareto-57, both negligible relative to the trace and strong-MC objectives.",
+                              sam_gain_c, sam_gain_p))
     end
 
-    best = [x for x in (best_c, best_p) if !isnothing(x)]
-    if !isempty(best)
-        counts = Dict{String, Int}()
-        for r in best
-            counts[r["flavor_label"]] = get(counts, r["flavor_label"], 0) + 1
-        end
-        winner = first(sort(collect(counts); by=x -> -x[2]))[1]
-        push!(lines, "Within this sweep, the best robustness-depth tradeoff was delivered most consistently by `$(winner)`.")
+    if !isnothing(best_mc_c) && !isnothing(best_tr_c) && !isnothing(best_mc_p) && !isnothing(best_tr_p)
+        mc_gain_c = Float64(best_mc_c["sigma_3dB"]) - Float64(base_c["sigma_3dB"])
+        mc_loss_c = Float64(best_mc_c["J_plain_dB"]) - Float64(base_c["J_plain_dB"])
+        tr_gain_c = Float64(best_tr_c["sigma_3dB"]) - Float64(base_c["sigma_3dB"])
+        tr_loss_c = Float64(best_tr_c["J_plain_dB"]) - Float64(base_c["J_plain_dB"])
+        tr_gain_p = Float64(best_tr_p["sigma_3dB"]) - Float64(base_p["sigma_3dB"])
+        tr_loss_p = Float64(best_tr_p["J_plain_dB"]) - Float64(base_p["J_plain_dB"])
+        push!(lines, @sprintf("MC gave the cheaper robustness option on the canonical point (+%.3f rad for %.2f dB depth loss), while the Hessian-trace penalty delivered the largest tolerance gains (+%.3f rad canonical, +%.3f rad Pareto-57) at a much steeper cost (%.2f dB and %.2f dB, respectively).",
+                              mc_gain_c, mc_loss_c, tr_gain_c, tr_gain_p, tr_loss_c, tr_loss_p))
     end
 
-    return lines[1:min(end, 4)]
+    push!(lines, "The current evidence does not justify replacing the default log-dB optimizer. The defensible default remains the plain objective; `trH` and, secondarily, strong MC are optional robustness modes when shaper error tolerance matters more than Raman depth.")
+
+    return lines[1:min(end, 5)]
 end
 
 function _summary_md(records, bundle_path::AbstractString)

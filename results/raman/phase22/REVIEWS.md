@@ -2,62 +2,53 @@
 
 ## Findings
 
-### No blocking findings remain after the smoke-cycle fixes
+### No blocking findings remain after the full production run
 
-The current implementation passed a full smoke cycle covering:
+The final Phase 22 pipeline completed the full 26-record sweep, emitted the
+mandatory 104-image standard set, resolved Hessian spectra for all 26 records,
+and produced the final Pareto summary and geometry table without manual patch-up.
 
-- full-resolution canonical baseline
-- reduced-basis Pareto baseline
-- one full-resolution `tr(H)` run
-- one reduced-basis `MC` run
-- post-hoc `sigma_3dB`
-- post-hoc Hessian eigenspectrum
-- serial `save_standard_set(...)`
-- summary/pareto generation
+### Fixed during review: Pareto seed loader needed `Symbol` keys, not `String` keys
 
-### Fixed during review: saved Pareto seed loader used the wrong JLD2 key type
+`results/raman/phase_sweep_simple/sweep2_LP_fiber.jld2` stores `record["config"]`
+as `Dict{Symbol,Any}`. The original lookup silently missed the target
+`N_phi = 57` row. `scripts/sharpness_phase22_lib.jl::_load_pareto_seed()` now
+reads symbol keys and reliably recovers the Phase 17 seed.
 
-`results/raman/phase_sweep_simple/sweep2_LP_fiber.jld2` stores
-`record["config"]` as `Dict{Symbol,Any}`, not `Dict{String,Any}`. The first
-smoke failure was a row-lookup miss caused by string-key access. The loader in
-`scripts/sharpness_phase22_lib.jl::_load_pareto_seed()` now reads symbol keys.
+### Fixed during review: low-resolution Hessians should use the exact dense Phase 13 path
 
-### Fixed during review: low-resolution Hessian path should be dense, not Arpack
+The 57-dimensional operating point does not need Arpack. The final code routes
+`N <= 1024` through `build_full_hessian_small(...)` from Phase 13 and reserves
+Arpack for the full-resolution canonical control space only.
 
-The second smoke failure was an Arpack/HVPOperator mismatch on the 57-dimensional
-control space. That was unnecessary complexity: Phase 13 already ships the
-small-N exact Hessian builder `build_full_hessian_small(...)`. The library now
-uses:
+### Fixed during review: Hessian extraction must be isolated from the threaded optimization sweep
 
-- dense exact Hessian for `N <= 1024`
-- Arpack only for the full-resolution case
+The critical production bug was not simple non-convergence; concurrent Arpack
+post-processing could segfault Julia itself. The final design splits the phase
+into:
 
-This is both more robust and cheaper for the Pareto point.
+- threaded optimization + `sigma_3dB` measurement + `save_standard_set(...)`
+- isolated one-record-at-a-time Hessian postpass via `scripts/sharpness_phase22_hessian_one.jl`
+- final bundle collection via `scripts/sharpness_phase22_collect.jl`
 
-### Fixed during review: full-resolution Arpack wing extraction needed a retry path
-
-The canonical `tr(H)` smoke run initially hit Arpack non-convergence at the
-requested wing size. The production path now retries with:
-
-- reduced `nev`
-- larger `maxiter`
-- looser `tol`
-
-That keeps the record alive instead of failing the whole task.
+That is the change that made the 26-record production batch reliable.
 
 ## Residual Risks
 
-- The full production sweep may still see slow or partially converged
-  eigenspectra on some full-resolution runs. That is acceptable because the
-  runner snapshots per-task results and records failures without aborting the
-  batch.
-- Smoke-mode baseline depths are intentionally under-optimized (`max_iter=8`)
-  and should not be interpreted physically.
-- `save_standard_set(...)` emits a recurring `pcolormesh` monotonic-coordinate
-  warning from existing plotting code. It does not block image generation and
-  is outside the Phase 22 namespace.
+- Full-resolution Hessian wings are still slow because they rely on Arpack over
+  a finite-difference HVP operator. The isolation step makes this tolerable,
+  but not cheap.
+- `save_standard_set(...)` still emits the pre-existing Matplotlib
+  `pcolormesh` monotonic-coordinate warning. It does not block image generation
+  and is outside the Phase 22 write scope.
+- The tracked markdown summary and Pareto plot are versioned, but the large
+  JLD2 bundles and the 104 PNG standard images follow the project's existing
+  results-artifact handling rather than normal source control.
 
 ## Verdict
 
-No blocking implementation defects remain after the smoke-cycle fixes. The
-production sweep can proceed.
+No blocking implementation defects remain. The final Phase 22 result is
+technically sound enough for D-docs to quote directly: the sweep ran to
+completion, the geometry claim is supported by resolved Hessian spectra, and
+the robustness recommendation is now based on the full two-operating-point
+Pareto rather than smoke-mode behavior.
