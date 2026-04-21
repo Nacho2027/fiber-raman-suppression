@@ -53,4 +53,9 @@ if !@isdefined(_PHASE34_BENCHMARK_COMMON_JL_LOADED)
     const _PHASE34_BENCHMARK_COMMON_JL_LOADED = true
 
     const DELTA0_SWEEP_VALUES = [0.5, 0.1, 0.01, 0.001]
+
+    # Preconditioner variants for the Phase 34 full 3×3×N benchmark matrix.
+    # Order matters for report readability: baseline first, then physics-motivated,
+    # then data-driven reduced basis.
+    const PRECOND_VARIANTS = [:none, :diagonal, :dispersion, :dct_K64]
 end
