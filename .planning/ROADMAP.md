@@ -475,3 +475,13 @@ Plans:
 
 Plans:
 - [x] 35-01-PLAN.md — Run reduced-basis Hessian ladder, perform negative-curvature escape study, and write the reachability report
+
+### Phase 35.1: Optimize CLAUDE.md under 40k chars preserving critical operational content (INSERTED)
+
+**Goal:** Reduce CLAUDE.md from 43142 bytes to strictly under 40000 bytes (target ≤ 38000) while preserving every behavior-governing rule (GSD strict mode, Codex whitelist/blacklist + escape phrase, Multi-Machine Workflow, Parallel Session Rules P1–P7, Compute Discipline Rules 1–3, save_standard_set mandate, SI Units, deepcopy(fiber) pattern).
+**Requirements**: none (urgent insertion, no REQ-ID mapping)
+**Depends on:** Phase 35
+**Plans:** 1 plan
+
+Plans:
+- [x] 35.1-01-PLAN.md — Compress CLAUDE.md to <40k bytes + verify preservation grep suite + commit
