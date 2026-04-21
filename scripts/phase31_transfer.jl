@@ -28,14 +28,16 @@ using JSON3
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
+
+using MultiModeNoise
 ensure_deterministic_environment()
 
 const P31T_RESULTS_DIR = joinpath(@__DIR__, "..", "results", "raman", "phase31")
 const P31T_RUN_TAG     = Dates.format(now(), "yyyymmdd_HHMMSS")
 const P31T_NT          = 2^14
 const P31T_TIME_WINDOW = 10.0
-const P31T_SIGMA_TRIALS = 20          # draws for sigma_3dB estimate
-const P31T_SIGMA_LADDER = [0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0]  # rad
+const P31T_SIGMA_TRIALS = 10          # draws for sigma_3dB estimate (was 20 — reduced for wall-time budget)
+const P31T_SIGMA_LADDER = [0.0, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0]  # rad (was 9 pts; trimmed to 7)
 
 # Canonical SMF-28 configuration (identical to Branch A/B)
 const P31T_CANONICAL = (fiber_preset = :SMF28, L_fiber = 2.0, P_cont = 0.2,
@@ -56,8 +58,11 @@ mkpath(P31T_RESULTS_DIR)
 
 """
 Evaluate `J_raman_linear` for a given phase vector on a given problem setup.
-Forward-only (no adjoint). Uses cost_and_gradient with log_cost=false but
-ignores the gradient.
+Forward-only: no adjoint solve. Reproduces the forward portion of
+cost_and_gradient by applying cis(φ), running solve_disp_mmf, rotating
+into the lab frame with cis(Dω·L), and calling spectral_band_cost.
+
+Roughly 2× cheaper than cost_and_gradient — the adjoint solve is skipped.
 """
 function evaluate_J_linear(phi_vec::AbstractVector{<:Real},
                             uω0::AbstractMatrix,
@@ -67,9 +72,15 @@ function evaluate_J_linear(phi_vec::AbstractVector{<:Real},
     Nt = sim["Nt"]
     @assert length(phi_vec) == Nt "phi length $(length(phi_vec)) != Nt $Nt"
     φ = reshape(phi_vec, Nt, 1)
-    J_linear, _ = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
-                                      log_cost = false)
-    return J_linear
+    uω0_shaped = @. uω0 * cis(φ)
+    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    ũω = sol["ode_sol"]
+    L = fiber["L"]
+    Dω = fiber["Dω"]
+    ũω_L = ũω(L)
+    uωf = @. cis(Dω * L) * ũω_L
+    J, _ = spectral_band_cost(uωf, band_mask)
+    return J
 end
 
 """
@@ -155,10 +166,15 @@ end
 """
 Estimate sigma_3dB: find the Gaussian perturbation scale at which the
 mean J (in dB) over `n_trials` draws degrades by 3 dB relative to the
-unperturbed J. Interpolates between the ladder bracketing the crossover.
+unperturbed J.
+
+Uses **early-exit**: iterate σ ladder in ascending order and stop the
+ladder scan the moment mean(J_dB) > J_base + 3 dB. Cuts typical
+evaluation count from 9·n_trials to ~3·n_trials per source row since
+most optima cross the 3 dB threshold between σ ∈ [0.02, 0.1].
 
 Returns the sigma in radians at the 3 dB crossover, or `NaN` if no
-crossover is found in the ladder.
+crossover is found before the end of the ladder.
 """
 function estimate_sigma_3dB(phi_opt::AbstractVector{<:Real},
                              J_base_dB::Real,
@@ -171,12 +187,13 @@ function estimate_sigma_3dB(phi_opt::AbstractVector{<:Real},
                              sigma_ladder = P31T_SIGMA_LADDER)
     rng = MersenneTwister(rng_seed)
     Nt = length(phi_opt)
-    J_dB_per_sigma = Float64[]
+    target = J_base_dB + 3.0
+
+    J_dB_per_sigma = Float64[J_base_dB]  # σ=0 baseline
+    σ_scanned = Float64[0.0]
+
     for σ in sigma_ladder
-        if σ == 0.0
-            push!(J_dB_per_sigma, J_base_dB)
-            continue
-        end
+        σ == 0.0 && continue
         Js = Float64[]
         for _ in 1:n_trials
             z = randn(rng, Nt)
@@ -184,26 +201,23 @@ function estimate_sigma_3dB(phi_opt::AbstractVector{<:Real},
             J_lin = evaluate_J_linear(phi_pert, uω0, fiber, sim, band_mask)
             push!(Js, 10.0 * log10(max(J_lin, 1e-15)))
         end
-        push!(J_dB_per_sigma, mean(Js))
+        J_mean = mean(Js)
+        push!(J_dB_per_sigma, J_mean)
+        push!(σ_scanned, σ)
+        if J_mean > target
+            # Crossover found — interpolate between prev and current
+            J_lo = J_dB_per_sigma[end - 1]
+            J_hi = J_dB_per_sigma[end]
+            σ_lo = σ_scanned[end - 1]
+            σ_hi = σ_scanned[end]
+            (J_hi == J_lo) && return σ_hi
+            frac = (target - J_lo) / (J_hi - J_lo)
+            return σ_lo + frac * (σ_hi - σ_lo)
+        end
     end
 
-    # Crossover: find first sigma where J_mean > J_base + 3.0
-    target = J_base_dB + 3.0
-    idx = findfirst(J -> J > target, J_dB_per_sigma)
-    idx === nothing && return NaN
-
-    if idx == 1
-        return sigma_ladder[1]
-    end
-
-    # Linear interpolation in sigma between idx-1 and idx
-    J_lo = J_dB_per_sigma[idx - 1]
-    J_hi = J_dB_per_sigma[idx]
-    σ_lo = sigma_ladder[idx - 1]
-    σ_hi = sigma_ladder[idx]
-    (J_hi == J_lo) && return σ_hi
-    frac = (target - J_lo) / (J_hi - J_lo)
-    return σ_lo + frac * (σ_hi - σ_lo)
+    # Reached end of ladder without crossing — extremely robust optimum
+    return NaN
 end
 
 """
