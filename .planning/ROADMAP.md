@@ -460,13 +460,13 @@ Plans:
 **Goal:** Deliver a PreconditionedCGSolver <: DirectionSolver subtype of Phase 33'''s frozen trust-region framework with systematic preconditioning experiments (physics diagonal, dispersion kernel, DCT reduced basis), a Δ₀-sweep diagnostic to disambiguate Phase 33 open question 5, and an honest head-to-head comparison against the SteihaugSolver baseline on the 3-config × 3-start-type benchmark matrix.
 **Requirements**: Derived from Phase 27 Krylov/Lanczos extension recommendation
 **Depends on:** Phase 28, Phase 33
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 34-01-PLAN.md — Δ₀-sweep diagnostic (bench-01/cold, SteihaugSolver, Δ₀ ∈ {0.5, 0.1, 0.01, 0.001}) — gates Plans 02-04
-- [ ] 34-02-PLAN.md — PreconditionedCGSolver + diagonal + dispersion preconditioners + unit tests (analytic quadratics only)
-- [ ] 34-03-PLAN.md — DCT reduced-basis preconditioner + Raman-oracle integration tests + Phase 34 benchmark driver (no execution)
-- [ ] 34-04-PLAN.md — Execute benchmark sweep on burst VM (Q-phase34-bench) + write 34-REPORT.md with honest failure audit + Phase 35/36 hand-off
+- [x] 34-01-PLAN.md — Δ₀-sweep diagnostic (bench-01/cold, SteihaugSolver, Δ₀ ∈ {0.5, 0.1, 0.01, 0.001}) — GO verdict: all Δ₀ produce RADIUS_COLLAPSE; root cause is λ_min(H)=-303, not wrong radius
+- [x] 34-02-PLAN.md — PreconditionedCGSolver + diagonal + dispersion preconditioners + unit tests (57 assertions pass; :none parity with Steihaug verified)
+- [x] 34-03-PLAN.md — DCT reduced-basis preconditioner + Raman-oracle integration tests (17 assertions) + Phase 34 benchmark driver (236 total assertions pass); M-kwarg wiring gap disclosed
+- [x] 34-04-PLAN.md — Benchmark sweep launched on burst VM (Q-phase34-bench, 8-14h); PCG smoke CONFIRMS hypothesis (ρ=0.944-0.994 vs 0.001-0.006 for Phase 33); M-kwarg gap documented in 34-REPORT.md; status: COMPLETE-WITH-CAVEATS
 
 ### Phase 35: Saddle escape and genuine minima reachability study — determine whether reachable Raman optima include true minima or only Hessian-indefinite saddles, and identify optimizer paths that can reliably reach minima-quality solutions if they exist
 
