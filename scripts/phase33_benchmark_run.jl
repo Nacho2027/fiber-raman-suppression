@@ -145,7 +145,7 @@ function run_single_benchmark(cfg, start_type::Symbol, config_index::Int;
     end
 
     # ── pre-flight edge-fraction trust gate (pitfall P8) ─────────────────────
-    uω0_shaped = @. uω0 * cis(reshape(φ0, size(uω0)))
+    uω0_shaped = uω0 .* cis.(reshape(φ0, size(uω0)))
     edge_frac = _pulse_edge_fraction(uω0_shaped, sim)
     if isfinite(edge_frac) && edge_frac > TRUST_THRESHOLDS.edge_frac_pass
         @warn "pre-flight EDGE_FRAC_SUSPECT — skipping config" tag=cfg.tag start_type edge_frac threshold=TRUST_THRESHOLDS.edge_frac_pass
