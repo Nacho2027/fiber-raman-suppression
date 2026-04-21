@@ -595,15 +595,18 @@ function run_ladder(schedule::ContinuationSchedule;
             end
         end
 
-        # Run corrector.
-        J_init = try
+        # Run corrector. CLAUDE.md §Error Handling: no try/catch in numerical
+        # code — errors propagate. Precondition-check the predictor output
+        # before calling cost_and_gradient; on non-finite phi we record
+        # J_init = NaN and let downstream detectors flag the step.
+        if !all(isfinite, phi_init)
+            @warn "predictor produced non-finite phi; treating step as broken"
+            J_init = NaN
+        else
             Ji, _ = cost_and_gradient(reshape(phi_init, Nt, 1),
                                       uω0, fiber, sim, band_mask;
                                       log_cost = false)
-            float(Ji)
-        catch err
-            @warn "cost_and_gradient on warm-start failed — predictor may have produced garbage" exception=(err, catch_backtrace())
-            NaN
+            J_init = float(Ji)
         end
 
         corrector_call = corrector_fn === nothing ?
