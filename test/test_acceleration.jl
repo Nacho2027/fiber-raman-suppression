@@ -13,10 +13,11 @@ Run:
     julia -t auto --project=. test/test_acceleration.jl
 """
 
-using Test, LinearAlgebra, Random, Statistics
+using Test, LinearAlgebra, Random, Statistics, Printf
 
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
+using MultiModeNoise
 include(joinpath(_ROOT, "scripts", "acceleration.jl"))
 include(joinpath(_ROOT, "scripts", "numerical_trust.jl"))
 
