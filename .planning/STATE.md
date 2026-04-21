@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Ready to execute
-last_updated: "2026-04-21T22:16:21.936Z"
+status: Executing Phase 34
+last_updated: "2026-04-21T22:18:05.493Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 45
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Physically correct simulation and optimization of Raman suppression, with every output plot clearly communicating the underlying physics.
-**Current focus:** Phase 32 — Extrapolation and acceleration for parameter studies and continuation
+**Current focus:** Phase 34 — Truncated-Newton Krylov preconditioning path
 
 ## Current Position
 
-Phase: 32 (Extrapolation and acceleration for parameter studies and continuation) — EXECUTING
-Plan: 1 of 2
+Phase: 34 (Truncated-Newton Krylov preconditioning path) — EXECUTING
+Plan: 1 of 4
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
