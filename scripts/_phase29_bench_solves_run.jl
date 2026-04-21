@@ -67,7 +67,10 @@ uω0_shaped = @. uω0 * cis(φ)   # mirror cost_and_gradient's production path
 # all three paths so no branch pays a cold-start cost inside the timed block.
 _warm_fwd = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
 let ũω_warm = _warm_fwd["ode_sol"]
-    uωf_warm = @. cis(fiber["Dω"] * fiber["L"]) * ũω_warm(fiber["L"])
+    L_warm    = fiber["L"]
+    Dω_warm   = fiber["Dω"]
+    ũω_L_warm = ũω_warm(L_warm)
+    uωf_warm  = @. cis(Dω_warm * L_warm) * ũω_L_warm
     _, λωL_warm = spectral_band_cost(uωf_warm, band_mask)
     _ = MultiModeNoise.solve_adjoint_disp_mmf(λωL_warm, ũω_warm, fiber, sim)
 end
@@ -96,7 +99,8 @@ elseif mode == "adjoint"
     ũω_sol        = sol_fwd_setup["ode_sol"]
     L_fib         = fiber["L"]
     Dω            = fiber["Dω"]
-    uωf           = @. cis(Dω * L_fib) * ũω_sol(L_fib)
+    ũω_L          = ũω_sol(L_fib)
+    uωf           = @. cis(Dω * L_fib) * ũω_L
     _, λωL        = spectral_band_cost(uωf, band_mask)
 
     t_start = time()
@@ -124,8 +128,8 @@ end
 payload = Dict(
     "mode"          => mode,
     "tag"           => tag,
-    "elapsed_s"     => elapsed_s,
-    "J"             => J,
+    "elapsed_s"     => isfinite(elapsed_s) ? elapsed_s : nothing,
+    "J"             => isfinite(J) ? J : nothing,
     "iters"         => iters,
     "Nt"            => Nt,
     "M"             => M,

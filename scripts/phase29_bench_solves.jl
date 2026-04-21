@@ -72,8 +72,9 @@ function _run_one_subprocess(mode::AbstractString, tag::AbstractString, n_thread
         error("worker produced no BENCH_JSON (mode=$mode tag=$tag n_threads=$n_threads)")
     end
     payload = JSON3.read(m[1])
-    return (elapsed_s     = Float64(payload["elapsed_s"]),
-            J             = Float64(payload["J"]),
+    _to_float(v) = v === nothing ? NaN : Float64(v)
+    return (elapsed_s     = _to_float(payload["elapsed_s"]),
+            J             = _to_float(payload["J"]),
             iters         = Int(payload["iters"]),
             julia_threads = Int(payload["julia_threads"]),
             fftw_threads  = Int(payload["fftw_threads"]))

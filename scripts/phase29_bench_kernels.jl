@@ -37,6 +37,7 @@ using JLD2
 using JSON3
 ENV["MPLBACKEND"] = "Agg"
 using MultiModeNoise
+using MultiModeNoise: get_p_disp_mmf, disp_mmf!, get_p_adjoint_disp_mmf, adjoint_disp_mmf!
 using Tullio
 
 include(joinpath(@__DIR__, "common.jl"))
