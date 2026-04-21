@@ -78,7 +78,15 @@ const P31_PENALTY_PROGRAM = [
     (:dct_l1,   [0.0, 1e-4, 1e-2, 1e0]),
 ]
 
-const P31_HVP_MAX_NPHI = 512    # skip coefficient-space Hessian probe above this
+const P31_HVP_MAX_NPHI = 16    # dense coefficient-space Hessian probe cap
+                                # (dense needs 2*N_phi forward+adjoint solves per run;
+                                #  at Nt=16384 each solve is ~10s → ~320s at N_phi=16.
+                                #  Beyond 16, the probe dominates the run and the
+                                #  saddle-masking signal is most relevant at small
+                                #  N_phi anyway — Phase 35 showed the :chirp_ladder
+                                #  N_phi=4 branch is where the indef_ratio artifact
+                                #  is most dramatic. Plan 02 will re-do this for
+                                #  larger N_phi using Arpack nev=10.)
 const P31_HVP_EPS_BASE = 1e-4   # fallback ε if adaptive estimate is not available
 
 mkpath(P31_RESULTS_DIR)
