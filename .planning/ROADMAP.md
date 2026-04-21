@@ -406,10 +406,10 @@ Plans:
 **Goal:** Turn the performance-modeling seed into an execution-ready benchmark phase with explicit kernels, bottleneck hypotheses, measurement protocol, and decision criteria for when tuning or more hardware is actually worth it.
 **Requirements**: [NMDS-PERF-01, NMDS-PERF-02, NMDS-PERF-03, NMDS-PERF-04] (derived from Phase 27 NMDS performance/roofline recommendations; defined in .planning/REQUIREMENTS.md §v3.0 and tied to Phase 29 CONTEXT.md D-1..D-4)
 **Depends on:** Phase 27
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 29-01-PLAN.md — Research FFT/adjoint performance kernels, define roofline/Amdahl benchmark protocol, and lock the implementation scope for the future execution pass
+- [x] 29-01-PLAN.md — Research FFT/adjoint performance kernels, define roofline/Amdahl benchmark protocol, and lock the implementation scope for the future execution pass
 
 ### Phase 30: Continuation and homotopy schedules for hard Raman regimes
 
