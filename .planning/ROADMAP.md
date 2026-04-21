@@ -437,10 +437,11 @@ Plans:
 **Goal:** Turn the acceleration seed into a concrete study phase that selects the first worthwhile sequence families, the right trust metrics, and a stop rule for when acceleration complexity is not justified.
 **Requirements**: Derived from Phase 27 NMDS acceleration recommendation
 **Depends on:** Phase 29, Phase 30
-**Plans:** 0/1 plans complete
+**Plans:** 0/2 plans complete
 
 Plans:
-- [ ] 32-01-PLAN.md — Choose candidate study families, acceleration methods, trust gates, and execution ordering for the acceleration comparison phase
+- [ ] 32-01-PLAN.md — Acceleration library (scripts/acceleration.jl) + additive attach_acceleration_metadata! trust-schema extension + 26-test unit/regression suite; schema stays "28.0"
+- [ ] 32-02-PLAN.md — Three driver scripts (Expt 0 Richardson audit, Expt 1 polynomial warm-start on Nt-capped SMF-28 L-ladder, Expt 2 offline MPE/RRE) + pre-registered 32-RESULTS.md scaffold + human-verify checkpoint on standard images
 
 ### Phase 33: Globalized second-order optimization for Raman suppression
 
