@@ -359,6 +359,23 @@ function run_branch_A(; dry_run::Bool = false)
     images_dir = joinpath(P31_RESULTS_DIR, "sweep_A", "images")
     mkpath(images_dir)
 
+    # Resume support: load previously completed rows so an interrupted sweep
+    # can be re-launched without redoing work. Keyed on (kind_string, N_phi).
+    completed_keys = Set{Tuple{String,Int}}()
+    if !dry_run && isfile(save_path)
+        try
+            prev = JLD2.load(save_path, "rows")
+            append!(rows, prev)
+            for r in prev
+                push!(completed_keys, (String(r["kind"]), r["N_phi"]))
+            end
+            @info @sprintf("  resume: loaded %d completed rows from %s",
+                           length(prev), save_path)
+        catch e
+            @warn "resume: failed to load existing rows, starting fresh" error=sprint(showerror, e)
+        end
+    end
+
     run_counter = 0
     total_expected = sum(length(nl) for (_, nl) in P31_BASIS_PROGRAM)
 
@@ -372,6 +389,13 @@ function run_branch_A(; dry_run::Bool = false)
             if N_phi > bw_bins
                 @info @sprintf("[%d/%d] skip kind=:%s N_phi=%d > bw_bins=%d (physically meaningless)",
                                run_counter, total_expected, kind, N_phi, bw_bins)
+                continue
+            end
+
+            # Resume: skip configs already completed in a previous run
+            if (String(kind), N_phi) in completed_keys
+                @info @sprintf("[%d/%d] resume: skip kind=:%s N_phi=%d (already in sweep_A_basis.jld2)",
+                               run_counter, total_expected, kind, N_phi)
                 continue
             end
 
@@ -473,6 +497,19 @@ function run_branch_A(; dry_run::Bool = false)
             catch e
                 @warn "standard image emission failed" tag=tag error=sprint(showerror, e)
             end
+
+            # Force matplotlib/PyCall cleanup. Observed 2026-04-21 on Mac:
+            # PyPlot figure handles accumulate across save_standard_set calls
+            # and fire a PyObject finalizer segfault on GC or process shutdown
+            # (_PyObject_Free → unicode_dealloc → pydecref_). Explicit close
+            # + GC between runs prevents the crash.
+            try
+                if isdefined(Main, :PyPlot)
+                    Base.invokelatest(Main.PyPlot.close, "all")
+                end
+            catch
+            end
+            GC.gc()
 
             # Propagate for continuation warm-start
             c_prev = vec(best.c_opt)
