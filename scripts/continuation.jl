@@ -524,8 +524,14 @@ on that step and STOPS — later ladder values are not attempted.
 | D4       | phase jump vs warm start    | soft (→ :degraded)  |
 | D5       | gradient-validation fail    | hard halt (via D1)  |
 | D6       | Hessian sign change         | informational only  |
-| D7       | Optim not g_converged       | hard halt           |
+| D7       | non-finite cost only        | hard halt (see note)|
 | D8       | edge-fraction growth        | hard halt           |
+
+D7 note: v1 only fires on non-finite J_opt_dB. A true `g_converged == false`
+check requires the corrector interface to return Optim's convergence flag;
+`_default_corrector_lbfgs` currently discards the full Optim result, so the
+g-norm signal is not available. Deferred until Phases 33/34 plug in Newton
+correctors with a richer return contract.
 
 # Saddle caveat (Phase 22 / 35)
 The competitive-dB branch is Hessian-indefinite everywhere surveyed; L, P,
