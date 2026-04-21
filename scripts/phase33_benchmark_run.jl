@@ -86,7 +86,7 @@ combined). Matches the convention used by Phase 21's edge_frac measurements.
 function _pulse_edge_fraction(uω::AbstractMatrix{<:Complex}, sim::Dict)
     Nt = sim["Nt"]
     # Time-domain field: IFFT of fftshift-ordered uω (same convention as solver).
-    ut = MultiModeNoise.ifft(uω; dims = 1)
+    ut = MultiModeNoise.ifft(uω, 1)
     energy = sum(abs2, ut)
     energy > 0 || return NaN
     edge_n = max(1, round(Int, 0.05 * Nt))
