@@ -7,6 +7,25 @@
 
 ---
 
+## Benchmark Set Substitution (addendum, 2026-04-21)
+
+The original §Benchmark Set below named 4 pre-audit canonical warm-starts. After user-directed cross-check against the Phase 21 audit, 3 of those 4 warm-start JLD2s were unavailable (never synced) or artifact-contaminated (bc_input_ok=false). The benchmark set used in Plan 02 is therefore:
+
+| # | Config | (fiber, L, P, Nt, time_window) | Warm-start source | J_honest | Status |
+|---|---|---|---|---|---|
+| bench-01 | SMF-28 canonical | (SMF28, 2.0 m, 0.2 W, 2^13, 40 ps) | `results/raman/sweeps/smf28/L2m_P0.2W/opt_result.jld2` | −59.43 dB | pre-audit canonical, `bc_input_ok=false` — kept as deliberate contrast against the Phase 21 honest baseline |
+| bench-02 | HNLF Phase-21 honest | (HNLF, 0.5 m, 0.01 W, 2^16, 320 ps) | `results/raman/phase21/phase13/hnlf_reanchor.jld2` | −86.68 dB | Phase 21 honest reanchor, edge_frac=2.2e-4 |
+| bench-03 | SMF-28 Phase-21 honest | (SMF28, 2.0 m, 0.2 W, 2^14, 54 ps) | `results/raman/phase21/phase13/smf28_reanchor.jld2` | −66.61 dB | Phase 21 honest reanchor at same (L,P) as bench-01 — direct canonical-vs-honest comparison |
+| ~~bench-04~~ | ~~Pareto-57~~ | ~~Nφ=57 reduced basis~~ | ~~`results/raman/phase22/pareto57/opt_result.jld2`~~ | ~~—~~ | DROPPED — per-row optimum was never synced from Mac to burst |
+
+Effect on matrix: **3 configs × 3 start types = 9 TR runs** (not 12). Warm-start robustness claim still validated with 3 distinct (fiber, L, P) points. Loss: cross-validation against the reduced-basis Pareto result (Nφ=57 line-search anchor) — Phase 34 can revisit this if/when phase22 artifacts are re-synced.
+
+Grid discipline: each config's Nt and time_window are pinned to its warm-start JLD2's grid, so `setup_raman_problem(Nt=cfg.Nt, time_window=cfg.time_window_ps*1e-12)` matches the frequency mesh exactly. Loading a phi_opt with mismatched Nt → size error → hard fail (intended).
+
+Audit trust: all 3 surviving warm-starts have documented `edge_frac` values (bench-01: from the original JLD2, bench-02/03: Phase 21 re-anchor). Phase 33's pre-flight trust gate (pitfall P8) uses `compute_edge_fraction` on the initial forward solve and aborts any config that crosses `TRUST_THRESHOLDS.edge_frac_pass`.
+
+---
+
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
