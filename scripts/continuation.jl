@@ -1,70 +1,78 @@
-"""
-Continuation and homotopy schedules for Raman-suppression optimization (Phase 30).
-
-One-line purpose
-----------------
-Promote "warm-start across lengths/powers" from an ad-hoc habit into an explicit
-numerical method with a declared ladder, predictor, corrector, failure detectors,
-and per-step trust emission on top of the Phase 28 numerical-trust schema.
-
-Public API
-----------
-- `ContinuationSchedule`       — immutable plan (ladder variable, values, config)
-- `ContinuationStepResult`     — per-step outcome (phi_opt, dB, trust, detectors)
-- `run_ladder(schedule; ...)`  — driver that walks the ladder with predictor +
-                                 corrector + detector policy, emitting one trust
-                                 row per converged step
-- `trivial_predictor`          — identity predictor with cross-grid interpolation
-- `detect_cost_discontinuity`, `detect_corrector_burn`,
-  `detect_phase_jump`, `detect_edge_growth` — pure detector functions
-
-The default corrector wraps `optimize_spectral_phase` (scripts/raman_optimization.jl).
-External callers can pass any `corrector_fn(phi_init, cfg) -> (phi_opt, J_final, iters, wall_s)`
-to plug in future correctors (Phase 33/34 Newton, Phase 32 acceleration).
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Continuation and homotopy schedules for Raman-suppression optimization
+# (Phase 30).
+#
+# This is a file-header comment — Julia discards a bare `"""..."""` at the top
+# of a file because it is not attached to any binding. For a queryable module
+# summary see `?CONTINUATION_VERSION`.
+#
+# One-line purpose
+# ----------------
+# Promote "warm-start across lengths/powers" from an ad-hoc habit into an
+# explicit numerical method with a declared ladder, predictor, corrector,
+# failure detectors, and per-step trust emission on top of the Phase 28
+# numerical-trust schema.
+#
+# Public API
+# ----------
+# - `ContinuationSchedule`       — immutable plan (ladder variable, values, config)
+# - `ContinuationStepResult`     — per-step outcome (phi_opt, dB, trust, detectors)
+# - `run_ladder(schedule; ...)`  — driver that walks the ladder with predictor +
+#                                  corrector + detector policy, emitting one trust
+#                                  row per converged step
+# - `trivial_predictor`          — identity predictor with cross-grid interpolation
+# - `detect_cost_discontinuity`, `detect_corrector_burn`,
+#   `detect_phase_jump`, `detect_edge_growth` — pure detector functions
+#
+# The default corrector wraps `optimize_spectral_phase`
+# (scripts/raman_optimization.jl). External callers can pass any
+# `corrector_fn(phi_init, cfg) -> (phi_opt, J_final, iters, wall_s)` to plug
+# in future correctors (Phase 33/34 Newton, Phase 32 acceleration).
+#
 # Saddle caveat (Phase 22 / 35)
-The competitive-dB branch of the Raman-suppression landscape is Hessian-
-indefinite everywhere surveyed. L, P, and λ ladders traverse saddles, not
-a smooth minimum branch. Detectors D1-D8 are designed to tolerate indefinite
-Hessians; Hessian sign change (D6) is informational only. Only the N_phi
-ladder (Phase 31) has a theoretical minimum-branch regime.
-
-Phase 28 trust schema
----------------------
-All per-step trust reports are built with `build_numerical_trust_report(...)`
-from `scripts/numerical_trust.jl` and then augmented (additively) via
-`attach_continuation_metadata!(...)`. The schema version string stays "28.0" —
-Phase 30 does NOT bump it. Downstream readers that do not know about
-continuation metadata keep working unchanged.
-
-Deferred ideas (NOT in this module; tracked here for traceability)
-------------------------------------------------------------------
-- **Secant predictor**  — phi_next = phi_prev + α (phi_prev - phi_prev_prev).
-                          Useful once two warm-starts are available. May be
-                          added at executor discretion in a future plan.
-- **Tangent / Newton predictor** — requires an explicit Hessian or HVP and the
-                          implicit-function-theorem tangent vector. Deferred
-                          to Phases 33/34 (globalized second-order optimization).
-- **Pseudo-arclength continuation** — requires tangent + bordered-system solve.
-                          Not viable until Phases 33/34 provide a Newton
-                          corrector; pseudo-arclength on L-BFGS alone is not
-                          numerically justified.
-- **Multi-variable / joint ladders** — joint (L, P) or (L, Nphi) schedules are
-                          a Phase 31+ successor once the reduced-basis
-                          framework is in place.
-
-References
-----------
-- Phase 22 (sharpness-Pareto, all competitive optima Hessian-indefinite)
-- Phase 28 (numerical trust schema 28.0)
-- Phase 35 (saddle-escape verdict)
-- scripts/benchmark_optimization.jl:470-574 — precursor `run_continuation` (L-only,
-  same-Nt). Superseded by this module; kept for reference.
-
-Include guard
--------------
-`_CONTINUATION_JL_LOADED` — safe to include multiple times.
-"""
+# -----------------------------
+# The competitive-dB branch of the Raman-suppression landscape is Hessian-
+# indefinite everywhere surveyed. L, P, and λ ladders traverse saddles, not
+# a smooth minimum branch. Detectors D1-D8 are designed to tolerate indefinite
+# Hessians; Hessian sign change (D6) is informational only. Only the N_phi
+# ladder (Phase 31) has a theoretical minimum-branch regime.
+#
+# Phase 28 trust schema
+# ---------------------
+# All per-step trust reports are built with `build_numerical_trust_report(...)`
+# from `scripts/numerical_trust.jl` and then augmented (additively) via
+# `attach_continuation_metadata!(...)`. The schema version string stays "28.0"
+# — Phase 30 does NOT bump it. Downstream readers that do not know about
+# continuation metadata keep working unchanged.
+#
+# Deferred ideas (NOT in this module; tracked here for traceability)
+# ------------------------------------------------------------------
+# - Secant predictor  — phi_next = phi_prev + α (phi_prev - phi_prev_prev).
+#                       Useful once two warm-starts are available. May be
+#                       added at executor discretion in a future plan.
+# - Tangent / Newton predictor — requires an explicit Hessian or HVP and the
+#                       implicit-function-theorem tangent vector. Deferred to
+#                       Phases 33/34 (globalized second-order optimization).
+# - Pseudo-arclength continuation — requires tangent + bordered-system solve.
+#                       Not viable until Phases 33/34 provide a Newton
+#                       corrector; pseudo-arclength on L-BFGS alone is not
+#                       numerically justified.
+# - Multi-variable / joint ladders — joint (L, P) or (L, Nphi) schedules are
+#                       a Phase 31+ successor once the reduced-basis framework
+#                       is in place.
+#
+# References
+# ----------
+# - Phase 22 (sharpness-Pareto, all competitive optima Hessian-indefinite)
+# - Phase 28 (numerical trust schema 28.0)
+# - Phase 35 (saddle-escape verdict)
+# - scripts/benchmark_optimization.jl:470-574 — precursor `run_continuation`
+#   (L-only, same-Nt). Superseded by this module; kept for reference.
+#
+# Include guard
+# -------------
+# `_CONTINUATION_JL_LOADED` — safe to include multiple times.
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Module-level imports outside the include guard (per project convention) —
 # keeps macros visible at compile time and lets parent scripts that already
