@@ -404,7 +404,7 @@ Plans:
 ### Phase 29: Performance modeling and roofline audit for the FFT-adjoint pipeline
 
 **Goal:** Turn the performance-modeling seed into an execution-ready benchmark phase with explicit kernels, bottleneck hypotheses, measurement protocol, and decision criteria for when tuning or more hardware is actually worth it.
-**Requirements**: Derived from Phase 27 NMDS performance/roofline recommendations
+**Requirements**: [NMDS-PERF-01, NMDS-PERF-02, NMDS-PERF-03, NMDS-PERF-04] (derived from Phase 27 NMDS performance/roofline recommendations; defined in .planning/REQUIREMENTS.md §v3.0 and tied to Phase 29 CONTEXT.md D-1..D-4)
 **Depends on:** Phase 27
 **Plans:** 0/1 plans complete
 
@@ -426,10 +426,11 @@ Plans:
 **Goal:** Turn the reduced-basis seed into an execution-ready model-selection phase that compares full-grid phase optimization against explicit basis restrictions and regularization families, anchored to the repo's existing DCT infrastructure.
 **Requirements**: Derived from Phase 27 regularization/model-selection recommendation
 **Depends on:** Phase 28
-**Plans:** 0/1 plans complete
+**Plans:** 0/2 plans complete
 
 Plans:
-- [ ] 31-01-PLAN.md — Define basis families, evaluation metrics, and execution waves for reduced-basis versus full-grid phase optimization
+- [ ] 31-01-PLAN.md — Libraries (basis + penalty) + unit tests + Branch A (basis sweep, 21 runs on burst) with mandatory save_standard_set + coefficient-space Hessian diagnostics
+- [ ] 31-02-PLAN.md — Branch B (penalty sweep, 21 runs) + transferability probe (HNLF + perturbations + sigma_3dB) + Pareto / L-curve / AIC analysis + FINDINGS.md
 
 ### Phase 32: Extrapolation and acceleration for parameter studies and continuation
 
