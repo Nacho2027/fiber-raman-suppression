@@ -294,21 +294,23 @@ function _render_results_md(cold::Vector{ContinuationStepResult},
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Per-arm runner
+# Per-arm persistence
 # ─────────────────────────────────────────────────────────────────────────────
 
-function _run_arm(arm_tag::AbstractString, cold_start::Bool)
-    schedule = _build_schedule()
-    @info "Running arm" arm=arm_tag cold_start=cold_start
-    results = run_ladder(schedule; cold_start = cold_start)
-    mkpath(P30_OUTDIR)
-    mkpath(joinpath(P30_OUTDIR, "trust"))
+"""
+    _persist_arm(results, arm_tag, cold_start)
 
+Re-stamp each step's trust report with arm-level metadata, then write the
+per-step trust markdown + JLD2 checkpoint. `main()` calls this after each
+`run_ladder(...)` invocation so both arms share one persistence path.
+"""
+function _persist_arm(results::Vector{ContinuationStepResult},
+                      arm_tag::AbstractString,
+                      cold_start::Bool)
     for r in results
-        # Per-step trust markdown (augmented by attach_continuation_metadata!
-        # inside run_ladder; the helper is also safe to call again here for
-        # an explicit re-stamp when the caller wants to record additional
-        # fields, e.g., is_cold_start_baseline).
+        # Re-stamp metadata (attach_continuation_metadata! was already called
+        # inside run_ladder; a second call merges without clobbering, which
+        # lets us record the arm-level `is_cold_start_baseline` field here).
         attach_continuation_metadata!(r.trust_report, Dict{String,Any}(
             "continuation_id"        => "p30_demo_smf28_L",
             "ladder_var"             => "L",
@@ -360,37 +362,18 @@ end
 
 function main()
     mkpath(P30_OUTDIR)
+    mkpath(joinpath(P30_OUTDIR, "trust"))
     mkpath(dirname(P30_RESULTS_PATH))
-    # Arm A: cold-start baseline (budget parity). Use the canonical literal
-    # `run_ladder(schedule; cold_start=true)` form per Phase 30 Plan 01
-    # acceptance criteria (grep-checked, so keep without spaces around `=`).
     schedule = _build_schedule()
+    # Arm A: cold-start baseline (budget parity). Canonical literal
+    # `run_ladder(schedule; cold_start=true)` is grep-checked by Phase 30
+    # Plan 01 acceptance — keep without spaces around `=`.
     results_cold = run_ladder(schedule; cold_start=true)
-    for r in results_cold
-        attach_continuation_metadata!(r.trust_report, Dict{String,Any}(
-            "continuation_id"        => "p30_demo_smf28_L",
-            "ladder_var"             => "L",
-            "step_index"             => r.step_index,
-            "is_cold_start_baseline" => true,
-            "path_status"            => String(r.path_status),
-        ))
-        _save_trust_markdown(r.trust_report, P30_TAG_COLD, r.step_index)
-        _save_step_checkpoint(r, P30_TAG_COLD)
-    end
+    _persist_arm(results_cold, P30_TAG_COLD, true)
     # Arm B: continuation (warm-start chain). Canonical literal form per
     # acceptance criteria: `run_ladder(schedule; cold_start=false)`.
     results_cont = run_ladder(schedule; cold_start=false)
-    for r in results_cont
-        attach_continuation_metadata!(r.trust_report, Dict{String,Any}(
-            "continuation_id"        => "p30_demo_smf28_L",
-            "ladder_var"             => "L",
-            "step_index"             => r.step_index,
-            "is_cold_start_baseline" => false,
-            "path_status"            => String(r.path_status),
-        ))
-        _save_trust_markdown(r.trust_report, P30_TAG_CONT, r.step_index)
-        _save_step_checkpoint(r, P30_TAG_CONT)
-    end
+    _persist_arm(results_cont, P30_TAG_CONT, false)
     # Standard images at final L = 100 m for both arms (CLAUDE.md mandatory).
     _emit_standard_images(_final_phi_opt(results_cold), P30_TAG_COLD)
     _emit_standard_images(_final_phi_opt(results_cont), P30_TAG_CONT)
