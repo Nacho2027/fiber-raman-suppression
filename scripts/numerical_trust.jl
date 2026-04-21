@@ -183,6 +183,30 @@ function write_numerical_trust_report(path::AbstractString, report::Dict{String,
         println(io, @sprintf("- λ_gdd: `%.3e`", surf["lambda_gdd"]))
         println(io, @sprintf("- λ_boundary: `%.3e`", surf["lambda_boundary"]))
         println(io, @sprintf("- Boundary penalty measurement: `%s`", surf["boundary_penalty_measurement"]))
+        # Phase 30 additive: if the report carries continuation metadata, emit
+        # a `## Continuation` section. Pre-Phase-30 reports render unchanged.
+        if haskey(report, "continuation")
+            cont = report["continuation"]
+            println(io)
+            println(io, "## Continuation")
+            println(io, @sprintf("- ID: `%s`", get(cont, "continuation_id", "")))
+            println(io, @sprintf("- Ladder: `%s` step=`%d` value=`%s`",
+                                 get(cont, "ladder_var", ""),
+                                 get(cont, "step_index", -1),
+                                 string(get(cont, "ladder_value", ""))))
+            println(io, @sprintf("- Predictor / corrector: `%s` / `%s`",
+                                 get(cont, "predictor", ""),
+                                 get(cont, "corrector", "")))
+            println(io, @sprintf("- Path status: **%s**",
+                                 uppercase(get(cont, "path_status", "unknown"))))
+            println(io, @sprintf("- Cold-start baseline: `%s`",
+                                 string(get(cont, "is_cold_start_baseline", false))))
+            if haskey(cont, "detectors")
+                for (k, v) in cont["detectors"]
+                    println(io, @sprintf("- Detector %s: `%s`", k, string(v)))
+                end
+            end
+        end
     end
     return path
 end
