@@ -336,20 +336,15 @@ function _emit_standard_images(final_phi::AbstractVector, tag::AbstractString)
         fiber_preset  = :SMF28,
         β_order       = 3,
     )
-    # setup_raman_problem may auto-size Nt upward; trim or pad final_phi to
-    # the actually-used Nt via longfiber_interpolate_phi (identity fast path
-    # when lengths already match).
+    # setup_raman_problem may auto-size Nt upward. If that ever produces a
+    # grid that disagrees with the phi the corrector actually converged on,
+    # refuse to silently reinterpolate — the true source-grid time_window is
+    # not carried here, so any fallback would ship a phase on the wrong
+    # spectral grid into save_standard_set. CLAUDE.md §Error Handling prefers
+    # fail-loud @assert over silent best-effort in numerical paths.
     Nt_actual = sim["Nt"]
-    phi_use = if length(final_phi) == Nt_actual
-        Vector{Float64}(vec(final_phi))
-    else
-        tw_actual = sim["Δt"] * Nt_actual
-        # We don't know the original time_window, best-effort — pass tw_actual
-        # as both arms since interpolate_phi uses the ratio.
-        vec(longfiber_interpolate_phi(vec(final_phi),
-                                      length(final_phi), tw_actual,
-                                      Nt_actual, tw_actual))
-    end
+    @assert length(final_phi) == Nt_actual "grid mismatch — refusing silent reinterpolation (length(final_phi)=$(length(final_phi)), sim[Nt]=$Nt_actual)"
+    phi_use = Vector{Float64}(vec(final_phi))
     save_standard_set(phi_use, uω0, fiber, sim, band_mask, Δf, raman_threshold;
         tag        = tag,
         fiber_name = "SMF28",
