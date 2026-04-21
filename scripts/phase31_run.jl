@@ -530,11 +530,345 @@ function run_branch_A(; dry_run::Bool = false)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# run_branch_B — stub; implemented in Plan 02
+# run_branch_B — penalty sweep on full-grid (identity basis)
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# Branch B optimizes φ on the full Nt grid with one of five penalty families
+# (tikhonov, gdd, tod, tv, dct_l1) at a log-spaced λ ladder. Every optimum
+# carries the same row schema as Branch A so Plan 02's transfer + analyze
+# code can load both branches uniformly.
+#
+# Why bypass optimize_phase_lowres: at kind=:identity with N_phi=Nt=2^14,
+# build_phase_basis constructs a dense Nt×Nt identity (~2 GB). Instead,
+# drive Optim.LBFGS directly on the phase vector and use a cost+gradient
+# wrapper that applies the penalty in-place BEFORE the log_cost rescale
+# (matching the convention in scripts/raman_optimization.jl::cost_and_gradient).
 
+"""
+    phase31_b_cost_and_gradient(φ_vec, uω0, fiber, sim, band_mask, bw_mask;
+                                 penalty_name, λ, B_dct_cache)
+        -> (J_total_dB, grad_total_vec, J_raman_linear, J_penalty_linear)
+
+Full-grid cost+gradient with a named penalty added before the log_cost rescale.
+
+- `φ_vec`: length-Nt flat vector (L-BFGS sees this).
+- Reshapes to `Nt × 1` for the existing matrix-shaped solver.
+- `penalty_name ∈ (:none, :tikhonov, :gdd, :tod, :tv, :dct_l1)`.
+- Returns the log-cost and chain-rule-scaled gradient (so L-BFGS sees dB).
+- Also returns the linear raman + linear penalty J pieces for row packaging.
+- `B_dct_cache` is the precomputed DCT basis used only for :dct_l1; pass
+  `nothing` for all other penalties.
+"""
+function phase31_b_cost_and_gradient(φ_vec::AbstractVector{<:Real},
+                                      uω0::AbstractMatrix,
+                                      fiber::Dict,
+                                      sim::Dict,
+                                      band_mask::AbstractVector{Bool},
+                                      bw_mask::AbstractVector{Bool};
+                                      penalty_name::Symbol,
+                                      λ::Real,
+                                      B_dct_cache::Union{Nothing,AbstractMatrix{<:Real}} = nothing)
+    Nt = sim["Nt"]
+    φ = reshape(φ_vec, Nt, 1)
+
+    # Physics cost + gradient in linear units (log_cost=false).
+    J_raman, grad_raman = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
+                                             log_cost = false)
+
+    J_total    = Ref(J_raman)
+    grad_total = copy(grad_raman)
+    J_penalty = 0.0
+    if penalty_name == :none || λ == 0
+        J_penalty = 0.0
+    elseif penalty_name == :tikhonov
+        J_penalty = apply_tikhonov_phi!(J_total, grad_total, φ, bw_mask; λ = λ)
+    elseif penalty_name == :gdd
+        # Reuse the existing GDD block by a second cost_and_gradient call with
+        # λ_gdd=λ and subtracting the base J/grad contributions. Simpler to
+        # compute the GDD contribution inline here to avoid the extra forward
+        # solve. Use the same Δω⁻³ scaling as raman_optimization.jl.
+        Nt_φ = Nt
+        Δω = 2π / (Nt_φ * sim["Δt"])
+        inv_Δω3 = 1.0 / Δω^3
+        m = 1
+        for i in 2:(Nt_φ - 1)
+            d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
+            J_penalty += λ * inv_Δω3 * d2^2
+            coeff = 2 * λ * inv_Δω3 * d2
+            grad_total[i-1, m] += coeff
+            grad_total[i, m]   -= 2 * coeff
+            grad_total[i+1, m] += coeff
+        end
+        J_total[] += J_penalty
+    elseif penalty_name == :tod
+        J_penalty = apply_tod_curvature!(J_total, grad_total, φ, bw_mask;
+                                           λ = λ, sim = sim)
+    elseif penalty_name == :tv
+        J_penalty = apply_tv_phi!(J_total, grad_total, φ, bw_mask; λ = λ)
+    elseif penalty_name == :dct_l1
+        @assert B_dct_cache !== nothing "B_dct_cache required for :dct_l1"
+        J_penalty = apply_dct_l1!(J_total, grad_total, φ, bw_mask;
+                                    λ = λ, B_dct = B_dct_cache)
+    else
+        error("unknown penalty_name: $penalty_name")
+    end
+
+    # Log-cost rescale on the combined (raman + penalty) objective so L-BFGS
+    # sees dB. Matches scripts/raman_optimization.jl::cost_and_gradient.
+    J_clamped = max(J_total[], 1e-15)
+    log_scale = 10.0 / (J_clamped * log(10.0))
+    grad_total .*= log_scale
+    J_dB = 10.0 * log10(J_clamped)
+
+    @assert isfinite(J_dB) "Branch B cost not finite: $J_dB"
+    @assert all(isfinite, grad_total) "Branch B gradient has NaN/Inf"
+
+    return J_dB, vec(grad_total), J_raman, J_penalty
+end
+
+"""
+Row packager for Branch B. Mirrors `package_phase31_row` but tolerates the
+identity-basis case (no B matrix, no coefficient-space conditioning).
+"""
+function package_phase31_row_B(phi_opt_vec::AbstractVector{<:Real},
+                                 J_final_dB::Real,
+                                 iterations::Int,
+                                 converged::Bool,
+                                 J_raman_linear::Real,
+                                 J_penalty_linear::Real,
+                                 penalty_name::Symbol,
+                                 λ::Real,
+                                 uω0, fiber, sim, band_mask, bw_mask, omega;
+                                 config::NamedTuple,
+                                 wall_time_s::Real,
+                                 seed_count::Int)
+    phi_gauged, (C_gauge, α_gauge) = gauge_fix(phi_opt_vec, bw_mask, omega)
+    phi_gauged_vec = vec(phi_gauged)
+    poly_r2 = polynomial_r2_from_gauged(phi_gauged_vec, omega, bw_mask)
+
+    Nt = sim["Nt"]
+    penalties_dict = Dict(:tikhonov => 0.0, :gdd => 0.0, :tod => 0.0,
+                           :tv => 0.0, :dct_l1 => 0.0)
+    penalties_dict[penalty_name] = Float64(λ)
+
+    return Dict{String,Any}(
+        "run_tag"             => P31_RUN_TAG,
+        "branch"              => "B",
+        "regularization_mode" => "penalty",
+        "config"              => Dict(String(k) => v for (k, v) in pairs(config)),
+        "kind"                => "identity",
+        "N_phi"               => Nt,
+        "kappa_B"             => NaN,
+        "kappa_B_warned"      => false,
+        "penalties"           => Dict(String(k) => v for (k, v) in pairs(penalties_dict)),
+        "penalty_name"        => String(penalty_name),
+        "lambda"              => Float64(λ),
+        "c_opt"               => collect(phi_opt_vec),
+        "phi_opt"             => collect(phi_opt_vec),
+        "phi_opt_gauged"      => collect(phi_gauged_vec),
+        "gauge_C"             => C_gauge,
+        "gauge_alpha"         => α_gauge,
+        "J_final"             => J_final_dB,
+        "J_raman_linear"      => J_raman_linear,
+        "J_penalty_linear"    => J_penalty_linear,
+        "iterations"          => iterations,
+        "converged"           => converged,
+        "wall_time_s"         => wall_time_s,
+        "seed_count"          => seed_count,
+        "N_eff"               => phase_neff(phi_gauged_vec, bw_mask),
+        "TV"                  => phase_tv(phi_gauged_vec, bw_mask),
+        "curvature"           => phase_curvature(phi_gauged_vec, sim, bw_mask),
+        "polynomial_R2"       => poly_r2,
+        "hess_indef_ratio"    => NaN,
+        "kappa_H_restricted"  => NaN,
+        "hess_probe_skipped_reason" => "identity_basis_Branch_B",
+    )
+end
+
+"""
+    run_branch_B(; dry_run=false) -> Vector{Dict{String,Any}}
+
+Execute the 21-run penalty sweep at the canonical SMF-28 point. Mirrors
+`run_branch_A`'s structure — resume support, incremental JLD2 save,
+mandatory save_standard_set, PyPlot + GC cleanup.
+
+`dry_run=true` writes a 1-row dry-run JLD2 and exits without optimization.
+"""
 function run_branch_B(; dry_run::Bool = false)
-    error("run_branch_B is implemented in Plan 02 Task 1 — invoke scripts/phase31_run.jl --branch=B only after Plan 02 is complete")
+    t_branch_start = time()
+
+    @info "Phase 31 Branch B — penalty sweep" canonical=P31_CANONICAL Nt=P31_NT threads=Threads.nthreads() dry_run=dry_run
+
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(;
+        fiber_preset = P31_CANONICAL.fiber_preset,
+        β_order      = 3,
+        L_fiber      = P31_CANONICAL.L_fiber,
+        P_cont       = P31_CANONICAL.P_cont,
+        Nt           = P31_NT,
+        time_window  = P31_TIME_WINDOW,
+    )
+    Nt = sim["Nt"]
+    bw_mask = pulse_bandwidth_mask(uω0)
+    omega = omega_vector(sim["ω0"], sim["Δt"], Nt)
+    bw_bins = sum(bw_mask)
+    @info @sprintf("  Nt=%d  bandwidth bins=%d (%.1f%% of grid)",
+                   Nt, bw_bins, 100 * bw_bins / Nt)
+
+    # DCT basis for :dct_l1 penalty. N_phi chosen to span the bandwidth with
+    # modest oversampling. Reuse build_basis_dispatch with kind=:dct.
+    N_phi_dct = min(128, bw_bins ÷ 2)
+    B_dct_cache = build_basis_dispatch(:dct, Nt, N_phi_dct, bw_mask, sim)
+
+    rows = Dict{String,Any}[]
+    save_path = dry_run ?
+        joinpath(P31_RESULTS_DIR, "sweep_B_penalty_dryrun.jld2") :
+        joinpath(P31_RESULTS_DIR, "sweep_B_penalty.jld2")
+    images_dir = joinpath(P31_RESULTS_DIR, "sweep_B", "images")
+    mkpath(images_dir)
+
+    # Resume: load existing rows if present. Keyed on (penalty_name, λ).
+    completed_keys = Set{Tuple{String,Float64}}()
+    if !dry_run && isfile(save_path)
+        try
+            prev = JLD2.load(save_path, "rows")
+            append!(rows, prev)
+            for r in prev
+                push!(completed_keys, (String(r["penalty_name"]), Float64(r["lambda"])))
+            end
+            @info @sprintf("  resume: loaded %d completed rows from %s",
+                           length(prev), save_path)
+        catch e
+            @warn "resume: failed to load existing rows, starting fresh" error=sprint(showerror, e)
+        end
+    end
+
+    run_counter = 0
+    total_expected = sum(length(ll) for (_, ll) in P31_PENALTY_PROGRAM)
+
+    for (penalty_name, λ_list) in P31_PENALTY_PROGRAM
+        for λ in λ_list
+            run_counter += 1
+            λf = Float64(λ)
+
+            if (String(penalty_name), λf) in completed_keys
+                @info @sprintf("[%d/%d] resume: skip penalty=:%s λ=%.3g (already in sweep_B_penalty.jld2)",
+                               run_counter, total_expected, penalty_name, λf)
+                continue
+            end
+
+            t_run_start = time()
+
+            if dry_run
+                @info @sprintf("[%d/%d] (dry-run) would optimize penalty=:%s λ=%.3g",
+                               run_counter, total_expected, penalty_name, λf)
+                # One dry-run row with zero phi (untouched unshaped pulse)
+                phi_zero = zeros(Float64, Nt)
+                J_linear, _ = cost_and_gradient(reshape(phi_zero, Nt, 1),
+                                                  uω0, fiber, sim, band_mask;
+                                                  log_cost = false)
+                J_dB = 10.0 * log10(max(J_linear, 1e-15))
+                push!(rows, package_phase31_row_B(phi_zero, J_dB, 0, true,
+                                                    J_linear, 0.0,
+                                                    penalty_name, λf,
+                                                    uω0, fiber, sim, band_mask,
+                                                    bw_mask, omega;
+                                                    config = (fiber_preset = String(P31_CANONICAL.fiber_preset),
+                                                              L_fiber = P31_CANONICAL.L_fiber,
+                                                              P_cont  = P31_CANONICAL.P_cont),
+                                                    wall_time_s = time() - t_run_start,
+                                                    seed_count = 1))
+                JLD2.jldsave(save_path; rows = rows, run_tag = P31_RUN_TAG)
+                break  # one dry-run row is enough to prove wiring
+            end
+
+            fiber_local = deepcopy(fiber)
+            fiber_local["zsave"] = nothing  # avoid solver-internal allocation
+
+            phi0 = zeros(Float64, Nt)
+
+            # Optim callback that calls our cost+gradient wrapper and returns
+            # (J_dB, grad_vec).
+            f_g! = Optim.only_fg!() do F, G, φ_vec
+                J_dB, grad_vec, _J_raman, _J_pen = phase31_b_cost_and_gradient(
+                    φ_vec, uω0, fiber_local, sim, band_mask, bw_mask;
+                    penalty_name = penalty_name, λ = λf,
+                    B_dct_cache = (penalty_name == :dct_l1 ? B_dct_cache : nothing))
+                if G !== nothing
+                    copyto!(G, grad_vec)
+                end
+                return J_dB
+            end
+
+            opt_res = Optim.optimize(f_g!, phi0,
+                                       LBFGS(),
+                                       Optim.Options(f_tol = 0.01,
+                                                       iterations = P31_MAX_ITER,
+                                                       show_trace = false))
+
+            phi_opt_vec = Optim.minimizer(opt_res)
+            J_final_dB  = Optim.minimum(opt_res)
+            iters       = Optim.iterations(opt_res)
+            conv        = Optim.converged(opt_res)
+
+            # Recover linear pieces from a final forward pass (cheaper than
+            # stashing them through the Optim callback closure).
+            _, _, J_raman_linear, J_penalty_linear = phase31_b_cost_and_gradient(
+                phi_opt_vec, uω0, fiber_local, sim, band_mask, bw_mask;
+                penalty_name = penalty_name, λ = λf,
+                B_dct_cache = (penalty_name == :dct_l1 ? B_dct_cache : nothing))
+
+            wall_time_s = time() - t_run_start
+
+            row = package_phase31_row_B(phi_opt_vec, J_final_dB, iters, conv,
+                                          J_raman_linear, J_penalty_linear,
+                                          penalty_name, λf,
+                                          uω0, fiber, sim, band_mask, bw_mask, omega;
+                                          config = (fiber_preset = String(P31_CANONICAL.fiber_preset),
+                                                    L_fiber = P31_CANONICAL.L_fiber,
+                                                    P_cont  = P31_CANONICAL.P_cont),
+                                          wall_time_s = wall_time_s,
+                                          seed_count = 1)
+            push!(rows, row)
+            JLD2.jldsave(save_path; rows = rows, run_tag = P31_RUN_TAG)
+            @info @sprintf("  -> J=%.3f dB  iters=%d  conv=%s  J_pen/J=%.2e  wall=%.1fs  saved %d rows",
+                           J_final_dB, iters, conv,
+                           (J_raman_linear > 0 ? J_penalty_linear / J_raman_linear : 0.0),
+                           wall_time_s, length(rows))
+
+            # Mandatory standard image set — emit one per optimum.
+            tag = @sprintf("p31B_%s_lam%.0e", String(penalty_name), λf)
+            phi_matrix = reshape(phi_opt_vec, Nt, 1)
+            try
+                save_standard_set(phi_matrix, uω0, fiber, sim,
+                                  band_mask, Δf, raman_threshold;
+                                  tag = tag,
+                                  fiber_name = String(P31_CANONICAL.fiber_preset),
+                                  L_m = P31_CANONICAL.L_fiber,
+                                  P_W = P31_CANONICAL.P_cont,
+                                  output_dir = images_dir)
+            catch e
+                @warn "standard image emission failed" tag=tag error=sprint(showerror, e)
+            end
+
+            # PyCall/matplotlib cleanup (same rationale as Branch A).
+            try
+                if isdefined(Main, :PyPlot)
+                    Base.invokelatest(Main.PyPlot.close, "all")
+                end
+            catch
+            end
+            GC.gc()
+        end
+    end
+
+    total_wall_time = time() - t_branch_start
+    @info @sprintf("Branch B complete: %d rows saved to %s (%.1fs)",
+                   length(rows), save_path, total_wall_time)
+
+    write_manifest(save_path, "B", P31_PENALTY_PROGRAM, length(rows),
+                    total_wall_time; dry_run = dry_run)
+
+    return rows
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
