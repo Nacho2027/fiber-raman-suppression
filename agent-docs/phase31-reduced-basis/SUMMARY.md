@@ -1,85 +1,76 @@
 ---
-phase: 31-reduced-basis-and-regularized-phase-parameterization
-plan: 01
+topic: phase31-reduced-basis
 status: complete
 completed: 2026-04-21
-tags:
-  - reduced-basis
-  - regularization
-  - raman
-  - phase31
+plans:
+  - Plan 01 — Branch A basis sweep (20 optima)
+  - Plan 02 — Branch B penalty sweep + transferability probe + analysis
 ---
 
-# Phase 31 Plan 01 — Summary
+# Phase 31 — SUMMARY
 
-Libraries + driver + unit tests + Branch A basis sweep. Plan 02 (Branch B penalty sweep + transferability probe + Pareto/L-curve/AIC analysis) can now execute.
+Compares reduced-basis phase parameterization (Branch A) against full-grid penalty regularization (Branch B) on the canonical SMF-28 L=2m P=0.2W Raman-suppression problem, with transferability + robustness probes and a Pareto / L-curve / AIC write-up.
+
+**Deliverable:** `FINDINGS.md` (this directory) — phase answer.
+**Top-10 AIC ranking:** `candidates.md`.
 
 ## What was built
 
-**New files**
-- `scripts/phase31_basis_lib.jl` — Legendre polynomial basis + chirp_ladder wrapper + `build_basis_dispatch(kind, Nt, N_phi, bw_mask, sim)` router (extends the existing DCT/cubic/linear/identity kinds in `sweep_simple_param.jl` without modifying that file)
-- `scripts/phase31_penalty_lib.jl` — `apply_tikhonov_phi!`, `apply_tod_curvature!`, `apply_tv_phi!`, `apply_dct_l1!` with in-place gradient accumulation BEFORE the `log_cost` rescale (per project memory `project_dB_linear_fix.md`)
-- `scripts/phase31_run.jl` — driver with `--branch=A|B`, deterministic env, resume-from-JLD2, mandatory `save_standard_set` per optimum, incremental JLD2 save, manifest output
-- `test/test_phase31_basis.jl` — 8 testsets (identity reproduction, polynomial κ, chirp_ladder gauge orthogonality, coefficient-space FD gradient check, Taylor-remainder-2 slope per penalty, continuation upsample, DCT orthonormal fast path, Phase 35 hess_indef_ratio reproduction)
-
-**Patches to `scripts/phase31_run.jl` (commit `38be4c5`)**
-- Resume support: load rows from existing `sweep_A_basis.jld2`, skip (kind, N_phi) combos already complete.
-- `PyPlot.close("all")` + `GC.gc()` between runs. Fixes a Julia 1.12 aarch64 PyCall finalizer segfault (`_PyObject_Free → unicode_dealloc → pydecref_`) that was triggered by accumulated matplotlib figure handles across many `save_standard_set` calls.
+| File | Purpose |
+|---|---|
+| `scripts/phase31_basis_lib.jl` | Legendre polynomial + chirp_ladder basis builders; `build_basis_dispatch(kind, Nt, N_phi, bw_mask, sim)` routes to existing `:cubic`/`:dct`/`:linear` kinds in `sweep_simple_param.jl` |
+| `scripts/phase31_penalty_lib.jl` | `apply_tikhonov_phi!`, `apply_tod_curvature!`, `apply_tv_phi!`, `apply_dct_l1!` — in-place gradient accumulators, applied BEFORE log_cost rescale |
+| `scripts/phase31_run.jl` | Driver with `--branch=A|B`, deterministic env, resume-from-JLD2, save_standard_set per optimum, PyPlot + GC cleanup, manifest output. Plan 01 added `run_branch_A`; Plan 02 added `run_branch_B` (bypasses `optimize_phase_lowres` — would allocate 2 GB identity at full Nt; uses `Optim.LBFGS` directly on φ_vec with a cost+gradient wrapper that applies the penalty before log_cost rescale) |
+| `scripts/phase31_transfer.jl` | Forward-only J (no adjoint, 2.66s/call at Nt=16384) + early-exit σ_3dB + HNLF + 3 perturbed-canonical evaluations. `Threads.@threads` across 41 source rows |
+| `scripts/phase31_analyze.jl` | 4-panel Pareto, per-penalty L-curves, AIC ranking CSV, `candidates.md` + `FINDINGS.md` from `sweep_A_basis.jld2` + `sweep_B_penalty.jld2` + `transfer_results.jld2` |
+| `test/test_phase31_basis.jl` | 8 testsets (identity reproduction, polynomial κ, chirp_ladder gauge orthogonality, coefficient-space FD gradient, Taylor-remainder-2 slope per penalty, continuation upsample, DCT orthonormal fast path, Phase 35 hess_indef_ratio reproduction). All pass. |
 
 ## What was executed
 
-**Branch A basis sweep** on the Mac (16-core Apple Silicon, 48 GB, Julia 1.12.4, `-t auto` → 12 threads). Canonical config: SMF28, L=2 m, P=0.2 W, Nt=16384.
+All runs on the Mac (16-core Apple Silicon, 48 GB, Julia 1.12.4, `-t auto` → 12 threads). Canonical SMF-28 L=2m P=0.2W Nt=16384 time_window=10→27 ps (auto-sized).
 
-- **20 rows saved** to `results/raman/phase31/sweep_A_basis.jld2` (the plan called for 21; DCT N_phi=256 was correctly skipped by the existing `N_phi > bw_bins` guard — it exceeds the pulse bandwidth support).
-- **20 `_phase_profile.png`** images in `results/raman/phase31/sweep_A/images/` (plus 60 other panels across the 4-image standard set per optimum).
-- **Manifest** at `results/raman/phase31/manifest_A_20260421_082700.json`.
-- **20 / 20 converged**.
-- Wall time: ~62 min combined (26 min first attempt truncated by segfault + 36 min resume).
+| Sweep | Rows | Wall-time | Artifact |
+|---|---|---|---|
+| Branch A (basis) | 20 / 21 (DCT N_phi=256 correctly skipped on bandwidth) | ~62 min (26 min first attempt truncated by PyCall segfault + 36 min resume) | `results/raman/phase31/sweep_A_basis.jld2` |
+| Branch B (penalty) | 21 / 21 | ~30 min | `results/raman/phase31/sweep_B_penalty.jld2` |
+| Transfer + σ_3dB probe | 41 source rows | 6.4 min (after forward-only + early-exit optimization) | `results/raman/phase31/transfer_results.jld2` |
+| Analyze | — | < 1 min | `pareto.png`, `L_curves/*.png`, `aic_ranking.csv`, `candidates.md`, `FINDINGS.md` |
 
-**Best J_final per basis kind:**
+## Headline result
 
-| Kind | Best N_phi | J (dB) |
-|---|---|---|
-| polynomial | 3 | −26.50 (plateau across N_phi ∈ {3,4,5,6,8}) |
-| chirp_ladder | 4 | −29.91 |
-| dct | 128 | −31.12 (flat at −26 dB for N_phi ≤ 64) |
-| **cubic** | **128** | **−67.60** ← best basis |
-| linear | 64 | −63.94 |
+**Branch A cubic basis at N_phi = 128 wins canonical depth (−67.6 dB).** Full-grid zero-init L-BFGS (Branch B λ = 0) plateaus at −57.75 dB regardless of penalty family — continuation through a reduced basis is a better optimizer path than full-grid zero init, not just a regularizer. See `FINDINGS.md` for the full narrative, caveats (σ_3dB basin width, HNLF gap, saddle-masking), and follow-on questions.
 
-## Physics observations
+## Key physics findings
 
-1. **Polynomial / DCT plateau near −26 dB for low N_phi.** The multi-start seeds (flat + ±quadratic chirp) all collapse to the same quadratic-compensation basin; higher-order polynomials don't escape it under these seeds. Real observation about the basin topology, not a bug.
-2. **Cubic bases dramatically outperform DCT at identical dimensionality.** At N_phi=128, cubic → −67.6 dB vs DCT's −31.1 dB (36 dB gap). Suggests the optimal phase has **localized structure** that cubic splines' local support captures but global DCT modes cannot.
-3. **Linear basis already strong at low N_phi.** Linear N_phi=16 → −60.3 dB; 16 piecewise-linear segments capture most of the suppression.
-4. **Hessian indefiniteness ratios are small in coefficient space.** All basis-restricted optima flagged `PSD_UNVERIFIED_AMBIENT` per Plan 02 design. Ambient-Hessian probe deferred out of Phase 31 (resolved Open Question 5 in 31-RESEARCH.md).
+1. **Cubic basis dominates.** Top 5 AIC rows are all cubic or linear Branch A; no penalty family reaches within 10 dB of cubic N_phi = 128.
+2. **Polynomial plateau at −26.5 dB.** All polynomial N_phi ∈ {3..8} converge to the same quadratic-chirp basin; multi-start seeds (flat + ±quadratic) don't escape. DCT N_phi ≤ 64 plateaus similarly.
+3. **Depth trades against basin width + transferability.** Cubic N_phi = 128 has σ_3dB = 0.07 rad (tightest) and HNLF gap = +21.5 dB. Cubic N_phi = 16 has σ_3dB = 0.31 rad and J = −54 dB.
+4. **Polynomial N_phi = 3 is the most fiber-transferable** (HNLF gap ≈ 0) — the analytical quadratic-chirp optimum is roughly fiber-agnostic. But shallow.
+5. **Regularization did NOT give a cheaper path to the cubic basin.** λ = 0 Branch B full-grid zero-init L-BFGS never reaches cubic depth. Saddle-trap behavior (consistent with Phase 35).
 
-## Must-haves — status
+## Deviations from original plan
 
-| # | Truth | Status |
-|---|---|---|
-| 1 | `phase31_basis_lib.jl` with polynomial + chirp_ladder | ✅ |
-| 2 | `phase31_penalty_lib.jl` with 4 penalty apply-* functions | ✅ |
-| 3 | Unit tests pass | ✅ (committed in `a829164`) |
-| 4 | Driver runs `--branch=A` and emits JLD2 rows | ✅ (20 rows; 21 target not met due to bw_bins skip — documented) |
-| 5 | Every row has 17 required keys incl. `phi_opt::Vector{Float64}` length Nt | ✅ |
-| 6 | ≥ 21 `_phase_profile.png` files | ⚠ 20 (one skip, see above) |
-| 7 | No shared-file mutations | ✅ `git diff --stat scripts/common.jl scripts/visualization.jl src/ Project.toml Manifest.toml` is empty |
-
-## Deviations
-
-1. **Executed on the Mac, not the burst VM.** Per user direction. CLAUDE.md §Running Simulations "always burst VM" rule was written for sessions on `claude-code-host`; on the Mac, local execution is correct. Memory updated (`feedback_burst_vm_only_from_remote.md`).
-2. **20 rows instead of 21.** DCT N_phi=256 skipped by the `N_phi > bw_bins` guard (physically meaningless — basis would have zero columns on the bandwidth-masked support). The plan's "exactly 21" count conflicts with the driver's sound skip logic. Documented in `31-01-BRANCH-A-NOTES.md`.
-3. **First run segfaulted at 5/21** (PyCall finalizer). Fixed in `38be4c5` with resume support and explicit PyPlot cleanup.
+1. **Executed on the Mac, not the burst VM.** Per user direction: the "always burst VM" rule in CLAUDE.md §Running Simulations was written for sessions on `claude-code-host`; on the Mac (primary editing machine) running Julia locally with `-t auto` is the default. Memory updated in `feedback_burst_vm_only_from_remote.md`.
+2. **20 Branch A rows instead of 21.** DCT N_phi = 256 skipped by the `N_phi > bw_bins` guard — physically meaningless (exceeds pulse bandwidth support).
+3. **Ambient-Hessian probe deferred.** All basis-restricted optima flagged `PSD_UNVERIFIED_AMBIENT`. Proper ambient probe requires Phase 33/34 Krylov-preconditioned Newton machinery.
+4. **σ_3dB probe performance fix.** Initial design was ~24 h worst-case (n_trials=20 × 9 σ × 41 rows × 12s/adjoint-solve). Patched to forward-only J (2.66s) + early-exit at 3 dB crossover → 6.4 min total.
+5. **PyCall finalizer segfault** on the Mac (Julia 1.12 aarch64) — observed during Branch A at 5/21 configs. Fixed by adding `PyPlot.close("all")` + `GC.gc()` between runs in both Branch A and Branch B. Never fired on Branch B after the fix.
 
 ## Commits
 
-- `a829164` — `feat(phase31-01): add basis + penalty libraries with unit tests`
-- `1873cc3` — `feat(phase31-01): add phase31_run.jl driver with Branch A basis sweep`
-- `c34ac61` — `fix(phase31-01): cap dense Hessian probe at N_phi=16 to keep per-run wall time bounded`
-- `38be4c5` — `fix(phase31-01): resumable Branch A sweep + matplotlib GC to prevent PyCall segfault`
+- `a829164` `feat(phase31-01): add basis + penalty libraries with unit tests`
+- `1873cc3` `feat(phase31-01): add phase31_run.jl driver with Branch A basis sweep`
+- `c34ac61` `fix(phase31-01): cap dense Hessian probe at N_phi=16 to keep per-run wall time bounded`
+- `38be4c5` `fix(phase31-01): resumable Branch A sweep + matplotlib GC to prevent PyCall segfault`
+- `efd5cbb` `docs(phase31): create agent-docs topic with Plan 01 SUMMARY + Plan 02 PLAN`
+- `ea655ba` `feat(phase31-02): implement run_branch_B penalty sweep`
+- `d48bfe0` `feat(phase31-02): add phase31_transfer.jl and phase31_analyze.jl`
+- `e23eede` `perf(phase31-02): forward-only J eval + early-exit sigma_3dB`
 
-## Ready for Plan 02
+## Seeds for next phase
 
-- `results/raman/phase31/sweep_A_basis.jld2` — 20 rows of Branch A optima, schema as specified in Plan 01 truth 5.
-- `scripts/phase31_basis_lib.jl`, `scripts/phase31_penalty_lib.jl` — both importable by Plan 02's `run_branch_B` and `phase31_analyze.jl`.
-- `scripts/phase31_run.jl` — Plan 02 Task 1 extends `run_branch_B` (currently a stub that errors out).
+See `FINDINGS.md §Follow-on questions`:
+
+1. Close the 10 dB gap between full-grid L-BFGS and cubic N_phi=128 via (a) multi-start from perturbed zero, (b) anchored continuation (DCT → cubic → identity), (c) Phase 33/34 second-order with negative-curvature handling.
+2. Test whether the HNLF gap is a property of the cubic basis or the canonical optimum.
+3. Ambient-Hessian probe on cubic N_phi = 128 — tractable once Phase 33/34 Krylov-preconditioned HVP is built.
