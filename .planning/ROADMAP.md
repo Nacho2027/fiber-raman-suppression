@@ -416,10 +416,10 @@ Plans:
 **Goal:** Promote the continuation seed into a practical methodology phase with explicit homotopy ladders, path-failure detectors, trust checks, and benchmark comparisons against cold-start optimization in hard regimes.
 **Requirements**: Derived from Phase 27 continuation recommendation
 **Depends on:** Phase 28
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 30-01-PLAN.md — Define continuation variables, schedule rules, failure detectors, and benchmark set for hard-regime path-following
+- [x] 30-01-PLAN.md — Define continuation variables, schedule rules, failure detectors, and benchmark set for hard-regime path-following
 
 ### Phase 31: Reduced-basis and regularized phase parameterization
 
@@ -437,10 +437,10 @@ Plans:
 **Goal:** Turn the acceleration seed into a concrete study phase that selects the first worthwhile sequence families, the right trust metrics, and a stop rule for when acceleration complexity is not justified.
 **Requirements**: Derived from Phase 27 NMDS acceleration recommendation
 **Depends on:** Phase 29, Phase 30
-**Plans:** 0/2 plans complete
+**Plans:** 1/2 plans complete
 
 Plans:
-- [ ] 32-01-PLAN.md — Acceleration library (scripts/acceleration.jl) + additive attach_acceleration_metadata! trust-schema extension + 26-test unit/regression suite; schema stays "28.0"
+- [x] 32-01-PLAN.md — Acceleration library (scripts/acceleration.jl) + additive attach_acceleration_metadata! trust-schema extension + 62-assertion unit/regression suite; schema stays "28.0" (completed 2026-04-21)
 - [ ] 32-02-PLAN.md — Three driver scripts (Expt 0 Richardson audit, Expt 1 polynomial warm-start on Nt-capped SMF-28 L-ladder, Expt 2 offline MPE/RRE) + pre-registered 32-RESULTS.md scaffold + human-verify checkpoint on standard images
 
 ### Phase 33: Globalized second-order optimization for Raman suppression
@@ -457,13 +457,16 @@ Plans:
 
 ### Phase 34: Truncated-Newton Krylov preconditioning path
 
-**Goal:** Convert the matrix-free second-order seed into an execution-ready solver phase with Krylov inner-solve design, preconditioning candidates, HVP reuse contract, and comparison criteria against L-BFGS and safeguarded second-order baselines.
+**Goal:** Deliver a PreconditionedCGSolver <: DirectionSolver subtype of Phase 33'''s frozen trust-region framework with systematic preconditioning experiments (physics diagonal, dispersion kernel, DCT reduced basis), a Δ₀-sweep diagnostic to disambiguate Phase 33 open question 5, and an honest head-to-head comparison against the SteihaugSolver baseline on the 3-config × 3-start-type benchmark matrix.
 **Requirements**: Derived from Phase 27 Krylov/Lanczos extension recommendation
 **Depends on:** Phase 28, Phase 33
-**Plans:** 0/1 plans complete
+**Plans:** 4 plans
 
 Plans:
-- [ ] 34-01-PLAN.md — Define truncated-Newton architecture, Krylov/preconditioning experiments, and benchmark/verification contract
+- [ ] 34-01-PLAN.md — Δ₀-sweep diagnostic (bench-01/cold, SteihaugSolver, Δ₀ ∈ {0.5, 0.1, 0.01, 0.001}) — gates Plans 02-04
+- [ ] 34-02-PLAN.md — PreconditionedCGSolver + diagonal + dispersion preconditioners + unit tests (analytic quadratics only)
+- [ ] 34-03-PLAN.md — DCT reduced-basis preconditioner + Raman-oracle integration tests + Phase 34 benchmark driver (no execution)
+- [ ] 34-04-PLAN.md — Execute benchmark sweep on burst VM (Q-phase34-bench) + write 34-REPORT.md with honest failure audit + Phase 35/36 hand-off
 
 ### Phase 35: Saddle escape and genuine minima reachability study — determine whether reachable Raman optima include true minima or only Hessian-indefinite saddles, and identify optimizer paths that can reliably reach minima-quality solutions if they exist
 
