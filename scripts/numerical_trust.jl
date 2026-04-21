@@ -207,6 +207,32 @@ function write_numerical_trust_report(path::AbstractString, report::Dict{String,
                 end
             end
         end
+        # Phase 32 additive: if the report carries acceleration metadata, emit
+        # a `## Acceleration` section. Ordering: Continuation before Acceleration
+        # so log diffs stay stable. Pre-Phase-32 reports render unchanged.
+        if haskey(report, "acceleration")
+            accel = report["acceleration"]
+            println(io)
+            println(io, "## Acceleration")
+            println(io, @sprintf("- Accelerator: `%s`",
+                                 get(accel, "accelerator", "unknown")))
+            if haskey(accel, "verdict")
+                println(io, @sprintf("- Verdict: **%s**", accel["verdict"]))
+            end
+            for key in ("prediction_norm", "prediction_vs_prev_norm",
+                        "coefficient_max", "corrector_iters",
+                        "corrector_iters_saved", "j_opt_db_delta",
+                        "trust_gap_vs_naive")
+                if haskey(accel, key)
+                    println(io, @sprintf("- %s: `%s`", key, string(accel[key])))
+                end
+            end
+            if haskey(accel, "safeguard_passed")
+                println(io, @sprintf("- Safeguard: `%s` (%s)",
+                    accel["safeguard_passed"] ? "PASS" : "FAIL",
+                    get(accel, "safeguard_reason", "—")))
+            end
+        end
     end
     return path
 end
@@ -283,6 +309,76 @@ function attach_continuation_metadata!(report::Dict{String,Any},
 
     existing = get(report, "continuation", Dict{String,Any}())
     report["continuation"] = merge(existing, meta)
+    return report
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 32 additive extension — acceleration metadata
+# ─────────────────────────────────────────────────────────────────────────────
+# Strictly ADDITIVE: the Phase 28 schema version string remains "28.0". A
+# pre-Phase-32 consumer reading one of these reports sees the same existing
+# fields; the new `acceleration` sub-dict is optional and always under a
+# separate top-level key. Mirrors Phase 30's attach_continuation_metadata!
+# pattern exactly. See scripts/acceleration.jl for the Phase 32 caller.
+
+const _ACCELERATION_ACCELERATORS = Set([
+    "trivial", "polynomial_d1", "polynomial_d2", "polynomial_d3",
+    "mpe", "rre", "aitken_diagnostic", "richardson",
+])
+
+"""
+    attach_acceleration_metadata!(report::Dict{String,Any}, meta::Dict{String,Any})
+        -> Dict{String,Any}
+
+Additive Phase 32 extension — schema version remains 28.0. Merges
+acceleration metadata under `report["acceleration"]` without modifying any
+existing field. Multiple calls accumulate via `merge()` (later values win
+for overlapping keys).
+
+# Required keys in `meta`
+- `accelerator::String` ∈ one of `{"trivial", "polynomial_d1", "polynomial_d2",
+  "polynomial_d3", "mpe", "rre", "aitken_diagnostic", "richardson"}`
+
+# Optional keys (from RESEARCH §4 — acceleration-specific metrics)
+- `prediction_norm::Float64`
+- `prediction_vs_prev_norm::Float64`
+- `coefficient_max::Float64`          # max|γ| or max|c_j|; safeguard sentry
+- `corrector_iters::Int`
+- `corrector_iters_saved::Int`
+- `j_opt_db_delta::Float64`
+- `trust_gap_vs_naive::Int`
+- `safeguard_passed::Bool`
+- `safeguard_reason::String`
+- `verdict::String` ∈ `{"WORTH_IT", "NOT_WORTH_IT", "INCONCLUSIVE"}`
+
+# Raises
+`ArgumentError` if `accelerator` is absent, not a String, or not a member of
+the accepted enum.
+
+# Example
+```julia
+attach_acceleration_metadata!(report, Dict{String,Any}(
+    "accelerator"           => "polynomial_d2",
+    "prediction_norm"       => 0.23,
+    "coefficient_max"       => 1.4,
+    "corrector_iters_saved" => 4,
+    "j_opt_db_delta"        => 0.05,
+    "verdict"               => "WORTH_IT",
+))
+```
+"""
+function attach_acceleration_metadata!(report::Dict{String,Any},
+                                       meta::Dict{String,Any})
+    haskey(meta, "accelerator") || throw(ArgumentError(
+        "attach_acceleration_metadata!: missing required key `accelerator`"))
+    accel = meta["accelerator"]
+    accel isa AbstractString || throw(ArgumentError(
+        "attach_acceleration_metadata!: `accelerator` must be a String, got $(typeof(accel))"))
+    String(accel) in _ACCELERATION_ACCELERATORS || throw(ArgumentError(
+        "attach_acceleration_metadata!: invalid accelerator `$(accel)`; expected one of $(collect(_ACCELERATION_ACCELERATORS))"))
+
+    existing = get(report, "acceleration", Dict{String,Any}())
+    report["acceleration"] = merge(existing, meta)
     return report
 end
 
