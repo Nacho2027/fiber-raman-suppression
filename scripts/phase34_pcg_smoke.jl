@@ -120,6 +120,7 @@ function run_smoke()
     )
 
     # 2. PCG variants — M wired directly.
+    # Each iteration calls: solve_subproblem(PreconditionedCGSolver(...), g, H_op, Δ; M=M)
     for (sym, M) in sort(collect(M_builders), by=x->string(x[1]))
         @info "running PCG" preconditioner=sym M_is_nothing=(M===nothing)
         pcg = PreconditionedCGSolver(preconditioner=sym, max_iter=50)
