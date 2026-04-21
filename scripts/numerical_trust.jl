@@ -187,4 +187,79 @@ function write_numerical_trust_report(path::AbstractString, report::Dict{String,
     return path
 end
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 30 additive extension — continuation metadata
+# ─────────────────────────────────────────────────────────────────────────────
+# Strictly ADDITIVE: the Phase 28 schema version string remains "28.0". A
+# pre-Phase-30 consumer reading one of these reports sees the same existing
+# fields; the new `continuation` sub-dict is optional and always under a
+# separate top-level key. See scripts/continuation.jl for the caller.
+
+const _CONTINUATION_LADDER_VARS = Set(["L", "P", "Nphi", "lambda"])
+const _CONTINUATION_PATH_STATUS = Set(["ok", "degraded", "broken"])
+
+"""
+    attach_continuation_metadata!(report::Dict{String,Any}, meta::Dict{String,Any})
+        -> Dict{String,Any}
+
+Additive Phase 30 extension — schema version remains 28.0. Merges continuation
+metadata under `report["continuation"]` without modifying any existing field.
+Multiple calls accumulate via `merge()`.
+
+# Required keys in `meta`
+- `continuation_id::String`
+- `ladder_var::String`   ∈ `{"L", "P", "Nphi", "lambda"}`
+- `step_index::Int`
+- `path_status::String`  ∈ `{"ok", "degraded", "broken"}`
+
+# Optional keys
+- `ladder_value::Float64`
+- `predictor::String`    (e.g., `"trivial"`, `"secant"`, `"scaled"`)
+- `corrector::String`    (e.g., `"lbfgs_warm_restart"`)
+- `is_cold_start_baseline::Bool`
+- `detectors::Dict`      with optional float keys
+                         `cost_discontinuity_dB`, `corrector_iters`,
+                         `phase_jump_ratio`, `edge_fraction_delta`
+
+# Raises
+`ArgumentError` if `ladder_var` or `path_status` is not in the known enum sets,
+or if any of the required keys is absent.
+
+# Example
+```julia
+attach_continuation_metadata!(report, Dict{String,Any}(
+    "continuation_id" => "p30_demo_smf28_L",
+    "ladder_var"      => "L",
+    "step_index"      => 2,
+    "ladder_value"    => 10.0,
+    "predictor"       => "trivial",
+    "corrector"       => "lbfgs_warm_restart",
+    "path_status"     => "ok",
+    "is_cold_start_baseline" => false,
+))
+```
+"""
+function attach_continuation_metadata!(report::Dict{String,Any},
+                                       meta::Dict{String,Any})
+    # Required keys
+    for k in ("continuation_id", "ladder_var", "step_index", "path_status")
+        haskey(meta, k) || throw(ArgumentError(
+            "attach_continuation_metadata!: missing required key `$k`"))
+    end
+    ladder_var = meta["ladder_var"]
+    path_status = meta["path_status"]
+    ladder_var isa AbstractString || throw(ArgumentError(
+        "attach_continuation_metadata!: `ladder_var` must be a String, got $(typeof(ladder_var))"))
+    path_status isa AbstractString || throw(ArgumentError(
+        "attach_continuation_metadata!: `path_status` must be a String, got $(typeof(path_status))"))
+    String(ladder_var) in _CONTINUATION_LADDER_VARS || throw(ArgumentError(
+        "attach_continuation_metadata!: invalid ladder_var `$(ladder_var)`; expected one of $(collect(_CONTINUATION_LADDER_VARS))"))
+    String(path_status) in _CONTINUATION_PATH_STATUS || throw(ArgumentError(
+        "attach_continuation_metadata!: invalid path_status `$(path_status)`; expected one of $(collect(_CONTINUATION_PATH_STATUS))"))
+
+    existing = get(report, "continuation", Dict{String,Any}())
+    report["continuation"] = merge(existing, meta)
+    return report
+end
+
 end  # include guard
