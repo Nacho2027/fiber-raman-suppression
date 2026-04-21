@@ -225,15 +225,19 @@ end
 
 """
     _spectral_signal_xlim(P_spec_fftshifted, lambda_nm_fftshifted;
-                           threshold_dB=-40.0, padding_nm=80.0)
+                           threshold_dB=-30.0, padding_nm=20.0)
 
 Compute wavelength xlim containing all spectral content above threshold_dB
 relative to peak. Returns (lambda_lo, lambda_hi) in nm.
 Both inputs must be co-indexed in fftshifted order.
 Negative-frequency ghost wavelengths (λ < 0 from FFT artifacts) are filtered out.
+
+Defaults tightened 2026-04-21: threshold −30 dB (was −40) + 20 nm padding (was 80)
+so narrow pulses (≲ 20 nm FWHM) are not plotted against a ±130 nm whitespace
+envelope. Callers can still pass the old values explicitly.
 """
 function _spectral_signal_xlim(P_spec_fftshifted, lambda_nm_fftshifted;
-                                threshold_dB=-40.0, padding_nm=80.0)
+                                threshold_dB=-30.0, padding_nm=20.0)
     P_peak = maximum(P_spec_fftshifted)
     dB = 10 .* log10.(P_spec_fftshifted ./ P_peak .+ 1e-30)
     above = findall(dB .> threshold_dB)
