@@ -48,6 +48,7 @@ include(joinpath(@__DIR__, "determinism.jl"))
 include(joinpath(@__DIR__, "longfiber_setup.jl"))
 include(joinpath(@__DIR__, "numerical_trust.jl"))
 include(joinpath(@__DIR__, "acceleration.jl"))
+include(joinpath(@__DIR__, "raman_optimization.jl"))
 
 ensure_deterministic_environment()
 
@@ -114,7 +115,6 @@ the cache probe turns up nothing. Deliberately small (20 iters) — we only
 need *some* reasonable phi to audit the grid-convergence of J.
 """
 function _fallback_reference_phi()
-    include(joinpath(@__DIR__, "raman_optimization.jl"))
     Nt = 2^13
     uω0, fiber, sim, band_mask, _, _ = setup_longfiber_problem(
         fiber_preset = :SMF28,
