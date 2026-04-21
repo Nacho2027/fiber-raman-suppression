@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
 status: Ready to execute
-last_updated: "2026-04-20T02:25:21.794Z"
-last_activity: 2026-04-20
+last_updated: "2026-04-21T00:57:09.448Z"
+last_activity: 2026-04-21
 progress:
-  total_phases: 25
-  completed_phases: 12
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  total_phases: 41
+  completed_phases: 23
+  total_plans: 44
+  completed_plans: 39
+  percent: 89
 ---
 
 # Project State
@@ -194,6 +194,7 @@ Both fixes require re-running the sweep to get valid results.
 - Phase 33 added (2026-04-20): Globalized second-order optimization for Raman suppression — scoped as the safeguarded-curvature phase. Deliverables locked: globalization family, benchmark set, honest failure accounting, and execution waves.
 - Phase 34 added (2026-04-20): Truncated-Newton Krylov preconditioning path — scoped as the matrix-free second-order extension phase. Deliverables locked: truncated-Newton architecture, Krylov/preconditioning experiments, and comparison contract versus L-BFGS/globalized second-order.
 - Phase 35 added (2026-04-20): Saddle escape and genuine minima reachability study — determine whether genuine minima exist in reachable Raman territory. Verdict: saddles everywhere in competitive dB; recommendation: reduced-basis continuation plus a globalized second-order method with explicit negative-curvature handling.
+- Phase 35.1 inserted after Phase 35 (2026-04-20): Optimize CLAUDE.md under 40k chars preserving critical operational content (URGENT) — current size 43.1k exceeds 40k harness-performance threshold; must trim verbose sections and redundancy while preserving GSD workflow enforcement, Codex constraints, multi-machine protocol, parallel session rules P1–P7, compute discipline rules 1–3, standard-image mandate, and key conventions.
 
 ### Resolved Issues
 
@@ -220,7 +221,7 @@ Both fixes require re-running the sweep to get valid results.
 ## Session Continuity
 
 Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-20 - Completed quick task 260420-iwc: force-add Phase 22 sharpness research to main, rsync remaining .planning/ to VM
+Last activity: 2026-04-21
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs
