@@ -130,13 +130,20 @@ include(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"))
     end
 
     @testset "preconditioner is zero-HVP (source check)" begin
-        # Verify the preconditioner source file does not reference HVP machinery
+        # Verify the preconditioner source file does not reference fd_hvp
+        # (the finite-difference HVP primitive from phase13_hvp.jl).
+        # Note: Plan 03 intentionally added build_dct_precond (which takes a
+        # generic H_op callable) and _build_dct_basis to this file.
+        # The zero-HVP claim applies to build_diagonal_precond and
+        # build_dispersion_precond — those must not call fd_hvp.
         src = read(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"), String)
         @test !occursin("fd_hvp", src)
-        @test !occursin("H_op", src)
-        # Also check DCT is not in this file (deferred to Plan 03)
-        @test !occursin("build_dct_precond", src)
-        @test !occursin("build_dct_basis", src)
+        # Plan 03 additions (expected to be present after Plan 03):
+        @test occursin("build_dct_precond", src)
+        @test occursin("_build_dct_basis", src)
+        # Cross-tier include must NOT appear (amplitude_optimization.jl is heavy driver)
+        @test !occursin("include(\"amplitude_optimization", src)
+        @test !occursin("include(joinpath", src) || !occursin("amplitude_optimization", src)
     end
 
 end  # testset

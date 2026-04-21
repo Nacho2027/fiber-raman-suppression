@@ -1,8 +1,18 @@
 # scripts/trust_region_preconditioner.jl — Phase 34 preconditioner factories.
 #
-# Zero-HVP preconditioners for PreconditionedCGSolver. DCT/reduced-basis variant
-# is deferred to Plan 03 because it requires K HVPs to build; this file only
-# holds the physics-motivated preconditioners that are free at setup time.
+# Preconditioner factories for PreconditionedCGSolver.
+#
+# Zero-HVP:
+#   build_diagonal_precond(uω0)     — physics power-profile diagonal
+#   build_dispersion_precond(sim)   — dispersion-kernel diagonal
+#
+# K-HVP (reduced-basis, Plan 03):
+#   build_dct_precond(H_op, Nt, K)  — DCT-II reduced Hessian + Tikhonov shift
+#
+# Private helper:
+#   _build_dct_basis(Nt, K)         — DCT-II basis, inlined copy of
+#                                     amplitude_optimization.jl::build_dct_basis
+#                                     (see header comment at top for rationale)
 #
 # READ-ONLY consumer of LinearAlgebra and Statistics. Does NOT include
 # common.jl, ODE solvers, or trust_region_core.jl.
@@ -13,6 +23,26 @@
 
 using LinearAlgebra
 using Statistics
+
+# Private DCT-II basis helper. MATHEMATICALLY identical to
+# `scripts/amplitude_optimization.jl::build_dct_basis` (Phase 31, lines 180-192).
+# Inlined here to keep `trust_region_preconditioner.jl` at the utility tier (no
+# dependency on the heavy amplitude-optimization driver, which activates Pkg at
+# module level). If `build_dct_basis` is ever extracted to a shared utility
+# module, replace this private helper with an `include` + call.
+function _build_dct_basis(Nt::Int, K::Int; bandwidth_mask = nothing)
+    B = zeros(Nt, K)
+    @inbounds for k in 0:K-1
+        for i in 1:Nt
+            B[i, k+1] = cos(k * π * (i - 0.5) / Nt)
+        end
+        B[:, k+1] ./= norm(B[:, k+1])
+    end
+    if bandwidth_mask !== nothing
+        B .*= bandwidth_mask
+    end
+    return B
+end
 
 if !(@isdefined _TRUST_REGION_PRECONDITIONER_JL_LOADED)
 const _TRUST_REGION_PRECONDITIONER_JL_LOADED = true
@@ -156,6 +186,74 @@ function build_dispersion_precond(sim::Dict;
             out[i] = v[i] / d[i]
         end
         return out
+    end
+end
+
+"""
+    build_dct_precond(H_op, Nt, K; σ_shift=:auto, bandwidth_mask=nothing) -> Function
+
+Reduced-basis DCT preconditioner (RESEARCH.md §Preconditioner 2).
+
+Builds the K×K reduced Hessian `H_r = B' * H * B` by K calls to `H_op`, where
+`B ∈ ℝ^{Nt×K}` is the DCT-II basis from `scripts/amplitude_optimization.jl`.
+Adds Tikhonov shift σ to make `H_r + σI` SPD (H itself is typically indefinite
+— see Phase 22 spectra). When `σ_shift == :auto`, uses
+    σ = max(0, -eigmin(H_r)) + eps() * tr(H_r) / K.
+
+Returns a closure `M_inv::Function` such that
+    M_inv(v) = B * ((H_r + σI) \\ (B' * v)) + (v - B * (B' * v))
+i.e. the reduced solve on the DCT subspace + identity on the complement.
+
+# Cost
+- Build: K HVPs. At Nt=2^13 on the burst VM (≈5s/HVP), K=64 is ~320s.
+- Apply: O(K·Nt) mat-vec + K×K triangular solve via pre-factored Cholesky.
+
+# Arguments
+- `H_op`          : callable `v::Vector -> H*v::Vector` (1 HVP each call)
+- `Nt`, `K`       : grid size and reduced-basis size (K ≤ Nt)
+- `σ_shift`       : :auto for eigmin-based shift, or a positive Real
+- `bandwidth_mask`: optional Nt-length mask passed to `_build_dct_basis`
+
+# Returns
+A `Function` `M_inv(v)` with length assertion `length(v) == Nt`.
+"""
+function build_dct_precond(H_op::Function, Nt::Int, K::Int;
+                            σ_shift = :auto,
+                            bandwidth_mask = nothing)
+    @assert K >= 1 "build_dct_precond: K must be ≥ 1"
+    @assert K <= Nt "build_dct_precond: K=$K must be ≤ Nt=$Nt"
+
+    B = _build_dct_basis(Nt, K; bandwidth_mask = bandwidth_mask)
+
+    # Reduced Hessian: H_r[:,i] = B' * (H * B[:,i])
+    H_r = zeros(Float64, K, K)
+    for i in 1:K
+        bi = B[:, i]
+        Hbi = H_op(bi)
+        @assert length(Hbi) == Nt "build_dct_precond: H_op returned wrong-size output ($(length(Hbi)) != $Nt)"
+        H_r[:, i] = B' * Hbi
+    end
+    H_r = 0.5 .* (H_r .+ H_r')   # symmetrize against FD-HVP noise
+
+    σ = if σ_shift === :auto
+        lam_min = eigmin(Symmetric(H_r))
+        max(0.0, -lam_min) + eps(Float64) * max(1.0, abs(tr(H_r))) / K
+    elseif σ_shift isa Real
+        Float64(σ_shift)
+    else
+        error("build_dct_precond: σ_shift must be :auto or a Real; got $(σ_shift)")
+    end
+
+    H_shifted = Symmetric(H_r + σ * I)
+    chol = cholesky(H_shifted)    # SPD by construction after shift
+
+    return v -> begin
+        @assert length(v) == Nt "build_dct_precond closure: expected length $Nt got $(length(v))"
+        Btv = B' * v
+        y = chol \ Btv           # K-dim reduced solve
+        B_times_y = B * y
+        complement = v .- B * Btv  # (I - BB') v : identity on complement
+        return B_times_y .+ complement
     end
 end
 
