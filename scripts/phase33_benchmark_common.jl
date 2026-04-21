@@ -45,3 +45,12 @@ if !@isdefined(_PHASE33_BENCHMARK_COMMON_JL_LOADED)
     # :warm      -> φ0 = vec(load(warm_jld2)["phi_opt"])
     # :perturbed -> warm + 0.05 .* randn(Xoshiro(42 + config_index), Nt)
 end
+
+# ── Phase 34 additions — append only, never edit lines above ─────────────────
+# Values for 34-01 Δ₀-sweep (open question 5 from 33-REPORT.md).
+# Δ₀-sweep runs bench-01-smf28-canonical/cold only with SteihaugSolver.
+if !@isdefined(_PHASE34_BENCHMARK_COMMON_JL_LOADED)
+    const _PHASE34_BENCHMARK_COMMON_JL_LOADED = true
+
+    const DELTA0_SWEEP_VALUES = [0.5, 0.1, 0.01, 0.001]
+end
