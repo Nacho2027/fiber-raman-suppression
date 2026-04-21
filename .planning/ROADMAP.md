@@ -445,12 +445,14 @@ Plans:
 ### Phase 33: Globalized second-order optimization for Raman suppression
 
 **Goal:** Promote the globalization seed into a real optimizer phase with safeguarded step-acceptance policy, benchmark set, honest failure accounting, and a clear boundary between direction computation and globalization mechanics.
-**Requirements**: Derived from Phase 27 globalization recommendation
+**Requirements**: REQ-33-A, REQ-33-B, REQ-33-C, REQ-33-D, REQ-33-E, REQ-33-F, REQ-33-G (see REQUIREMENTS.md)
 **Depends on:** Phase 28, Phase 30, Phase 31
-**Plans:** 0/1 plans complete
+**Plans:** 0/3 plans complete
 
 Plans:
-- [ ] 33-01-PLAN.md — Select globalization strategy family, benchmark configs, trust metrics, and execution waves for safeguarded second-order optimization
+- [ ] 33-01-PLAN.md — Trust-region outer loop + Steihaug inner solver + DirectionSolver trait + telemetry + unit/integration tests
+- [ ] 33-02-PLAN.md — Benchmark driver (4 configs × 3 starts = 12 runs) executed on burst VM via burst-run-heavy P-phase33-tr with mandatory save_standard_set per run
+- [ ] 33-03-PLAN.md — Cross-run synthesis (rho/exit-code/rejection figures + SYNTHESIS.md) + final 33-REPORT.md with Phase 34 handoff contract
 
 ### Phase 34: Truncated-Newton Krylov preconditioning path
 
