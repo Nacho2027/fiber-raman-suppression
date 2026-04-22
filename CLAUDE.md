@@ -46,6 +46,11 @@ For runs that produced a `phi_opt` before this rule was in place, run `scripts/r
 
 Drivers that skip this step are incomplete. Do not mark work done without the standard images on disk.
 
+PNG existence is not sufficient verification. Agents must visually inspect the generated figures for obvious plotting failures before calling simulation or optimization work complete.
+
+- **Single run / primary result:** inspect the full standard image set.
+- **Sweep / multistart / large batch:** inspect representative best, typical, worst, and any suspicious or outlier cases, then record what was checked in the agent-facing summary.
+
 ## Technology Stack
 
 Julia ≥ 1.9.3 (Manifest pinned to 1.12.4) + Python/Matplotlib via PyCall for plotting. Headless plotting via `ENV["MPLBACKEND"] = "Agg"`. No secrets, no `.env`. Build via `Pkg.instantiate()`.

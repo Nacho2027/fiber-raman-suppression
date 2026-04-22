@@ -53,6 +53,8 @@ git push origin main
   - `{tag}_phase_diagnostic.png`
   - `{tag}_evolution_unshaped.png`
 - Work that produces `phi_opt` but does not leave the standard images on disk is incomplete.
+- Do not treat PNG existence as sufficient verification. For a single run, visually inspect the full standard image set before calling the work complete.
+- For sweeps, multistart batches, or large regenerations, inspect representative best / typical / worst / outlier cases and note what was checked in the agent summary.
 
 ## Results Rules
 
