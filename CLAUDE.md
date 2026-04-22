@@ -1,6 +1,7 @@
 # Working Style
 
 - Separate agent work docs from human docs. Put internal investigation and implementation notes in `agent-docs/<topic>/CONTEXT.md`, `agent-docs/<topic>/PLAN.md`, and `agent-docs/<topic>/SUMMARY.md`. Put human-facing docs and polished reports in `docs/`. `docs/planning-history/` is the historical archive of the old workflow; do not add new active work there.
+- Read `agent-docs/current-agent-context/` before starting substantial technical work that touches numerics, methodology, or compute operations. It is the curated successor to the useful parts of the old `.planning/` state.
 - Research heavily before writing code: grep the codebase, read referenced files, use WebFetch on official docs, and WebSearch for known pitfalls. Write findings down before coding.
 - Test heavily. Add or update tests for every non-trivial change. Never mark work done without running tests.
 
