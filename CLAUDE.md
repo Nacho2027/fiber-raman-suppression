@@ -200,8 +200,6 @@ The live working-tree model is:
 
 ```bash
 git status
-git fetch origin
-git pull --ff-only origin main
 ```
 
 Also verify Syncthing is healthy before trusting the shared workspace:
@@ -209,14 +207,23 @@ Also verify Syncthing is healthy before trusting the shared workspace:
 - Mac: `syncthing cli show connections`
 - `claude-code-host`: `systemctl --user status syncthing --no-pager`
 
-If Syncthing is down, fix that first. If `git pull --ff-only` fails, surface it before doing more work.
+If Syncthing is down, fix that first. Do not reflexively `git pull` just because a session started. Syncthing handles Mac ↔ host file sync. Use git reconciliation only when you actually need updated remote history before a push or after another session lands commits.
 
 **At the END of any session (or any logical stopping point):**
 
 ```bash
 git status
+git fetch origin
 git add <specific files>
 git commit -m "<type>(<scope>): <description>"
+git push origin main
+```
+
+If `git push origin main` is rejected:
+
+```bash
+git fetch origin
+git rebase origin/main
 git push origin main
 ```
 
@@ -243,7 +250,7 @@ See `docs/planning-history/notes/compute-infrastructure-decision.md` for the ful
 ### Common pitfalls
 
 - **Assuming Syncthing solves simultaneous edits**: it does not. If two machines edit the same file before syncing, Syncthing creates `.sync-conflict-*` files. Avoid overlapping edits to the same path.
-- **Forgetting to pull at session start**: Syncthing moves files, not git history. Always fetch + pull first.
+- **Assuming Syncthing updates git history**: it does not. Syncthing moves files, not commits. Fetch or rebase when you actually need to reconcile with `origin/main`.
 - **Forgetting to push at session end**: the other machine may have the file contents via Syncthing, but `origin/main` still needs the commit history.
 - **Editing the same files from multiple machines or sessions**: keep concurrent sessions on non-overlapping files whenever possible. If a push is rejected, rebase on `origin/main` immediately before doing more work.
 - **Mixing agent notes with human docs**: keep internal work products in `agent-docs/` and polished outputs in `docs/`.
@@ -273,9 +280,9 @@ Every session stays on `main`.
 Session hygiene for direct-to-`main` work:
 
 ```bash
-git fetch origin
-git pull --ff-only origin main
+git status
 # ... do work ...
+git fetch origin
 git add <files>
 git commit -m "..."
 git push origin main
@@ -333,14 +340,20 @@ The `claude-code-host` VM (e2-standard-4, 16 GB RAM) hosts about 3 concurrent Cl
 
 Before a 4th session on `claude-code-host`, check `free -h`. If `available` < 3 GB, do not add more. See `docs/planning-history/notes/parallel-session-prompts.md` for prior session assignments and patterns.
 
-### Rule P7: Re-sync checkpoints
+### Rule P7: Remote-history checkpoints
 
-Every 2–3 hours, or at natural breakpoints, each session should re-sync with `origin/main` before starting another substantial edit block:
+Every 2–3 hours, or at natural breakpoints, each session should check whether `origin/main` has moved before starting another substantial edit block:
 
 ```bash
 git fetch origin
 git status
-git pull --rebase origin main
+git rev-list --left-right --count main...origin/main
+```
+
+If `origin/main` is ahead, rebase before continuing:
+
+```bash
+git rebase origin/main
 ```
 
 If the rebase surfaces conflicts, resolve them immediately or stop and escalate. Do not continue coding on a stale local base.

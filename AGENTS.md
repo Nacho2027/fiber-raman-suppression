@@ -14,15 +14,22 @@ This is a Julia + Python nonlinear fiber optics simulation project focused on Ra
 ## Git And Sync
 
 - All sessions work on `main` and push to `main`.
-- Start with:
+- Start by checking local state and Syncthing health:
 
 ```bash
 git status
-git fetch origin
-git pull --ff-only origin main
+syncthing cli show connections
 ```
 
-- If your push is rejected, run:
+- Do not reflexively `git pull` at session start. Syncthing keeps the Mac and `claude-code-host` working trees aligned; use git to reconcile commit history only when needed.
+- Before committing and pushing, refresh remote history:
+
+```bash
+git fetch origin
+git status
+```
+
+- If `origin/main` has moved or your push is rejected, run:
 
 ```bash
 git fetch origin
@@ -62,6 +69,7 @@ git push origin main
 - Syncthing moves `results/` between the Mac and `claude-code-host`.
 - Burst results come back via explicit `rsync`, then Syncthing carries them to the Mac.
 - Commit only durable, intentionally chosen summaries or fixtures. Do not reflexively commit the whole `results/` tree.
+- Generated PNGs, burst logs, and routine run-output JLD2s should stay out of git unless they are deliberate fixtures or moved into a human-facing docs location.
 
 ## When In Doubt
 
