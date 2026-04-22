@@ -3,7 +3,9 @@
 - Separate agent work docs from human docs. Put internal investigation and implementation notes in `agent-docs/<topic>/CONTEXT.md`, `agent-docs/<topic>/PLAN.md`, and `agent-docs/<topic>/SUMMARY.md`. Put human-facing docs and polished reports in `docs/`. `docs/planning-history/` is the historical archive of the old workflow; do not add new active work there.
 - Read `agent-docs/current-agent-context/` before starting substantial technical work that touches numerics, methodology, or compute operations. It is the curated successor to the useful parts of the old `.planning/` state.
 - Research heavily before writing code: grep the codebase, read referenced files, use WebFetch on official docs, and WebSearch for known pitfalls. Write findings down before coding.
+- Prefer test-driven development for non-trivial changes. When feasible, start red, get to green with the smallest correct change, then refactor with tests still green. When red-first TDD is genuinely awkward for a task, explain that briefly in the agent notes and still land a regression test before calling the work done.
 - Test heavily. Add or update tests for every non-trivial change. Never mark work done without running tests.
+- Document more rigorously than a typical research repo. Public or reused functions should have docstrings, numerics-heavy code should state units / assumptions / invariants, and behavior or workflow changes should update the relevant human docs as well as the agent summary. Comments should explain intent, physics, or constraints, not narrate syntax.
 
 ## Project
 
@@ -103,6 +105,9 @@ Julia ≥ 1.9.3 (Manifest pinned to 1.12.4) + Python/Matplotlib via PyCall for p
 - Julia `"""..."""` docstrings above functions with `# Arguments`, `# Returns`, `# Example`.
 - Physics comments explain the math: `# Chain rule: dJ/dphi(omega) = 2 * Re(lambda_0*(omega) * i * u_0(omega))`.
 - Units always stated in comments (`# W^-1 m^-1`, `# s^2/m`, `# THz`).
+- Document preconditions, postconditions, and numerical assumptions when they are important to correctness or reproducibility.
+- If a change affects outputs, workflows, file formats, CLI/script usage, or interpretation of results, update the relevant human-facing doc in `docs/` or `README.md`, not just inline comments.
+- Keep comments high-signal. Prefer documenting intent, invariants, physics, or failure modes over line-by-line narration.
 
 ### Logging
 

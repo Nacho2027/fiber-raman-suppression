@@ -9,7 +9,9 @@ This is a Julia + Python nonlinear fiber optics simulation project focused on Ra
 - Keep agent docs and human docs separate. Put internal work notes in `agent-docs/<topic>/CONTEXT.md`, `agent-docs/<topic>/PLAN.md`, and `agent-docs/<topic>/SUMMARY.md`. Put human-facing docs and reports in `docs/`.
 - Read `agent-docs/current-agent-context/` before deep numerics, methodology, or infrastructure work.
 - Research before coding. Grep the repo, read the files you touch and the files they call into, then check official docs and known pitfalls when the change depends on external behavior.
+- Prefer test-driven development for non-trivial code changes. When practical, start with a failing or missing test, make the smallest change that gets it green, then refactor while keeping tests green. If true red-first TDD is not practical for a task, still add or update the regression test before closing the work.
 - Test heavily. Add or update tests for every non-trivial change, and do not call work done until the relevant tests have been run.
+- Raise the documentation bar. Public or reused code should have clear docstrings, tricky numerics should document assumptions and invariants, and behavior changes should be reflected in the relevant `docs/`, `README`, or agent work summary. Comments should explain why, not restate the code.
 
 ## Git And Sync
 
