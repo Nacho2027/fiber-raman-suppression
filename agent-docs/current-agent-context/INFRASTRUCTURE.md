@@ -13,11 +13,14 @@ Source artifacts:
   - local Mac for primary editing and local work
   - `claude-code-host` for remote sessions and orchestration
   - `fiber-raman-burst` for heavy Julia compute
+- The Mac and `claude-code-host` working trees are now intended to stay in live sync via Syncthing.
+- `.git` is not part of that sync. Syncthing moves the working tree; git still records history and GitHub pushes.
 - The helper-script model is operationally important:
   - `burst-start`
   - `burst-stop`
   - `burst-ssh`
   - `burst-status`
+- Burst is still explicit-transfer infrastructure, not part of the live sync mesh.
 - The big invariant is still the same: heavy simulation work belongs on the burst VM, not the always-on host.
 
 ## What became historical

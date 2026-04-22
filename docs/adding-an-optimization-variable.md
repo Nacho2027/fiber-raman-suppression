@@ -51,4 +51,3 @@ The framework supports any scalar-or-vector variable `x` that:
 - [output-format.md](./output-format.md) — schema versioning for new fields.
 - [adding-a-fiber-preset.md](./adding-a-fiber-preset.md) — sibling extension
   guide for fibers (more mature; use as a style reference).
-- Session A worktree (`~/raman-wt-A/`) for multi-variable optimization work in progress.

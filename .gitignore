@@ -4,6 +4,8 @@
 
 # Machine-specific MCP server config (paths differ per host)
 .mcp.json
+.stfolder
+*.sync-conflict-*
 
 # macOS
 .DS_Store

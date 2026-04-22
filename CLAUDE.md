@@ -181,28 +181,41 @@ Julia ≥ 1.9.3 (Manifest pinned to 1.12.4) + Python/Matplotlib via PyCall for p
 
 ## Multi-Machine Workflow
 
-This project runs on multiple machines (local Mac + GCP `claude-code-host` + occasional bursts on `fiber-raman-burst`). The same repo is cloned on each machine. Without discipline, divergent commits on different machines produce merge conflicts.
+This project runs on multiple machines (local Mac + GCP `claude-code-host` + occasional bursts on `fiber-raman-burst`).
+
+The live working-tree model is:
+
+- **Syncthing** keeps the Mac repo and the `claude-code-host` repo continuously synced.
+- **Git** is for history, rollback, and GitHub pushes.
+- **Burst** is not part of Syncthing. Stage code to burst explicitly and pull results back explicitly.
 
 ### Session hygiene — always do these
 
-**At the START of any session (regardless of machine):**
+**At the START of any session on the Mac or `claude-code-host`:**
 
 ```bash
+git status
 git fetch origin
-git status                        # check for divergence / uncommitted changes
-git pull --ff-only origin main    # apply remote changes if local is behind
+git pull --ff-only origin main
 ```
 
-If `git pull --ff-only` fails (diverged histories), another machine has committed work that is not in this checkout. Do not proceed with edits before surfacing that divergence to the user.
+Also verify Syncthing is healthy before trusting the shared workspace:
+
+- Mac: `syncthing cli show connections`
+- `claude-code-host`: `systemctl --user status syncthing --no-pager`
+
+If Syncthing is down, fix that first. If `git pull --ff-only` fails, surface it before doing more work.
 
 **At the END of any session (or any logical stopping point):**
 
 ```bash
-git status                        # confirm what is about to be committed
-git add <specific files>          # prefer explicit over "git add -A"
+git status
+git add <specific files>
 git commit -m "<type>(<scope>): <description>"
-git push origin <branch>          # so the other machines can pull
+git push origin main
 ```
+
+Syncthing moves file changes between the Mac and `claude-code-host`. Git records the checkpoint on `origin/main`.
 
 ### Documentation and history
 
@@ -210,6 +223,7 @@ git push origin <branch>          # so the other machines can pull
 - Human-facing docs and polished reports live in `docs/`.
 - Historical GSD material has been archived under `docs/planning-history/`.
 - Do not revive `.planning/` for new work. If a historical note is still useful, reference it from `docs/planning-history/` and create new material in either `agent-docs/` or `docs/` as appropriate.
+- `.git` is intentionally excluded from Syncthing. The working tree syncs; commit history does not.
 
 ### Machine inventory
 
@@ -223,8 +237,9 @@ See `docs/planning-history/notes/compute-infrastructure-decision.md` for the ful
 
 ### Common pitfalls
 
-- **Forgetting to pull at session start**: diverged commits, merge conflicts later. Always fetch + pull first.
-- **Forgetting to push at session end**: other machines cannot see the work. Push before closing out unless the user explicitly wants a local-only commit.
+- **Assuming Syncthing solves simultaneous edits**: it does not. If two machines edit the same file before syncing, Syncthing creates `.sync-conflict-*` files. Avoid overlapping edits to the same path.
+- **Forgetting to pull at session start**: Syncthing moves files, not git history. Always fetch + pull first.
+- **Forgetting to push at session end**: the other machine may have the file contents via Syncthing, but `origin/main` still needs the commit history.
 - **Editing the same files from multiple machines or sessions**: keep concurrent sessions on non-overlapping files whenever possible. If a push is rejected, rebase on `origin/main` immediately before doing more work.
 - **Mixing agent notes with human docs**: keep internal work products in `agent-docs/` and polished outputs in `docs/`.
 - **Treating archived planning docs as active workflow state**: `docs/planning-history/` is historical context, not a live planning database.
@@ -277,7 +292,7 @@ If a session must touch a shared coordination document, append a new dated entry
 
 ### Rule P4: Git, not rsync, is the source of truth for tracked docs
 
-`agent-docs/` and `docs/` are tracked. Move active work between machines with git, not ad hoc rsync. Avoid concurrent edits to the same doc path on different machines.
+`agent-docs/`, `docs/`, and the rest of the Mac/host working tree move through Syncthing. Git remains the source of truth for history. Do not use ad hoc rsync between the Mac and `claude-code-host`.
 
 ### Rule P5: Burst VM coordination — mandatory wrapper
 
@@ -349,23 +364,29 @@ Everything else goes to the burst VM.
 From `claude-code-host` (helpers in `~/bin/` on `PATH`):
 
 ```bash
-# 1. Commit and push code first (burst VM pulls from git).
-git add <files> && git commit -m "..." && git push
+# 1. Ensure Syncthing has brought the latest Mac/host workspace into this checkout.
+syncthing cli show connections
 # 2. Start the burst VM (~30s to boot).
 burst-start
-# 3. Check the VM is free before claiming the lock.
+# 3. Stage a fresh workspace snapshot to burst (.git excluded on purpose).
+rsync -az --delete \
+      --exclude='.git' --exclude='.DS_Store' --exclude='.stfolder' \
+      ~/fiber-raman-suppression/ \
+      -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
+      fiber-raman-burst:~/fiber-raman-suppression/
+# 4. Check the VM is free before claiming the lock.
 burst-ssh "~/bin/burst-status"
-# 4. Run through the mandatory heavy-lock wrapper (Rule P5).
-burst-ssh "cd fiber-raman-suppression && git pull && \
+# 5. Run through the mandatory heavy-lock wrapper (Rule P5).
+burst-ssh "cd fiber-raman-suppression && \
            ~/bin/burst-run-heavy E-sweep2 \
            'julia -t auto --project=. scripts/your_script.jl'"
-# 5. Monitor (path printed by the wrapper).
+# 6. Monitor (path printed by the wrapper).
 burst-ssh "tail -f fiber-raman-suppression/results/burst-logs/E-sweep2_*.log"
-# 6. Pull results back.
+# 7. Pull results back to claude-code-host; Syncthing moves them to the Mac.
 rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
       fiber-raman-burst:~/fiber-raman-suppression/results/ \
       ~/fiber-raman-suppression/results/
-# 7. Always stop the VM when done (~$0.90/hr while running).
+# 8. Always stop the VM when done (~$0.90/hr while running).
 burst-stop
 ```
 

@@ -5,6 +5,9 @@
 Goal: Produce a `J_final` heatmap over (L, P) for SMF-28 and HNLF. Expected
 runtime: 2–3 hours on the burst VM.
 
+Mac and `claude-code-host` are assumed to be live-synced by Syncthing. Burst is
+not. Stage code to burst explicitly and pull results back explicitly.
+
 ## When to run a sweep
 
 - You are mapping the operating-regime landscape (how does suppression vary
@@ -24,7 +27,7 @@ On `claude-code-host` (where you are presumably running Claude Code):
 
 ```bash
 git status                 # confirm clean working tree
-git push                   # burst VM pulls from git
+syncthing cli show connections
 burst-start                # ~30 s to boot
 burst-status               # verify RUNNING
 ```
@@ -45,8 +48,12 @@ lockup (7+ concurrent heavy jobs) and is enforced-against by the watchdog.
 # Session-B example. Replace B-sweep with your session tag.
 # Tag format: ^[A-Za-z]-[A-Za-z0-9_-]+$
 burst-ssh "~/bin/burst-status"                   # confirm lock is free
+rsync -az --delete \
+      --exclude='.git' --exclude='.DS_Store' --exclude='.stfolder' \
+      ~/fiber-raman-suppression/ \
+      -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
+      fiber-raman-burst:~/fiber-raman-suppression/
 burst-ssh "cd fiber-raman-suppression && \
-           git pull && \
            ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/run_sweep.jl'"
 ```
 
@@ -113,10 +120,15 @@ A healthy sweep prints one line per point (24 total):
 
 ```bash
 # On claude-code-host:
-burst-ssh "cd fiber-raman-suppression && git add results/ && git commit -m 'sweep results' && git push"
-git pull
+rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
+      fiber-raman-burst:~/fiber-raman-suppression/results/ \
+      ~/fiber-raman-suppression/results/
 burst-stop                 # $0.90/hr while running — do not skip this
 ```
+
+The pulled `results/` tree then flows back to the Mac automatically via
+Syncthing. Commit only the small durable summaries you actually want in git;
+do not reflexively commit the whole `results/` tree.
 
 If you forget `burst-stop`, the VM runs overnight at ~$22/day. Set a phone
 reminder if you walk away mid-sweep.
@@ -171,6 +183,6 @@ schema is documented in [output-format.md](./output-format.md).
   you see the warning, increase the safety factor in `setup_raman_problem`.
 - **Burst VM accidentally left running:** `burst-stop` is idempotent; just
   run it again.
-- **`git pull` on burst fails with divergent history:** the burst VM has
-  local commits that were not pushed. Resolve by pushing from burst first,
-  then pulling on `claude-code-host`.
+- **Burst results came back but are not on the Mac yet:** verify Syncthing is
+  healthy on the Mac and on `claude-code-host`, then wait for the initial scan
+  or force a rescan from the Syncthing UI/CLI.
