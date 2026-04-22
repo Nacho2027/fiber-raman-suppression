@@ -432,7 +432,7 @@ Already used in `scripts/benchmark_optimization.jl:635` (multi-start) and `scrip
 ### Summary — quick checklist before running any simulation
 
 - [ ] Is this non-trivial per Rule 1? If yes, use the burst VM.
-- [ ] Did I commit and push my code so the burst VM's `git pull` gets it?
+- [ ] Did I stage a fresh workspace snapshot to burst with `rsync` before running?
 - [ ] Am I launching Julia with `-t auto` (or `-t N`)?
 - [ ] If adding new parallel loops, am I `deepcopy(fiber)` per thread?
 - [ ] When done, have I run `burst-stop`?
