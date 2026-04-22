@@ -19,7 +19,6 @@ LocalPreferences.toml
 results/**/*.jld2
 results/**/*.png
 results/**/*.log
-results/raman/multivar/**/*.json
 results/raman/sweeps/
 results/raman/phase10/
 results/raman/phase11/
@@ -34,6 +33,7 @@ results/images/
 !results/**/*.txt
 !results/**/*.csv
 !results/**/*.json
+results/raman/multivar/**/*.json
 
 # LaTeX build artifacts
 *.aux
