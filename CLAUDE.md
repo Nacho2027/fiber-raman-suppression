@@ -225,7 +225,7 @@ See `docs/planning-history/notes/compute-infrastructure-decision.md` for the ful
 
 - **Forgetting to pull at session start**: diverged commits, merge conflicts later. Always fetch + pull first.
 - **Forgetting to push at session end**: other machines cannot see the work. Push before closing out unless the user explicitly wants a local-only commit.
-- **Editing the same files from multiple machines or sessions**: use worktrees or enforce non-overlapping directory ownership.
+- **Editing the same files from multiple machines or sessions**: keep concurrent sessions on non-overlapping files whenever possible. If a push is rejected, rebase on `origin/main` immediately before doing more work.
 - **Mixing agent notes with human docs**: keep internal work products in `agent-docs/` and polished outputs in `docs/`.
 - **Treating archived planning docs as active workflow state**: `docs/planning-history/` is historical context, not a live planning database.
 
@@ -245,19 +245,31 @@ Session namespaces:
 
 **Shared files — never modify without explicit user go-ahead:** `scripts/common.jl`, `scripts/visualization.jl`, `src/simulation/*.jl`, `src/sensitivity_*.jl`, `Project.toml`, `Manifest.toml`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `README.md`, `docs/README.md`.
 
-### Rule P2: Branch-per-session. Never push directly to `main`.
+### Rule P2: All sessions work on `main` and push to `main`.
 
-Each session works in a git worktree on its own branch:
+This repo no longer uses session branches as the default coordination model.
+Every session stays on `main`.
+
+Session hygiene for direct-to-`main` work:
 
 ```bash
-git worktree add ../raman-wt-<session-name> sessions/<session-name>
-cd ../raman-wt-<session-name>
-# ... session work ...
+git fetch origin
+git pull --ff-only origin main
+# ... do work ...
+git add <files>
 git commit -m "..."
-git push origin sessions/<session-name>
+git push origin main
 ```
 
-The session never runs `git push origin main`. Only the user, or a single integrator session, merges session branches into `main` at coordination checkpoints.
+If `git push origin main` is rejected because another session landed first:
+
+```bash
+git fetch origin
+git rebase origin/main
+git push origin main
+```
+
+Do not create ad hoc `sessions/*` branches unless the user explicitly asks for an exception.
 
 ### Rule P3: Append-only edits to shared coordination docs
 
@@ -296,27 +308,22 @@ If another session holds the lock, `burst-run-heavy` fails immediately by defaul
 
 The `claude-code-host` VM (e2-standard-4, 16 GB RAM) hosts about 3 concurrent Claude Code sessions before OOM. Distribute work accordingly:
 
-- **Mac**: sessions doing heavy editing, lots of context, or light compute. Each in its own `~/raman-wt-<name>` worktree.
+- **Mac**: sessions doing heavy editing, lots of context, or light compute.
 - **claude-code-host**: sessions needing the burst VM frequently (the `burst-*` helpers are only on `claude-code-host`).
 
 Before a 4th session on `claude-code-host`, check `free -h`. If `available` < 3 GB, do not add more. See `docs/planning-history/notes/parallel-session-prompts.md` for prior session assignments and patterns.
 
-### Rule P7: Integration checkpoints
+### Rule P7: Re-sync checkpoints
 
-Every 2–3 hours, or at natural breakpoints, the user (not a session) does an integration pass:
+Every 2–3 hours, or at natural breakpoints, each session should re-sync with `origin/main` before starting another substantial edit block:
 
 ```bash
 git fetch origin
-git branch -r | grep sessions/     # see which session branches have new work
-for branch in sessions/B-handoff sessions/D-simple ... ; do
-  git log main..origin/$branch --oneline
-done
-git checkout main
-git merge origin/sessions/B-handoff --no-ff
-git push origin main
+git status
+git pull --rebase origin main
 ```
 
-Sessions pull from `main` at the start of their next work block to incorporate integrations.
+If the rebase surfaces conflicts, resolve them immediately or stop and escalate. Do not continue coding on a stale local base.
 
 ## Running Simulations — Compute Discipline
 
