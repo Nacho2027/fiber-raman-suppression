@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Verification & Discovery
-status: Executing Phase 34
-last_updated: "2026-04-21T22:18:05.493Z"
-last_activity: 2026-04-21
+status: Ready to execute
+last_updated: "2026-04-22T00:15:44.690Z"
+last_activity: 2026-04-22
 progress:
   total_phases: 45
-  completed_phases: 23
+  completed_phases: 24
   total_plans: 56
-  completed_plans: 42
-  percent: 75
+  completed_plans: 46
+  percent: 82
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 34 (Truncated-Newton Krylov preconditioning path) — EXECUTING
-Plan: 1 of 4
+Plan: 2 of 4
 Phase 8 (Sweep Point Reporting) — COMPLETE
 Phase 9 (Physics of Raman Suppression) — COMPLETE (2 plans, 15 figures, all hypotheses tested)
 Next: Multimode (M>1) simulations for quantum noise analysis
@@ -165,6 +165,8 @@ Both fixes require re-running the sweep to get valid results.
 - [Phase 11-classical-physics-completion]: Suppression horizon: L_50dB ≈ 3.33 m at P=0.2W for SMF-28; 5m degradation is landscape-limited, not resolution or convergence
 - [Phase 12-suppression-reach]: Bypass setup_raman_problem auto-sizing via direct MultiModeNoise calls for L>=10m — the wrapper always overrides explicit Nt/tw at long distances
 - [Phase 12-suppression-reach]: SMF-28 phi@2m maintains -57 dB Raman suppression at L=30m (15x opt horizon); HNLF reach collapses to <3 dB by z=15m — fiber-type-dependent suppression reach confirmed
+- [Phase ?]: M-kwarg wiring gap: optimize_spectral_phase_tr does not forward preconditioner M kwarg into solve_subproblem; ALL Phase 34 benchmark sweep variants run as identity Steihaug regardless of precond_sym — Discovered during Phase 34 Plan 03 implementation; the M kwarg wiring requires additive change in Phase 35/36
+- [Phase ?]: Conditioning hypothesis CONFIRMED: direct-wired PCG smoke at Nt=128 shows ALL preconditioners produce rho in [0.944, 0.994] >> eta_1=0.25 on the same cold-start oracle where Steihaug produces RADIUS_COLLAPSE — Phase 34 Plan 04 smoke script (scripts/phase34_pcg_smoke.jl); results in results/raman/phase34/pcg_smoke/smoke.jld2
 
 ### Roadmap Evolution
 
@@ -220,8 +222,8 @@ Both fixes require re-running the sweep to get valid results.
 
 ## Session Continuity
 
-Last session: 2026-04-17T02:40:00Z
-Last activity: 2026-04-21
+Last session: 2026-04-22T00:15:44.682Z
+Last activity: 2026-04-22
 Next action: **URGENT** — a follow-up session must (1) check `burst-ssh "tail -100 fiber-raman-suppression/sweep_run.log"` for sweep completion, (2) rsync results back, (3) run `burst-stop` (burst VM is RUNNING at $0.90/hr), (4) update `07-03-SUMMARY.md` status IN_PROGRESS → COMPLETE with final counts. Then continue Phase 13/14/15 Newton/Hessian sprint.
 
 ## Active Background Jobs
