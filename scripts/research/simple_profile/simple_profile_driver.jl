@@ -40,6 +40,7 @@ using Interpolations
 include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "raman_optimization.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "determinism.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
 ensure_deterministic_environment(verbose=true)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ function stage_baseline(; verbose::Bool=true)
 
     Random.seed!(SP_SEED_BASE)
 
-    uω0, fiber, sim, band_mask, Δf, _ = build_baseline_problem()
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = build_baseline_problem()
     Nt = sim["Nt"]; M = sim["M"]
     time_window_ps = Nt * sim["Δt"]
 
@@ -284,7 +285,6 @@ function stage_baseline(; verbose::Bool=true)
 
     # Rule 2: mandatory standard-image set
     try
-        include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
         save_standard_set(
             phi_opt, uω0, fiber, sim, band_mask, Δf, raman_threshold;
             tag        = "smf28_L0p50m_P0p050W_baseline",
@@ -641,7 +641,6 @@ function stage_transferability(; verbose::Bool=true)
 
         # Rule 2: mandatory standard-image set for every phi_opt produced
         try
-            include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
             fname_canonical = replace(String(tgt.fiber_name), "-" => "")
             tag = lowercase(@sprintf("%s_L%.2fm_P%.3fW_warm", fname_canonical, tgt.L, tgt.P))
             tag = replace(tag, "." => "p")

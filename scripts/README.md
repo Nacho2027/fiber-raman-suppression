@@ -11,6 +11,19 @@ script files.
 - internal developer helpers in [`dev/`](./dev/README.md)
 - operational machine/launcher helpers in [`ops/`](./ops/README.md)
 
+## How to navigate this tree
+
+Use this rule before editing:
+
+- supported CLI surface: [`canonical/`](./canonical/README.md)
+- maintained workflow implementation: [`workflows/`](./workflows/README.md)
+- shared script-library code: [`lib/`](./lib/README.md)
+- active but not-yet-canonical experiments: [`research/`](./research/README.md)
+- historical material you should usually not extend: [`archive/`](./archive/README.md)
+
+The broader repo-level boundary map lives in
+[`../docs/architecture/repo-navigation.md`](../docs/architecture/repo-navigation.md).
+
 ## Supported interface
 
 If you are looking for the maintained command-line workflow, start in

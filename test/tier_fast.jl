@@ -21,13 +21,13 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # Using MultiModeNoise first lets common.jl's `using MultiModeNoise` resolve.
 # Printf must be imported at top-level BEFORE include(common.jl) because
 # common.jl uses @sprintf — macros resolve at parse time and need Printf
-# visible in the including scope (matches test/test_determinism.jl pattern).
+# visible in the including scope (matches test/core/test_determinism.jl pattern).
 using MultiModeNoise
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "manifest_io.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
-include(joinpath(@__DIR__, "test_repo_structure.jl"))
+include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
 
 @testset "Phase 16 — fast tier" begin
 
@@ -144,6 +144,45 @@ include(joinpath(@__DIR__, "test_repo_structure.jl"))
         @test any(band_r)
     end
 
+    @testset "Exact single-mode setup preserves requested grid" begin
+        exact_kwargs = (
+            λ0 = 1550e-9,
+            M = 1,
+            Nt = 1024,
+            time_window = 5.0,
+            β_order = 3,
+            L_fiber = 10.0,
+            P_cont = 0.10,
+            pulse_fwhm = 185e-15,
+            pulse_rep_rate = 80.5e6,
+            pulse_shape = "sech_sq",
+            raman_threshold = -5.0,
+            fiber_preset = :SMF28,
+        )
+
+        uω0_exact, fiber_exact, sim_exact, band_exact, Δf_exact, thr_exact =
+            setup_raman_problem_exact(; exact_kwargs...)
+        uω0_auto, fiber_auto, sim_auto, band_auto, Δf_auto, thr_auto =
+            setup_raman_problem(; exact_kwargs...)
+
+        @test sim_exact["Nt"] == exact_kwargs.Nt
+        @test sim_exact["Δt"] * sim_exact["Nt"] == exact_kwargs.time_window
+        @test size(uω0_exact) == (exact_kwargs.Nt, exact_kwargs.M)
+        @test size(fiber_exact["Dω"]) == (exact_kwargs.Nt, exact_kwargs.M)
+        @test length(band_exact) == exact_kwargs.Nt
+        @test length(Δf_exact) == exact_kwargs.Nt
+        @test thr_exact == exact_kwargs.raman_threshold
+
+        @test sim_auto["Nt"] >= sim_exact["Nt"]
+        @test sim_auto["Δt"] * sim_auto["Nt"] >= sim_exact["Δt"] * sim_exact["Nt"]
+        @test sim_auto["Nt"] > sim_exact["Nt"] ||
+              sim_auto["Δt"] * sim_auto["Nt"] > sim_exact["Δt"] * sim_exact["Nt"]
+        @test fiber_exact["L"] == fiber_auto["L"] == exact_kwargs.L_fiber
+        @test fiber_exact["γ"] == fiber_auto["γ"]
+        @test thr_auto == thr_exact
+        @test any(band_auto) && any(band_exact)
+    end
+
     @testset "Regularizer helper formulas" begin
         φ = reshape(collect(range(-0.2, stop=0.3, length=18)), 6, 3)
         Δt = 0.0125
@@ -233,7 +272,73 @@ include(joinpath(@__DIR__, "test_repo_structure.jl"))
         end
     end
 
-    @testset "Output format round trip (D2 schema)" begin
+    @testset "Canonical run loader via package manifest helpers" begin
+        mktempdir() do dir
+            manifest_path = joinpath(dir, "manifest.json")
+
+            payload_a = (
+                fiber_name = "SMF-28",
+                run_tag = "a",
+                L_m = 1.0,
+                P_cont_W = 0.1,
+                lambda0_nm = 1550.0,
+                fwhm_fs = 185.0,
+                gamma = 1.1e-3,
+                betas = [-2.17e-26, 1.2e-40],
+                Nt = 8,
+                time_window_ps = 0.08,
+                J_before = 1e-3,
+                J_after = 1e-5,
+                delta_J_dB = -20.0,
+                grad_norm = 1e-4,
+                converged = true,
+                iterations = 3,
+                wall_time_s = 0.1,
+                convergence_history = [-10.0, -20.0],
+                phi_opt = reshape(collect(1.0:8.0), 8, 1),
+                uomega0 = reshape(ComplexF64[complex(i, -i) for i in 1:8], 8, 1),
+                E_conservation = 1e-6,
+                bc_input_frac = 1e-7,
+                bc_output_frac = 2e-7,
+                bc_input_ok = true,
+                bc_output_ok = true,
+                trust_report = Dict{String,Any}("overall_verdict" => "PASS"),
+                trust_report_md = "a.md",
+                band_mask = [i <= 4 for i in 1:8],
+                sim_Dt = 0.01,
+                sim_omega0 = 1215.0,
+            )
+            payload_b = merge(payload_a, (run_tag = "b", J_after = 1e-6, trust_report_md = "b.md"))
+
+            path_a = joinpath(dir, "a.jld2")
+            path_b = joinpath(dir, "b.jld2")
+            save_run(path_a, payload_a)
+            save_run(path_b, payload_b)
+
+            n1 = update_run_manifest_entry(manifest_path, Dict{String,Any}(
+                "result_file" => path_a,
+                "J_after_dB" => MultiModeNoise.lin_to_dB(payload_a.J_after),
+                "fiber_name" => payload_a.fiber_name,
+            ))
+            n2 = update_run_manifest_entry(manifest_path, Dict{String,Any}(
+                "result_file" => path_b,
+                "J_after_dB" => MultiModeNoise.lin_to_dB(payload_b.J_after),
+                "fiber_name" => payload_b.fiber_name,
+            ))
+
+            @test n1 == 1
+            @test n2 == 2
+
+            runs = load_canonical_runs(manifest_path)
+            @test length(runs) == 2
+            @test runs[1]["result_file"] == path_a
+            @test runs[1]["run_tag"] == "a"
+            @test runs[2]["run_tag"] == "b"
+            @test runs[2]["J_after"] == payload_b.J_after
+        end
+    end
+
+    @testset "Output format round trip (legacy package schema)" begin
         mktempdir() do dir
             path = joinpath(dir, "rt.jld2")
             result = (
@@ -279,6 +384,61 @@ include(joinpath(@__DIR__, "test_repo_structure.jl"))
             # Also: loading via the JSON sidecar path resolves to the same data.
             loaded_json = load_run(joinpath(dir, "rt.json"))
             @test loaded_json.phi_opt == result.phi_opt
+        end
+    end
+
+    @testset "Output format round trip (canonical Raman schema)" begin
+        mktempdir() do dir
+            path = joinpath(dir, "canon.jld2")
+            result = (
+                fiber_name = "SMF-28",
+                run_tag = "canon-rt",
+                L_m = 2.0,
+                P_cont_W = 0.2,
+                lambda0_nm = 1550.0,
+                fwhm_fs = 185.0,
+                gamma = 1.1e-3,
+                betas = [-2.17e-26, 1.2e-40],
+                Nt = 64,
+                time_window_ps = 12.0,
+                J_before = 1e-3,
+                J_after = 1e-5,
+                delta_J_dB = -20.0,
+                grad_norm = 1e-4,
+                converged = true,
+                iterations = 7,
+                wall_time_s = 1.5,
+                convergence_history = Float64[-10.0, -20.0, -30.0],
+                phi_opt = reshape(collect(range(0.0, stop=π, length=64)), 64, 1),
+                uomega0 = reshape(ComplexF64[i + 0.5im for i in 1:64], 64, 1),
+                E_conservation = 1e-6,
+                bc_input_frac = 1e-7,
+                bc_output_frac = 2e-7,
+                bc_input_ok = true,
+                bc_output_ok = true,
+                trust_report = Dict{String,Any}("overall_verdict" => "PASS"),
+                trust_report_md = "canon_trust.md",
+                band_mask = [i <= 16 for i in 1:64],
+                sim_Dt = 1.5e-3,
+                sim_omega0 = 1215.0,
+            )
+
+            sidecar_path = save_run(path, result)
+            @test isfile(path)
+            @test isfile(sidecar_path)
+
+            loaded = load_run(path)
+            @test loaded.run_tag == result.run_tag
+            @test loaded.phi_opt == result.phi_opt
+            @test loaded.uomega0 == result.uomega0
+            @test loaded.J_after == result.J_after
+            @test loaded.metadata["run_id"] == "canon"
+            @test loaded.metadata["fiber_preset"] == "SMF-28"
+            @test loaded.sidecar.J_final_dB ≈ MultiModeNoise.lin_to_dB(result.J_after)
+
+            loaded_json = load_run(joinpath(dir, "canon.json"))
+            @test loaded_json.run_tag == result.run_tag
+            @test loaded_json.band_mask == result.band_mask
         end
     end
 

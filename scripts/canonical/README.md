@@ -17,3 +17,8 @@ point readers toward first.
 
 These entry points are thin wrappers over implementation files in
 `scripts/workflows/` and shared helpers in `scripts/lib/`.
+
+If you are deciding where to edit behavior, prefer changing the implementation
+layers rather than growing logic directly in this directory. See
+[`../../docs/architecture/repo-navigation.md`](../../docs/architecture/repo-navigation.md) for the full
+boundary map.

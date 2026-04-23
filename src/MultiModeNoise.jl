@@ -19,7 +19,9 @@ See `scripts/raman_optimization.jl` for the main optimization entry point and
 module MultiModeNoise
 
 export OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
-       ensure_deterministic_environment, load_run, save_run
+       ensure_deterministic_environment, load_run, load_canonical_runs,
+       read_run_manifest, save_run, update_run_manifest_entry,
+       upsert_run_manifest_entry!, write_run_manifest
 
 using Tullio
 using SparseArrays

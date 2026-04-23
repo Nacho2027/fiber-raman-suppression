@@ -19,7 +19,7 @@ from `results/raman/` and writes into `results/images/presentation/`.
 ~3–6 minutes. Pure plotting, no simulation.
 
 # Docs
-Docs: docs/interpreting-plots.md
+Docs: docs/guides/interpreting-plots.md
 """
 
 ENV["MPLBACKEND"] = "Agg"
@@ -363,7 +363,7 @@ end
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
-function main()
+function generate_presentation_figures_main()
     @info "Loading sweep data..."
     points = load_all_sweep_points()
     @info "Loaded $(length(points)) points"
@@ -386,6 +386,8 @@ function main()
     @info "All presentation figures saved to $OUT_DIR"
 end
 
+main() = generate_presentation_figures_main()
+
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    generate_presentation_figures_main()
 end

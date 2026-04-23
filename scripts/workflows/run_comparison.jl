@@ -23,7 +23,7 @@ paper-style figures and saves a unified comparison set.
 ~25–40 minutes on a 4-core laptop. Burst VM strongly recommended.
 
 # Docs
-Docs: docs/quickstart-optimization.md
+Docs: docs/guides/quickstart-optimization.md
 """
 
 try using Revise catch end
@@ -39,15 +39,11 @@ using Optim
 using JLD2
 using JSON3
 
-include("common.jl")
-include("visualization.jl")
-
-# NOTE: raman_optimization.jl is included BELOW because its top-level
-# include("common.jl") and include("visualization.jl") are safe to re-call
-# (both have include guards: _COMMON_JL_LOADED, _VISUALIZATION_JL_LOADED).
-# The PROGRAM_FILE guard on line 522 of raman_optimization.jl prevents the
-# heavy run block from executing when included from another script.
-include("raman_optimization.jl")
+# Shared workflow dependencies live in ../lib; keep them explicit here so this
+# script does not rely on a same-directory include chain.
+include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
+include(joinpath(@__DIR__, "..", "lib", "raman_optimization.jl"))
 include(joinpath(@__DIR__, "..", "lib", "determinism.jl"))
 ensure_deterministic_environment()
 
@@ -170,20 +166,8 @@ GC.gc()
 manifest_path = joinpath("results", "raman", "manifest.json")
 @assert isfile(manifest_path) "manifest.json not found at $manifest_path — re-run section 2"
 
-manifest_raw = JSON3.read(read(manifest_path, String), Vector{Dict{String,Any}})
-
-all_runs = Dict{String,Any}[]
-for entry in manifest_raw
-    jld2_path = entry["result_file"]
-    if !isfile(jld2_path)
-        @warn "Missing JLD2 file, skipping manifest entry" path=jld2_path
-        continue
-    end
-    jld2_data = JLD2.load(jld2_path)
-    # Merge manifest scalars with JLD2 arrays/fields
-    merged = merge(Dict{String,Any}(entry), Dict{String,Any}(jld2_data))
-    push!(all_runs, merged)
-end
+manifest_raw = MultiModeNoise.read_run_manifest(manifest_path)
+all_runs = MultiModeNoise.load_canonical_runs(manifest_path)
 @info "Loaded $(length(all_runs)) runs from manifest"
 @assert length(all_runs) >= 5 "Expected ≥ 5 runs, got $(length(all_runs)) — check manifest.json"
 
@@ -229,9 +213,7 @@ for entry in manifest_raw
     end
     push!(updated_manifest, entry_dict)
 end
-open(manifest_path, "w") do io
-    JSON3.pretty(io, updated_manifest)
-end
+MultiModeNoise.write_run_manifest(manifest_path, updated_manifest)
 @info "Updated manifest.json with soliton_number_N for $(length(updated_manifest)) entries"
 
 # ─────────────────────────────────────────────────────────────────────────────

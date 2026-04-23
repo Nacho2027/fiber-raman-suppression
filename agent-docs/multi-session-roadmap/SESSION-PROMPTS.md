@@ -538,3 +538,235 @@ Constraints:
 Output style:
 Think like a scientifically serious research strategist helping define what success should mean, not just like an optimizer engineer.
 ```
+
+## Session J Prompt
+
+```text
+You are working in /home/ignaciojlizama/fiber-raman-suppression.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- scripts/README.md
+- agent-docs/current-agent-context/INDEX.md
+- agent-docs/repo-refactor-plan/PLAN.md
+- agent-docs/code-architecture-refactor/SUMMARY.md
+- docs/recent-phase-synthesis-29-34.md
+- docs/why-phase-31-changed-the-roadmap.md
+
+Mission:
+Continue the refactor, but optimize specifically for long-term maintainability, extensibility, agent legibility, and restrained software beauty. This is not a giant rewrite and not a cosmetic pass. The goal is a codebase that both humans and Codex can navigate, trust, modify, and extend with low ambiguity.
+
+Design philosophy:
+- Favor one obvious way over multiple parallel patterns.
+- Favor small explicit modules over clever abstractions.
+- Favor stable interfaces over script-local ad hoc behavior.
+- Favor beauty through clarity, consistency, and restraint.
+- Preserve scientific transparency; do not hide the physics behind architecture.
+
+Main questions:
+1. Where does duplicated logic still force maintainers or agents to guess which path is authoritative?
+2. Which abstractions are now justified by repeated active use across canonical and research paths?
+3. Which experiment drivers should become thin wrappers around shared infrastructure?
+4. What boundaries should exist between reusable core code, canonical workflows, exploratory research code, and archived legacy material?
+5. What small structural changes would make future additions of fibers, costs, optimizers, reports, and exports safer?
+
+Deliverables:
+- A concrete duplication and ambiguity audit with file references
+- A prioritized refactor plan: now / next / later
+- One or two behavior-preserving extractions or interface cleanups if safe
+- Regression tests covering any shared-path changes
+- Updated agent docs summarizing what was changed, what was deferred, and what remains risky
+
+High-value focus areas:
+- unified problem/setup construction
+- unified optimization entrypoints and shared helper interfaces
+- unified result payload / manifest / artifact-writing paths
+- repeated experiment-driver boilerplate
+- separation between canonical workflows and research-local orchestration
+- naming and file-placement consistency where it reduces ambiguity
+
+Constraints:
+- Do not perform a big-bang rewrite
+- Do not intentionally change scientific behavior
+- Do not delete research functionality casually
+- Do not abstract things that are only used once
+- Keep canonical scripts working
+- Keep research scripts readable as experiment definitions, not mini-frameworks
+- Run fast tests and targeted load checks before finishing
+
+Success criteria:
+- Fewer duplicated implementations of the same concept
+- Fewer ambiguous places where a future agent could edit the wrong file
+- More obvious extension points for new fibers, costs, and workflows
+- Cleaner structure that feels intentional and professional without becoming overengineered
+
+Output style:
+Think like a maintainer preparing a valuable but historically messy research repo for long-term use by a lab and by future coding agents. Prefer elegance through simplification, not abstraction theater.
+```
+
+## Session K Prompt
+
+```text
+You are working in /home/ignaciojlizama/fiber-raman-suppression.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- scripts/README.md
+- agent-docs/current-agent-context/INDEX.md
+- agent-docs/code-architecture-refactor/SUMMARY.md
+- agent-docs/multi-session-roadmap/SESSION-PROMPTS.md
+- docs/recent-phase-synthesis-29-34.md
+
+Mission:
+Finish and organize the unfinished research lanes so the project stops carrying half-complete scientific threads. The goal is to determine what is complete, what is incomplete, what still needs simulations, and what should be explicitly closed out.
+
+Primary focus lanes:
+- multimode
+- multiparameter optimization
+- long-fiber, if still scientifically incomplete
+
+Main questions:
+1. What research directions are still incomplete in code, simulations, or interpretation?
+2. Which unfinished lanes are still high-value and should be finished now?
+3. Which lanes should be closed out as negative or low-priority results?
+4. What simulations, summaries, or verification runs are still needed to call each lane complete?
+
+Deliverables:
+- A research-completion audit covering every active/unfinished lane
+- A concrete finish-up plan for multimode, multiparameter, and long-fiber work
+- Clear distinction between:
+  - needs more simulation
+  - needs more analysis/docs only
+  - scientifically complete and ready to archive/summarize
+- If safe and useful, implement or run one finish-up step in the highest-value incomplete lane
+- Updated agent docs recording status and next actions
+
+Constraints:
+- Do not start new science directions
+- Do not do a broad refactor
+- Focus on closure, organization, and honest status
+- Be explicit about what is incomplete versus merely undocumented
+- If you run simulations, respect compute discipline and standard-output rules
+
+Output style:
+Think like a research lead trying to eliminate dangling threads before the project transitions into lab-ready and publication-ready form.
+```
+
+## Session L Prompt
+
+```text
+You are working in /home/ignaciojlizama/fiber-raman-suppression.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- scripts/README.md
+- docs/output-format.md
+- docs/recent-phase-synthesis-29-34.md
+- agent-docs/multi-session-roadmap/SESSION-PROMPTS.md
+
+Mission:
+Design and begin preparing the repo for real lab-group usage, but do so with the assumption that the remaining high-value research lanes should be finished first. Your job is to define what “lab-ready” should mean here and what should be built after the unfinished science threads are resolved.
+
+Main questions:
+1. What are the actual lab-facing use cases this repo must support?
+2. What infrastructure should exist before the lab starts depending on this repo?
+3. What should wait until after unfinished research lanes are closed out?
+4. How should refactoring and lab-readiness sequencing interact?
+5. What front-layer API, notebook flow, config system, examples, exports, and docs will make this usable without the original author?
+
+Deliverables:
+- A concrete lab-readiness proposal
+- A sequencing plan:
+  - what must happen before lab rollout
+  - what can be built in parallel
+  - what should happen after research closure
+- A recommended user-facing workflow for:
+  - notebooks
+  - canonical optimization runs
+  - sweeps
+  - result inspection
+  - export / experimental handoff
+- A definition of minimum viable lab-ready state for this repo
+
+Constraints:
+- Do not assume the repo is ready right now
+- Do not do a giant implementation pass yet unless a small thin wrapper is obviously helpful
+- Optimize for simplicity, trust, and reproducibility
+- Treat this as product design for scientific users
+
+Output style:
+Think like a maintainer planning the transition from personal research codebase to shared lab instrument.
+```
+
+## Session M Prompt
+
+```text
+You are working in /home/ignaciojlizama/fiber-raman-suppression.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- scripts/README.md
+- docs/recent-phase-synthesis-29-34.md
+- agent-docs/multi-session-roadmap/SESSION-PROMPTS.md
+
+Mission:
+Create a documentation-production plan for mini LaTeX research notes covering every major research path in the repo. These should be concise but thorough technical notes that explain the motivation, implementation, math, strategy, results, examples, and representative images for each path.
+
+The goal is not to write one giant monolith. The goal is a clean set of small research companion documents that make the project legible to the author, the lab, future agents, and potential paper-writing workflows.
+
+Main questions:
+1. What are the distinct research paths that deserve their own LaTeX note?
+2. What template should all notes follow so they are consistent but not bloated?
+3. What figures/examples/results should be included for each path?
+4. What information is currently missing and must be generated or summarized before the notes can be written well?
+
+Deliverables:
+- A complete inventory of research-note targets
+- A recommended shared LaTeX template structure
+- Per-path note outlines with required inputs:
+  - math
+  - implementation summary
+  - strategy
+  - representative runs/results
+  - phase profiles / figures / diagnostics
+  - key lessons and limitations
+- A production plan for later mini-researcher agents that will write the notes
+
+Suggested research-note targets:
+- classical Raman optimization baseline
+- sharpness / Newton / trust-region work
+- reduced-basis / continuation / Phase 31 line
+- multimode
+- multiparameter optimization
+- long-fiber
+- simple profiles / universality / transferability
+- cost-audit / numerics-coherence / trust diagnostics
+- recovery / saddle / other meaningful follow-up lanes
+
+Constraints:
+- Do not write every LaTeX file in this session unless the scope is very small
+- Focus on planning, structure, inventory, and identifying missing ingredients
+- Prefer concise but technically serious notes over long unfocused reports
+
+Output style:
+Think like an organizing editor setting up a clean technical note series for a research program.
+```
+
+## Updated Strategic Priority Note
+
+Based on the current project state, the recommended order is:
+
+1. Continue the high-value refactor and architecture cleanup
+2. Finish or explicitly close the unfinished research lanes
+3. Define the lab-ready front layer and rollout plan
+4. Produce the mini LaTeX research-note series once the science threads and repo structure are stable enough to document cleanly
+
+The lab-readiness push is important, but it should follow the closure of the major unfinished research paths so the public/user-facing system is built on settled workflows rather than moving targets.

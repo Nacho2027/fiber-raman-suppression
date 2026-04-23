@@ -373,16 +373,20 @@ function _setup_single_mode_problem(;
     betas_user,
     fR,
     fiber_preset::Union{Nothing, Symbol},
+    auto_size::Bool=true,
 )
     gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
     _validate_single_mode_setup(;
         λ0, M, Nt, time_window, L_fiber, P_cont, pulse_fwhm, gamma_user, betas_user,
     )
 
-    Nt, time_window, tw_rec = _auto_size_single_mode_grid(
-        Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
-        gamma_user, betas_user,
-    )
+    tw_rec = time_window
+    if auto_size
+        Nt, time_window, tw_rec = _auto_size_single_mode_grid(
+            Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
+            gamma_user, betas_user,
+        )
+    end
 
     sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
     fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
@@ -449,6 +453,49 @@ function setup_raman_problem(;
     )
 
     @debug "Setup (raman)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] fiber_preset=fiber_preset
+
+    return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Setup: exact single-mode reconstruction (no auto-sizing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    setup_raman_problem_exact(; kwargs...)
+
+Create the same tuple as `setup_raman_problem`, but honor the caller-provided
+`Nt` and `time_window` exactly instead of auto-sizing them upward.
+
+Use this when reconstructing a saved run or validating a specific grid where
+changing the discretization would be a behavioral bug rather than a safeguard.
+
+Returns (uω0, fiber, sim, band_mask, Δf, raman_threshold).
+"""
+function setup_raman_problem_exact(;
+    λ0 = 1550e-9,
+    M = 1,
+    Nt = 2^14,
+    time_window = 10.0,
+    β_order = 2,
+    L_fiber = 1.0,
+    P_cont = 0.05,
+    pulse_fwhm = 185e-15,
+    pulse_rep_rate = 80.5e6,
+    pulse_shape = "sech_sq",
+    raman_threshold = -5.0,
+    gamma_user = 0.0013,
+    betas_user = [-2.6e-26],
+    fR = 0.18,
+    fiber_preset::Union{Nothing, Symbol} = nothing
+)
+    setup = _setup_single_mode_problem(;
+        λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
+        pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
+        fR, fiber_preset, auto_size=false,
+    )
+
+    @debug "Setup (raman exact)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] fiber_preset=fiber_preset
 
     return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
 end

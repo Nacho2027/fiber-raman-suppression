@@ -27,7 +27,7 @@ pre-computed NPZ eigenmode files needed.
 Nt=2^13, max_iter=30). Scale linearly with `max_iter`; super-linearly with Nt.
 
 # Docs
-Docs: docs/quickstart-optimization.md
+Docs: docs/guides/quickstart-optimization.md
 """
 
 try using Revise catch end
@@ -442,6 +442,110 @@ function plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix=
     return fig
 end
 
+"""
+    build_raman_result_payload(; kwargs...) -> NamedTuple
+
+Assemble the canonical JLD2 payload written by `run_optimization`. This keeps
+the output schema in one testable place while preserving the historical key
+names consumed by downstream analysis scripts.
+"""
+function build_raman_result_payload(;
+    run_meta,
+    run_tag::AbstractString,
+    fiber::Dict,
+    sim::Dict,
+    Nt::Integer,
+    time_window_ps::Real,
+    J_before::Real,
+    J_after::Real,
+    delta_J_dB::Real,
+    grad_norm::Real,
+    converged::Bool,
+    iterations::Integer,
+    wall_time_s::Real,
+    convergence_history,
+    phi_opt,
+    uω0,
+    E_conservation::Real,
+    bc_input_frac::Real,
+    bc_output_frac::Real,
+    bc_input_ok::Bool,
+    bc_output_ok::Bool,
+    trust_report,
+    trust_report_md::AbstractString,
+    band_mask,
+)
+    return (
+        # Run identification
+        fiber_name = run_meta.fiber_name,
+        run_tag = String(run_tag),
+        # Fiber parameters
+        L_m = fiber["L"],
+        P_cont_W = run_meta.P_cont_W,
+        lambda0_nm = run_meta.lambda0_nm,
+        fwhm_fs = run_meta.fwhm_fs,
+        gamma = fiber["γ"][1],
+        betas = haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        # Grid parameters
+        Nt = Int(Nt),
+        time_window_ps = Float64(time_window_ps),
+        # Optimization results
+        J_before = Float64(J_before),
+        J_after = Float64(J_after),
+        delta_J_dB = Float64(delta_J_dB),
+        grad_norm = Float64(grad_norm),
+        converged = converged,
+        iterations = Int(iterations),
+        wall_time_s = Float64(wall_time_s),
+        convergence_history = convergence_history,
+        # Fields for re-propagation
+        phi_opt = phi_opt,
+        uomega0 = uω0,
+        # Diagnostics
+        E_conservation = Float64(E_conservation),
+        bc_input_frac = Float64(bc_input_frac),
+        bc_output_frac = Float64(bc_output_frac),
+        bc_input_ok = bc_input_ok,
+        bc_output_ok = bc_output_ok,
+        trust_report = trust_report,
+        trust_report_md = String(trust_report_md),
+        # Simulation context
+        band_mask = band_mask,
+        sim_Dt = sim["Δt"],
+        sim_omega0 = sim["ω0"],
+    )
+end
+
+"""
+    build_raman_manifest_entry(payload, jld2_path) -> Dict{String,Any}
+
+Create the canonical manifest row corresponding to a Raman result payload.
+"""
+function build_raman_manifest_entry(payload::NamedTuple, jld2_path::AbstractString)
+    return Dict{String,Any}(
+        "fiber_name" => payload.fiber_name,
+        "L_m" => payload.L_m,
+        "P_cont_W" => payload.P_cont_W,
+        "lambda0_nm" => payload.lambda0_nm,
+        "J_before" => payload.J_before,
+        "J_before_dB" => MultiModeNoise.lin_to_dB(payload.J_before),
+        "J_after" => payload.J_after,
+        "J_after_dB" => MultiModeNoise.lin_to_dB(payload.J_after),
+        "delta_J_dB" => payload.delta_J_dB,
+        "converged" => payload.converged,
+        "iterations" => payload.iterations,
+        "wall_time_s" => payload.wall_time_s,
+        "Nt" => payload.Nt,
+        "time_window_ps" => payload.time_window_ps,
+        "grad_norm" => payload.grad_norm,
+        "E_conservation" => payload.E_conservation,
+        "bc_ok" => payload.bc_input_ok && payload.bc_output_ok,
+        "trust_overall" => payload.trust_report["overall_verdict"],
+        "trust_report_md" => payload.trust_report_md,
+        "result_file" => String(jld2_path),
+    )
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. Run a single optimization for given parameters
 # ─────────────────────────────────────────────────────────────────────────────
@@ -591,71 +695,38 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         convergence_history = MultiModeNoise.lin_to_dB.(Optim.f_trace(result))
     end
     @info "Saving results to $jld2_path"
-    jldsave(jld2_path;
-        # Run identification
-        fiber_name   = run_meta.fiber_name,
-        run_tag      = (@isdefined(RUN_TAG) ? RUN_TAG : "interactive"),
-        # Fiber parameters
-        L_m          = fiber["L"],
-        P_cont_W     = run_meta.P_cont_W,
-        lambda0_nm   = run_meta.lambda0_nm,
-        fwhm_fs      = run_meta.fwhm_fs,
-        gamma        = fiber["γ"][1],
-        betas        = haskey(fiber, "betas") ? fiber["betas"] : Float64[],
-        # Grid parameters
-        Nt           = Nt,
+    result_payload = build_raman_result_payload(;
+        run_meta = run_meta,
+        run_tag = (@isdefined(RUN_TAG) ? RUN_TAG : "interactive"),
+        fiber = fiber,
+        sim = sim,
+        Nt = Nt,
         time_window_ps = tw_ps,
-        # Optimization results
-        J_before     = J_before,
-        J_after      = J_after,
-        delta_J_dB   = ΔJ_dB,
-        grad_norm    = grad_norm,
-        converged    = Optim.converged(result),
-        iterations   = Optim.iterations(result),
-        wall_time_s  = elapsed,
+        J_before = J_before,
+        J_after = J_after,
+        delta_J_dB = ΔJ_dB,
+        grad_norm = grad_norm,
+        converged = Optim.converged(result),
+        iterations = Optim.iterations(result),
+        wall_time_s = elapsed,
         convergence_history = convergence_history,
-        # Fields for re-propagation (Phase 6)
-        phi_opt      = φ_after,
-        uomega0      = uω0,
-        # Diagnostics
-        E_conservation    = E_conservation,
-        bc_input_frac     = bc_input_frac,
-        bc_output_frac    = bc_output_frac,
-        bc_input_ok       = bc_input_ok,
-        bc_output_ok      = bc_output_ok,
-        trust_report      = trust_report,
-        trust_report_md   = trust_md_path,
-        # Simulation context (for Phase 6 grid compatibility checks)
-        band_mask    = band_mask,
-        sim_Dt       = sim["Δt"],
-        sim_omega0   = sim["ω0"],
+        phi_opt = φ_after,
+        uω0 = uω0,
+        E_conservation = E_conservation,
+        bc_input_frac = bc_input_frac,
+        bc_output_frac = bc_output_frac,
+        bc_input_ok = bc_input_ok,
+        bc_output_ok = bc_output_ok,
+        trust_report = trust_report,
+        trust_report_md = trust_md_path,
+        band_mask = band_mask,
     )
+    sidecar_path = MultiModeNoise.save_run(jld2_path, result_payload)
+    @info "Saved JSON sidecar to $sidecar_path"
 
     # ── Manifest update (XRUN-01) ──
     manifest_path = joinpath("results", "raman", "manifest.json")
-    manifest_entry = Dict{String,Any}(
-        "fiber_name"     => run_meta.fiber_name,
-        "L_m"            => fiber["L"],
-        "P_cont_W"       => run_meta.P_cont_W,
-        "lambda0_nm"     => run_meta.lambda0_nm,
-        "J_before"       => J_before,
-        "J_before_dB"    => MultiModeNoise.lin_to_dB(J_before),
-        "J_after"        => J_after,
-        "J_after_dB"     => MultiModeNoise.lin_to_dB(J_after),
-        "delta_J_dB"     => ΔJ_dB,
-        "converged"      => Optim.converged(result),
-        "iterations"     => Optim.iterations(result),
-        "wall_time_s"    => elapsed,
-        "Nt"             => Nt,
-        "time_window_ps" => tw_ps,
-        "grad_norm"      => grad_norm,
-        "E_conservation" => E_conservation,
-        "bc_ok"          => bc_input_ok && bc_output_ok,
-        "trust_overall"  => trust_report["overall_verdict"],
-        "trust_report_md"=> trust_md_path,
-        "result_file"    => jld2_path,
-    )
-
+    manifest_entry = build_raman_manifest_entry(result_payload, jld2_path)
     manifest_count = update_manifest_entry(manifest_path, manifest_entry)
     @info "Updated manifest at $manifest_path ($(manifest_count) runs)"
 

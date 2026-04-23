@@ -51,7 +51,7 @@ function rebuild_problem(fiber_name::AbstractString, L::Real, P::Real)
     if preset === nothing
         error("Unknown fiber_name: $fiber_name — expected SMF-28 or HNLF")
     end
-    setup_raman_problem(
+    setup_raman_problem_exact(
         Nt           = 8192,
         time_window  = 10.0,
         β_order      = 3,

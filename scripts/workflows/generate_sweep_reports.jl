@@ -22,7 +22,7 @@ all points ranked by final suppression depth.
 ~2–5 minutes for a 24-point sweep. Pure I/O + matplotlib, no simulation.
 
 # Docs
-Docs: docs/interpreting-plots.md
+Docs: docs/guides/interpreting-plots.md
 """
 
 ENV["MPLBACKEND"] = "Agg"
@@ -409,7 +409,7 @@ end
 # Section 5: Main entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
-function main()
+function generate_sweep_reports_main()
     @info "Starting sweep report generation"
 
     smf28_points = NamedTuple[]
@@ -463,6 +463,8 @@ function main()
     @info "Sweep report generation complete"
 end
 
+main() = generate_sweep_reports_main()
+
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    generate_sweep_reports_main()
 end

@@ -99,15 +99,15 @@ include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
     end
 
     @testset "Phase 27 numerics regressions" begin
-        include(joinpath(_ROOT, "test", "test_phase27_numerics_regressions.jl"))
+        include(joinpath(_ROOT, "test", "phases", "test_phase27_numerics_regressions.jl"))
     end
 
     # Phase 13 tests live in their own files and use their own setup blocks.
     @testset "Phase 13 primitives" begin
-        include(joinpath(_ROOT, "test", "test_primitives.jl"))
+        include(joinpath(_ROOT, "test", "phases", "test_phase13_primitives.jl"))
     end
     @testset "Phase 13 HVP" begin
-        include(joinpath(_ROOT, "test", "test_hvp.jl"))
+        include(joinpath(_ROOT, "test", "phases", "test_phase13_hvp.jl"))
     end
 
 end

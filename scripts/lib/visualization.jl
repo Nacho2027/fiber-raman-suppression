@@ -1646,10 +1646,6 @@ function plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=not
         betas        = run["betas"]
         L_m          = run["L_m"]
 
-        # --- Reconstruct sim and fiber from JLD2 scalars ---
-        # beta_order=3 per Phase 4 decision; M=1 for SMF
-        sim_r = MultiModeNoise.get_disp_sim_params(lambda0_m, 1, Nt, time_win_ps, 3)
-
         # Fallback for empty betas (Pitfall 5): use fiber-name-specific defaults
         betas_use = if isempty(betas)
             run["fiber_name"] == "SMF-28" ? [-2.17e-26, 1.2e-40] : [-0.5e-26, 1.0e-40]
@@ -1657,8 +1653,20 @@ function plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=not
             betas
         end
 
-        fiber_r = MultiModeNoise.get_disp_fiber_params_user_defined(
-            L_m, sim_r; gamma_user=gamma, betas_user=betas_use)
+        # --- Reconstruct the saved grid exactly from JLD2 scalars ---
+        _, fiber_r, sim_r, _, _, _ = setup_raman_problem_exact(;
+            λ0 = lambda0_m,
+            M = 1,
+            Nt = Nt,
+            time_window = time_win_ps,
+            β_order = 3,
+            L_fiber = L_m,
+            P_cont = 0.05,
+            gamma_user = gamma,
+            betas_user = betas_use,
+            pulse_fwhm = 185e-15,
+            pulse_rep_rate = 80.5e6,
+        )
         fiber_r["zsave"] = [0.0, L_m]
 
         # --- Apply optimal phase and propagate ---

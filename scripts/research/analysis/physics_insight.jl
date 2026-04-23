@@ -153,20 +153,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 manifest_path = joinpath("results", "raman", "manifest.json")
 @assert isfile(manifest_path) "manifest.json not found at $manifest_path"
 
-manifest_raw = JSON3.read(read(manifest_path, String), Vector{Dict{String,Any}})
-
-all_runs = Dict{String,Any}[]
-for entry in manifest_raw
-    jld2_path = entry["result_file"]
-    if !isfile(jld2_path)
-        @warn "Missing JLD2 file, skipping manifest entry" path=jld2_path
-        continue
-    end
-    jld2_data = JLD2.load(jld2_path)
-    # Merge manifest scalars with JLD2 arrays/fields
-    merged = merge(Dict{String,Any}(entry), Dict{String,Any}(jld2_data))
-    push!(all_runs, merged)
-end
+all_runs = MultiModeNoise.load_canonical_runs(manifest_path)
 @info "Loaded $(length(all_runs)) runs from manifest"
 
 # Normalize phi_opt and uomega0 shapes; run phase normalization and decomposition

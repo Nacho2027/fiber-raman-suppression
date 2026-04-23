@@ -51,7 +51,7 @@ sweep:
 	@echo "                 ~/bin/burst-run-heavy <SESSION-TAG> \\"
 	@echo "                 'julia -t auto --project=. scripts/canonical/run_sweep.jl'\""
 	@echo ""
-	@echo "    See docs/quickstart-sweep.md for the full recipe."
+	@echo "    See docs/guides/quickstart-sweep.md for the full recipe."
 	@echo "    Press Ctrl-C within 3 seconds to abort this local run."
 	@echo ""
 	@sleep 3

@@ -1,99 +1,96 @@
 # Fiber Raman Suppression
 
-Adjoint-based spectral phase optimization for suppressing stimulated Raman
-scattering in optical fibers.
+Raman-suppression simulation, optimization, and result-generation workflows for
+nonlinear fiber propagation.
 
-**Rivera Lab** | Cornell Applied & Engineering Physics
+## What lives here
 
-## What this is (90 seconds)
+- Adjoint-based spectral-phase optimization for suppressing stimulated Raman
+  scattering in optical fibers.
+- Canonical single-run and sweep workflows for the maintained SMF-28 and HNLF
+  studies.
+- Shared result I/O, plotting, and report-generation utilities used by the lab
+  workflow.
+- Research scripts, status notes, and synthesis documents that capture what the
+  recent phases actually established.
 
-When ultrashort laser pulses propagate through optical fibers, stimulated Raman
-scattering transfers energy to longer wavelengths, degrading the pulse and
-adding quantum noise. This repository optimizes the input spectral phase to
-suppress that energy transfer. Forward GNLSE simulation + backward adjoint solve
-gives exact gradients in ~2 seconds; L-BFGS converges in 20–60 iterations.
+## Usual starting point
 
-New to the project? Start here:
-
-1. `make install` — install Julia dependencies.
-2. `make optimize` — run the canonical SMF-28 optimization (~5 min).
-3. Read [`docs/README.md`](docs/README.md) for the full documentation suite.
-
-## Results at a glance
-
-| Fiber  | Best suppression | Worst | Configurations               |
-|--------|------------------|-------|------------------------------|
-| SMF-28 | **-78 dB**       | -37 dB | 12 points (4 lengths × 3 powers) |
-| HNLF   | **-74 dB**       | -51 dB | 12 points (4 lengths × 3 powers) |
-
-See [`results/RESULTS_SUMMARY.md`](results/RESULTS_SUMMARY.md) for a
-plain-language explanation. After running `make report`, presentation-quality
-figures land in `results/images/presentation/` — see
-[`docs/interpreting-plots.md`](docs/interpreting-plots.md) for a field guide.
-
-## Happy path
+For a fresh clone:
 
 ```bash
-make install         # install Julia dependencies (one-time, ~2 min)
-make test            # run the fast tier regression tests (~30 s)
-make optimize        # run the canonical SMF-28 optimization (~5 min)
-make report          # regenerate figures and report cards from existing JLD2
+make install
+make test
+make optimize
 ```
 
-For the full parameter sweep (2–3 h, strongly recommended on the burst VM):
+That sequence instantiates the Julia environment, runs the fast regression
+tests, and produces the canonical SMF-28 optimization run.
 
-```bash
-make sweep
+If you need the supporting docs, start with:
+
+- [docs/guides/installation.md](docs/guides/installation.md)
+- [docs/guides/quickstart-optimization.md](docs/guides/quickstart-optimization.md)
+- [docs/README.md](docs/README.md)
+
+## Common tasks
+
+| Task | Read |
+|------|------|
+| Install dependencies and verify the environment | [docs/guides/installation.md](docs/guides/installation.md) |
+| Run the canonical optimization | [docs/guides/quickstart-optimization.md](docs/guides/quickstart-optimization.md) |
+| Run a parameter sweep on the burst VM | [docs/guides/quickstart-sweep.md](docs/guides/quickstart-sweep.md) |
+| Understand repo boundaries before editing code | [docs/architecture/repo-navigation.md](docs/architecture/repo-navigation.md) |
+| Understand saved result files | [docs/architecture/output-format.md](docs/architecture/output-format.md) |
+| Interpret standard plots and sweep heatmaps | [docs/guides/interpreting-plots.md](docs/guides/interpreting-plots.md) |
+| Review the physics and cost-function rationale | [docs/architecture/cost-function-physics.md](docs/architecture/cost-function-physics.md) |
+| Add a fiber preset or optimization variable | [docs/guides/adding-a-fiber-preset.md](docs/guides/adding-a-fiber-preset.md), [docs/guides/adding-an-optimization-variable.md](docs/guides/adding-an-optimization-variable.md) |
+| Re-enter recent project conclusions | [docs/synthesis/](docs/synthesis/) and [docs/status/](docs/status/) |
+
+## Repository layout
+
+```text
+src/         Julia package code and reusable infrastructure
+scripts/     Canonical entry points, maintained workflows, shared script libs,
+             research drivers, and operational helpers
+docs/        Human-facing documentation, architecture notes, status, and synthesis
+test/        Tiered regression suite
+results/     Run artifacts and generated figures; not normal source code
+notebooks/   Scratch analysis, not the canonical workflow surface
 ```
 
-Run `make` with no arguments to list every target.
+The maintained command-line entry points are under
+[`scripts/canonical/`](scripts/canonical/README.md). If you are deciding where
+new code should live, read
+[docs/architecture/repo-navigation.md](docs/architecture/repo-navigation.md)
+before editing.
 
-## Where to go next
+## Environment and compute expectations
 
-| I want to...                                     | Read                                                  |
-|--------------------------------------------------|-------------------------------------------------------|
-| Install and run my first optimization            | [`docs/quickstart-optimization.md`](docs/quickstart-optimization.md) |
-| Launch a parameter sweep                         | [`docs/quickstart-sweep.md`](docs/quickstart-sweep.md) |
-| Understand the output file format (JLD2 + JSON)  | [`docs/output-format.md`](docs/output-format.md)      |
-| Interpret the plots                              | [`docs/interpreting-plots.md`](docs/interpreting-plots.md) |
-| Understand the cost function / adjoint / physics | [`docs/cost-function-physics.md`](docs/cost-function-physics.md) and [`docs/companion_explainer.pdf`](docs/companion_explainer.pdf) |
-| Extend with a new fiber preset                   | [`docs/adding-a-fiber-preset.md`](docs/adding-a-fiber-preset.md) |
-| Extend with a new optimization variable          | [`docs/adding-an-optimization-variable.md`](docs/adding-an-optimization-variable.md) |
-| Install troubleshooting                          | [`docs/installation.md`](docs/installation.md)        |
-| Full doc index                                   | [`docs/README.md`](docs/README.md)                    |
+- Julia `1.9.3+` is required; the repo currently targets Julia `1.12.x`.
+- `claude-code-host` is for editing, orchestration, and light verification.
+- Heavy sweeps and substantial simulation runs belong on `fiber-raman-burst`.
+- Any workflow that produces `phi_opt` is expected to leave the standard image
+  set on disk before the run is considered complete.
 
-## Project layout
+These workflow rules are documented in
+[docs/guides/quickstart-sweep.md](docs/guides/quickstart-sweep.md) and in the
+project operating docs.
 
-```
-src/                Core Julia package (MultiModeNoise.jl): GNLSE forward +
-                    adjoint solvers, YDFA gain, mode solving
-scripts/            Small public CLI surface plus grouped research/dev/ops
-                    workflows under explicit subdirectories.
-docs/               Markdown how-tos + LaTeX pedagogy (companion_explainer.pdf,
-                    verification_document.pdf, physics_verification.pdf),
-                    reports, and durable presentation artifacts.
-test/               Tiered regression test suite (fast / slow / full)
-results/            Run artifacts (JLD2 + JSON), figures, report cards
-notebooks/          Research scratchpads (not handoff material)
-Makefile            Convenience targets — see `make` with no arguments
-```
+## Results and outputs
 
-## Requirements
+Canonical runs write JLD2 payloads, JSON sidecars, and the standard image set
+under `results/`. Sweep reports and presentation figures are generated from
+those saved artifacts rather than by rerunning optimization.
 
-- Julia ≥ 1.9.3 (recommended: 1.12.x). See [`docs/installation.md`](docs/installation.md).
-- Python 3.x with Matplotlib (auto-installed by Conda.jl via PyPlot).
-- No GPU required. Parameter sweeps benefit from a multicore burst VM.
+For field definitions and loading conventions, see
+[docs/architecture/output-format.md](docs/architecture/output-format.md).
 
-## Attribution
+## Attribution and license
 
-Built on Michael Horodynski's
-[MultiModeNoise.jl](https://github.com/michaelhorodynski/MultiModeNoise.jl)
-(shared September 2025). Extended with adjoint-based optimization, parameter
-sweeps, log-scale cost function, and comprehensive visualization.
+The repo builds on Michael Horodynski's
+[MultiModeNoise.jl](https://github.com/michaelhorodynski/MultiModeNoise.jl),
+extended here with adjoint optimization, workflow tooling, result
+serialization, and visualization specific to the Raman-suppression project.
 
-## License
-
-MIT. See [`LICENSE`](LICENSE).
-
-This repository is public for transparency and reproducibility, but it is not
-an open-contribution project.
+MIT license. See [LICENSE](LICENSE).

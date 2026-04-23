@@ -13,6 +13,7 @@ The code changes were intentionally small and behavior-preserving:
 - extract shared objective-regularization primitives used by SMF, MMF, and
   multivariable cost paths
 - extract shared objective-surface metadata and manifest update helpers
+- extract canonical Raman result payload / manifest row builders
 
 ## Duplication And Abstraction Audit
 
@@ -64,11 +65,25 @@ The code changes were intentionally small and behavior-preserving:
   - `write_manifest`
   - `update_manifest_entry`
 
+### Extracted after objective metadata cleanup
+
+- `run_optimization` had a large inline JLD2 payload and manifest-row assembly
+  block. This made it hard to test schema stability without running a full
+  optimization.
+- Added in `scripts/lib/raman_optimization.jl`:
+  - `build_raman_result_payload`
+  - `build_raman_manifest_entry`
+- Added a synthetic Phase 27 regression that verifies:
+  - exact payload key order
+  - selected payload values
+  - manifest fields derived from payload
+  - `jldsave(path; payload...)` round-trips the expected JLD2 keys
+
 ### Stable, but deferred
 
 - Result payload construction in `run_optimization` is still bulky and could be
-  split into a canonical result-record builder, but that touches JLD2 schema
-  expectations and should wait.
+  further split from diagnostics computation, but the schema assembly itself is
+  now isolated and regression-covered.
 
 ### Legacy but valuable
 
@@ -108,10 +123,11 @@ Immediate:
 
 Next:
 
-- Consider a canonical result-record builder for `run_optimization`, keeping
-  the current JLD2 keys unchanged.
 - Audit whether research-side manifests should use `manifest_io.jl` or remain
   study-local provenance files.
+- Consider whether the canonical JLD2 payload should eventually use
+  `src/io/results.jl::save_run` or remain the legacy richer research payload.
+  This requires a deliberate output-format decision.
 
 Later:
 
@@ -139,6 +155,7 @@ Later:
   - Replaced duplicated SMF regularizer blocks with shared helpers.
   - Replaced objective-surface construction and manifest update logic with
     shared helpers.
+  - Added canonical Raman result payload and manifest-entry builders.
 - `scripts/research/analysis/numerical_trust.jl`
   - Replaced fallback cost-surface spec construction with shared helper.
 - `scripts/research/mmf/mmf_raman_optimization.jl`
@@ -163,6 +180,7 @@ Later:
 - `julia -t auto --project=. test/test_phase16_mmf.jl`
 - `julia -t auto --project=. test/test_phase28_trust_report.jl`
 - `julia -t auto --project=. test/test_phase13_hvp.jl`
+- `make test`
 - Fresh-process include checks:
   - `scripts/lib/objective_surface.jl`
   - `scripts/lib/manifest_io.jl`

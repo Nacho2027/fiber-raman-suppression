@@ -23,15 +23,15 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
     # 2. Phase 15 single-process bit-identity.
     @testset "Phase 15 determinism (same process)" begin
-        include(joinpath(_ROOT, "test", "test_determinism.jl"))
+        include(joinpath(_ROOT, "test", "core", "test_determinism.jl"))
     end
 
     # 3. Phase 14 regression + sharpness.
     @testset "Phase 14 regression" begin
-        include(joinpath(_ROOT, "test", "test_phase14_regression.jl"))
+        include(joinpath(_ROOT, "test", "phases", "test_phase14_regression.jl"))
     end
     @testset "Phase 14 sharpness" begin
-        include(joinpath(_ROOT, "test", "test_phase14_sharpness.jl"))
+        include(joinpath(_ROOT, "test", "phases", "test_phase14_sharpness.jl"))
     end
 
     # 4. Cross-process bit identity — spawn two fresh Julia subprocesses

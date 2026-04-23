@@ -121,23 +121,24 @@ function rebuild_problem(; fiber_preset::Symbol, L_fiber::Real, P_cont::Real,
                           raman_threshold::Real=-5.0,
                           M::Int=1, β_order::Union{Nothing,Int}=nothing)
     preset = FIBER_PRESETS[fiber_preset]
-    gamma = preset.gamma
-    betas = preset.betas
-    fR = preset.fR
     # helpers.jl requires length(betas) ≤ β_order-1 (β_order counts from β₀ = 0);
     # all raman drivers use β_order=length(betas)+1, so we mirror that here.
-    β_order_eff = β_order === nothing ? (length(betas) + 1) : β_order
+    β_order_eff = β_order === nothing ? (length(preset.betas) + 1) : β_order
 
-    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, float(time_window), β_order_eff)
-    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
-        float(L_fiber), sim; fR=fR, gamma_user=gamma, betas_user=betas
+    uω0, fiber, sim, band_mask, _, _ = setup_raman_problem_exact(;
+        fiber_preset = fiber_preset,
+        λ0 = float(λ0),
+        M = M,
+        Nt = Nt,
+        time_window = float(time_window),
+        β_order = β_order_eff,
+        L_fiber = float(L_fiber),
+        P_cont = float(P_cont),
+        pulse_fwhm = float(pulse_fwhm),
+        pulse_rep_rate = float(rep_rate),
+        pulse_shape = pulse_shape,
+        raman_threshold = float(raman_threshold),
     )
-    u0_modes = ones(M) / √M
-    _, uω0 = MultiModeNoise.get_initial_state(
-        u0_modes, float(P_cont), float(pulse_fwhm), float(rep_rate), pulse_shape, sim
-    )
-    Δf_fft = fftfreq(Nt, 1 / sim["Δt"])
-    band_mask = Δf_fft .< raman_threshold
     return uω0, fiber, sim, band_mask
 end
 

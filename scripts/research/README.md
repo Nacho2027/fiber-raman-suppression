@@ -14,6 +14,22 @@ Typical contents belong to one of these categories:
 When a research workflow becomes stable and broadly supported, prefer promoting
 its reusable logic into `src/` and exposing only a thin canonical entry point.
 
+## Navigation rule
+
+Treat this tree as intentionally local unless a boundary has already been
+promoted into `scripts/lib/` or `src/`.
+
+That means:
+
+- research scripts should stay readable as experiment definitions
+- local manifest or include patterns are acceptable when they are genuinely
+  study-local
+- do not generalize a research-local pattern into shared infrastructure unless
+  repeated maintained use justifies it
+
+For the broader authority map, see
+[`../../docs/architecture/repo-navigation.md`](../../docs/architecture/repo-navigation.md).
+
 Current grouped areas include:
 
 - [`mmf/`](./mmf/README.md) — multimode Raman optimization and analysis tooling

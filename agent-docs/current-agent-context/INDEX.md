@@ -17,6 +17,8 @@ Only the durable technical and operational findings belong in the new system as 
 
 - `METHODOLOGY.md` — durable sweep/windowing and threading findings that still affect how agents should run experiments
 - `NUMERICS.md` — numerics audit findings that still matter after the April 20 fixes
+- `LONGFIBER.md` — maintainer-style assessment of what the repo can currently support for 50–100 m single-mode work versus what is still experimental
+- `MULTIVAR.md` — current status of the joint phase/amplitude/energy optimization path and the open convergence gap
 - `PERFORMANCE.md` — static roofline/kernel conclusions from Phase 29 that still matter when reasoning about optimization runtime
 - `INFRASTRUCTURE.md` — current remote compute setup and what parts of the old setup notes remain operationally useful
 - `PLANNING-MIGRATION.md` — disposition of every remaining `.planning/` artifact migrated in this pass

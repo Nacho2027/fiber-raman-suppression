@@ -1,70 +1,76 @@
-# Documentation — Fiber Raman Suppression
+# Documentation
 
-One-page index of every doc in this folder. All docs are plain markdown — no
-static-site build step. The LaTeX PDFs beside them (see "Math pedagogy" below)
-stay for math-heavy readers.
+This index covers the human-facing docs in `docs/`. It is written for Rivera
+Lab users running the maintained workflows, interpreting results, or modifying
+the codebase.
 
-See also: [`../README.md`](../README.md) for the project-level overview.
+See also: [../README.md](../README.md) for the project-level overview.
 
-## Operational docs (the ones you run commands from)
+## Start here
 
-| Doc | Read when you want to... |
-|-----|--------------------------|
-| [installation.md](./installation.md) | Install Julia, Python/Matplotlib, and dependencies; troubleshoot Mac / Linux / GCP VM setups. |
-| [quickstart-optimization.md](./quickstart-optimization.md) | Run your first optimization (<15 min). **Start here if you just cloned.** |
-| [quickstart-sweep.md](./quickstart-sweep.md) | Launch a parameter sweep and interpret `results/raman/sweeps/`. |
-| [output-format.md](./output-format.md) | Understand the JLD2 + JSON sidecar format produced by every run. |
-| [interpreting-plots.md](./interpreting-plots.md) | Read the 4-panel report card and know what "good Raman suppression" looks like. |
-| [adding-a-fiber-preset.md](./adding-a-fiber-preset.md) | Extend `FIBER_PRESETS` with a new fiber type. |
-| [adding-an-optimization-variable.md](./adding-an-optimization-variable.md) | Extend the framework with a new optimization variable (stub — Session A in progress). |
+If you are new to the repo but already know the research context, read in this
+order:
 
-Canonical command-line entry points live under [`../scripts/canonical/`](../scripts/canonical/README.md).
-Reusable script libraries live under [`../scripts/lib/`](../scripts/lib/README.md), stable workflow drivers under
-[`../scripts/workflows/`](../scripts/workflows/README.md), and exploratory research drivers under
-[`../scripts/research/`](../scripts/research/README.md). The top level of `scripts/` is intentionally kept free of
-loose script files.
+1. [guides/installation.md](./guides/installation.md)
+2. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
+3. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
+4. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
+5. [architecture/output-format.md](./architecture/output-format.md)
 
-## Recent synthesis
+If you are resuming work after time away, the synthesis and status sections are
+usually more useful than the onboarding sequence.
 
-| Doc | Read when you want to... |
-|-----|--------------------------|
-| [recent-phase-synthesis-29-34.md](./recent-phase-synthesis-29-34.md) | Recover the main lessons from Phases 29-34 without rereading the full planning history. |
-| [why-phase-31-changed-the-roadmap.md](./why-phase-31-changed-the-roadmap.md) | Understand why Phase 31 shifted attention from penalty tuning toward continuation, curvature, and basin access. |
+## Guides
 
-## Phase Status Notes
-
-| Doc | Read when you want to... |
-|-----|--------------------------|
-| [phase-30-status.md](./phase-30-status.md) | See what Phase 30 actually completed versus what its flagship continuation demo failed to prove. |
-| [phase-32-status.md](./phase-32-status.md) | See which Phase 32 acceleration experiments really ran and which conclusions are still provisional. |
-| [phase-34-preconditioning-caveat.md](./phase-34-preconditioning-caveat.md) | Understand why current Phase 34 preconditioning comparisons need a wiring caveat before interpretation. |
-| [phase-34-bounded-rerun-status.md](./phase-34-bounded-rerun-status.md) | See what the post-fix bounded Phase 34 reruns actually say about `:none`, `:dispersion`, and `:dct`. |
-
-## Physics / math pedagogy
-
-| Doc | What it is |
+| Doc | Use it for |
 |-----|------------|
-| [cost-function-physics.md](./cost-function-physics.md) | Prose walkthrough of GNLSE, adjoint, log-scale cost, Raman band. |
-| [companion_explainer.pdf](./companion_explainer.pdf) | First-principles math walkthrough (undergrad-friendly). |
-| [verification_document.pdf](./verification_document.pdf) | Formal equation-by-equation code verification. |
-| [physics_verification.pdf](./physics_verification.pdf) | Physics verification notes. |
+| [guides/installation.md](./guides/installation.md) | Environment setup and troubleshooting on laptops and project VMs. |
+| [guides/quickstart-optimization.md](./guides/quickstart-optimization.md) | Running the maintained single-optimization workflow and checking the output. |
+| [guides/quickstart-sweep.md](./guides/quickstart-sweep.md) | Running a sweep on `fiber-raman-burst` and pulling results back correctly. |
+| [guides/interpreting-plots.md](./guides/interpreting-plots.md) | Reading standard plots, convergence curves, and sweep heatmaps. |
+| [guides/adding-a-fiber-preset.md](./guides/adding-a-fiber-preset.md) | Adding or auditing a fiber preset in the shared setup layer. |
+| [guides/adding-an-optimization-variable.md](./guides/adding-an-optimization-variable.md) | Extending the optimization variable beyond spectral phase. |
 
-## Canonical reading order
+## Architecture and reference
 
-If you are new to the project:
+| Doc | Use it for |
+|-----|------------|
+| [architecture/repo-navigation.md](./architecture/repo-navigation.md) | Deciding where code should live and which layer is authoritative. |
+| [architecture/codebase-visual-map.md](./architecture/codebase-visual-map.md) | Visual companion to the repo navigation guide. |
+| [architecture/output-format.md](./architecture/output-format.md) | Understanding saved JLD2 and JSON run artifacts. |
+| [architecture/cost-convention.md](./architecture/cost-convention.md) | Cost-sign and dB-reporting conventions. |
+| [architecture/cost-function-physics.md](./architecture/cost-function-physics.md) | Physics rationale and the adjoint/cost-function framing used here. |
 
-1. [`../README.md`](../README.md) — 90-second overview.
-2. [installation.md](./installation.md) — get dependencies working.
-3. [quickstart-optimization.md](./quickstart-optimization.md) — your first result.
-4. [interpreting-plots.md](./interpreting-plots.md) — make sense of it.
-5. [cost-function-physics.md](./cost-function-physics.md) — understand why it works.
-6. [output-format.md](./output-format.md) — needed before writing analysis scripts.
+## Status and synthesis
 
-Everything else is reference material for the first time you need it.
+These files are for re-entry and decision support, not first-time onboarding.
 
-## Related project artifacts
+| Doc | Use it for |
+|-----|------------|
+| [synthesis/recent-phase-synthesis-29-34.md](./synthesis/recent-phase-synthesis-29-34.md) | Recovering the main conclusions from recent phases without rereading the full planning history. |
+| [synthesis/why-phase-31-changed-the-roadmap.md](./synthesis/why-phase-31-changed-the-roadmap.md) | Understanding why Phase 31 changed the project direction. |
+| [synthesis/why-phase-34-still-points-back-to-phase-31.md](./synthesis/why-phase-34-still-points-back-to-phase-31.md) | Understanding why the later trust-region work still points back to the Phase 31 conclusion. |
+| [status/multimode-baseline-status-2026-04-22.md](./status/multimode-baseline-status-2026-04-22.md) | Current state of the multimode baseline work. |
+| [status/phase-30-status.md](./status/phase-30-status.md) | What Phase 30 actually established. |
+| [status/phase-32-status.md](./status/phase-32-status.md) | What Phase 32 acceleration work did and did not establish. |
+| [status/phase-34-preconditioning-caveat.md](./status/phase-34-preconditioning-caveat.md) | Caveat for interpreting the current preconditioning comparisons. |
+| [status/phase-34-bounded-rerun-status.md](./status/phase-34-bounded-rerun-status.md) | Summary of the bounded reruns after the Phase 34 fix. |
 
-- [`../results/RESULTS_SUMMARY.md`](../results/RESULTS_SUMMARY.md) — plain-language summary of
-  what the optimizer achieves across fiber presets.
-- [`../agent-docs/current-agent-context/INDEX.md`](../agent-docs/current-agent-context/INDEX.md) — current
-  agent-maintained context for deeper numerics, methodology, and infrastructure work.
+## Reference PDFs and artifacts
+
+| Doc | Use it for |
+|-----|------------|
+| [reference/companion_explainer.pdf](./reference/companion_explainer.pdf) | Longer mathematical walkthrough of the forward and adjoint setup. |
+| [reference/verification_document.pdf](./reference/verification_document.pdf) | Formal verification notes keyed to implementation details. |
+| [reference/physics_verification.pdf](./reference/physics_verification.pdf) | Physics-verification notes and supporting derivations. |
+| [artifacts/README.md](./artifacts/README.md) | Durable figures and report artifacts intentionally kept under `docs/`. |
+| [reports/README.md](./reports/README.md) | Human-facing report outputs kept alongside the docs tree. |
+
+## Planning history
+
+The `planning-history/` subtree is retained as project history. It is useful
+when you need provenance on why a phase was opened, what was claimed at the
+time, or how an implementation decision evolved.
+
+The current operational interpretation of that history usually lives in the
+status and synthesis docs above.

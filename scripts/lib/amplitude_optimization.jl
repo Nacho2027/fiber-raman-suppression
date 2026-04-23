@@ -22,7 +22,7 @@ optimization; phase is the default production path.
 ~5–10 minutes per regularization strategy on a 4-core laptop.
 
 # Docs
-Docs: docs/cost-function-physics.md
+Docs: docs/architecture/cost-function-physics.md
 """
 
 try using Revise catch end

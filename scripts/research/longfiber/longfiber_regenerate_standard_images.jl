@@ -32,7 +32,9 @@ include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
 
-const PHASE16_DIR = joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase16")
+const PHASE16_DIR = let override = get(ENV, "PHASE16_DIR", "")
+    isempty(override) ? joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase16") : override
+end
 
 """
 Regenerate the canonical 4-PNG set for one Session F optimizer JLD2.
