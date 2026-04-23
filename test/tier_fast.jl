@@ -24,6 +24,9 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # visible in the including scope (matches test/test_determinism.jl pattern).
 using MultiModeNoise
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "manifest_io.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "test_repo_structure.jl"))
 
 @testset "Phase 16 — fast tier" begin
@@ -106,6 +109,128 @@ include(joinpath(@__DIR__, "test_repo_structure.jl"))
         spm_ps_bug      = β2 * L * δω_SPM_bug * 1e12
         expected_tw_bug = max(5, ceil(Int, (walk_off_ps + spm_ps_bug + 0.5) * 2.0))
         @test tw_spm != expected_tw_bug   # regression guard: bug is detectable
+    end
+
+    @testset "Single-mode setup contract" begin
+        kwargs = (
+            λ0 = 1550e-9,
+            M = 1,
+            Nt = 1024,
+            time_window = 10.0,
+            β_order = 3,
+            L_fiber = 1.0,
+            P_cont = 0.05,
+            pulse_fwhm = 185e-15,
+            pulse_rep_rate = 80.5e6,
+            pulse_shape = "sech_sq",
+            raman_threshold = -5.0,
+            fiber_preset = :SMF28,
+        )
+
+        uω0_r, fiber_r, sim_r, band_r, Δf_r, thr_r = setup_raman_problem(; kwargs...)
+        uω0_a, fiber_a, sim_a, band_a, Δf_a, thr_a = setup_amplitude_problem(; kwargs...)
+
+        @test size(uω0_r) == (sim_r["Nt"], sim_r["M"])
+        @test sim_r["Nt"] == sim_a["Nt"]
+        @test sim_r["M"] == sim_a["M"]
+        @test sim_r["Δt"] == sim_a["Δt"]
+        @test fiber_r["L"] == fiber_a["L"]
+        @test fiber_r["γ"] == fiber_a["γ"]
+        @test fiber_r["Dω"] == fiber_a["Dω"]
+        @test uω0_r == uω0_a
+        @test band_r == band_a
+        @test Δf_r == Δf_a
+        @test thr_r == thr_a == kwargs.raman_threshold
+        @test any(band_r)
+    end
+
+    @testset "Regularizer helper formulas" begin
+        φ = reshape(collect(range(-0.2, stop=0.3, length=18)), 6, 3)
+        Δt = 0.0125
+        λ_gdd = 2e-4
+        grad = zeros(size(φ))
+        J_helper = add_gdd_penalty!(grad, φ, Δt, λ_gdd)
+
+        Δω = 2π / (size(φ, 1) * Δt)
+        inv_Δω3 = 1.0 / Δω^3
+        J_ref = 0.0
+        grad_ref = zeros(size(φ))
+        for m in 1:size(φ, 2)
+            for i in 2:(size(φ, 1) - 1)
+                d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
+                J_ref += λ_gdd * inv_Δω3 * d2^2
+                coeff = 2 * λ_gdd * inv_Δω3 * d2
+                grad_ref[i-1, m] += coeff
+                grad_ref[i, m] -= 2 * coeff
+                grad_ref[i+1, m] += coeff
+            end
+        end
+        @test J_helper ≈ J_ref
+        @test grad ≈ grad_ref
+
+        uω = ComplexF64[sin(i / 3) + im*cos(i / 5) for i in 1:16, _ in 1:2]
+        grad_b = zeros(Float64, size(uω))
+        J_b = add_boundary_phase_penalty!(grad_b, uω, 0.7; edge_fraction_floor=0.0)
+
+        Nt = size(uω, 1)
+        n_edge = max(1, Nt ÷ 20)
+        ut0 = ifft(uω, 1)
+        mask_edge = zeros(Float64, size(uω))
+        mask_edge[1:n_edge, :] .= 1.0
+        mask_edge[end-n_edge+1:end, :] .= 1.0
+        E_total_input = max(sum(abs2, ut0), eps())
+        edge_frac = sum(abs2.(ut0) .* mask_edge) / E_total_input
+        grad_b_ref = (2 * 0.7 / (Nt * E_total_input)) .* imag.(conj.(uω) .* fft(mask_edge .* ut0, 1))
+        @test J_b ≈ 0.7 * edge_frac
+        @test grad_b ≈ grad_b_ref
+
+        grad_log = copy(grad_b_ref)
+        J_log = apply_log_surface!(grad_log, J_b)
+        @test J_log ≈ 10 * log10(max(J_b, 1e-15))
+        @test grad_log ≈ grad_b_ref .* (10.0 / (max(J_b, 1e-15) * log(10.0)))
+    end
+
+    @testset "Objective surface helper" begin
+        terms = active_linear_terms(
+            ["J_physics"],
+            [(true, "λ_gdd*R_gdd"), (false, "λ_boundary*R_boundary"), (true, "λ_tv*R_tv")],
+        )
+        spec = build_objective_surface_spec(;
+            objective_label = "test objective",
+            log_cost = true,
+            linear_terms = terms,
+            leading_fields = (variant = "sum",),
+            trailing_fields = (lambda_gdd = 1e-4, lambda_tv = 0.2),
+        )
+
+        @test spec.variant == "sum"
+        @test spec.objective_label == "test objective"
+        @test spec.scale == "dB"
+        @test spec.pre_log_linear_surface == "J_physics + λ_gdd*R_gdd + λ_tv*R_tv"
+        @test spec.scalar_surface == "10*log10(J_physics + λ_gdd*R_gdd + λ_tv*R_tv)"
+        @test spec.regularizers_chained_into_surface === true
+        @test spec.lambda_gdd == 1e-4
+    end
+
+    @testset "Manifest append/replace helper" begin
+        mktempdir() do dir
+            path = joinpath(dir, "manifest.json")
+            n1 = update_manifest_entry(path, Dict{String,Any}(
+                "result_file" => "a.jld2", "J_after_dB" => -10.0))
+            n2 = update_manifest_entry(path, Dict{String,Any}(
+                "result_file" => "b.jld2", "J_after_dB" => -20.0))
+            n3 = update_manifest_entry(path, Dict{String,Any}(
+                "result_file" => "a.jld2", "J_after_dB" => -30.0))
+
+            manifest = read_manifest(path)
+            @test n1 == 1
+            @test n2 == 2
+            @test n3 == 2
+            @test length(manifest) == 2
+            @test manifest[1]["result_file"] == "a.jld2"
+            @test manifest[1]["J_after_dB"] == -30.0
+            @test manifest[2]["result_file"] == "b.jld2"
+        end
     end
 
     @testset "Output format round trip (D2 schema)" begin

@@ -41,6 +41,8 @@ const _MULTIVAR_OPT_LOADED = true
 
 include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "determinism.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "objective_surface.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "regularizers.jl"))
 ensure_deterministic_environment()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -106,29 +108,28 @@ function multivar_cost_surface_spec(
     cfg::MVConfig;
     objective_label::AbstractString="multivariable Raman spectral shaping optimization")
 
-    linear_terms = String["J_physics"]
-    cfg.λ_gdd > 0        && push!(linear_terms, "λ_gdd*R_gdd")
-    cfg.λ_boundary > 0   && push!(linear_terms, "λ_boundary*R_boundary")
-    cfg.λ_energy > 0     && push!(linear_terms, "λ_energy*R_energy")
-    cfg.λ_tikhonov > 0   && push!(linear_terms, "λ_tikhonov*R_tikhonov")
-    cfg.λ_tv > 0         && push!(linear_terms, "λ_tv*R_tv")
-    cfg.λ_flat > 0       && push!(linear_terms, "λ_flat*R_flat")
-    linear_surface = join(linear_terms, " + ")
-    scalar_surface = cfg.log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
-
-    return (
-        objective_label = String(objective_label),
+    return build_objective_surface_spec(;
+        objective_label = objective_label,
         log_cost = cfg.log_cost,
-        scale = cfg.log_cost ? "dB" : "linear",
-        scalar_surface = scalar_surface,
-        pre_log_linear_surface = linear_surface,
-        regularizers_chained_into_surface = true,
-        lambda_gdd = cfg.λ_gdd,
-        lambda_boundary = cfg.λ_boundary,
-        lambda_energy = cfg.λ_energy,
-        lambda_tikhonov = cfg.λ_tikhonov,
-        lambda_tv = cfg.λ_tv,
-        lambda_flat = cfg.λ_flat,
+        linear_terms = active_linear_terms(
+            ["J_physics"],
+            [
+                (cfg.λ_gdd > 0, "λ_gdd*R_gdd"),
+                (cfg.λ_boundary > 0, "λ_boundary*R_boundary"),
+                (cfg.λ_energy > 0, "λ_energy*R_energy"),
+                (cfg.λ_tikhonov > 0, "λ_tikhonov*R_tikhonov"),
+                (cfg.λ_tv > 0, "λ_tv*R_tv"),
+                (cfg.λ_flat > 0, "λ_flat*R_flat"),
+            ],
+        ),
+        trailing_fields = (
+            lambda_gdd = cfg.λ_gdd,
+            lambda_boundary = cfg.λ_boundary,
+            lambda_energy = cfg.λ_energy,
+            lambda_tikhonov = cfg.λ_tikhonov,
+            lambda_tv = cfg.λ_tv,
+            lambda_flat = cfg.λ_flat,
+        ),
     )
 end
 
@@ -360,20 +361,8 @@ function cost_and_gradient_multivar(
 
     # GDD penalty on φ (same discrete stencil as raman_optimization.jl)
     if cfg.λ_gdd > 0 && haskey(off.ranges, :phase)
-        Δω = 2π / (Nt * sim["Δt"])
-        inv_Δω3 = 1.0 / Δω^3
-        J_gdd = 0.0
         g_gdd = zeros(Nt, M)
-        @inbounds for m in 1:M
-            for i in 2:(Nt-1)
-                d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
-                J_gdd += cfg.λ_gdd * inv_Δω3 * d2^2
-                coeff = 2 * cfg.λ_gdd * inv_Δω3 * d2
-                g_gdd[i-1, m] += coeff
-                g_gdd[i,   m] -= 2 * coeff
-                g_gdd[i+1, m] += coeff
-            end
-        end
+        J_gdd = add_gdd_penalty!(g_gdd, φ, sim["Δt"], cfg.λ_gdd)
         J_total += J_gdd
         g[off.ranges[:phase]] .+= vec(g_gdd)
         reg_breakdown["J_gdd"] = J_gdd
@@ -381,24 +370,22 @@ function cost_and_gradient_multivar(
 
     # Boundary penalty on the shaped input pulse energy at FFT window edges
     if cfg.λ_boundary > 0
-        n_edge = max(1, Nt ÷ 20)
-        ut0 = ifft(u_shaped, 1)
-        mask_edge = zeros(Nt, M)
-        mask_edge[1:n_edge, :] .= 1.0
-        mask_edge[end - n_edge + 1:end, :] .= 1.0
-        E_t_total = max(sum(abs2, ut0), eps())
-        E_edges   = sum(abs2.(ut0) .* mask_edge)
-        edge_frac = E_edges / E_t_total
-        if edge_frac > 1e-8
-            J_b = cfg.λ_boundary * edge_frac
-            # Same derivation as raman_optimization.jl: chain rule through IFFT and the
-            # shaping factor α·A·cis(φ). Only active for phase-enabled runs (simplest case).
-            if haskey(off.ranges, :phase)
-                coeff_b = 2 * cfg.λ_boundary / (Nt * E_t_total)
-                # d|ut|²/dφ path: imag part of conj(u_shaped) · fft(mask .* ut0)
-                grad_b_ω = coeff_b .* imag.(conj.(u_shaped) .* fft(mask_edge .* ut0, 1))
-                g[off.ranges[:phase]] .+= vec(grad_b_ω)
-            end
+        J_b = 0.0
+        if haskey(off.ranges, :phase)
+            g_boundary = zeros(Nt, M)
+            J_b = add_boundary_phase_penalty!(g_boundary, u_shaped, cfg.λ_boundary)
+            g[off.ranges[:phase]] .+= vec(g_boundary)
+        else
+            ut0 = ifft(u_shaped, 1)
+            n_edge = max(1, Nt ÷ 20)
+            mask_edge = zeros(Nt, M)
+            mask_edge[1:n_edge, :] .= 1.0
+            mask_edge[end - n_edge + 1:end, :] .= 1.0
+            E_t_total = max(sum(abs2, ut0), eps())
+            edge_frac = sum(abs2.(ut0) .* mask_edge) / E_t_total
+            edge_frac > 1e-8 && (J_b = cfg.λ_boundary * edge_frac)
+        end
+        if J_b > 0
             J_total += J_b
             reg_breakdown["J_boundary"] = J_b
         end
@@ -462,11 +449,7 @@ function cost_and_gradient_multivar(
 
     # Log-cost transform of the full regularized scalar objective.
     if cfg.log_cost
-        J_clamped = max(J_total, 1e-15)
-        J_phys = 10.0 * log10(J_clamped)
-        scale  = 10.0 / (J_clamped * log(10.0))
-        g .*= scale
-        J_total = J_phys
+        J_total = apply_log_surface!(g, J_total)
     end
 
     merge!(diag, Dict{Symbol,Any}(:breakdown => reg_breakdown))

@@ -1,6 +1,8 @@
 using Dates
 using Printf
 
+include(joinpath(@__DIR__, "..", "..", "lib", "objective_surface.jl"))
+
 if !(@isdefined _NUMERICAL_TRUST_JL_LOADED)
 const _NUMERICAL_TRUST_JL_LOADED = true
 
@@ -92,18 +94,16 @@ function build_numerical_trust_report(;
         "verdict" => determinism_verdict(det_status),
     )
 
-    spec = isnothing(objective_spec) ? (
-        objective_label = String(objective_label),
+    spec = isnothing(objective_spec) ? build_objective_surface_spec(;
+        objective_label = objective_label,
         log_cost = log_cost,
-        scale = log_cost ? "dB" : "linear",
-        scalar_surface = log_cost ? "10*log10(physics + λ_gdd*R_gdd + λ_boundary*R_boundary)" :
-                                    "physics + λ_gdd*R_gdd + λ_boundary*R_boundary",
-        pre_log_linear_surface = "physics + λ_gdd*R_gdd + λ_boundary*R_boundary",
-        regularizers_chained_into_surface = true,
-        lambda_gdd = Float64(λ_gdd),
-        lambda_boundary = Float64(λ_boundary),
-        boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
-        hvp_safe_for_same_surface = true,
+        linear_terms = ["physics", "λ_gdd*R_gdd", "λ_boundary*R_boundary"],
+        trailing_fields = (
+            lambda_gdd = Float64(λ_gdd),
+            lambda_boundary = Float64(λ_boundary),
+            boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+            hvp_safe_for_same_surface = true,
+        ),
     ) : objective_spec
 
     cost_surface_block = Dict{String,Any}(

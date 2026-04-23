@@ -47,6 +47,8 @@ include(joinpath(@__DIR__, "..", "..", "..", "src", "mmf_cost.jl"))
 # That file is in the protected set — we include it read-only. standard_images.jl is
 # the new mandatory wrapper; every driver MUST call save_standard_set after phi_opt.
 include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "objective_surface.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
 
@@ -131,21 +133,18 @@ function mmf_cost_surface_spec(;
                 variant === :fundamental ? "J_mmf_fundamental" :
                 variant === :worst_mode ? "J_mmf_worst_mode" :
                 throw(ArgumentError("unknown MMF cost variant :$variant"))
-    linear_terms = String[base_cost]
-    λ_gdd > 0 && push!(linear_terms, "λ_gdd*R_gdd")
-    λ_boundary > 0 && push!(linear_terms, "λ_boundary*R_boundary")
-    linear_surface = join(linear_terms, " + ")
-    scalar_surface = log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
-    return (
-        objective_label = String(objective_label),
-        variant = String(variant),
+    return build_objective_surface_spec(;
+        objective_label = objective_label,
         log_cost = log_cost,
-        scale = log_cost ? "dB" : "linear",
-        scalar_surface = scalar_surface,
-        pre_log_linear_surface = linear_surface,
-        regularizers_chained_into_surface = true,
-        lambda_gdd = Float64(λ_gdd),
-        lambda_boundary = Float64(λ_boundary),
+        linear_terms = active_linear_terms(
+            [base_cost],
+            [(λ_gdd > 0, "λ_gdd*R_gdd"), (λ_boundary > 0, "λ_boundary*R_boundary")],
+        ),
+        leading_fields = (variant = String(variant),),
+        trailing_fields = (
+            lambda_gdd = Float64(λ_gdd),
+            lambda_boundary = Float64(λ_boundary),
+        ),
     )
 end
 
@@ -233,47 +232,14 @@ function cost_and_gradient_mmf(
     grad_total = copy(∂J_∂φ)
 
     # GDD regularizer on the shared phase
-    if λ_gdd > 0
-        Δω    = 2π / (Nt * sim["Δt"])
-        invω3 = 1.0 / Δω^3
-        for i in 2:(Nt - 1)
-            d2 = φ[i + 1] - 2φ[i] + φ[i - 1]
-            J_total          += λ_gdd * invω3 * d2^2
-            coeff             = 2 * λ_gdd * invω3 * d2
-            grad_total[i - 1] += coeff
-            grad_total[i]     -= 2 * coeff
-            grad_total[i + 1] += coeff
-        end
-    end
+    J_total += add_gdd_penalty!(grad_total, φ, sim["Δt"], λ_gdd)
 
     # Boundary energy penalty on the time-domain input
-    if λ_boundary > 0
-        n_edge = max(1, Nt ÷ 20)
-        # Apply the SAME phase to each mode (shared) before IFFT
-        ut0 = ifft(uω0_base .* phase_factor, 1)     # (Nt, M)
-        mask_edge = zeros(Nt)
-        mask_edge[1:n_edge]               .= 1.0
-        mask_edge[end - n_edge + 1:end]   .= 1.0
-
-        E_total_input = max(sum(abs2, ut0), eps())
-        E_edges       = sum(abs2.(ut0) .* mask_edge)
-        edge_frac     = E_edges / E_total_input
-        if edge_frac > 1e-8
-            J_total += λ_boundary * edge_frac
-            # Gradient of boundary penalty w.r.t. φ
-            coeff = 2 * λ_boundary / (Nt * E_total_input)
-            # sum over modes: ∂J_b/∂φ = Σ_m 2·Re(conj(uω0_shaped[:,m]) · FFT(mask·ut0[:,m]))
-            fft_back = fft(ut0 .* mask_edge, 1)     # (Nt, M)
-            grad_b   = coeff .* vec(sum(imag.(conj.(uω0_base .* phase_factor) .* fft_back), dims = 2))
-            grad_total .+= grad_b
-        end
-    end
+    J_total += add_shared_boundary_phase_penalty!(
+        grad_total, uω0_base .* phase_factor, λ_boundary)
 
     if log_cost
-        J_clamped    = max(J_total, 1e-15)
-        scale        = 10.0 / (J_clamped * log(10.0))
-        grad_total .*= scale
-        J_total      = 10.0 * log10(J_clamped)
+        J_total = apply_log_surface!(grad_total, J_total)
     end
 
     @assert isfinite(J_total)         "regularized cost non-finite: $J_total"

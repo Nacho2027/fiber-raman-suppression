@@ -19,13 +19,14 @@ All fiber parameters in this module are for single-mode (M=1) propagation using
 Include guard: safe to include multiple times.
 """
 
+using Printf
+
 if !(@isdefined _COMMON_JL_LOADED)
 const _COMMON_JL_LOADED = true
 
 using LinearAlgebra
 using FFTW
 using Logging
-using Printf
 using MultiModeNoise
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,6 +310,107 @@ end
 # Setup: phase optimization (single-mode fibers)
 # ─────────────────────────────────────────────────────────────────────────────
 
+function _validate_single_mode_setup(;
+    λ0,
+    M,
+    Nt,
+    time_window,
+    L_fiber,
+    P_cont,
+    pulse_fwhm,
+    gamma_user,
+    betas_user,
+)
+    @assert λ0 > 0 "wavelength must be positive, got $λ0"
+    @assert M ≥ 1 "need at least 1 mode"
+    @assert ispow2(Nt) "Nt must be power of 2, got $Nt"
+    @assert time_window > 0 "time_window must be positive"
+    @assert L_fiber > 0 "fiber length must be positive, got $L_fiber"
+    @assert P_cont > 0 "power must be positive"
+    @assert pulse_fwhm > 0 "pulse FWHM must be positive"
+    @assert gamma_user > 0 "nonlinear coefficient must be positive"
+    @assert length(betas_user) ≥ 1 "need at least β₂"
+end
+
+function _auto_size_single_mode_grid(Nt, time_window, L_fiber, P_cont,
+                                     pulse_fwhm, pulse_rep_rate,
+                                     gamma_user, betas_user)
+    # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
+    P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
+    tw_rec = recommended_time_window(L_fiber;
+        beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=P_peak)
+    if time_window < tw_rec
+        Nt_rec = nt_for_window(tw_rec)
+        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
+            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
+        time_window = tw_rec
+        Nt = max(Nt, Nt_rec)
+    end
+    return Nt, time_window, tw_rec
+end
+
+"""
+    _setup_single_mode_problem(; kwargs...) -> NamedTuple
+
+Shared single-mode problem builder used by the public Raman phase and amplitude
+setup functions. It preserves their tuple-shaped API while keeping preset
+resolution, validation, grid auto-sizing, sim/fiber construction, launch-field
+creation, and Raman-band masking in one place.
+"""
+function _setup_single_mode_problem(;
+    λ0,
+    M,
+    Nt,
+    time_window,
+    β_order,
+    L_fiber,
+    P_cont,
+    pulse_fwhm,
+    pulse_rep_rate,
+    pulse_shape,
+    raman_threshold,
+    gamma_user,
+    betas_user,
+    fR,
+    fiber_preset::Union{Nothing, Symbol},
+)
+    gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
+    _validate_single_mode_setup(;
+        λ0, M, Nt, time_window, L_fiber, P_cont, pulse_fwhm, gamma_user, betas_user,
+    )
+
+    Nt, time_window, tw_rec = _auto_size_single_mode_grid(
+        Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
+        gamma_user, betas_user,
+    )
+
+    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
+    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
+        L_fiber, sim; fR=fR, gamma_user=gamma_user, betas_user=betas_user
+    )
+    u0_modes = ones(M) / √M
+    _, uω0 = MultiModeNoise.get_initial_state(
+        u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
+    )
+
+    Δf_fft = fftfreq(Nt, 1 / sim["Δt"])
+    Δf = fftshift(Δf_fft)
+    band_mask = Δf_fft .< raman_threshold
+
+    return (
+        uω0 = uω0,
+        fiber = fiber,
+        sim = sim,
+        band_mask = band_mask,
+        Δf = Δf,
+        raman_threshold = raman_threshold,
+        gamma_user = gamma_user,
+        betas_user = betas_user,
+        fR = fR,
+        tw_rec = tw_rec,
+    )
+end
+
 """
     setup_raman_problem(; kwargs...)
 
@@ -340,48 +442,15 @@ function setup_raman_problem(;
     fR = 0.18,
     fiber_preset::Union{Nothing, Symbol} = nothing
 )
-    gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
-
-    # PRECONDITIONS
-    @assert λ0 > 0 "wavelength must be positive, got $λ0"
-    @assert M ≥ 1 "need at least 1 mode"
-    @assert ispow2(Nt) "Nt must be power of 2, got $Nt"
-    @assert time_window > 0 "time_window must be positive"
-    @assert L_fiber > 0 "fiber length must be positive, got $L_fiber"
-    @assert P_cont > 0 "power must be positive"
-    @assert pulse_fwhm > 0 "pulse FWHM must be positive"
-    @assert gamma_user > 0 "nonlinear coefficient must be positive"
-    @assert length(betas_user) ≥ 1 "need at least β₂"
-
-    # SPM-corrected time window: auto-override if too small to prevent attenuator absorption.
-    # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
-    _P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
-    tw_rec = recommended_time_window(L_fiber;
-        beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=_P_peak)
-    if time_window < tw_rec
-        Nt_rec = nt_for_window(tw_rec)
-        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
-            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
-        time_window = tw_rec
-        Nt = max(Nt, Nt_rec)
-    end
-
-    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
-    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
-        L_fiber, sim; fR=fR, gamma_user=gamma_user, betas_user=betas_user
-    )
-    u0_modes = ones(M) / √M
-    _, uω0 = MultiModeNoise.get_initial_state(
-        u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
+    setup = _setup_single_mode_problem(;
+        λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
+        pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
+        fR, fiber_preset,
     )
 
-    Δf_fft = fftfreq(Nt, 1 / sim["Δt"])
-    Δf = fftshift(Δf_fft)
-    band_mask = Δf_fft .< raman_threshold
+    @debug "Setup (raman)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] fiber_preset=fiber_preset
 
-    @debug "Setup (raman)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=gamma_user β₂=betas_user[1] raman_bins=sum(band_mask) total_bins=Nt fiber_preset=fiber_preset
-
-    return uω0, fiber, sim, band_mask, Δf, raman_threshold
+    return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -419,54 +488,21 @@ function setup_amplitude_problem(;
     fR = 0.18,
     fiber_preset::Union{Nothing, Symbol} = nothing
 )
-    gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
-
-    # PRECONDITIONS
-    @assert λ0 > 0 "wavelength must be positive, got $λ0"
-    @assert M ≥ 1 "need at least 1 mode"
-    @assert ispow2(Nt) "Nt must be power of 2, got $Nt"
-    @assert time_window > 0 "time_window must be positive"
-    @assert L_fiber > 0 "fiber length must be positive, got $L_fiber"
-    @assert P_cont > 0 "power must be positive"
-    @assert pulse_fwhm > 0 "pulse FWHM must be positive"
-    @assert gamma_user > 0 "nonlinear coefficient must be positive"
-    @assert length(betas_user) ≥ 1 "need at least β₂"
-
-    # SPM-corrected time window: auto-override if too small to prevent attenuator absorption.
-    # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
-    _P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
-    tw_rec = recommended_time_window(L_fiber;
-        beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=_P_peak)
-    if time_window < tw_rec
-        Nt_rec = nt_for_window(tw_rec)
-        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
-            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
-        time_window = tw_rec
-        Nt = max(Nt, Nt_rec)
-    end
-
-    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
-    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
-        L_fiber, sim; fR=fR, gamma_user=gamma_user, betas_user=betas_user
+    setup = _setup_single_mode_problem(;
+        λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
+        pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
+        fR, fiber_preset,
     )
-    u0_modes = ones(M) / √M
-    _, uω0 = MultiModeNoise.get_initial_state(
-        u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
-    )
-
-    Δf_fft = fftfreq(Nt, 1 / sim["Δt"])
-    Δf = fftshift(Δf_fft)
-    band_mask = Δf_fft .< raman_threshold
 
     # Soliton order for diagnostics
-    β2 = betas_user[1]
+    β2 = setup.betas_user[1]
     T0 = pulse_fwhm / (2 * acosh(sqrt(2)))
     P_peak = P_cont / (pulse_fwhm * pulse_rep_rate)
-    N_sol = sqrt(gamma_user * P_peak * T0^2 / abs(β2))
+    N_sol = sqrt(setup.gamma_user * P_peak * T0^2 / abs(β2))
 
-    @debug "Setup (amplitude)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=gamma_user β₂=betas_user[1] N_soliton=round(N_sol, digits=2) raman_bins=sum(band_mask) total_bins=Nt time_window=time_window tw_recommended=tw_rec fiber_preset=fiber_preset
+    @debug "Setup (amplitude)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] N_soliton=round(N_sol, digits=2) raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] time_window=setup.sim["Δt"]*setup.sim["Nt"] tw_recommended=setup.tw_rec fiber_preset=fiber_preset
 
-    return uω0, fiber, sim, band_mask, Δf, raman_threshold
+    return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
 end
 
 end # include guard

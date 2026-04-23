@@ -43,6 +43,9 @@ using JLD2
 using JSON3
 
 include("common.jl")
+include("manifest_io.jl")
+include("objective_surface.jl")
+include("regularizers.jl")
 include("visualization.jl")
 include(joinpath(@__DIR__, "..", "research", "analysis", "numerical_trust.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
@@ -76,19 +79,16 @@ function raman_cost_surface_spec(;
     λ_boundary::Real=0.0,
     objective_label::AbstractString="single-mode Raman spectral phase optimization")
 
-    linear_surface = "physics + λ_gdd*R_gdd + λ_boundary*R_boundary"
-    scalar_surface = log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
-    return (
-        objective_label = String(objective_label),
+    return build_objective_surface_spec(;
+        objective_label = objective_label,
         log_cost = log_cost,
-        scale = log_cost ? "dB" : "linear",
-        scalar_surface = scalar_surface,
-        pre_log_linear_surface = linear_surface,
-        regularizers_chained_into_surface = true,
-        lambda_gdd = Float64(λ_gdd),
-        lambda_boundary = Float64(λ_boundary),
-        boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
-        hvp_safe_for_same_surface = true,
+        linear_terms = ["physics", "λ_gdd*R_gdd", "λ_boundary*R_boundary"],
+        trailing_fields = (
+            lambda_gdd = Float64(λ_gdd),
+            lambda_boundary = Float64(λ_boundary),
+            boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+            hvp_safe_for_same_surface = true,
+        ),
     )
 end
 
@@ -143,54 +143,15 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     grad_total = copy(∂J_∂φ)
 
     # ── GDD penalty: ∫(d²φ/dω²)² dω, scaled by Δω⁻³ for N-independence ──
-    if λ_gdd > 0
-        Nt_φ = size(φ, 1)
-        Δω = 2π / (Nt_φ * sim["Δt"])
-        inv_Δω3 = 1.0 / Δω^3
-        for m in 1:size(φ, 2)
-            for i in 2:(Nt_φ - 1)
-                d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
-                J_total += λ_gdd * inv_Δω3 * d2^2
-                coeff = 2 * λ_gdd * inv_Δω3 * d2
-                grad_total[i-1, m] += coeff
-                grad_total[i, m]   -= 2 * coeff
-                grad_total[i+1, m] += coeff
-            end
-        end
-    end
+    J_total += add_gdd_penalty!(grad_total, φ, sim["Δt"], λ_gdd)
 
     # ── Boundary penalty: penalizes energy at FFT window edges of input pulse ──
-    if λ_boundary > 0
-        Nt_b = size(φ, 1)
-        n_edge = max(1, Nt_b ÷ 20)  # 5% on each side
-
-        ut0 = ifft(uω0_shaped, 1)
-
-        mask_edge = zeros(Nt_b, size(φ, 2))
-        mask_edge[1:n_edge, :] .= 1.0
-        mask_edge[end-n_edge+1:end, :] .= 1.0
-
-        E_total_input = max(sum(abs2.(ut0)), eps())
-        E_edges = sum(abs2.(ut0) .* mask_edge)
-        edge_frac = E_edges / E_total_input
-
-        if edge_frac > 1e-8
-            J_total += λ_boundary * edge_frac
-
-            # Gradient: adjoint of IFFT + chain rule through cis(φ)
-            coeff = 2 * λ_boundary / (Nt_b * E_total_input)
-            grad_boundary_ω = coeff .* imag.(conj.(uω0_shaped) .* fft(mask_edge .* ut0, 1))
-            grad_total .+= grad_boundary_ω
-        end
-    end
+    J_total += add_boundary_phase_penalty!(grad_total, uω0_shaped, λ_boundary)
 
     # Log-scale the entire regularized objective so the returned gradient matches
     # the scalar objective seen by L-BFGS.
     if log_cost
-        J_clamped = max(J_total, 1e-15)
-        log_scale = 10.0 / (J_clamped * log(10.0))
-        grad_total .*= log_scale
-        J_total = 10.0 * log10(J_clamped)
+        J_total = apply_log_surface!(grad_total, J_total)
     end
 
     @assert isfinite(J_total) "regularized cost is not finite: $J_total"
@@ -695,31 +656,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         "result_file"    => jld2_path,
     )
 
-    # Append-safe: read existing manifest, update/append this run, write back
-    existing_manifest = if isfile(manifest_path)
-        try
-            JSON3.read(read(manifest_path, String), Vector{Dict{String,Any}})
-        catch e
-            @warn "Could not parse existing manifest.json, starting fresh" exception=e
-            Dict{String,Any}[]
-        end
-    else
-        Dict{String,Any}[]
-    end
-
-    # Replace existing entry for same result_file, or append
-    idx = findfirst(e -> get(e, "result_file", "") == jld2_path, existing_manifest)
-    if idx !== nothing
-        existing_manifest[idx] = manifest_entry
-    else
-        push!(existing_manifest, manifest_entry)
-    end
-
-    mkpath(dirname(manifest_path))
-    open(manifest_path, "w") do io
-        JSON3.pretty(io, existing_manifest)
-    end
-    @info "Updated manifest at $manifest_path ($(length(existing_manifest)) runs)"
+    manifest_count = update_manifest_entry(manifest_path, manifest_entry)
+    @info "Updated manifest at $manifest_path ($(manifest_count) runs)"
 
     if do_plots
         # ── Plots ──
