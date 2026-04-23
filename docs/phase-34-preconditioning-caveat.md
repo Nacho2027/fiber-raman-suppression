@@ -1,53 +1,63 @@
-# Phase 34 Preconditioning Caveat
+# Phase 34 Preconditioning Status And Caveat
 
-This note records the most important interpretation caveat for current Phase 34 results.
+This note records the current interpretation status for Phase 34 preconditioning work.
 
-## The short version
+## Current status
 
-Some early Phase 34 benchmark comparisons should **not** be read as true preconditioned benchmark evidence.
+The original `M`-wiring caveat has now been addressed:
 
-The reason is simple:
+- `optimize_spectral_phase_tr` forwards `M` into `solve_subproblem`
+- the Phase 34 benchmark driver passes its built preconditioner through that path
+- regression coverage now checks that the outer loop actually uses `M`
 
-- `PreconditionedCGSolver` supports a preconditioner passed as `M`
-- but the main trust-region outer loop currently calls `solve_subproblem(solver, g, H_op, Δ)` without forwarding `M`
+So current PCG runs are no longer suffering from the earlier "preconditioner silently dropped" problem.
 
-So in that path, the configured solver can still run as if no preconditioner was supplied.
+## The new short version
+
+The important caveat has changed.
+
+The current issue is no longer missing wiring. It is that preconditioning must respect the gauge-projected subspace used by the trust-region outer loop.
+
+That problem has also been partially addressed:
+
+- the PCG path now reprojects preconditioned residuals, directions, and the final step back into the gauge-complement
+
+This removed the immediate `GAUGE_LEAK` failures that appeared as soon as real preconditioners were admitted into the main path.
 
 ## Why this matters
 
-If `M` is not forwarded, then a benchmark labeled with a preconditioner name may still behave like the identity / unpreconditioned case inside the actual subproblem solve.
+The Phase 34 story now has two stages:
 
-That means:
+1. before the wiring fix, full benchmark comparisons could not be trusted because nominal preconditioners might still behave like the identity case
+2. after the wiring fix and gauge-safe projection fix, the preconditioners are finally being tested honestly on the main path
 
-- solver-type comparisons may be overstated
-- negative results may say more about wiring than about the preconditioner idea itself
-- apparent parity with Steihaug can be an artifact of bypass, not a scientific verdict
+That is a real research transition: the comparisons are now more meaningful, but they still need to be interpreted as early bounded-case evidence rather than final Phase 34 verdicts.
 
 ## What is confirmed
 
-The gap is visible in the current code path:
+The old gap was visible in the code path:
 
 - `scripts/trust_region_optimize.jl` calls:
-  `solve_subproblem(solver, g, H_op, Δ)`
+  `solve_subproblem(solver, g, H_op, Δ; M=M, proj=_proj)`
 - `scripts/trust_region_pcg.jl` expects:
-  `solve_subproblem(...; M=nothing, ...)`
+  `solve_subproblem(...; M=nothing, proj=identity, ...)`
 
-So unless some caller-specific path injects `M` directly, the prebuilt preconditioner is bypassed.
+The current bounded reruns through the real outer loop show:
 
-This matches the project state note in `docs/planning-history/STATE.md`:
-
-- "M-kwarg wiring gap: optimize_spectral_phase_tr does not forward preconditioner M kwarg into solve_subproblem"
+- `:none` remains a strong baseline on final objective
+- `:dispersion` is close to `:none` on final objective and cheaper in wall time on the small test
+- `:dct` gives healthier and more consistent accepted-step `ρ` values, but did not beat `:none` on final objective in the small bounded tests
 
 ## What is still useful despite the caveat
 
-The caveat does **not** erase all of Phase 34.
+The caveat does **not** erase Phase 34. It sharpens it.
 
 Useful results that still stand:
 
 - the `Δ0` sweep showed cold-start collapse is not just a bad initial radius choice
-- the PCG smoke result indicates the conditioning hypothesis is plausible when the solver is direct-wired in a smoke setup
-
-In particular, the smoke artifact in `results/raman/phase34/pcg_smoke/smoke.jld2` shows high `rho` values for multiple preconditioner choices on a small cold-start oracle. That supports the idea that preconditioning may help once the benchmark path is wired correctly.
+- the PCG smoke result indicated the conditioning hypothesis was plausible before the main-path fix
+- the post-fix bounded reruns now show that preconditioners can run honestly on the main path without immediate `GAUGE_LEAK`
+- the remaining question is no longer "does the preconditioner enter the solver?" but "does better step acceptance become better final Raman suppression?"
 
 ## Recommended interpretation
 
@@ -58,29 +68,30 @@ Treat current Phase 34 evidence in two buckets.
 - radius-collapse diagnosis from the `Δ0` sweep
 - the claim that curvature conditioning is the next real question
 - smoke-level evidence that direct-wired preconditioning can improve acceptance behavior
+- bounded main-path evidence that gauge-safe `:dispersion` and `:dct` runs are now genuinely distinct from `:none`
 
 ### Bucket 2: provisional
 
-- any full benchmark comparison that depends on the main outer-loop path using the intended preconditioner
+- any claim that preconditioning already improves the scientifically relevant final Raman objective in the regimes that matter most
 
-Those results are provisional until the `M` forwarding path is fixed and regression-tested.
+Those claims still need a harder bounded comparison and then a larger benchmark pass.
 
 ## What should happen next
 
-Before drawing stronger scientific conclusions from Phase 34 benchmarks:
+Before drawing stronger scientific conclusions from Phase 34 benchmarks, the right next steps are:
 
-1. forward `M` through the trust-region outer loop
-2. add a regression test proving the configured preconditioner actually reaches `solve_subproblem`
-3. rerun the smallest honest benchmark or smoke comparison
+1. compare `:none`, `:dispersion`, and `:dct` on a slightly harder but still bounded cold-start case
+2. decide whether Phase 34 should optimize for final objective, convergence speed, or cold-start recovery
+3. only then rerun a broader benchmark slice
 
 Until then, the correct reading is:
 
 - the **preconditioning hypothesis remains alive**
-- the **benchmark wiring is not yet strong enough** to treat all current Phase 34 comparisons as final
+- the **wiring problem is fixed**
+- the **current remaining question is effectiveness, not plumbing**
 
 ## Sources
 
-- `docs/planning-history/STATE.md`
 - `scripts/trust_region_optimize.jl`
 - `scripts/trust_region_pcg.jl`
 - `results/raman/phase34/pcg_smoke/smoke.jld2`

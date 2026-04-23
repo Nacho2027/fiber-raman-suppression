@@ -32,6 +32,7 @@ See also: [`../README.md`](../README.md) for the project-level overview.
 | [phase-30-status.md](./phase-30-status.md) | See what Phase 30 actually completed versus what its flagship continuation demo failed to prove. |
 | [phase-32-status.md](./phase-32-status.md) | See which Phase 32 acceleration experiments really ran and which conclusions are still provisional. |
 | [phase-34-preconditioning-caveat.md](./phase-34-preconditioning-caveat.md) | Understand why current Phase 34 preconditioning comparisons need a wiring caveat before interpretation. |
+| [phase-34-bounded-rerun-status.md](./phase-34-bounded-rerun-status.md) | See what the post-fix bounded Phase 34 reruns actually say about `:none`, `:dispersion`, and `:dct`. |
 
 ## Physics / math pedagogy
 

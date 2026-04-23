@@ -376,18 +376,19 @@ git fetch origin
 git pull --ff-only origin main
 
 Mission:
-Design and begin a serious refactor plan for this codebase. The goal is not cosmetic cleanup. The goal is to make the repo cleaner, more coherent, easier to work in, easier to extend, and safer to evolve without losing useful existing functionality.
+Design and begin a serious refactor plan for this codebase. This is a public repo and it currently feels bloated, messy, script-heavy, and structurally embarrassing. The goal is to make it cleaner, more coherent, easier to work in, easier to extend, safer to evolve, and visibly more professional without losing useful existing functionality.
 
 Main questions:
 1. What are the current structural pain points in the repo for development, extension, and maintenance?
 2. What should be reorganized, renamed, wrapped, or separated?
-3. How can we remove real garbage without throwing away potentially valuable research functionality?
+3. How can we remove real garbage, reduce visible chaos, and clearly separate canonical workflows from legacy clutter without throwing away potentially valuable research functionality?
 4. What refactor boundaries are safe now, and what should wait until later?
 
 Deliverables:
 - A concrete refactor proposal with phases, not just complaints
 - A map of current code organization problems
 - A proposed target structure for modules/scripts/docs/results interfaces
+- A proposal for what should be canonical, what should be archived, and what should be removed from the main surface area
 - A distinction between immediate cleanup, medium-term refactor, and later archival/deletion work
 - A note on what functionality must be preserved even if it seems niche
 
@@ -399,7 +400,7 @@ Constraints:
 - If you make code changes, keep them low-risk and well-tested
 
 Output style:
-Think like a maintainer preparing a messy but valuable research repo for long-term use by a group, not just by its original author.
+Think like a lead engineer cleaning up a publicly visible research codebase that currently feels overgrown and messy. Preserve important functionality, but impose enough structure that the repo looks intentional, professional, and trustworthy to outside users.
 ```
 
 ## Session G Prompt
