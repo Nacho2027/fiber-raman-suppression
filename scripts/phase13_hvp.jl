@@ -24,7 +24,8 @@
 # and single-threaded before any HVP call.
 #
 # API:
-#   build_oracle(config::NamedTuple) -> (oracle::Function, meta::NamedTuple)
+#   build_oracle(config::NamedTuple; log_cost, λ_gdd, λ_boundary)
+#       -> (oracle::Function, meta::NamedTuple)
 #   fd_hvp(phi, v, oracle; eps=1e-4)                -> Hv::Vector
 #   validate_hvp_taylor(phi, v_test, oracle; kwargs) -> NamedTuple
 #   build_full_hessian_small(phi, oracle; eps)       -> Matrix  (small-Nt only)
@@ -53,7 +54,7 @@ const P13_MIN_V_NORM = 1e-12                       # guard against zero-directio
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
-    build_oracle(config::NamedTuple)
+    build_oracle(config::NamedTuple; log_cost=false, λ_gdd=0.0, λ_boundary=0.0)
 
 Construct a closure `oracle(phi)` that returns the gradient `∇J(phi)` of the
 Raman suppression cost at spectral phase `phi`, using the EXISTING
@@ -69,11 +70,11 @@ Raman suppression cost at spectral phase `phi`, using the EXISTING
 # Returns
 - `oracle::Function` — `oracle(phi::AbstractVector) → ∇J::Vector{Float64}`
   · Accepts a flat vector (length Nt·M); reshapes internally.
-  · Uses log_cost=false and λ_gdd=λ_boundary=0 to probe the pure physics
-    landscape Hessian (no regularisation curvature contamination).
+  · Uses the exact `(log_cost, λ_gdd, λ_boundary)` surface specified by the
+    caller. The default remains the linear physics-only Hessian.
 - `meta::NamedTuple` — `(uω0, fiber, sim, band_mask, Δf, raman_threshold,
-  Nt, M, omega, input_band_mask)` so callers can introspect the setup without
-  re-running it.
+  Nt, M, omega, input_band_mask, objective_spec)` so callers can introspect
+  the setup without re-running it.
 
 # Notes
 - Uses `Base.invokelatest` on the freshly-included `cost_and_gradient` to sidestep
@@ -81,7 +82,10 @@ Raman suppression cost at spectral phase `phi`, using the EXISTING
 - Ensures a fresh buffer is allocated each call — avoiding stateful buffer
   aliasing that would spuriously break HVP symmetry.
 """
-function build_oracle(config::NamedTuple)
+function build_oracle(config::NamedTuple;
+                      log_cost::Bool=false,
+                      λ_gdd::Real=0.0,
+                      λ_boundary::Real=0.0)
     # Setup simulation from the config kwargs
     uω0, fiber, sim, band_mask, Δf, raman_threshold =
         setup_raman_problem(; config...)
@@ -98,15 +102,21 @@ function build_oracle(config::NamedTuple)
     M = sim["M"]
     input_mask = input_band_mask(uω0)
     omega = omega_vector(sim["ω0"], sim["Δt"], Nt)
+    objective_spec = Core.eval(Main, quote
+        raman_cost_surface_spec(
+            log_cost=$log_cost,
+            λ_gdd=$λ_gdd,
+            λ_boundary=$λ_boundary,
+            objective_label="Phase 13/33/34 Raman HVP oracle",
+        )
+    end)
 
     function oracle(phi_flat::AbstractVector{<:Real})
         @assert length(phi_flat) == Nt * M "phi length $(length(phi_flat)) ≠ Nt·M = $(Nt*M)"
         phi_mat = reshape(copy(phi_flat), Nt, M)
-        # log_cost=false → linear J so the Hessian is of the physics cost, not the log-cost.
-        # λ_gdd=λ_boundary=0 → probe the pure landscape Hessian.
         J, grad = Base.invokelatest(Main.cost_and_gradient,
             phi_mat, uω0, fiber, sim, band_mask;
-            log_cost=false, λ_gdd=0.0, λ_boundary=0.0)
+            log_cost=log_cost, λ_gdd=λ_gdd, λ_boundary=λ_boundary)
         return vec(copy(grad))
     end
 
@@ -114,6 +124,7 @@ function build_oracle(config::NamedTuple)
         uω0 = uω0, fiber = fiber, sim = sim,
         band_mask = band_mask, Δf = Δf, raman_threshold = raman_threshold,
         Nt = Nt, M = M, omega = omega, input_band_mask = input_mask,
+        objective_spec = objective_spec,
     )
     return oracle, meta
 end

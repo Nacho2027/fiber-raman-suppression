@@ -110,15 +110,17 @@ Exception: `:NO_DESCENT` returns hvps_used = 0 (no H_op call made).
 
 # Gauge safety
 The incoming `g` is assumed already gauge-projected (the outer loop in
-`trust_region_optimize.jl` calls gauge_fix before passing g here).
-Pointwise division in M⁻¹ does not preserve gauge projection in general;
-if strict gauge safety is required, the caller should project after solve.
+`trust_region_optimize.jl` calls gauge_fix before passing g here). Since
+pointwise division in M⁻¹ does not preserve gauge projection in general,
+callers may pass `proj = Π` to re-project preconditioned residuals and
+search directions back into the gauge-complement subspace.
 """
 function solve_subproblem(solver::PreconditionedCGSolver,
                           g::AbstractVector{<:Real},
                           H_op,
                           Δ::Real;
                           M = nothing,
+                          proj = identity,
                           kwargs...)::SubproblemResult
     n = length(g)
     p = zeros(Float64, n)
@@ -131,10 +133,16 @@ function solve_subproblem(solver::PreconditionedCGSolver,
     # Preconditioner dispatch: use identity when :none or M not provided
     use_M = !(solver.preconditioner === :none || M === nothing)
     M_inv = use_M ? M : identity
+    proj_fn = proj
+
+    function _apply_precond(v::AbstractVector{<:Real})
+        w = use_M ? M_inv(v) : copy(v)
+        return Vector{Float64}(proj_fn(w))
+    end
 
     r = Vector{Float64}(copy(g))
-    z = Vector{Float64}(use_M ? M_inv(r) : copy(r))
-    d = -Vector{Float64}(copy(z))
+    z = _apply_precond(r)
+    d = Vector{Float64}(proj_fn(-z))
     ε = solver.tol_forcing(g)
     rTz = dot(r, z)
     hvps = 0
@@ -172,7 +180,7 @@ function solve_subproblem(solver::PreconditionedCGSolver,
         # Commit step
         p = p_new
         r_new = r .+ α .* Hd
-        z_new = Vector{Float64}(use_M ? M_inv(r_new) : copy(r_new))
+        z_new = _apply_precond(r_new)
         rTz_new = dot(r_new, z_new)
 
         # Convergence check in preconditioned norm (reduces to Euclidean when :none)
@@ -185,11 +193,14 @@ function solve_subproblem(solver::PreconditionedCGSolver,
         end
 
         β = rTz_new / rTz
-        d = -z_new .+ β .* d
+        d = Vector{Float64}(proj_fn(-z_new .+ β .* d))
         r = r_new
         z = z_new
         rTz = rTz_new
     end
+
+    # Enforce subspace membership before the Euclidean clamp.
+    p = Vector{Float64}(proj_fn(p))
 
     # Euclidean-norm clamp: PCG in M-space may exit slightly outside Δ-ball
     p_norm = norm(p)

@@ -96,6 +96,42 @@ Base.@kwdef mutable struct MVConfig
     λ_flat::Float64     = 0.0
 end
 
+"""
+    multivar_cost_surface_spec(cfg; objective_label="multivariable Raman spectral shaping optimization")
+
+Machine-readable description of the scalar objective returned by
+`cost_and_gradient_multivar`.
+"""
+function multivar_cost_surface_spec(
+    cfg::MVConfig;
+    objective_label::AbstractString="multivariable Raman spectral shaping optimization")
+
+    linear_terms = String["J_physics"]
+    cfg.λ_gdd > 0        && push!(linear_terms, "λ_gdd*R_gdd")
+    cfg.λ_boundary > 0   && push!(linear_terms, "λ_boundary*R_boundary")
+    cfg.λ_energy > 0     && push!(linear_terms, "λ_energy*R_energy")
+    cfg.λ_tikhonov > 0   && push!(linear_terms, "λ_tikhonov*R_tikhonov")
+    cfg.λ_tv > 0         && push!(linear_terms, "λ_tv*R_tv")
+    cfg.λ_flat > 0       && push!(linear_terms, "λ_flat*R_flat")
+    linear_surface = join(linear_terms, " + ")
+    scalar_surface = cfg.log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
+
+    return (
+        objective_label = String(objective_label),
+        log_cost = cfg.log_cost,
+        scale = cfg.log_cost ? "dB" : "linear",
+        scalar_surface = scalar_surface,
+        pre_log_linear_surface = linear_surface,
+        regularizers_chained_into_surface = true,
+        lambda_gdd = cfg.λ_gdd,
+        lambda_boundary = cfg.λ_boundary,
+        lambda_energy = cfg.λ_energy,
+        lambda_tikhonov = cfg.λ_tikhonov,
+        lambda_tv = cfg.λ_tv,
+        lambda_flat = cfg.λ_flat,
+    )
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Variable validation + stripping
 # ─────────────────────────────────────────────────────────────────────────────
@@ -424,9 +460,7 @@ function cost_and_gradient_multivar(
         g[off.ranges[:amplitude]] .+= vec(g_A_reg_out)
     end
 
-    # Log-cost transform of the **physics cost** only (regularizers already additive).
-    # We apply after reg additions, matching raman_optimization's log_cost semantics
-    # for pure physics J: the reg adds give a small offset, but they're O(small).
+    # Log-cost transform of the full regularized scalar objective.
     if cfg.log_cost
         J_clamped = max(J_total, 1e-15)
         J_phys = 10.0 * log10(J_clamped)
@@ -689,6 +723,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     cfg = outcome.cfg
     Nt = size(outcome.φ_opt, 1)
     M  = size(outcome.φ_opt, 2)
+    objective_spec = multivar_cost_surface_spec(cfg)
 
     # Baseline (unshaped) input energy
     E_ref = outcome.E_ref
@@ -738,6 +773,14 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "lambda_tv"       => cfg.λ_tv,
             "lambda_flat"     => cfg.λ_flat,
         ),
+        cost_surface = Dict{String,Any}(
+            "objective_label" => objective_spec.objective_label,
+            "log_cost" => objective_spec.log_cost,
+            "scale" => objective_spec.scale,
+            "surface" => objective_spec.scalar_surface,
+            "pre_log_linear_surface" => objective_spec.pre_log_linear_surface,
+            "regularizers_chained_into_surface" => objective_spec.regularizers_chained_into_surface,
+        ),
         preconditioning_s = Dict{String,Float64}(
             "s_phi"       => cfg.s_φ,
             "s_amplitude" => cfg.s_A,
@@ -774,6 +817,14 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             ),
         ),
         "variables_enabled" => [String(v) for v in cfg.variables],
+        "cost_surface" => Dict(
+            "objective_label" => objective_spec.objective_label,
+            "log_cost" => objective_spec.log_cost,
+            "scale" => objective_spec.scale,
+            "surface" => objective_spec.scalar_surface,
+            "pre_log_linear_surface" => objective_spec.pre_log_linear_surface,
+            "regularizers_chained_into_surface" => objective_spec.regularizers_chained_into_surface,
+        ),
         "shaped_input_formula" =>
             "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * c_m * uomega0(omega); " *
             "alpha = sqrt(E_opt / E_ref)",
@@ -838,6 +889,7 @@ function load_multivar_result(prefix::AbstractString)
         wall_time_s = payload["wall_time_s"],
         convergence_history = payload["convergence_history"],
         regularizers = payload["regularizers"],
+        cost_surface = payload["cost_surface"],
         preconditioning_s = payload["preconditioning_s"],
         variables_enabled = payload["variables_enabled"],
         payload = payload,
@@ -960,6 +1012,7 @@ function run_multivar_optimization(;
         :convergence_history => conv,
         :run_tag => Dates.format(now(), "yyyymmdd_HHMMss"),
     )
+    objective_spec = multivar_cost_surface_spec(outcome.cfg)
 
     saved = save_multivar_result(save_prefix, outcome; meta=meta)
 
@@ -970,6 +1023,7 @@ function run_multivar_optimization(;
     │  Variables        %s
     │  Fiber            %s  L=%.2fm  γ=%.2e
     │  Grid             Nt=%d  window=%.1f ps
+    │  Objective        %s
     │  Iterations       %d  (%.1f s total, %.1f s optim)
     │  J (before)       %.4e (%.1f dB)
     │  J (after)        %.4e (%.1f dB)
@@ -980,6 +1034,7 @@ function run_multivar_optimization(;
         join(String.(outcome.cfg.variables), "+"),
         fiber_name, fiber["L"], fiber["γ"][1],
         Nt, Nt * sim["Δt"],
+        objective_spec.scalar_surface,
         outcome.iterations, elapsed, outcome.wall_time_s,
         J_before, MultiModeNoise.lin_to_dB(J_before),
         J_after_lin, MultiModeNoise.lin_to_dB(J_after_lin),

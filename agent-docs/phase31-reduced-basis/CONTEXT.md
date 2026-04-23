@@ -32,13 +32,39 @@ See `SUMMARY.md` and `BRANCH-A-NOTES.md`. Key results:
 - Polynomial plateau at −26.5 dB for all N_phi ∈ {3..8} — the quadratic-compensation basin dominates.
 - `scripts/phase31_basis_lib.jl`, `scripts/phase31_penalty_lib.jl`, `scripts/phase31_run.jl`, `test/test_phase31_basis.jl` committed. All 8 testsets pass.
 
-## Plan 02 — pending (this topic)
+## Plan 02 — done (this topic)
 
 See `PLAN.md`. Three tasks:
 
 1. Branch B penalty sweep on full-grid: Tikhonov / GDD / TOD / TV / DCT-L1 at log-spaced λ, 21 runs.
 2. Transferability probe: apply every Branch A + Branch B optimum to HNLF and to three perturbed canonical configs (+5% FWHM, +10% P, +5% β₂) without re-optimization.
 3. Analysis: Pareto front, L-curve, AIC ranking, saddle-masking classification, FINDINGS.md narrative.
+
+## Plan 03 — done (2026-04-22 follow-up extension)
+
+Question carried forward from `FINDINGS.md`: can the reduced-basis continuation result be turned into a stronger or more transferable **full-grid refinement** result, and is there a better refinement path than simply taking the best cubic optimum?
+
+Executed follow-up paths:
+
+1. `zero -> full-grid`
+2. `cubic 32 -> full-grid`
+3. `linear 64 -> full-grid`
+4. `cubic 128 -> full-grid`
+5. `linear 64 -> cubic 128 -> full-grid`
+
+Headline outcome:
+
+- **Yes, reduced-basis continuation survives a final full-grid polish.** `cubic32 -> full-grid` reached **−67.16 dB**, closing almost all of the gap to the best Phase 31 cubic optimum without starting from the deepest reduced-basis seed.
+- **No, the full-grid polish does not preserve robustness/transferability.** Once the path is allowed onto the full grid, the promising wider-basin starts collapse toward the same narrow, canonical-specific family: `σ_3dB ≈ 0.07–0.10 rad`, HNLF gap ≈ `+20.7` to `+22.3 dB`.
+- **The current cubic route still wins on depth.** `cubic128 -> full-grid` stayed at **−67.60 dB**; the alternative `linear64 -> cubic128 -> full-grid` plateaued at **−64.40 dB**.
+
+Artifacts:
+
+- `results/raman/phase31/followup/path_comparison.jld2`
+- `results/raman/phase31/followup/images/`
+- `agent-docs/phase31-reduced-basis/FOLLOWUP-PHASE31-EXTENSION.md`
+- `scripts/phase31_extension_{lib,run,analyze}.jl`
+- `test/test_phase31_extension.jl`
 
 ## Constraints inherited from CLAUDE.md
 

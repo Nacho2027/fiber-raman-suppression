@@ -70,6 +70,28 @@ Full forward-adjoint pipeline:
 
 Returns (J, ∂J/∂φ).
 """
+function raman_cost_surface_spec(;
+    log_cost::Bool=true,
+    λ_gdd::Real=0.0,
+    λ_boundary::Real=0.0,
+    objective_label::AbstractString="single-mode Raman spectral phase optimization")
+
+    linear_surface = "physics + λ_gdd*R_gdd + λ_boundary*R_boundary"
+    scalar_surface = log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
+    return (
+        objective_label = String(objective_label),
+        log_cost = log_cost,
+        scale = log_cost ? "dB" : "linear",
+        scalar_surface = scalar_surface,
+        pre_log_linear_surface = linear_surface,
+        regularizers_chained_into_surface = true,
+        lambda_gdd = Float64(λ_gdd),
+        lambda_boundary = Float64(λ_boundary),
+        boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+        hvp_safe_for_same_surface = true,
+    )
+end
+
 function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     uω0_shaped::Union{Nothing,AbstractMatrix}=nothing,
     uωf_buffer::Union{Nothing,AbstractMatrix}=nothing,
@@ -290,6 +312,56 @@ function validate_gradient(uω0_base, fiber, sim, band_mask; n_checks=5, ε=1e-5
     )
 end
 
+"""
+    validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
+                             λ_gdd=0.0, λ_boundary=0.0, log_cost=true,
+                             eps_range=10.0 .^ (-2:-0.5:-6))
+
+Directional Taylor-remainder check for the exact scalar objective returned by
+`cost_and_gradient`. For a consistent `(J, ∇J)` pair, the remainder
+
+    |J(φ + εv) - J(φ) - ε ∇J(φ)⋅v|
+
+should decay like `O(ε²)` over the truncation-error regime.
+"""
+function validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
+    λ_gdd::Real=0.0,
+    λ_boundary::Real=0.0,
+    log_cost::Bool=true,
+    eps_range::AbstractVector{<:Real}=10.0 .^ (-2:-0.5:-6))
+
+    @assert size(φ) == size(v) "φ and v must have the same shape"
+    @assert any(abs.(v) .> 0) "v must be nonzero"
+
+    J0, grad0 = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
+        λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
+    dir0 = sum(grad0 .* v)
+
+    eps_values = collect(Float64.(eps_range))
+    remainders = Float64[]
+    for ε in eps_values
+        Jp, _ = cost_and_gradient(φ .+ ε .* v, uω0, fiber, sim, band_mask;
+            λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
+        push!(remainders, abs(Jp - J0 - ε * dir0))
+    end
+
+    valid = findall(>(0.0), remainders)
+    @assert length(valid) >= 3 "Need at least 3 positive Taylor remainders to fit a slope"
+    fit_idx = valid[1:min(end, 4)]
+    xs = log10.(eps_values[fit_idx])
+    ys = log10.(remainders[fit_idx])
+    slope = (ys[end] - ys[1]) / (xs[end] - xs[1])
+
+    return (
+        eps_values = eps_values,
+        remainders = remainders,
+        slope = slope,
+        slope_region = (first(fit_idx), last(fit_idx)),
+        base_cost = J0,
+        base_directional_derivative = dir0,
+    )
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 7b. Visualization helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -441,6 +513,11 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     else
         λ_gdd_val = Float64(λ_gdd)
     end
+    objective_spec = raman_cost_surface_spec(
+        log_cost=log_cost,
+        λ_gdd=λ_gdd_val,
+        λ_boundary=λ_boundary,
+        objective_label="single-mode Raman spectral phase optimization")
 
     if validate
         @info "Gradient Validation"
@@ -496,6 +573,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     │  Fiber        L = %.1f m, γ = %.2e W⁻¹m⁻¹
     │  Grid         Nt = %d, time_window = %.1f ps
     │  Regulariz.   λ_gdd = %.2e, λ_boundary = %.1f
+    │  Objective    %s
     │  Iterations   %d (%.1f s)
     ├─────────────────────────────────────────────────┤
     │  J (before)   %.4e  (%.1f dB)
@@ -513,6 +591,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         fiber["L"], fiber["γ"][1],
         Nt, tw_ps,
         λ_gdd_val, λ_boundary,
+        objective_spec.scalar_surface,
         max_iter, elapsed,
         J_before, MultiModeNoise.lin_to_dB(J_before),
         J_after, MultiModeNoise.lin_to_dB(J_after),
@@ -537,6 +616,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
+        objective_spec=objective_spec,
         objective_label="single-mode Raman spectral phase optimization")
     trust_md_path = write_numerical_trust_report("$(save_prefix)_trust.md", trust_report)
     @info "Saved numerical trust report to $trust_md_path"

@@ -243,6 +243,7 @@ function _optimize_tr_core(oracle::RamanOracle,
                            omega::AbstractVector{<:Real},
                            n::Integer;
                            solver::DirectionSolver = SteihaugSolver(),
+                           M = nothing,
                            max_iter::Int = 50,
                            Δ0::Float64 = 0.5,
                            Δ_max::Float64 = 10.0,
@@ -387,7 +388,7 @@ function _optimize_tr_core(oracle::RamanOracle,
         end
 
         # Solve the TR subproblem
-        sub = solve_subproblem(solver, g, H_op, Δ)
+        sub = solve_subproblem(solver, g, H_op, Δ; M = M, proj = _proj)
 
         # Gauge-leak guard on accepted candidate. We apply the projection
         # inside H_op already, so `sub.p` should be in the gauge-complement
@@ -601,6 +602,7 @@ for the mathematical contract. Result has `.minimizer` (Optim.jl parity).
 function optimize_spectral_phase_tr(uω0, fiber, sim, band_mask;
                                     φ0 = nothing,
                                     solver::DirectionSolver = SteihaugSolver(),
+                                    M = nothing,
                                     max_iter::Int = 50,
                                     Δ0::Float64 = 0.5,
                                     Δ_max::Float64 = 10.0,
@@ -621,8 +623,8 @@ function optimize_spectral_phase_tr(uω0, fiber, sim, band_mask;
     ensure_deterministic_fftw()
     ensure_deterministic_environment()
 
-    Nt = sim["Nt"]; M = sim["M"]
-    n = Nt * M
+    Nt = sim["Nt"]; n_modes = sim["M"]
+    n = Nt * n_modes
     fiber["zsave"] = nothing
 
     oracle = build_raman_oracle(uω0, fiber, sim, band_mask;
@@ -641,6 +643,7 @@ function optimize_spectral_phase_tr(uω0, fiber, sim, band_mask;
 
     return _optimize_tr_core(oracle, φ0v, mask, omega, n;
                              solver = solver,
+                             M = M,
                              max_iter = max_iter,
                              Δ0 = Δ0, Δ_max = Δ_max, Δ_min = Δ_min,
                              η1 = η1, η2 = η2,

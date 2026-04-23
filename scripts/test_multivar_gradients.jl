@@ -79,6 +79,55 @@ end
 @info "═══ Test 1 PASS ═══"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 1b. Explicit cost-surface convention and Taylor remainder
+# ─────────────────────────────────────────────────────────────────────────────
+
+@info "═══ Test 1b: multivar cost surface spec + Taylor remainder ═══"
+let
+    cfg = MVConfig(
+        variables = (:phase, :amplitude, :energy),
+        δ_bound = 0.10,
+        s_φ = 1.0,
+        s_A = 1.0,
+        s_E = 1.0 / E_ref,
+        log_cost = true,
+        λ_gdd = 1e-4,
+        λ_boundary = 0.5,
+        λ_energy = 1.0,
+        λ_tikhonov = 1e-2,
+        λ_tv = 1e-3,
+    )
+    spec = multivar_cost_surface_spec(cfg)
+    @test spec.log_cost === true
+    @test spec.regularizers_chained_into_surface === true
+    @test occursin("10*log10(", spec.scalar_surface)
+    @test occursin("λ_gdd*R_gdd", spec.pre_log_linear_surface)
+    @test occursin("λ_energy*R_energy", spec.pre_log_linear_surface)
+
+    φ_test = 0.01 .* randn(Nt, M)
+    A_test = 0.01 .* randn(Nt, M)
+    E_test = E_ref * 1.02
+    x0 = mv_pack(φ_test, A_test, E_test, cfg, Nt, M)
+    J0, g0, _ = cost_and_gradient_multivar(x0, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+    spectral_power = vec(sum(abs2, uω0; dims=2))
+    idx_ω = findmax(spectral_power)[2]
+    v = zeros(length(x0))
+    v[idx_ω] = 1.0
+    dir0 = dot(g0, v)
+    eps_values = 10.0 .^ (-1:-0.5:-3)
+    remainders = Float64[]
+    for ε in eps_values
+        Jp, _, _ = cost_and_gradient_multivar(x0 .+ ε .* v, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+        push!(remainders, abs(Jp - J0 - ε * dir0))
+    end
+    xs = log10.(eps_values)
+    ys = log10.(remainders)
+    slope = (ys[end] - ys[1]) / (xs[end] - xs[1])
+    @test 1.7 < slope < 2.3
+end
+@info "═══ Test 1b PASS ═══"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 2. :mode_coeffs stripped with @warn
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -135,6 +184,8 @@ let
         @test loaded.J_after == outcome.J_opt
         @test loaded.convergence_history == meta[:convergence_history]
         @test loaded.variables_enabled == [String(v) for v in outcome.cfg.variables]
+        @test haskey(loaded.payload, "cost_surface")
+        @test loaded.payload["cost_surface"]["regularizers_chained_into_surface"] == true
         @info "  round-trip OK (phi, amp, E, J, conv_hist, vars)"
     finally
         rm("$(tmp_prefix)_result.jld2"; force=true)

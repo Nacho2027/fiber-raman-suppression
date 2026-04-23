@@ -73,6 +73,9 @@ end
         @test all(isfinite, g)
         # Gradient at a small random phi should have nontrivial norm
         @test norm(g) > 1e-14
+        @test TEST_META.objective_spec.log_cost == false
+        @test TEST_META.objective_spec.lambda_gdd == 0.0
+        @test TEST_META.objective_spec.lambda_boundary == 0.0
     end
 
     @testset "2. HVP symmetry: v' H w ≈ w' H v" begin
@@ -151,6 +154,18 @@ end
         φ = _base_phi()
         zero_v = zeros(TEST_N)
         @test_throws AssertionError fd_hvp(φ, zero_v, TEST_ORACLE; eps=1e-4)
+    end
+
+    @testset "6. HVP oracle can target the regularized dB surface explicitly" begin
+        cfg = merge(TEST_CONFIG, (Nt = 2^6, time_window = 5.0))
+        oracle_dB, meta_dB = build_oracle(cfg; log_cost=true, λ_gdd=1e-4, λ_boundary=0.5)
+        φ = 0.01 .* randn(meta_dB.Nt * meta_dB.M)
+        g = oracle_dB(φ)
+        @test all(isfinite, g)
+        @test meta_dB.objective_spec.log_cost == true
+        @test meta_dB.objective_spec.lambda_gdd == 1e-4
+        @test meta_dB.objective_spec.lambda_boundary == 0.5
+        @test occursin("10*log10", meta_dB.objective_spec.scalar_surface)
     end
 
 end  # @testset

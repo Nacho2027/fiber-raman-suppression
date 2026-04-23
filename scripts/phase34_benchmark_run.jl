@@ -13,20 +13,10 @@
 #
 # Do NOT launch bare `julia` (CLAUDE.md Rule 1 — all sim work runs on burst).
 #
-# KNOWN LIMITATION (Plan 03 scope): optimize_spectral_phase_tr is frozen
-# (Phase 33 handoff) and does not currently forward the `M` preconditioner
-# kwarg into solve_subproblem. As a result, ALL preconditioner variants in
-# this run will exercise the PCG :none path (identity preconditioner) —
-# which still validates the PreconditionedCGSolver end-to-end on the Raman
-# oracle and provides a parity baseline with Phase 33's SteihaugSolver.
-#
-# A future phase that adds an additive `M_builder` kwarg to
-# optimize_spectral_phase_tr will unlock the full preconditioner sweep.
-# Plan 04's report MUST document this gap in its verdict.
-#
-# The _build_precond_for_slot call and M_inv computation are preserved below
-# because they exercise the factory code paths and record build HVPs in logs,
-# which is useful diagnostic info even without wiring to the outer loop.
+# Earlier Phase 34 runs documented an `M`-wiring gap in the outer loop.
+# This driver now passes the built preconditioner through
+# `optimize_spectral_phase_tr(...; M=M_inv)`, so configured PCG variants
+# exercise their intended preconditioners on the Raman oracle.
 
 try using Revise catch end
 using Pkg
@@ -229,6 +219,7 @@ function run_single_benchmark_phase34(cfg, start_type::Symbol, config_index::Int
         uω0, deepcopy(fiber), sim, band_mask;
         φ0                     = φ0,
         solver                 = solver,
+        M                      = M_inv,
         max_iter               = 50,
         Δ0                     = 0.5,
         Δ_max                  = 10.0,

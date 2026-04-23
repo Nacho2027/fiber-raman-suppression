@@ -202,6 +202,7 @@ function run_eigendecomposition(config_name::AbstractString;
     t_oracle = time()
     oracle, meta = build_oracle(cfg.setup_kwargs)
     @info @sprintf("  Oracle built in %.1f s; N = Nt·M = %d", time() - t_oracle, meta.Nt * meta.M)
+    @info "  HVP objective surface: $(meta.objective_spec.scalar_surface)"
     @assert meta.Nt == opt_meta.Nt "oracle Nt $(meta.Nt) ≠ JLD2 Nt $(opt_meta.Nt)"
 
     # 3. Sanity check: gradient at phi_opt should be small (it's an optimum)
@@ -295,6 +296,11 @@ function run_eigendecomposition(config_name::AbstractString;
         omega = meta.omega,
         input_band_mask = meta.input_band_mask,
         output_band_mask = meta.band_mask,
+        objective_surface = meta.objective_spec.scalar_surface,
+        objective_scale = meta.objective_spec.scale,
+        objective_log_cost = meta.objective_spec.log_cost,
+        lambda_gdd = meta.objective_spec.lambda_gdd,
+        lambda_boundary = meta.objective_spec.lambda_boundary,
         # Config provenance
         config_name = config_name,
         config_label = cfg.label,

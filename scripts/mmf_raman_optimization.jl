@@ -71,6 +71,84 @@ function _mmf_cost_call(variant::Symbol, uωf, band_mask)
     end
 end
 
+function mmf_forward_output(
+    φ::AbstractVector{<:Real},
+    uω0_base::AbstractMatrix,
+    fiber::Dict,
+    sim::Dict,
+)
+    phase_factor = cis.(φ)
+    uω0_shaped = uω0_base .* phase_factor
+    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    ũω = sol["ode_sol"]
+    L = fiber["L"]
+    uωf = cis.(fiber["Dω"] .* L) .* ũω(L)
+    return (; uω0_shaped, sol, uωf)
+end
+
+"""
+    mmf_trust_metrics(φ, setup; boundary_threshold=1e-3, τ=50.0) -> NamedTuple
+
+Forward-only trust summary for a multimode phase profile. This is used for run
+reporting, not for optimization itself.
+"""
+function mmf_trust_metrics(
+    φ::AbstractVector{<:Real},
+    setup::NamedTuple;
+    boundary_threshold::Real = 1e-3,
+    τ::Real = 50.0,
+)
+    prop = mmf_forward_output(φ, setup.uω0, setup.fiber, setup.sim)
+    cost_report = mmf_cost_report(prop.uωf, setup.band_mask; τ = τ)
+    ut_out = ifft(prop.uωf, 1)
+    boundary_ok, boundary_edge_fraction = check_boundary_conditions(
+        ut_out, setup.sim; threshold = boundary_threshold
+    )
+    return (
+        cost_report = cost_report,
+        boundary_ok = boundary_ok,
+        boundary_edge_fraction = boundary_edge_fraction,
+        boundary_threshold = Float64(boundary_threshold),
+        uωf = prop.uωf,
+    )
+end
+
+"""
+    mmf_cost_surface_spec(; variant=:sum, log_cost=true, λ_gdd=0.0, λ_boundary=0.0,
+                           objective_label="MMF Raman shared-phase optimization")
+
+Machine-readable description of the scalar objective returned by
+`cost_and_gradient_mmf`.
+"""
+function mmf_cost_surface_spec(;
+    variant::Symbol = :sum,
+    log_cost::Bool = true,
+    λ_gdd::Real = 0.0,
+    λ_boundary::Real = 0.0,
+    objective_label::AbstractString = "MMF Raman shared-phase optimization",
+)
+    base_cost = variant === :sum ? "J_mmf_sum" :
+                variant === :fundamental ? "J_mmf_fundamental" :
+                variant === :worst_mode ? "J_mmf_worst_mode" :
+                throw(ArgumentError("unknown MMF cost variant :$variant"))
+    linear_terms = String[base_cost]
+    λ_gdd > 0 && push!(linear_terms, "λ_gdd*R_gdd")
+    λ_boundary > 0 && push!(linear_terms, "λ_boundary*R_boundary")
+    linear_surface = join(linear_terms, " + ")
+    scalar_surface = log_cost ? "10*log10(" * linear_surface * ")" : linear_surface
+    return (
+        objective_label = String(objective_label),
+        variant = String(variant),
+        log_cost = log_cost,
+        scale = log_cost ? "dB" : "linear",
+        scalar_surface = scalar_surface,
+        pre_log_linear_surface = linear_surface,
+        regularizers_chained_into_surface = true,
+        lambda_gdd = Float64(λ_gdd),
+        lambda_boundary = Float64(λ_boundary),
+    )
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # cost_and_gradient_mmf
 # ─────────────────────────────────────────────────────────────────────────────
@@ -151,16 +229,8 @@ function cost_and_gradient_mmf(
     @assert isfinite(J)           "cost non-finite: $J"
     @assert all(isfinite, ∂J_∂φ)  "gradient non-finite"
 
-    # Log-scale: J_dB = 10·log₁₀(J); gradient scaled by 10/(J·ln10)
-    if log_cost
-        J_clamped    = max(J, 1e-15)
-        J_phys       = 10.0 * log10(J_clamped)
-        scale        = 10.0 / (J_clamped * log(10.0))
-        grad_total   = ∂J_∂φ .* scale
-    else
-        J_phys       = J
-        grad_total   = copy(∂J_∂φ)
-    end
+    J_total = J
+    grad_total = copy(∂J_∂φ)
 
     # GDD regularizer on the shared phase
     if λ_gdd > 0
@@ -168,7 +238,7 @@ function cost_and_gradient_mmf(
         invω3 = 1.0 / Δω^3
         for i in 2:(Nt - 1)
             d2 = φ[i + 1] - 2φ[i] + φ[i - 1]
-            J_phys           += λ_gdd * invω3 * d2^2
+            J_total          += λ_gdd * invω3 * d2^2
             coeff             = 2 * λ_gdd * invω3 * d2
             grad_total[i - 1] += coeff
             grad_total[i]     -= 2 * coeff
@@ -189,7 +259,7 @@ function cost_and_gradient_mmf(
         E_edges       = sum(abs2.(ut0) .* mask_edge)
         edge_frac     = E_edges / E_total_input
         if edge_frac > 1e-8
-            J_phys += λ_boundary * edge_frac
+            J_total += λ_boundary * edge_frac
             # Gradient of boundary penalty w.r.t. φ
             coeff = 2 * λ_boundary / (Nt * E_total_input)
             # sum over modes: ∂J_b/∂φ = Σ_m 2·Re(conj(uω0_shaped[:,m]) · FFT(mask·ut0[:,m]))
@@ -199,10 +269,17 @@ function cost_and_gradient_mmf(
         end
     end
 
-    @assert isfinite(J_phys)         "regularized cost non-finite: $J_phys"
+    if log_cost
+        J_clamped    = max(J_total, 1e-15)
+        scale        = 10.0 / (J_clamped * log(10.0))
+        grad_total .*= scale
+        J_total      = 10.0 * log10(J_clamped)
+    end
+
+    @assert isfinite(J_total)         "regularized cost non-finite: $J_total"
     @assert all(isfinite, grad_total) "regularized gradient non-finite"
 
-    return J_phys, grad_total
+    return J_total, grad_total
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -327,6 +404,12 @@ function plot_mmf_result(
     fiber    = setup.fiber
     sim      = setup.sim
     band_mask = setup.band_mask
+    objective_spec = mmf_cost_surface_spec(
+        variant = variant,
+        log_cost = log_cost,
+        λ_gdd = 0.0,
+        λ_boundary = 0.0,
+    )
     Δf       = setup.Δf
     rth      = setup.raman_threshold
     Nt, M    = size(uω0_base)
@@ -477,12 +560,11 @@ function run_mmf_baseline(;
 
     # Reference J at φ=0 (unoptimized)
     φ0 = zeros(Float64, Nt)
-    J_ref, _ = cost_and_gradient_mmf(
-        φ0, c_m, uω0, fiber, sim, band_mask;
-        variant = variant, log_cost = false,
-    )
-    J_ref_dB = 10 * log10(max(J_ref, 1e-15))
+    trust_ref = mmf_trust_metrics(φ0, setup)
+    J_ref = trust_ref.cost_report.sum_lin
+    J_ref_dB = trust_ref.cost_report.sum_dB
     @info @sprintf("Reference (φ=0): J_lin = %.4e (%.2f dB)", J_ref, J_ref_dB)
+    @info "MMF objective surface: $(objective_spec.scalar_surface)"
 
     # Optimize
     t0 = time()
@@ -496,10 +578,19 @@ function run_mmf_baseline(;
     )
     wall_time = time() - t0
 
-    J_final_lin_dB = 10 * log10(max(opt.J_lin, 1e-15))
+    trust_opt = mmf_trust_metrics(opt.φ_opt, setup)
+    J_final_lin_dB = trust_opt.cost_report.sum_dB
     improvement_dB = J_ref_dB - J_final_lin_dB
-    @info @sprintf("Baseline done in %.1f s. J_ref=%.2f dB → J_opt=%.2f dB (improvement: %.2f dB)",
-        wall_time, J_ref_dB, J_final_lin_dB, improvement_dB)
+    @info @sprintf(
+        "Baseline done in %.1f s. J_sum: %.2f→%.2f dB (Δ=%.2f dB); J_fund=%.2f dB; J_worst=%.2f dB; edge=%.2e",
+        wall_time,
+        J_ref_dB,
+        J_final_lin_dB,
+        improvement_dB,
+        trust_opt.cost_report.fundamental_dB,
+        trust_opt.cost_report.worst_mode_true_dB,
+        trust_opt.boundary_edge_fraction,
+    )
 
     # Figures
     tag_s = isempty(tag) ? @sprintf("%s_L%g_P%g_seed%d", String(preset), L_fiber, P_cont, seed) : tag
@@ -537,6 +628,8 @@ function run_mmf_baseline(;
         improvement_dB = improvement_dB,
         wall_time      = wall_time,
         save_prefix    = save_prefix,
+        trust_ref      = trust_ref,
+        trust_opt      = trust_opt,
     )
 end
 

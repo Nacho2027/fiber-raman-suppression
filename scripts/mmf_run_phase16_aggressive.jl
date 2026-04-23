@@ -71,6 +71,7 @@ function run_m6()
     fname = joinpath(SAVE_DIR, @sprintf("aggressive_M6_seed%d.jld2", AGG_SEED))
     jldopen(fname, "w") do f
         f["preset"]         = "GRIN_50"
+        f["variant"]        = "sum"
         f["L_fiber"]        = AGG_L
         f["P_cont"]         = AGG_P
         f["seed"]           = AGG_SEED
@@ -82,6 +83,21 @@ function run_m6()
         f["improvement_dB"] = r.improvement_dB
         f["wall_time"]      = r.wall_time
         f["mode_weights"]   = r.setup.mode_weights
+        f["Nt_used"]        = r.setup.sim["Nt"]
+        f["time_window_used_ps"] = r.setup.sim["time_window"]
+        f["time_window_recommended_ps"] = r.setup.window_recommendation.time_window_ps
+        f["ref_sum_dB"]     = r.trust_ref.cost_report.sum_dB
+        f["ref_fundamental_dB"] = r.trust_ref.cost_report.fundamental_dB
+        f["ref_worst_mode_true_dB"] = r.trust_ref.cost_report.worst_mode_true_dB
+        f["ref_per_mode_dB"] = r.trust_ref.cost_report.per_mode_dB
+        f["ref_boundary_edge_fraction"] = r.trust_ref.boundary_edge_fraction
+        f["ref_boundary_ok"] = r.trust_ref.boundary_ok
+        f["opt_sum_dB"]     = r.trust_opt.cost_report.sum_dB
+        f["opt_fundamental_dB"] = r.trust_opt.cost_report.fundamental_dB
+        f["opt_worst_mode_true_dB"] = r.trust_opt.cost_report.worst_mode_true_dB
+        f["opt_per_mode_dB"] = r.trust_opt.cost_report.per_mode_dB
+        f["opt_boundary_edge_fraction"] = r.trust_opt.boundary_edge_fraction
+        f["opt_boundary_ok"] = r.trust_opt.boundary_ok
     end
     @info @sprintf("M=6 aggressive: J_ref=%.2f dB → J_opt=%.2f dB (Δ=%.2f dB, wall=%.1fs)",
         r.J_ref_dB, r.J_final_lin_dB, r.improvement_dB, wall)

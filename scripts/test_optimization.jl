@@ -325,6 +325,16 @@ end
         @test rel_err < 5e-2
     end
 
+    @testset "gradient Taylor remainder matches the returned scalar objective" begin
+        v = randn(sim["Nt"], sim["M"])
+        v ./= norm(v)
+        result = validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
+            λ_gdd=1e-4, λ_boundary=0.5, log_cost=true,
+            eps_range=10.0 .^ (-2:-0.5:-5))
+        @test result.slope > 1.7
+        @test result.slope < 2.3
+    end
+
     @testset "chirp sensitivity returns linear costs consumable by plotter" begin
         φ_opt = zeros(sim["Nt"], sim["M"])
         gdd_range, J_gdd, tod_range, J_tod = chirp_sensitivity(
@@ -341,6 +351,12 @@ end
                 save_prefix=save_prefix)
             @test isfile(save_prefix * ".png")
         end
+    end
+
+    @testset "cost-surface spec names the scalar objective explicitly" begin
+        spec = raman_cost_surface_spec(log_cost=true, λ_gdd=1e-4, λ_boundary=0.5)
+        @test spec.scalar_surface == "10*log10(physics + λ_gdd*R_gdd + λ_boundary*R_boundary)"
+        @test spec.pre_log_linear_surface == "physics + λ_gdd*R_gdd + λ_boundary*R_boundary"
     end
 end
 

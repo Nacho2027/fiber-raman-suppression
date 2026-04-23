@@ -160,4 +160,63 @@ function mmf_cost_worst_mode(uωf, band_mask; τ::Real = 50.0)
     return J, dJ
 end
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Reporting helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    mmf_mode_band_fractions(uωf, band_mask) -> Vector{Float64}
+
+Per-mode Raman-band fractions:
+    r_m = E_band_m / E_total_m.
+
+Modes with zero total energy are reported as 0.0.
+"""
+function mmf_mode_band_fractions(uωf, band_mask)
+    @assert size(uωf, 1) == length(band_mask)
+    M = size(uωf, 2)
+    r = zeros(Float64, M)
+    for m in 1:M
+        u_m = @view uωf[:, m]
+        E_total = sum(abs2, u_m)
+        if E_total > 0
+            r[m] = sum(abs2.(u_m[band_mask])) / E_total
+        end
+    end
+    @assert all(isfinite, r)
+    return r
+end
+
+"""
+    mmf_cost_report(uωf, band_mask; τ=50.0) -> NamedTuple
+
+Evaluate all multimode Raman cost views on the same output field:
+- `:sum` — integrating-detector baseline
+- `:fundamental` — LP01-only
+- `:worst_mode` — smooth robust worst-mode proxy
+
+Also returns the true per-mode fractions.
+"""
+function mmf_cost_report(uωf, band_mask; τ::Real = 50.0)
+    per_mode_lin = mmf_mode_band_fractions(uωf, band_mask)
+    J_sum, _ = mmf_cost_sum(uωf, band_mask)
+    J_fund, _ = mmf_cost_fundamental(uωf, band_mask)
+    J_worst, _ = mmf_cost_worst_mode(uωf, band_mask; τ = τ)
+
+    to_dB(x) = 10.0 * log10(max(x, 1e-15))
+    return (
+        sum_lin = J_sum,
+        sum_dB = to_dB(J_sum),
+        fundamental_lin = J_fund,
+        fundamental_dB = to_dB(J_fund),
+        worst_mode_lin = J_worst,
+        worst_mode_dB = to_dB(J_worst),
+        worst_mode_true_lin = maximum(per_mode_lin),
+        worst_mode_true_dB = to_dB(maximum(per_mode_lin)),
+        per_mode_lin = per_mode_lin,
+        per_mode_dB = to_dB.(per_mode_lin),
+        τ = Float64(τ),
+    )
+end
+
 end # include guard

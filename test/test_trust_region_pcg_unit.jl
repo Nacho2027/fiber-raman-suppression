@@ -225,4 +225,27 @@ include(joinpath(@__DIR__, "..", "scripts", "trust_region_pcg.jl"))
         @test res.exit_code in (:INTERIOR_CONVERGED, :BOUNDARY_HIT, :NEGATIVE_CURVATURE, :MAX_ITER)
     end
 
+    @testset "projection hook removes preconditioner-induced gauge leak" begin
+        n = 6
+        H = Diagonal(fill(2.0, n))
+        H_op = v -> H * v
+        g = [-1.0, 0.0, 1.0, -1.0, 0.0, 1.0]  # mean-zero
+        Δ = 1.0
+
+        # Deliberately inject a constant-shift leak through the preconditioner.
+        M_leaky = v -> collect(v .+ 3.0)
+        proj_mean_zero = v -> begin
+            w = collect(Float64.(v))
+            return w .- mean(w)
+        end
+
+        pcg = PreconditionedCGSolver(preconditioner = :diagonal, max_iter = 20)
+        res = solve_subproblem(pcg, g, H_op, Δ; M = M_leaky, proj = proj_mean_zero)
+
+        @test abs(mean(res.p)) <= 1e-10
+        @test norm(res.p) <= Δ * (1 + 1e-8)
+        @test res.pred_reduction >= 0.0
+        @test res.exit_code in (:INTERIOR_CONVERGED, :BOUNDARY_HIT, :NEGATIVE_CURVATURE, :MAX_ITER)
+    end
+
 end  # testset

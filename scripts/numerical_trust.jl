@@ -52,6 +52,7 @@ function build_numerical_trust_report(;
     log_cost::Bool,
     λ_gdd::Real,
     λ_boundary::Real,
+    objective_spec=nothing,
     objective_label::AbstractString="spectral phase optimization")
 
     boundary_max = max(edge_input_frac, edge_output_frac)
@@ -91,14 +92,31 @@ function build_numerical_trust_report(;
         "verdict" => determinism_verdict(det_status),
     )
 
+    spec = isnothing(objective_spec) ? (
+        objective_label = String(objective_label),
+        log_cost = log_cost,
+        scale = log_cost ? "dB" : "linear",
+        scalar_surface = log_cost ? "10*log10(physics + λ_gdd*R_gdd + λ_boundary*R_boundary)" :
+                                    "physics + λ_gdd*R_gdd + λ_boundary*R_boundary",
+        pre_log_linear_surface = "physics + λ_gdd*R_gdd + λ_boundary*R_boundary",
+        regularizers_chained_into_surface = true,
+        lambda_gdd = Float64(λ_gdd),
+        lambda_boundary = Float64(λ_boundary),
+        boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+        hvp_safe_for_same_surface = true,
+    ) : objective_spec
+
     cost_surface_block = Dict{String,Any}(
-        "objective_label" => String(objective_label),
-        "log_cost" => log_cost,
-        "surface" => log_cost ? "10*log10(physics + regularizers)" : "physics + regularizers",
-        "regularizers_chained_into_surface" => true,
-        "lambda_gdd" => λ_gdd,
-        "lambda_boundary" => λ_boundary,
-        "boundary_penalty_measurement" => "pre-attenuator temporal edge fraction of shaped input pulse",
+        "objective_label" => String(spec.objective_label),
+        "log_cost" => Bool(spec.log_cost),
+        "scale" => String(spec.scale),
+        "surface" => String(spec.scalar_surface),
+        "pre_log_linear_surface" => String(spec.pre_log_linear_surface),
+        "regularizers_chained_into_surface" => Bool(spec.regularizers_chained_into_surface),
+        "lambda_gdd" => Float64(spec.lambda_gdd),
+        "lambda_boundary" => Float64(spec.lambda_boundary),
+        "boundary_penalty_measurement" => String(spec.boundary_penalty_measurement),
+        "hvp_safe_for_same_surface" => Bool(spec.hvp_safe_for_same_surface),
         "verdict" => "PASS",
     )
 
@@ -180,6 +198,8 @@ function write_numerical_trust_report(path::AbstractString, report::Dict{String,
         println(io, "## Cost Surface")
         println(io, @sprintf("- Verdict: **%s**", surf["verdict"]))
         println(io, @sprintf("- Surface: `%s`", surf["surface"]))
+        println(io, @sprintf("- Scale: `%s`", surf["scale"]))
+        println(io, @sprintf("- Pre-log linear surface: `%s`", surf["pre_log_linear_surface"]))
         println(io, @sprintf("- λ_gdd: `%.3e`", surf["lambda_gdd"]))
         println(io, @sprintf("- λ_boundary: `%.3e`", surf["lambda_boundary"]))
         println(io, @sprintf("- Boundary penalty measurement: `%s`", surf["boundary_penalty_measurement"]))

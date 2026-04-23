@@ -85,6 +85,12 @@ end
 
     # worst_mode with large τ coincides up to log(1)/τ = 0 at M=1
     @test isapprox(J_worst, J_sum, atol = 1e-10)
+
+    report = mmf_cost_report(uωf, band_mask; τ = 100.0)
+    @test isapprox(report.sum_lin, J_sum, atol = 1e-12)
+    @test isapprox(report.fundamental_lin, J_fund, atol = 1e-12)
+    @test isapprox(report.worst_mode_lin, J_worst, atol = 1e-10)
+    @test length(report.per_mode_lin) == 1
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +140,66 @@ end
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Testset 3b: log-cost + regularizers stay on one scalar surface
+# ─────────────────────────────────────────────────────────────────────────────
+
+@testset "Phase 16 — log-cost regularizers are chained into the MMF surface" begin
+    setup = setup_mmf_raman_problem(;
+        preset = :GRIN_50,
+        L_fiber = 0.3,
+        P_cont = 0.05,
+        Nt = 2^10,
+        time_window = 8.0,
+    )
+    Nt = size(setup.uω0, 1)
+    rng = MersenneTwister(PHASE16_SEED + 2)
+    φ = 0.02 .* randn(rng, Nt)
+
+    spec = mmf_cost_surface_spec(;
+        variant = :sum, log_cost = true, λ_gdd = 1e-4, λ_boundary = 0.5)
+    @test spec.scalar_surface == "10*log10(J_mmf_sum + λ_gdd*R_gdd + λ_boundary*R_boundary)"
+    @test spec.regularizers_chained_into_surface === true
+
+    J0, g0 = cost_and_gradient_mmf(
+        φ, setup.mode_weights, setup.uω0, setup.fiber, setup.sim, setup.band_mask;
+        variant = :sum, log_cost = true, λ_gdd = 1e-4, λ_boundary = 0.5,
+    )
+
+    idx = rand(rng, 1:Nt)
+    ε = 1e-6
+    φp = copy(φ); φp[idx] += ε
+    φm = copy(φ); φm[idx] -= ε
+    Jp, _ = cost_and_gradient_mmf(
+        φp, setup.mode_weights, setup.uω0, setup.fiber, setup.sim, setup.band_mask;
+        variant = :sum, log_cost = true, λ_gdd = 1e-4, λ_boundary = 0.5,
+    )
+    Jm, _ = cost_and_gradient_mmf(
+        φm, setup.mode_weights, setup.uω0, setup.fiber, setup.sim, setup.band_mask;
+        variant = :sum, log_cost = true, λ_gdd = 1e-4, λ_boundary = 0.5,
+    )
+    g_fd = (Jp - Jm) / (2ε)
+    rel = abs(g_fd - g0[idx]) / max(abs(g0[idx]), abs(g_fd), 1e-12)
+
+    v = randn(rng, Nt); v ./= norm(v)
+    dir0 = dot(g0, v)
+    eps_values = 10.0 .^ (-2:-0.5:-5)
+    remainders = Float64[]
+    for εt in eps_values
+        Jt, _ = cost_and_gradient_mmf(
+            φ .+ εt .* v, setup.mode_weights, setup.uω0, setup.fiber, setup.sim, setup.band_mask;
+            variant = :sum, log_cost = true, λ_gdd = 1e-4, λ_boundary = 0.5,
+        )
+        push!(remainders, abs(Jt - J0 - εt * dir0))
+    end
+    xs = log10.(eps_values[1:4])
+    ys = log10.(remainders[1:4])
+    slope = (ys[end] - ys[1]) / (xs[end] - xs[1])
+
+    @test rel < 5e-2
+    @test 1.7 < slope < 2.3
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Testset 4: energy accounting at M=6
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -162,6 +228,27 @@ end
     @test isfinite(rel_loss)
     @test rel_loss > -1e-6         # no numerical energy generation (within FFTW)
     @test rel_loss < 0.05          # bounded loss
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testset 5: MMF auto window sizing
+# ─────────────────────────────────────────────────────────────────────────────
+
+@testset "Phase 16 — auto window sizing at aggressive config" begin
+    setup = setup_mmf_raman_problem(;
+        preset = :GRIN_50,
+        L_fiber = 2.0,
+        P_cont = 0.5,
+        Nt = 2^12,
+        time_window = 5.0,
+        auto_time_window = true,
+    )
+
+    @test setup.sim["time_window"] >= setup.window_recommendation.time_window_ps
+    @test setup.sim["time_window"] > 5.0
+    @test ispow2(setup.sim["Nt"])
+    @test setup.window_recommendation.peak_power_W > 0
+    @test setup.window_recommendation.beta2_abs_max > 0
 end
 
 @info "Phase 16 MMF tests complete."

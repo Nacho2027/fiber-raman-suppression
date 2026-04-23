@@ -110,3 +110,32 @@ Implication: the cubic-N_phi=128 basin is PSD in coefficient space, but its ambi
 1. **Can we close the 10 dB gap between Branch B λ = 0 (−57.75) and Branch A cubic N_phi = 128 (−67.6)?** Hypotheses: (a) multi-start from random perturbations of zero; (b) continuation through an anchored DCT → cubic path with the full-grid fall-back as the final step; (c) second-order (globalized Newton / truncated-Newton with negative-curvature handling — the Phase 33/34 candidates).
 2. **Is the HNLF gap a property of the cubic basis or the canonical optimum it found?** Repeat the cubic-N_phi=128 sweep but initialized near the Branch B λ = 0 optimum. If the gap persists, the canonical optimum itself is fiber-specific; if it shrinks, the cubic basis encodes canonical-specific assumptions.
 3. **Ambient-Hessian probe on cubic N_phi = 128.** Does the cubic-coefficient-space PSD basin hold up when allowed to move in all 16 384 ambient directions? Phase 33/34 Krylov-preconditioned Newton methods would make this probe tractable.
+
+## 2026-04-22 follow-up extension — continuation to full-grid
+
+Five follow-up paths were run in `results/raman/phase31/followup/path_comparison.jld2`:
+
+| Path | Final J (dB) | σ_3dB | HNLF gap |
+|---|---:|---:|---:|
+| cubic128 -> full-grid | **−67.60** | 0.072 | +21.50 |
+| cubic32 -> full-grid | −67.16 | 0.070 | +22.31 |
+| linear64 -> cubic128 -> full-grid | −64.40 | 0.100 | +20.74 |
+| linear64 -> full-grid | −64.23 | 0.093 | +20.80 |
+| zero -> full-grid | −55.75 | 0.230 | +11.47 |
+
+What worked:
+
+1. **Reduced-basis continuation does carry into a strong full-grid solution.** The decisive result is `cubic32 -> full-grid = −67.16 dB`, far deeper than `zero -> full-grid = −55.75 dB`. So the continuation path is not merely a reduced-space artifact; it is a real route into a deeper ambient basin.
+2. **The best cubic solution is already effectively full-grid-stationary.** `cubic128 -> full-grid` stayed at `−67.60 dB` with negligible change, which says the Phase 31 cubic optimum already sits essentially on the full-grid shelf reachable from that seed.
+
+What failed:
+
+1. **Full-grid refinement does not preserve robustness.** The attractive `cubic32` basin width from Phase 31 disappears after refinement: `σ_3dB` drops from the Phase 31 reduced-basis scale to `0.070 rad`, nearly identical to `cubic128 -> full-grid`.
+2. **Full-grid refinement does not improve transferability.** All continuation-seeded full-grid runs remain highly canonical-specific, with HNLF gaps around `+21 dB`. The only path with materially better HNLF behavior is the shallow `zero -> full-grid` baseline, and it gives up ~12 dB of canonical depth.
+3. **Linear -> cubic -> full is not better than staying cubic.** `linear64 -> cubic128 -> full-grid` stopped at `−64.40 dB`, well short of the cubic route, so the hybrid path did not open a new better basin.
+
+Implication:
+
+- **Question 1:** yes, reduced-basis continuation can reach a strong full-grid refinement result.
+- **Question 2:** no, we did not preserve most of the best cubic depth *and* improve robustness/transferability; the full-grid step collapses promising wider starts onto the same narrow canonical family.
+- **Question 3:** among the tested paths, **current cubic continuation remains best**. `cubic32 -> full-grid` is operationally interesting because it nearly matches the best depth without needing the deepest reduced-basis seed, but it does not produce a better robustness-transfer tradeoff.

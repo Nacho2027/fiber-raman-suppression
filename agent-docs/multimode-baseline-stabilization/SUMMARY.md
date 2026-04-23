@@ -1,0 +1,25 @@
+## Summary
+
+- Added MMF-only trust infrastructure:
+  - `scripts/mmf_setup.jl`
+    - conservative MMF time-window recommendation
+    - automatic time-window/Nt upsizing when the requested window is too small
+  - `src/mmf_cost.jl`
+    - `mmf_mode_band_fractions`
+    - `mmf_cost_report`
+  - `scripts/mmf_raman_optimization.jl`
+    - `mmf_forward_output`
+    - `mmf_trust_metrics`
+    - baseline runner now returns reference/optimized trust summaries
+- Added a dedicated heavy-run driver:
+  - `scripts/mmf_phase36_baseline.jl`
+    - regime sweep under `:sum`
+    - cost-variant comparison on the strongest candidate regime
+    - writes `results/raman/phase36/`
+- Tests:
+  - `julia -t 4 --project=. test/test_phase16_mmf.jl`
+  - passed after replacing the first noisy β₂ inference with a centered second-derivative estimate at zero frequency
+- Heavy run status:
+  - launched on `fiber-raman-burst` via `~/bin/burst-run-heavy C-phase36`
+  - log path: `results/burst-logs/C-phase36_20260422T201841Z.log`
+  - results pending at the time of this note

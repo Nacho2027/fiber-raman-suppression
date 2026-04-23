@@ -1,0 +1,30 @@
+{
+    "rows_saved": 5,
+    "run_tag": "20260422_195627",
+    "julia_version": "1.12.6",
+    "dry_run": false,
+    "threads": 4,
+    "paths": [
+        {
+            "name": "full_zero",
+            "description": "zero -> full-grid baseline"
+        },
+        {
+            "name": "cubic32_full",
+            "description": "Phase31 cubic N=32 optimum -> full-grid"
+        },
+        {
+            "name": "linear64_full",
+            "description": "Phase31 linear N=64 optimum -> full-grid"
+        },
+        {
+            "name": "cubic128_full",
+            "description": "Phase31 best cubic N=128 optimum -> full-grid"
+        },
+        {
+            "name": "linear64_cubic128_full",
+            "description": "linear N=64 seed -> cubic N=128 refinement -> full-grid"
+        }
+    ],
+    "wall_time_s": 822.3188490867615
+}

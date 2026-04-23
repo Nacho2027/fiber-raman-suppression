@@ -74,3 +74,28 @@ See `FINDINGS.md §Follow-on questions`:
 1. Close the 10 dB gap between full-grid L-BFGS and cubic N_phi=128 via (a) multi-start from perturbed zero, (b) anchored continuation (DCT → cubic → identity), (c) Phase 33/34 second-order with negative-curvature handling.
 2. Test whether the HNLF gap is a property of the cubic basis or the canonical optimum.
 3. Ambient-Hessian probe on cubic N_phi = 128 — tractable once Phase 33/34 Krylov-preconditioned HVP is built.
+
+## 2026-04-22 extension
+
+Follow-up files added in the Phase 31 namespace:
+
+| File | Purpose |
+|---|---|
+| `scripts/phase31_extension_lib.jl` | pure path-program + seed/projection helpers for continuation/refinement comparisons |
+| `scripts/phase31_extension_run.jl` | resumable follow-up driver comparing 5 continuation paths ending in full-grid refinement; emits standard images per step |
+| `scripts/phase31_extension_analyze.jl` | writes `FOLLOWUP-PHASE31-EXTENSION.md` from the follow-up JLD2 |
+| `test/test_phase31_extension.jl` | unit tests for path-program, row selection, projection, and labeling helpers |
+
+Executed result:
+
+- `zero -> full-grid`: `−55.75 dB`, `σ_3dB = 0.230`, HNLF gap `+11.47 dB`
+- `cubic32 -> full-grid`: `−67.16 dB`, `σ_3dB = 0.070`, HNLF gap `+22.31 dB`
+- `linear64 -> full-grid`: `−64.23 dB`, `σ_3dB = 0.093`, HNLF gap `+20.80 dB`
+- `cubic128 -> full-grid`: `−67.60 dB`, `σ_3dB = 0.072`, HNLF gap `+21.50 dB`
+- `linear64 -> cubic128 -> full-grid`: `−64.40 dB`, `σ_3dB = 0.100`, HNLF gap `+20.74 dB`
+
+Interpretation:
+
+- The reduced-basis continuation result **does** extend to a strong ambient/full-grid refinement.
+- The full-grid polish **does not** preserve the attractive robustness/transferability of shallower seeds; it pulls them into the same narrow canonical family as the best cubic result.
+- The current cubic route remains the best depth-seeking path among the tested options.

@@ -71,6 +71,35 @@ const _INTEG_β_ORDER       = 3
     @test result.iterations <= 3
 end
 
+@testset "Regression: optimize_analytic_tr forwards M kwarg into solve_subproblem" begin
+    H = Diagonal([2.0, 5.0])
+    cost_fn = φ -> 0.5 * dot(φ, H * φ)
+    grad_fn = φ -> H * φ
+    φ0 = [1.0, -1.0]
+
+    m_calls = Ref(0)
+    M_probe = v -> begin
+        m_calls[] += 1
+        return copy(v)
+    end
+
+    solver = PreconditionedCGSolver(preconditioner=:diagonal, max_iter=10)
+    result = optimize_analytic_tr(
+        cost_fn, grad_fn, φ0;
+        solver = solver,
+        M = M_probe,
+        max_iter = 1,
+        Δ0 = 0.5,
+        g_tol = 1e-12,
+        lambda_probe_cadence = 100,
+    )
+
+    @test m_calls[] >= 1
+    @test result.exit_code in (CONVERGED_2ND_ORDER, MAX_ITER, MAX_ITER_STALLED, RADIUS_COLLAPSE)
+    @test all(isfinite, result.minimizer)
+    @test isfinite(result.J_final)
+end
+
 @testset "PCG driver composes with build_diagonal_precond factory" begin
     # Factory exercise — does NOT wire M into outer loop (frozen), but
     # verifies the combo loads and factory outputs are correct.

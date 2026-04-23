@@ -18,6 +18,21 @@ See also: [`../README.md`](../README.md) for the project-level overview.
 | [adding-a-fiber-preset.md](./adding-a-fiber-preset.md) | Extend `FIBER_PRESETS` with a new fiber type. |
 | [adding-an-optimization-variable.md](./adding-an-optimization-variable.md) | Extend the framework with a new optimization variable (stub — Session A in progress). |
 
+## Recent synthesis
+
+| Doc | Read when you want to... |
+|-----|--------------------------|
+| [recent-phase-synthesis-29-34.md](./recent-phase-synthesis-29-34.md) | Recover the main lessons from Phases 29-34 without rereading the full planning history. |
+| [why-phase-31-changed-the-roadmap.md](./why-phase-31-changed-the-roadmap.md) | Understand why Phase 31 shifted attention from penalty tuning toward continuation, curvature, and basin access. |
+
+## Phase Status Notes
+
+| Doc | Read when you want to... |
+|-----|--------------------------|
+| [phase-30-status.md](./phase-30-status.md) | See what Phase 30 actually completed versus what its flagship continuation demo failed to prove. |
+| [phase-32-status.md](./phase-32-status.md) | See which Phase 32 acceleration experiments really ran and which conclusions are still provisional. |
+| [phase-34-preconditioning-caveat.md](./phase-34-preconditioning-caveat.md) | Understand why current Phase 34 preconditioning comparisons need a wiring caveat before interpretation. |
+
 ## Physics / math pedagogy
 
 | Doc | What it is |

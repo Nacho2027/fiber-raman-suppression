@@ -57,6 +57,22 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
         @test rel_err < 5e-2
     end
 
+    @testset "Gradient Taylor remainder tracks the scalar objective" begin
+        Random.seed!(314)
+        uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
+            Nt=2^7, time_window=5.0, β_order=2, L_fiber=0.05, P_cont=0.01)
+        φ = 0.02 .* randn(sim["Nt"], sim["M"])
+        v = randn(sim["Nt"], sim["M"])
+        v ./= norm(v)
+
+        result = validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
+            λ_gdd=1e-4, λ_boundary=0.5, log_cost=true,
+            eps_range=10.0 .^ (-2:-0.5:-5))
+
+        @test result.slope > 1.7
+        @test result.slope < 2.3
+    end
+
     @testset "Chirp sensitivity returns linear J for plotting" begin
         Random.seed!(7)
         uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
@@ -77,5 +93,15 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
                 save_prefix=save_prefix)
             @test isfile(save_prefix * ".png")
         end
+    end
+
+    @testset "Cost-surface spec is explicit about log vs linear" begin
+        spec_log = raman_cost_surface_spec(log_cost=true, λ_gdd=1e-4, λ_boundary=0.5)
+        spec_lin = raman_cost_surface_spec(log_cost=false, λ_gdd=1e-4, λ_boundary=0.5)
+
+        @test spec_log.scalar_surface == "10*log10(physics + λ_gdd*R_gdd + λ_boundary*R_boundary)"
+        @test spec_lin.scalar_surface == "physics + λ_gdd*R_gdd + λ_boundary*R_boundary"
+        @test spec_log.regularizers_chained_into_surface
+        @test spec_lin.regularizers_chained_into_surface
     end
 end

@@ -32,6 +32,8 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
 
         @test report["overall_verdict"] == "PASS"
         @test report["cost_surface"]["regularizers_chained_into_surface"] == true
+        @test report["cost_surface"]["surface"] == "10*log10(physics + λ_gdd*R_gdd + λ_boundary*R_boundary)"
+        @test report["cost_surface"]["scale"] == "dB"
         @test report["boundary"]["verdict"] == "PASS"
     end
 
@@ -54,6 +56,7 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
             @test isfile(trust_md)
             @test haskey(result, "trust_report")
             @test result["trust_report"]["cost_surface"]["regularizers_chained_into_surface"] == true
+            @test haskey(result["trust_report"]["cost_surface"], "pre_log_linear_surface")
             @test haskey(result["trust_report"], "overall_verdict")
         end
     end
