@@ -1,0 +1,165 @@
+=== Phase 36 Codex tool-surface capture ===
+Run timestamp: 2026-04-21T02:04:08Z
+
+--- Codex native binary (primary path resolved) ---
+/Users/ignaciojlizama/.nvm/versions/node/v22.3.0/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex/codex
+/Users/ignaciojlizama/.nvm/versions/node/v22.3.0/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex/codex: Mach-O 64-bit executable arm64
+
+--- Tool-name dispatch strings (one per line, sorted unique) ---
+apply_patch
+close_agent
+exec_command
+followup_task
+list_agents
+request_user_input
+resume_agent
+send_input
+send_message
+spawn_agent
+spawn_agents_on_csv
+update_plan
+wait
+web_search_request
+
+--- Raw strings hits (substring grep) for cross-check ---
+apply_patch
+close_agent
+exec_command
+followup_task
+list_agents
+request_user_input
+resume_agent
+send_input
+send_message
+spawn_agent
+spawn_agents_on_csv
+update_plan
+web_search_request
+
+--- codex --help (head -40) ---
+Codex CLI
+
+If no subcommand is specified, options will be forwarded to the interactive CLI.
+
+Usage: codex [OPTIONS] [PROMPT]
+       codex [OPTIONS] <COMMAND> [ARGS]
+
+Commands:
+  exec         Run Codex non-interactively [aliases: e]
+  review       Run a code review non-interactively
+  login        Manage login
+  logout       Remove stored authentication credentials
+  mcp          Manage external MCP servers for Codex
+  marketplace  Manage plugin marketplaces for Codex
+  mcp-server   Start Codex as an MCP server (stdio)
+  app-server   [experimental] Run the app server or related tooling
+  app          Launch the Codex desktop app (downloads the macOS installer if missing)
+  completion   Generate shell completion scripts
+  sandbox      Run commands within a Codex-provided sandbox
+  debug        Debugging tools
+  apply        Apply the latest diff produced by Codex agent as a `git apply` to your local working
+               tree [aliases: a]
+  resume       Resume a previous interactive session (picker by default; use --last to continue the
+               most recent)
+  fork         Fork a previous interactive session (picker by default; use --last to fork the most
+               recent)
+  cloud        [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally
+  exec-server  [EXPERIMENTAL] Run the standalone exec-server service
+  features     Inspect feature flags
+  help         Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [PROMPT]
+          Optional user prompt to start the session
+
+Options:
+  -c, --config <key=value>
+          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed
+          as TOML. If it fails to parse as TOML, the raw string is used as a literal.
+
+--- codex exec --help (head -40) ---
+Run Codex non-interactively
+
+Usage: codex exec [OPTIONS] [PROMPT]
+       codex exec [OPTIONS] <COMMAND> [ARGS]
+
+Commands:
+  resume  Resume a previous session by id or pick the most recent with --last
+  review  Run a code review against the current repository
+  help    Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [PROMPT]
+          Initial instructions for the agent. If not provided as an argument (or if `-` is used),
+          instructions are read from stdin. If stdin is piped and a prompt is also provided, stdin
+          is appended as a `<stdin>` block
+
+Options:
+  -c, --config <key=value>
+          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed
+          as TOML. If it fails to parse as TOML, the raw string is used as a literal.
+          
+          Examples: - `-c model="o3"` - `-c 'sandbox_permissions=["disk-full-read-access"]'` - `-c
+          shell_environment_policy.inherit=all`
+
+      --enable <FEATURE>
+          Enable a feature (repeatable). Equivalent to `-c features.<name>=true`
+
+      --disable <FEATURE>
+          Disable a feature (repeatable). Equivalent to `-c features.<name>=false`
+
+  -i, --image <FILE>...
+          Optional image(s) to attach to the initial prompt
+
+  -m, --model <MODEL>
+          Model the agent should use
+
+      --oss
+          Use open-source provider
+
+
+--- codex features list (head -40) ---
+apply_patch_freeform             under development  false
+apps                             stable             true
+artifact                         under development  false
+child_agents_md                  under development  false
+code_mode                        under development  false
+code_mode_only                   under development  false
+codex_git_commit                 under development  false
+codex_hooks                      under development  true
+collaboration_modes              removed            true
+default_mode_request_user_input  under development  false
+elevated_windows_sandbox         removed            false
+enable_fanout                    under development  false
+enable_request_compression       stable             true
+exec_permission_approvals        under development  false
+experimental_windows_sandbox     removed            false
+fast_mode                        stable             true
+general_analytics                stable             true
+guardian_approval                experimental       false
+image_detail_original            removed            false
+image_generation                 under development  false
+js_repl                          experimental       false
+js_repl_tools_only               under development  false
+memories                         under development  false
+multi_agent                      stable             true
+multi_agent_v2                   under development  false
+personality                      stable             true
+plugins                          stable             true
+prevent_idle_sleep               experimental       false
+realtime_conversation            under development  false
+remote_control                   under development  false
+remote_models                    removed            false
+request_permissions_tool         under development  false
+request_rule                     removed            false
+responses_websockets             removed            false
+responses_websockets_v2          removed            false
+runtime_metrics                  under development  false
+search_tool                      removed            false
+shell_snapshot                   stable             true
+shell_tool                       stable             true
+shell_zsh_fork                   under development  false
+
+=== capture complete ===

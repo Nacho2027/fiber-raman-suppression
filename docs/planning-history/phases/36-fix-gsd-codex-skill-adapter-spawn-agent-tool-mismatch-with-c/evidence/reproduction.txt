@@ -1,0 +1,27 @@
+=== Phase 36 reproduction harness ===
+Run timestamp: 2026-04-21T02:01:59Z
+
+--- Codex CLI version ---
+codex-cli 0.121.0
+
+--- GSD VERSION file ---
+1.38.1
+--- Skill inventory ---
+skills installed: 81
+skills referencing spawn_agent: 81
+
+--- spawn_agent invocation counts across all logs_*.sqlite ---
+  /Users/ignaciojlizama/.codex/logs_2.sqlite: 0
+
+TOTAL spawn_agent invocations: 0
+
+--- Distinct tool_name values ever observed in first db ---
+tool_name="apply_patch"
+tool_name="exec_command"
+
+=== reproduction summary ===
+spawn_agent_total=0
+skills_total=81
+skills_with_spawn_ref=81
+
+Reproduction complete. spawn_agent symptom (count=0) reproduced.
