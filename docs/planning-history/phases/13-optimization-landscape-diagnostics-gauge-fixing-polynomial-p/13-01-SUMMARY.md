@@ -13,7 +13,7 @@ requires:
   - phase: 06-cross-run-comparison
     provides: 5 canonical run JLD2 files
 provides:
-  - "Tested primitives library (scripts/phase13_primitives.jl) with gauge_fix, polynomial_project, phase_similarity, determinism_check, input_band_mask"
+  - "Tested primitives library (scripts/primitives.jl) with gauge_fix, polynomial_project, phase_similarity, determinism_check, input_band_mask"
   - "Full gauge-fixed + polynomial-decomposed dataset for all 39 existing phi_opt (results/raman/phase13/gauge_polynomial_analysis.jld2 + .csv)"
   - "Three diagnostic figures establishing NO-COLLAPSE and NO-POLYNOMIAL-DOMINANCE findings"
   - "Determinism baseline: FFTW.MEASURE non-determinism quantified (max|Δφ|=1.04 rad, ΔJ=-1.83 dB)"
@@ -31,9 +31,9 @@ tech-stack:
 
 key-files:
   created:
-    - scripts/phase13_primitives.jl
-    - scripts/phase13_gauge_and_polynomial.jl
-    - test/test_phase13_primitives.jl
+    - scripts/primitives.jl
+    - scripts/gauge_and_polynomial.jl
+    - test/test_primitives.jl
     - results/raman/phase13/gauge_polynomial_analysis.jld2
     - results/raman/phase13/gauge_polynomial_summary.csv
     - results/raman/phase13/determinism.md
@@ -81,7 +81,7 @@ completed: 2026-04-16
 
 ## Accomplishments
 
-1. **Primitives library shipped and tested.** 31 unit tests pass (`julia --project=. test/test_phase13_primitives.jl`). Covers gauge-fix idempotence, gauge invariance (removes C + alpha*omega exactly), polynomial recovery under both clean and noisy inputs, phase-similarity symmetry, shape preservation, and input-band mask construction.
+1. **Primitives library shipped and tested.** 31 unit tests pass (`julia --project=. test/test_primitives.jl`). Covers gauge-fix idempotence, gauge invariance (removes C + alpha*omega exactly), polynomial recovery under both clean and noisy inputs, phase-similarity symmetry, shape preservation, and input-band mask construction.
 2. **All 39 existing phi_opt processed through the pipeline** — 5 canonical + 24 sweep + 10 multistart. CSV summary and JLD2 serialisation written.
 3. **Three diagnostic figures generated** (Fig 1 gauge-before-after, Fig 2 residual bars, Fig 3 coefficient symlog scatter) at 300 DPI.
 4. **Determinism baseline established empirically.** Non-deterministic by 1.04 rad / 1.83 dB due to FFTW.MEASURE; cause diagnosed and documented for Plan 02 / Phase 14 to act on.
@@ -105,9 +105,9 @@ completed: 2026-04-16
 
 ## Files Created/Modified
 
-- `scripts/phase13_primitives.jl` (411 lines) — Library: gauge_fix, polynomial_project, phase_similarity, input_band_mask, omega_vector, determinism_check, cost_invariance_under_gauge
-- `scripts/phase13_gauge_and_polynomial.jl` (480 lines) — Entry point: processes all JLD2 optima, writes 3 figures + 1 JLD2 + 1 CSV + determinism.md
-- `test/test_phase13_primitives.jl` (158 lines) — 31 unit tests in 10 testsets
+- `scripts/primitives.jl` (411 lines) — Library: gauge_fix, polynomial_project, phase_similarity, input_band_mask, omega_vector, determinism_check, cost_invariance_under_gauge
+- `scripts/gauge_and_polynomial.jl` (480 lines) — Entry point: processes all JLD2 optima, writes 3 figures + 1 JLD2 + 1 CSV + determinism.md
+- `test/test_primitives.jl` (158 lines) — 31 unit tests in 10 testsets
 - `results/raman/phase13/gauge_polynomial_analysis.jld2` (12 MB) — Per-optimum gauge-fixed phi, polynomial coefficients a2..a6, residual fractions, pairwise similarity matrices
 - `results/raman/phase13/gauge_polynomial_summary.csv` (40 rows, 20 cols) — Tabular summary for quick inspection
 - `results/raman/phase13/determinism.md` — Determinism verdict + FFTW root-cause diagnosis
@@ -129,7 +129,7 @@ See frontmatter `key-decisions`. Highlights:
 - **Found during:** Task 1 (first test run)
 - **Issue:** First run errored with `UndefVarError: @sprintf not defined in Main` — macros behind an `if !(@isdefined _GUARD)` guard aren't visible at compile-time per STATE.md's "Include Guards" section.
 - **Fix:** Moved `using LinearAlgebra, Statistics, Printf, Random, FFTW` and the `include("common.jl")` outside the guard block; kept constant + function definitions inside.
-- **Files modified:** `scripts/phase13_primitives.jl`
+- **Files modified:** `scripts/primitives.jl`
 - **Verification:** Tests pass after fix.
 - **Committed in:** `cfad5dc`
 
@@ -137,7 +137,7 @@ See frontmatter `key-decisions`. Highlights:
 - **Found during:** Task 1 (test run after primitives fix)
 - **Issue:** Original test expected a polynomial-in-x input to be recovered exactly by `gauge_fix` + `polynomial_project`. But on a finite symmetric band, x^3 and x^5 have nonzero least-squares linear slopes, so gauge_fix removes a linear term, leaving a linear residual that orders 2..6 cannot represent. Test was asking for an impossible thing.
 - **Fix:** Split into Test 3 (polynomial_project on a pure polynomial input WITHOUT gauge_fix, passes exactly) and Test 3b (even polynomial under gauge_fix — confirms alpha=0 and mean-only removal). Both pass.
-- **Files modified:** `test/test_phase13_primitives.jl`
+- **Files modified:** `test/test_primitives.jl`
 - **Committed in:** `cfad5dc`
 
 **3. [Rule 2 - Missing critical] Documented FFTW.MEASURE-mode non-determinism**
@@ -187,21 +187,21 @@ Rationale:
 **Constraints Plan 02 must honour:**
 1. Do not re-optimise on this point — pull phi_opt from the JLD2 directly.
 2. If Plan 02's HVPs call `solve_disp_mmf` repeatedly, use a single (forward + adjoint) FFTW plan built once (cache it) rather than letting MEASURE re-decide per call. Otherwise HVP results will differ run-to-run at the 1 rad / 1.8 dB scale documented in `determinism.md`.
-3. The input-band projection (`input_band_mask`) lives in `scripts/phase13_primitives.jl` — import via `include` not copy-paste.
+3. The input-band projection (`input_band_mask`) lives in `scripts/primitives.jl` — import via `include` not copy-paste.
 
 **Verdict on Newton-vs-L-BFGS question (interim):**
 The symptom that random starts give different phases is NOT explained by gauge modes (collapse fraction = 0). It is also NOT explained by low-order polynomial equivalence (median residual 92%, all multistart residuals > 93%). Something richer — higher-order polynomial, sinusoidal, or genuinely multi-minimum — is responsible. Plan 02's Hessian eigendecomposition will tell us which.
 
 ## Next Phase Readiness
 
-- **Plan 02 (Hessian eigenspectrum):** Ready. The canonical config is identified; `scripts/phase13_primitives.jl` provides `input_band_mask` and `omega_vector` helpers; the JLD2 analysis file has the gauge-fixed phi and input-band mask for every optimum. Plan 02 can reuse these without touching production code.
+- **Plan 02 (Hessian eigenspectrum):** Ready. The canonical config is identified; `scripts/primitives.jl` provides `input_band_mask` and `omega_vector` helpers; the JLD2 analysis file has the gauge-fixed phi and input-band mask for every optimum. Plan 02 can reuse these without touching production code.
 - **Plan 03 (if any, findings doc):** Fig 1/2/3 are all production-ready and interpretable at a glance. Findings document should lead with Fig 2 (residual fraction) and Fig 3 middle panel (a_2, a_4 anti-correlation) because those are the clean quantitative answers.
 
 ## Self-Check
 
-- [x] `scripts/phase13_primitives.jl` exists (411 lines) — FOUND
-- [x] `scripts/phase13_gauge_and_polynomial.jl` exists (480 lines) — FOUND
-- [x] `test/test_phase13_primitives.jl` exists, all 31 tests pass — FOUND
+- [x] `scripts/primitives.jl` exists (411 lines) — FOUND
+- [x] `scripts/gauge_and_polynomial.jl` exists (480 lines) — FOUND
+- [x] `test/test_primitives.jl` exists, all 31 tests pass — FOUND
 - [x] `results/raman/phase13/gauge_polynomial_analysis.jld2` exists (12 MB, JLD2.load succeeds) — FOUND
 - [x] `results/raman/phase13/gauge_polynomial_summary.csv` exists, 40 lines — FOUND
 - [x] `results/raman/phase13/determinism.md` exists, verdict = FAIL — FOUND

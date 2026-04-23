@@ -5,21 +5,21 @@ subsystem: trust-region-optimizer
 tags: [delta0-sweep, radius-collapse, negative-curvature, diagnostic, go-no-go]
 dependency-graph:
   requires: [phase-33-benchmark-results, trust_region_core.jl, trust_region_optimize.jl]
-  provides: [34-01-SUMMARY.md, phase34_delta0_sweep.jl, DELTA0_SWEEP_VALUES constant]
+  provides: [34-01-SUMMARY.md, delta0_sweep.jl, DELTA0_SWEEP_VALUES constant]
   affects: [plans-02-04-preconditioning-decision]
 tech-stack:
-  added: [phase34_delta0_sweep.jl, DELTA0_SWEEP_VALUES in phase33_benchmark_common.jl]
+  added: [delta0_sweep.jl, DELTA0_SWEEP_VALUES in benchmark_common.jl]
   patterns: [delta0-sweep, cold-start-only, SteihaugSolver-frozen]
 key-files:
   created:
-    - scripts/phase34_delta0_sweep.jl
+    - scripts/delta0_sweep.jl
     - results/raman/phase34/delta0_sweep/bench-01-smf28-canonical/delta0_{0p5,0p1,0p01,0p001}/_result.jld2
     - results/raman/phase34/delta0_sweep/bench-01-smf28-canonical/delta0_{0p5,0p1,0p01,0p001}/telemetry.csv
     - results/raman/phase34/delta0_sweep/bench-01-smf28-canonical/delta0_{0p5,0p1,0p01,0p001}/trust_report.md
     - results/raman/phase34/delta0_sweep/bench-01-smf28-canonical/delta0_{0p5,0p1,0p01,0p001}/*.png (4 images each)
     - results/burst-logs/Q-phase34-delta0_20260421T223806Z.log
   modified:
-    - scripts/phase33_benchmark_common.jl (append-only Phase 34 block)
+    - scripts/benchmark_common.jl (append-only Phase 34 block)
 decisions:
   - "DELTA0_SWEEP_VALUES = [0.5, 0.1, 0.01, 0.001] chosen to span 3 decades around default"
   - "cold-start only for sweep — warm-start would need pre-existing phi_opt which Phase 33 couldn't produce"
@@ -110,7 +110,7 @@ The simplest approach (Plan 02: diagonal Hessian regularization via λ_shift > |
 
 **Found during:** Task 3 (burst VM execution)
 
-**Issue:** Phase 32's `P-32-accel-expt1` held the burst heavy lock when Task 3 tried to start. Phase 32 then transitioned to `P-32-accel-expt2` which immediately crashed with `AssertionError: expected 3 past iterates, got 2` in `phase32_mpe_offline.jl:447`.
+**Issue:** Phase 32's `P-32-accel-expt1` held the burst heavy lock when Task 3 tried to start. Phase 32 then transitioned to `P-32-accel-expt2` which immediately crashed with `AssertionError: expected 3 past iterates, got 2` in `mpe_offline.jl:447`.
 
 **Fix:** Launched `Q-phase34-delta0-waiter` tmux session on burst VM with `WAIT_TIMEOUT_SEC=7200` to automatically acquire lock when released. Lock was released when Phase 32 expt2 crashed (trap cleanup ran correctly). The waiter acquired the lock and started the sweep without any manual intervention.
 
@@ -130,8 +130,8 @@ The simplest approach (Plan 02: diagonal Hessian regularization via λ_shift > |
 
 | Item | Status |
 |------|--------|
-| `scripts/phase34_delta0_sweep.jl` | FOUND |
-| `scripts/phase33_benchmark_common.jl` (DELTA0_SWEEP_VALUES appended) | FOUND |
+| `scripts/delta0_sweep.jl` | FOUND |
+| `scripts/benchmark_common.jl` (DELTA0_SWEEP_VALUES appended) | FOUND |
 | `results/raman/phase34/.../delta0_0p5/_result.jld2` | FOUND |
 | `results/raman/phase34/.../delta0_0p1/_result.jld2` | FOUND |
 | `results/raman/phase34/.../delta0_0p01/_result.jld2` | FOUND |

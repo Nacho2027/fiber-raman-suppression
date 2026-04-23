@@ -6,20 +6,20 @@ Reference: full-fidelity archived plan at `docs/planning-history/phases/31-reduc
 
 ## Task 1 — Branch B penalty sweep
 
-**Goal:** replace the `run_branch_B(; dry_run)` stub in `scripts/phase31_run.jl` with a working penalty-on-full-grid sweep.
+**Goal:** replace the `run_branch_B(; dry_run)` stub in `scripts/run.jl` with a working penalty-on-full-grid sweep.
 
-**Scope:** iterate `P31_PENALTY_PROGRAM = [(:tikhonov, [0.0, 1e-6, 1e-4, 1e-2, 1e0]), (:gdd, [0.0, 1e-6, 1e-4, 1e-2]), (:tod, [0.0, 1e-8, 1e-6, 1e-4]), (:tv, [0.0, 1e-4, 1e-2, 1e0]), (:dct_l1, [0.0, 1e-4, 1e-2, 1e0])]` → 21 runs. Each run: `optimize_phase_lowres` with `kind=:identity` is memory-prohibitive at Nt=16384 (2 GB identity matrix), so bypass: directly `Optim.optimize(Optim.only_fg!(wrapper), phi0, LBFGS(), Optim.Options(f_tol=1e-10, iterations=P31_MAX_ITER, show_trace=false))` where the wrapper calls `cost_and_gradient(...)` and adds the relevant penalty from `phase31_penalty_lib.jl` BEFORE the `log_cost` rescale.
+**Scope:** iterate `P31_PENALTY_PROGRAM = [(:tikhonov, [0.0, 1e-6, 1e-4, 1e-2, 1e0]), (:gdd, [0.0, 1e-6, 1e-4, 1e-2]), (:tod, [0.0, 1e-8, 1e-6, 1e-4]), (:tv, [0.0, 1e-4, 1e-2, 1e0]), (:dct_l1, [0.0, 1e-4, 1e-2, 1e0])]` → 21 runs. Each run: `optimize_phase_lowres` with `kind=:identity` is memory-prohibitive at Nt=16384 (2 GB identity matrix), so bypass: directly `Optim.optimize(Optim.only_fg!(wrapper), phi0, LBFGS(), Optim.Options(f_tol=1e-10, iterations=P31_MAX_ITER, show_trace=false))` where the wrapper calls `cost_and_gradient(...)` and adds the relevant penalty from `penalty_lib.jl` BEFORE the `log_cost` rescale.
 
 **Branch B row packaging:** `c_opt = phi_opt_vec` (length Nt), `B = nothing`, `kind = "identity"`, `N_phi = sim["Nt"]`, `kappa_B = NaN`, `kappa_H_restricted = NaN`, `hess_probe_skipped_reason = "identity_basis_Branch_B"`, plus the penalty-family metadata (`penalty_name`, `lambda`, `J_raman_linear`, `J_penalty`). Store `"phi_opt" => vec(phi_opt)::Vector{Float64}` uniformly.
 
 **Execute on the Mac** (not burst VM). Expected wall-time ~35 min. Apply the same resume + PyPlot cleanup pattern already in `run_branch_A`.
 
 **Deliverables:**
-- `scripts/phase31_run.jl` — `run_branch_B` with real body (no `error(...)` stub).
+- `scripts/run.jl` — `run_branch_B` with real body (no `error(...)` stub).
 - `results/raman/phase31/sweep_B_penalty.jld2` — 21 rows.
 - `results/raman/phase31/sweep_B/images/*_phase_profile.png` — 21 files.
 - `results/raman/phase31/manifest_B_*.json`.
-- Smoke test: `julia --project=. -e 'include("scripts/phase31_run.jl"); run_branch_B(; dry_run=true)'` exits cleanly and writes a 1-row dry-run JLD2.
+- Smoke test: `julia --project=. -e 'include("scripts/run.jl"); run_branch_B(; dry_run=true)'` exits cleanly and writes a 1-row dry-run JLD2.
 
 **Acceptance:** 21 rows, all 17 schema keys present, every `regularization_mode == "penalty"`, ≥19/21 converged, no shared-file mutations outside `phase31_*` namespace.
 
@@ -27,7 +27,7 @@ Reference: full-fidelity archived plan at `docs/planning-history/phases/31-reduc
 
 **Goal:** quantify how well every Branch A + Branch B optimum holds up when the fiber / pulse / power changes, without re-optimization.
 
-**New file:** `scripts/phase31_transfer.jl`.
+**New file:** `scripts/transfer.jl`.
 
 **Probes (forward-only evaluations):**
 1. **HNLF transfer** — reload `phi_opt` from a Branch A/B row, evaluate `J_raman_linear` on HNLF L=0.5 m P=0.01 W (use `setup_raman_problem(; fiber_preset=:HNLF, L_fiber=0.5, P_cont=0.01, Nt=16384)`). Record `J_transfer_HNLF`.
@@ -45,7 +45,7 @@ Reference: full-fidelity archived plan at `docs/planning-history/phases/31-reduc
 
 ## Task 3 — Analysis + FINDINGS
 
-**New file:** `scripts/phase31_analyze.jl`.
+**New file:** `scripts/analyze.jl`.
 
 **Outputs:**
 1. `results/raman/phase31/pareto.png` — 4-panel Pareto with axes `(J_dB, N_eff)`, `(J_dB, σ_3dB)`, `(J_dB, polynomial_R²)`, `(J_dB, J_transfer_HNLF - J_canonical)`.
@@ -60,7 +60,7 @@ Reference: full-fidelity archived plan at `docs/planning-history/phases/31-reduc
 
 ## Risks + mitigations (Plan 01 experience)
 
-1. **PyCall finalizer segfault.** `phase31_run.jl` already has `PyPlot.close("all")` + `GC.gc()` between runs. Replicate in `phase31_transfer.jl` wherever `save_standard_set` is called.
+1. **PyCall finalizer segfault.** `run.jl` already has `PyPlot.close("all")` + `GC.gc()` between runs. Replicate in `transfer.jl` wherever `save_standard_set` is called.
 2. **Resume-from-JLD2.** Mirror the pattern from `run_branch_A` in `run_branch_B` so an interrupted sweep can be re-launched.
 3. **Log-cost gradient scaling.** Penalties go in BEFORE the `log_cost` rescale in `cost_and_gradient`, matching the existing convention in `scripts/raman_optimization.jl`.
 4. **`deepcopy(fiber)` per thread** — always, for any `@threads` block.

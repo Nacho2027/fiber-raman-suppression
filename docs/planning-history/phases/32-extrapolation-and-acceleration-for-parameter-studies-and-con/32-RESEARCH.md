@@ -77,7 +77,7 @@ The second structural constraint: **L-BFGS is itself an approximation to the And
 | Vector extrapolation of converged iterates | `scripts/acceleration.jl` | — | Pure function over `Vector{Vector{Float64}}` → `Vector{Float64}` |
 | Scalar convergence-rate estimator (Aitken Δ²) on `J_opt_dB` sequence | `scripts/acceleration.jl` | — | One-liner; used only for the stop rule + convergence diagnostics |
 | Per-step trust report | existing `scripts/numerical_trust.jl::build_numerical_trust_report` + `attach_continuation_metadata!` | — | Reuse Phase 28 schema 28.0 without bump. Phase 32 adds `report["acceleration"]` sub-dict additively, same pattern as Phase 30. [VERIFIED: `scripts/numerical_trust.jl:7` constant] |
-| Benchmark driver | `scripts/phase32_demo.jl` (NEW) | — | Mirrors `scripts/phase30_demo.jl` pattern for consistency. [VERIFIED template: `scripts/phase30_demo.jl` 413 lines per 30-01-SUMMARY.md] |
+| Benchmark driver | `scripts/demo.jl` (NEW) | — | Mirrors `scripts/demo.jl` pattern for consistency. [VERIFIED template: `scripts/demo.jl` 413 lines per 30-01-SUMMARY.md] |
 
 ## Standard Stack
 
@@ -113,7 +113,7 @@ The codebase produces the following structured sequences of "nearby" optimizatio
 
 | # | Family | Ladder variable | Typical length | Warm-start in place? | Source | Expected `‖Δphi_opt‖` regime |
 |---|--------|-----------------|----------------|----------------------|--------|------------------------------|
-| S1 | Phase 30 continuation ladder (SMF-28 long-fiber) | `L ∈ {1, 10, 100} m` | 3 | YES — Phase 30 trivial predictor + `longfiber_interpolate_phi` cross-grid transfer | `.planning/phases/30-.../30-01-SUMMARY.md`, `scripts/phase30_demo.jl:const P30_LADDER_L` | LARGE — factor-10 `L` jumps cross regime (walk-off-dominated vs. dispersion-dominated); saddle branch transitions |
+| S1 | Phase 30 continuation ladder (SMF-28 long-fiber) | `L ∈ {1, 10, 100} m` | 3 | YES — Phase 30 trivial predictor + `longfiber_interpolate_phi` cross-grid transfer | `.planning/phases/30-.../30-01-SUMMARY.md`, `scripts/demo.jl:const P30_LADDER_L` | LARGE — factor-10 `L` jumps cross regime (walk-off-dominated vs. dispersion-dominated); saddle branch transitions |
 | S2 | Phase 7 `(L, P)` sweep grid SMF-28 | `(L_i, P_j)` 5 × 4 | 20 | NO — Phase 7 cold-starts each point | `.planning/phases/07-parameter-sweeps/07-02-SUMMARY.md:83` (`SW_SMF28_L = [0.5, 1.0, 2.0, 5.0, 10.0] × [0.05, 0.10, 0.20, 0.30]`) | UNKNOWN — never measured under warm-start; flag as Experiment 1 prerequisite |
 | S3 | Phase 7 `(L, P)` sweep grid HNLF | `(L_i, P_j)` 4 × 4 | 16 | NO | same plan, `SW_HNLF_L × SW_HNLF_P` | UNKNOWN (same) |
 | S4 | `sweep_simple_run.jl` N_phi ladder | `N_phi ∈ {4, 8, 16, 32, 64, 128, 256, 512, Nt}` | 9 | YES — "Continuation warm-start from the coarser level" per `scripts/sweep_simple_run.jl:8` | `scripts/sweep_simple_run.jl:57` | VARIES — at low N_phi the optimum is forced-sparse, at high N_phi it fills out. Not monotone in norm. |
@@ -123,7 +123,7 @@ The codebase produces the following structured sequences of "nearby" optimizatio
 
 ### Per-family depth of solves
 
-Each "point" is one `optimize_spectral_phase(...)` call. At `Nt = 2^14` with 40 L-BFGS iterations and the two-solve cost per iteration (forward + adjoint), one point costs ~80 forward-adjoint solves. Phase 30 `scripts/phase30_demo.jl` at `max_iter = 40` is representative. At burst-VM scale (22 threads, parallel across points only), S2 at 20 points × 80 = 1600 solves; S4 at 9 points × 80 = 720 solves per arm; S7 at 21 × 80 = 1680 solves per branch.
+Each "point" is one `optimize_spectral_phase(...)` call. At `Nt = 2^14` with 40 L-BFGS iterations and the two-solve cost per iteration (forward + adjoint), one point costs ~80 forward-adjoint solves. Phase 30 `scripts/demo.jl` at `max_iter = 40` is representative. At burst-VM scale (22 threads, parallel across points only), S2 at 20 points × 80 = 1600 solves; S4 at 9 points × 80 = 720 solves per arm; S7 at 21 × 80 = 1680 solves per branch.
 
 The lever worth pulling: if acceleration turns a 40-iter L-BFGS polish into a 20-iter polish at every ladder step after the third, the saving scales as `0.5 × N_solves × (K - 3) / K` — roughly 40% wall-time at `K = 9`, 30% at `K = 5`, near-zero at `K = 3`. **Ladders shorter than ~5 are not worth accelerating** even if the method works perfectly. S1 at K=3 is on the edge. S2 (20), S4 (9), S5 (per flavor = 4, too short), and S7 (21) are the candidates where the arithmetic works.
 
@@ -226,7 +226,7 @@ Per method: what it does, storage cost, expected failure mode on THIS problem, e
 
 **Expected failure modes.** Same as Anderson (gauge, saddle, cost-surface), *plus*: MPE/RRE on a non-fixed-point sequence (which is most of our sequences — see Section 2) combines iterates from different problems. The combination is defined, but it isn't converging to anything meaningful. In practice this shows up as `γ` with wild magnitudes — same safeguard as Anderson.
 
-**Explicit abandon criterion.** If MPE on the `scripts/phase30_demo.jl` 3-point L-ladder does not reduce `J_opt_dB` at the final point by ≥1 dB at budget parity, or if the combined `phi_init` needs MORE L-BFGS iterations than the trivial-predictor `phi_init` to converge, abandon MPE.
+**Explicit abandon criterion.** If MPE on the `scripts/demo.jl` 3-point L-ladder does not reduce `J_opt_dB` at the final point by ≥1 dB at budget parity, or if the combined `phi_init` needs MORE L-BFGS iterations than the trivial-predictor `phi_init` to converge, abandon MPE.
 
 ### 3.5 Vector Polynomial Warm-Start Prediction (the main recommendation)
 
@@ -378,7 +378,7 @@ All experiments run on `fiber-raman-burst` via `~/bin/burst-run-heavy P32-<tag>`
 **Purpose.** Test the main recommendation: polynomial warm-start prediction.
 
 **Inputs.**
-- Run Phase 30's `scripts/phase30_demo.jl` EXACTLY AS IS for the NAIVE arm. Reuse its output. `L = [1, 10, 100] m`, `P = 0.2 W`, `Nt = 2^14`, `max_iter = 40`.
+- Run Phase 30's `scripts/demo.jl` EXACTLY AS IS for the NAIVE arm. Reuse its output. `L = [1, 10, 100] m`, `P = 0.2 W`, `Nt = 2^14`, `max_iter = 40`.
 - Add a third arm called `ACCEL`: at step k=2 (`L = 10 m`), use linear extrapolation (= secant = Phase 30's deferred "secant predictor" per `scripts/continuation.jl:50-52`) from the step-1 optimum. At step k=3 (`L = 100 m`), use quadratic extrapolation in `log L` over `{phi_opt_1, phi_opt_2}` — wait, quadratic needs 3 points and we have 2 before step 3. Use linear in `log L` for step 3, and plan an expanded 4-point ladder (`L = [1, 3, 10, 30, 100]` m) for Experiment 1b if linear is not enough.
 
 **Expected runtime on burst.** Same as Phase 30 demo (~15-30 minutes) × 2 (add ACCEL arm).
@@ -458,11 +458,11 @@ Run 0, 1, 2 FIRST (all cheap, combined < 1 burst-VM hour). That is the minimum v
 | REQ-32-C | `report["acceleration"]` additive block does not bump `schema_version` from `"28.0"` | regression | `@testset` asserting `report["schema_version"] == "28.0"` after `attach_acceleration_metadata!` | ❌ Wave 0 |
 | REQ-32-C | `write_numerical_trust_report` renders `## Acceleration` block only when `report["acceleration"]` present (regression: existing non-acceleration reports render unchanged) | regression | Diff markdown output against Phase 28 regression test baseline | ❌ Wave 0 |
 | REQ-32-D | Stop rule classifier returns `WORTH_IT`/`NOT_WORTH_IT`/`INCONCLUSIVE` on hand-crafted metric dicts | unit | `@testset "stop rule"` | ❌ Wave 0 |
-| REQ-32-E | `scripts/phase32_demo.jl` loads via `include` without triggering heavy run (same `abspath(PROGRAM_FILE) == @__FILE__` guard as `phase30_demo.jl`) | smoke | `julia -e 'include("scripts/phase32_demo.jl"); println("LOAD_OK")'` | ❌ Wave 0 |
-| REQ-32-F | `scripts/phase32_demo.jl` calls `save_standard_set(...)` for every produced `phi_opt` at the target ladder point (ACCEL arm final + NAIVE arm final + COLD arm final) | grep check | `grep -c "save_standard_set(" scripts/phase32_demo.jl` ≥ 3 | ❌ Wave 0 |
-| REQ-32-F | Demo script references `burst-run-heavy P32-<tag>` in top comment | grep check | `grep -c "burst-run-heavy P32" scripts/phase32_demo.jl` ≥ 1 | ❌ Wave 0 |
-| REQ-32-F | Determinism applied: `grep -c "ensure_deterministic_environment" scripts/phase32_demo.jl` ≥ 1 | grep check | same | ❌ Wave 0 |
-| REQ-32-F | Any `Threads.@threads` loop deepcopies `fiber` per thread | grep check | `grep -c "deepcopy(fiber)" scripts/phase32_demo.jl` must match `grep -c "Threads.@threads" scripts/phase32_demo.jl` | ❌ Wave 0 |
+| REQ-32-E | `scripts/demo.jl` loads via `include` without triggering heavy run (same `abspath(PROGRAM_FILE) == @__FILE__` guard as `demo.jl`) | smoke | `julia -e 'include("scripts/demo.jl"); println("LOAD_OK")'` | ❌ Wave 0 |
+| REQ-32-F | `scripts/demo.jl` calls `save_standard_set(...)` for every produced `phi_opt` at the target ladder point (ACCEL arm final + NAIVE arm final + COLD arm final) | grep check | `grep -c "save_standard_set(" scripts/demo.jl` ≥ 3 | ❌ Wave 0 |
+| REQ-32-F | Demo script references `burst-run-heavy P32-<tag>` in top comment | grep check | `grep -c "burst-run-heavy P32" scripts/demo.jl` ≥ 1 | ❌ Wave 0 |
+| REQ-32-F | Determinism applied: `grep -c "ensure_deterministic_environment" scripts/demo.jl` ≥ 1 | grep check | same | ❌ Wave 0 |
+| REQ-32-F | Any `Threads.@threads` loop deepcopies `fiber` per thread | grep check | `grep -c "deepcopy(fiber)" scripts/demo.jl` must match `grep -c "Threads.@threads" scripts/demo.jl` | ❌ Wave 0 |
 | REQ-32-G | Open questions documented in 32-RESEARCH.md | documentation-only | N/A | ✅ this file |
 
 ### Sampling Rate
@@ -475,7 +475,7 @@ Run 0, 1, 2 FIRST (all cheap, combined < 1 burst-VM hour). That is the minimum v
 
 - [ ] `test/test_acceleration.jl` — unit + regression tests per the map above.
 - [ ] `scripts/acceleration.jl` — Aitken, polynomial_predict, mpe_combine, rre_combine, safeguard logic, `attach_acceleration_metadata!`.
-- [ ] `scripts/phase32_demo.jl` — mirrors `scripts/phase30_demo.jl`; runs COLD / NAIVE / ACCEL arms, emits trust reports, saves standard images.
+- [ ] `scripts/demo.jl` — mirrors `scripts/demo.jl`; runs COLD / NAIVE / ACCEL arms, emits trust reports, saves standard images.
 - [ ] Extension to `scripts/numerical_trust.jl` — add `attach_acceleration_metadata!(report, meta)` and a `## Acceleration` markdown section. Additive. Schema stays `"28.0"`.
 - [ ] Extension to `scripts/continuation.jl` — add `:polynomial` to `LADDER_VARS` predictor enum OR document that `corrector_fn` seam is the integration point (prefer the latter — no `run_ladder` API change). Planner picks one path and defends it.
 
@@ -491,13 +491,13 @@ These are codebase invariants the executor must preserve. Tagged `[VERIFIED: ...
 
 | Hazard | Rule | Source |
 |--------|-----|--------|
-| `save_standard_set(...)` must be called for every optimization run that produces a `phi_opt` | 4 PNGs per arm, for every arm, at target ladder step. `scripts/phase32_demo.jl` must emit at least 3 `save_standard_set` calls (COLD, NAIVE, ACCEL final `phi_opt` each). | [VERIFIED: `CLAUDE.md` §Standard output images mandate; `scripts/phase30_demo.jl` pattern 2 calls] |
+| `save_standard_set(...)` must be called for every optimization run that produces a `phi_opt` | 4 PNGs per arm, for every arm, at target ladder step. `scripts/demo.jl` must emit at least 3 `save_standard_set` calls (COLD, NAIVE, ACCEL final `phi_opt` each). | [VERIFIED: `CLAUDE.md` §Standard output images mandate; `scripts/demo.jl` pattern 2 calls] |
 | `deepcopy(fiber)` per thread inside `Threads.@threads` blocks | The `fiber` dict has mutable fields (`fiber["zsave"]`). Multi-start / parallel gradient validation both do this [VERIFIED: `scripts/benchmark_optimization.jl:637`, `:730`]. Any Phase 32 parallel evaluation (parallel arms, parallel ladder points) must follow the pattern. | [VERIFIED: CLAUDE.md §deepcopy pattern] |
 | `burst-run-heavy` wrapper for heavy Julia | Never `tmux new -d -s run 'julia ...'` directly. Wrapper enforces session tag, heavy lock, stale-lock detection, log teeing. Session tag must match `^[A-Za-z]-[A-Za-z0-9_-]+$` — e.g. `P32-poly-warmstart`. | [VERIFIED: CLAUDE.md §Rule P5] |
 | Deterministic environment | `ensure_deterministic_environment()` at module load of every Phase 32 driver. FFTW ESTIMATE + FFTW/BLAS threads pinned to 1. | [VERIFIED: `scripts/determinism.jl:75`; `scripts/continuation.jl:575`] |
 | Phase 28 trust schema version | Stays `"28.0"`. Phase 32 adds `report["acceleration"]` ADDITIVELY (same pattern Phase 30 used for `report["continuation"]`). Any bump requires Phase 28 co-sign. | [VERIFIED: `scripts/numerical_trust.jl:7` — one occurrence of `"28.0"`] |
 | `scripts/continuation.jl` public API stable | Do NOT change `run_ladder` signature (`corrector_fn`, `cold_start`, `setup_fn`, `baseline_iters` kwargs). Do NOT change `ContinuationSchedule` fields (Phase 33/34 inherit via the `corrector_fn` seam). Extensions go in a new `scripts/acceleration.jl`. | [VERIFIED: `scripts/continuation.jl:118` struct; `:568-572` kwargs] |
-| `abspath(PROGRAM_FILE) == @__FILE__` guard | `scripts/phase32_demo.jl` must have this guard so `include()` from REPL or tests does not trigger the heavy run. | [VERIFIED: Phase 30 pattern — `scripts/phase30_demo.jl` `abspath` check 2 occurrences per 30-01-SUMMARY.md] |
+| `abspath(PROGRAM_FILE) == @__FILE__` guard | `scripts/demo.jl` must have this guard so `include()` from REPL or tests does not trigger the heavy run. | [VERIFIED: Phase 30 pattern — `scripts/demo.jl` `abspath` check 2 occurrences per 30-01-SUMMARY.md] |
 | Julia launched with `-t auto` for simulation work | Every `julia ...` call in scripts or documentation must be `julia -t auto --project=.`. Bare `julia` single-threaded is a CLAUDE.md Rule 2 violation. | [VERIFIED: CLAUDE.md §Rule 2] |
 | No new Julia package dependencies without approval | If Phase 32 implementation grows to need `NLsolve` or similar, STOP and escalate. Hand-rolled Anderson / MPE / RRE is the default. | [VERIFIED: `Project.toml` — no `NLsolve`] |
 
@@ -536,7 +536,7 @@ CONTEXT.md locks a Wait Directive: do not begin execution until Phase 30 has mer
 ### Q6. Use existing Phase 30 outputs, or re-run for Phase 32?
 
 Phase 30's 3-point L-ladder output (pending burst-VM run per 30-RESULTS.md "Status: Pending") is the natural input to Experiments 1 and 2. The planner should decide:
-- Option A: re-run Phase 30's demo as the NAIVE baseline inside `scripts/phase32_demo.jl` to guarantee arm parity.
+- Option A: re-run Phase 30's demo as the NAIVE baseline inside `scripts/demo.jl` to guarantee arm parity.
 - Option B: consume Phase 30's artifacts (JLD2 + trust reports) as inputs.
 
 Option A is cleaner but wastes ~30 min of burst time. Option B is faster but fragile to Phase 30 output format changes. Research recommends Option A for Experiment 1 (re-run for parity); Option B for Experiment 2 (offline MPE/RRE on existing artifacts).
@@ -547,7 +547,7 @@ CONTEXT.md states "not worth it" is acceptable but is silent on inconclusive. Pl
 
 ### Q8. Gauge zero-mode projection before acceleration?
 
-Phase 13 established that `{constant, ω-linear}` are exact gauge null-modes [VERIFIED: `results/raman/phase13/FINDINGS.md` verdict]. Acceleration methods that do least-squares combinations of `phi_opt` vectors can amplify motion along these directions harmlessly (cost is invariant) but confusingly (`‖phi_opt‖` inflates). Should Phase 32's accelerator project out gauge components from each `phi_opt` before combining? Research recommends YES as a default, with the projection implemented as a single helper call per the Phase 13 `gauge_fix` primitive (`.planning/phases/13-.../13-01-SUMMARY.md` references `gauge_fix` in `phase13_primitives.jl`). Low cost, high interpretive value.
+Phase 13 established that `{constant, ω-linear}` are exact gauge null-modes [VERIFIED: `results/raman/phase13/FINDINGS.md` verdict]. Acceleration methods that do least-squares combinations of `phi_opt` vectors can amplify motion along these directions harmlessly (cost is invariant) but confusingly (`‖phi_opt‖` inflates). Should Phase 32's accelerator project out gauge components from each `phi_opt` before combining? Research recommends YES as a default, with the projection implemented as a single helper call per the Phase 13 `gauge_fix` primitive (`.planning/phases/13-.../13-01-SUMMARY.md` references `gauge_fix` in `primitives.jl`). Low cost, high interpretive value.
 
 ## Assumptions Log
 

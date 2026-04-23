@@ -73,8 +73,8 @@
   - `scripts/mmf_setup.jl` — `setup_mmf_raman_problem`, NPZ-cached GRIN eigensolve
   - `scripts/mmf_raman_optimization.jl` — `cost_and_gradient_mmf`, L-BFGS driver (shared φ, fixed `c_m`)
   - `scripts/mmf_joint_optimization.jl` — Phase 17: joint φ + mode-coefficient optimization
-  - `scripts/mmf_run_phase16_all.jl`, `mmf_run_phase16_aggressive.jl` — batch runners
-  - `scripts/mmf_m1_limit_run.jl`, `mmf_smoke_test.jl`, `mmf_analyze_phase16.jl` — sanity + analysis
+  - `scripts/run_all.jl`, `run_aggressive.jl` — batch runners
+  - `scripts/mmf_m1_limit_run.jl`, `mmf_smoke_test.jl`, `analyze.jl` — sanity + analysis
   - `src/mmf_cost.jl` — `mmf_cost_sum` (integrating detector), `mmf_cost_fundamental` (mode-selective), `mmf_cost_worst_mode` (log-sum-exp smooth-max)
 
 **Multivariable optimizer layer (Session A — Phase 16/18):**
@@ -111,7 +111,7 @@
 
 **Landscape diagnostics (Phase 13):**
 - Purpose: Gauge-fixed Hessian eigenspectrum, polynomial parameterization, HVP.
-- Location: `scripts/phase13_primitives.jl`, `phase13_hvp.jl`, `phase13_gauge_and_polynomial.jl`, `phase13_hessian_eigspec.jl`, `phase13_hessian_figures.jl`.
+- Location: `scripts/primitives.jl`, `hvp.jl`, `gauge_and_polynomial.jl`, `hessian_eigspec.jl`, `hessian_figures.jl`.
 
 ## Data Flow
 

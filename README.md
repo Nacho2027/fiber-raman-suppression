@@ -67,12 +67,11 @@ Run `make` with no arguments to list every target.
 ```
 src/                Core Julia package (MultiModeNoise.jl): GNLSE forward +
                     adjoint solvers, YDFA gain, mode solving
-scripts/            Entry points: `raman_optimization.jl`, `run_sweep.jl`,
-                    `generate_sweep_reports.jl`, `generate_presentation_figures.jl`,
-                    `amplitude_optimization.jl`, `run_comparison.jl`,
-                    `sharpness_optimization.jl`
+scripts/            Small public CLI surface plus grouped research/dev/ops
+                    workflows under explicit subdirectories.
 docs/               Markdown how-tos + LaTeX pedagogy (companion_explainer.pdf,
-                    verification_document.pdf, physics_verification.pdf)
+                    verification_document.pdf, physics_verification.pdf),
+                    reports, and durable presentation artifacts.
 test/               Tiered regression test suite (fast / slow / full)
 results/            Run artifacts (JLD2 + JSON), figures, report cards
 notebooks/          Research scratchpads (not handoff material)
@@ -94,5 +93,7 @@ sweeps, log-scale cost function, and comprehensive visualization.
 
 ## License
 
-Research code — not yet published. Contact Rivera Lab for collaboration
-inquiries.
+MIT. See [`LICENSE`](LICENSE).
+
+This repository is public for transparency and reproducibility, but it is not
+an open-contribution project.

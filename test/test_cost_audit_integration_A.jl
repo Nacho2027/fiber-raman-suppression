@@ -24,10 +24,10 @@ BLAS.set_num_threads(1)
 const _PHASE16_WISDOM = joinpath(@__DIR__, "..", "results", "raman", "phase14", "fftw_wisdom.txt")
 isfile(_PHASE16_WISDOM) && try; FFTW.import_wisdom(_PHASE16_WISDOM); catch; end
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "raman_optimization.jl"))
 
-const _CA_DRIVER_PATH = joinpath(@__DIR__, "..", "scripts", "cost_audit_driver.jl")
+const _CA_DRIVER_PATH = joinpath(@__DIR__, "..", "scripts", "research", "cost_audit", "cost_audit_driver.jl")
 if isfile(_CA_DRIVER_PATH)
     include(_CA_DRIVER_PATH)
     const _CA_DRIVER_READY = true
@@ -45,7 +45,7 @@ end
     @testset "variants_run_config_A" begin
         @testset "variant=linear" begin
             if !_CA_DRIVER_READY
-                @test_skip "cost_audit_driver.jl not yet present (Task 3)"
+                @test_skip "scripts/research/cost_audit/cost_audit_driver.jl not yet present (Task 3)"
             else
                 result = run_one(:linear, :A;
                                  max_iter=10, Nt=1024, save=false, strict_nt=false)
@@ -56,7 +56,7 @@ end
 
         @testset "variant=log_dB" begin
             if !_CA_DRIVER_READY
-                @test_skip "cost_audit_driver.jl not yet present (Task 3)"
+                @test_skip "scripts/research/cost_audit/cost_audit_driver.jl not yet present (Task 3)"
             else
                 result = run_one(:log_dB, :A;
                                  max_iter=10, Nt=1024, save=false, strict_nt=false)
@@ -67,7 +67,7 @@ end
 
         @testset "variant=sharp" begin
             if !_CA_DRIVER_READY
-                @test_skip "cost_audit_driver.jl not yet present (Task 3)"
+                @test_skip "scripts/research/cost_audit/cost_audit_driver.jl not yet present (Task 3)"
             else
                 result = run_one(:sharp, :A;
                                  max_iter=10, Nt=1024, save=false, strict_nt=false)
@@ -78,7 +78,7 @@ end
 
         @testset "variant=curvature" begin
             if !_CA_DRIVER_READY
-                @test_skip "cost_audit_driver.jl not yet present (Task 3)"
+                @test_skip "scripts/research/cost_audit/cost_audit_driver.jl not yet present (Task 3)"
             else
                 result = run_one(:curvature, :A;
                                  max_iter=10, Nt=1024, save=false, strict_nt=false)

@@ -8,9 +8,11 @@ Every Raman-suppression optimization run produces TWO files:
 - `<run_id>.json` — human-readable sidecar with scalar metadata (grep-able,
   diff-able, cross-language).
 
-The reference implementation lives at
-[`../scripts/polish_output_format.jl`](../scripts/polish_output_format.jl) —
-it is the single source of truth; this doc describes the schema.
+The canonical implementation now lives in
+[`../src/io/results.jl`](../src/io/results.jl) and is exposed as
+`MultiModeNoise.save_run` / `MultiModeNoise.load_run`.
+[`../scripts/workflows/polish_output_format.jl`](../scripts/workflows/polish_output_format.jl)
+remains as a compatibility shim for older include-based workflows.
 
 Current schema version: **1.0**
 
@@ -92,7 +94,7 @@ The JSON sidecar gives:
 ## Round trip with save_run / load_run
 
 ```julia
-include("scripts/polish_output_format.jl")
+using MultiModeNoise: load_run, save_run
 
 # Save
 save_run("results/raman/my_run.jld2", result)
@@ -113,7 +115,7 @@ for a concrete load example against a real run.
 - `schema_version` is checked on load. A mismatch prints a warning but the
   load still succeeds.
 - Bumping the schema requires: (a) updating `OUTPUT_FORMAT_SCHEMA_VERSION` in
-  `scripts/polish_output_format.jl`, (b) documenting the diff in this file's
+  `src/io/results.jl`, (b) documenting the diff in this file's
   changelog below, (c) adding a migration note or helper if old files need to
   be readable.
 

@@ -23,15 +23,15 @@ Legend: ✓ verified · ≈ partially verified · ✗ wrong · ? not verified ·
 ### "Forward/adjoint validation culture" (REPORT §Assets.2)
 - ✓ `scripts/raman_optimization.jl:254-285` — `validate_gradient` uses central differences at ε=1e-5, reports relative error per index.
 - ✓ `scripts/amplitude_optimization.jl:553-576` — analogous FD check for amplitude.
-- ✓ `scripts/phase13_hvp.jl:13-29` — `fd_hvp` uses the same central-difference style for HVP; has `validate_hvp_taylor` in API.
+- ✓ `scripts/hvp.jl:13-29` — `fd_hvp` uses the same central-difference style for HVP; has `validate_hvp_taylor` in API.
 - ! **Not flagged:** None of these use a **Taylor-remainder-2 test** (verifying that `|J(φ+εv) − J(φ) − ε·∇J·v|` shrinks like O(ε²) as ε halves). A ratio-of-errors sanity check is weaker than an order-of-accuracy slope check and can hide a gradient that is "approximately right" but with wrong scaling.
-- ≈ `validate_gradient` defaults to `log_cost=true` (line 259 → `cost_and_gradient` default at line 77), so it checks the dB gradient. That is *self-consistent*, but does not test the linear-cost gradient that `phase13_hvp.jl` later assumes.
+- ≈ `validate_gradient` defaults to `log_cost=true` (line 259 → `cost_and_gradient` default at line 77), so it checks the dB gradient. That is *self-consistent*, but does not test the linear-cost gradient that `hvp.jl` later assumes.
 
 ### "Matrix-free Hessian tooling" (REPORT §Assets.3)
-- ✓ `scripts/phase13_hvp.jl:83-` — `build_oracle` + `fd_hvp` (2 forward + 2 adjoint per HVP).
-- ✓ `scripts/phase13_hessian_eigspec.jl:104-121` — `HVPOperator` implements the `mul!` contract for `Arpack.eigs` (i.e., Lanczos); extracts top-20 / bottom-20 wings.
-- ✓ `phase13_hessian_eigspec.jl:30-33` — explicit acknowledgement that shift-invert is impossible matrix-free.
-- ! **Not flagged:** `P13_DEFAULT_EPS = 1e-4` in `phase13_hvp.jl:48` is a fixed FD step. Optimal step scales as `sqrt(eps_mach · |∇J|) / ‖v‖`. At deep L-BFGS suppression (`‖∇J‖_linear` → 1e-8), a fixed 1e-4 step is way outside the sweet spot — HVP symmetry holds only "up to FD noise" per file docstring, and that noise blows up when the gradient is small. This is the regime where Newton-like curvature matters most.
+- ✓ `scripts/hvp.jl:83-` — `build_oracle` + `fd_hvp` (2 forward + 2 adjoint per HVP).
+- ✓ `scripts/hessian_eigspec.jl:104-121` — `HVPOperator` implements the `mul!` contract for `Arpack.eigs` (i.e., Lanczos); extracts top-20 / bottom-20 wings.
+- ✓ `hessian_eigspec.jl:30-33` — explicit acknowledgement that shift-invert is impossible matrix-free.
+- ! **Not flagged:** `P13_DEFAULT_EPS = 1e-4` in `hvp.jl:48` is a fixed FD step. Optimal step scales as `sqrt(eps_mach · |∇J|) / ‖v‖`. At deep L-BFGS suppression (`‖∇J‖_linear` → 1e-8), a fixed 1e-4 step is way outside the sweet spot — HVP symmetry holds only "up to FD noise" per file docstring, and that noise blows up when the gradient is small. This is the regime where Newton-like curvature matters most.
 - ! **Not flagged:** Oracle uses `log_cost=false, λ_gdd=0, λ_boundary=0` (line 74) → probes the **linear physics-only** Hessian. L-BFGS optimizes the **dB cost with regularization**. The eigenspectrum analyzed is therefore NOT the curvature of the objective actually being minimized. Future truncated-Newton built on this infrastructure must decide which Hessian it wants.
 
 ### "Raman overflow fix" (REPORT §Context D25-03)
@@ -53,13 +53,13 @@ Legend: ✓ verified · ≈ partially verified · ✗ wrong · ? not verified ·
 
 ### "Dict{String,Any} for sim/fiber state" (REPORT §6)
 - ✓ `src/helpers/helpers.jl:65-66` (`sim` dict) and `:129` (`fiber` dict).
-- ✓ Mutated in place: `fiber["zsave"]` is set to `nothing` (raman_optimization.jl:203, amplitude_optimization.jl:414, phase13_hvp.jl:89) or to a vector in `solve_disp_mmf` variants.
+- ✓ Mutated in place: `fiber["zsave"]` is set to `nothing` (raman_optimization.jl:203, amplitude_optimization.jl:414, hvp.jl:89) or to a vector in `solve_disp_mmf` variants.
 - ! **Also missed by Phase 25:** the unit system carried inside `sim` is hybrid: `time_window` in ps, `Δt` in ps (line 52), `ts` in **seconds** (line 53), `f0` in THz (line 51), `ω0` in rad/ps (line 55), `ε` carries `1e-12 * Δt / (h * 1e12 * f0)` (line 57). `hRt` multiplies `ts * 1e15` to convert to fs (line 107). This is the prototypical CS 4220 "nondimensionalize first" target that Phase 25 invokes abstractly but doesn't pin to the specific code.
 
 ### "L-BFGS globalization weakness" (REPORT §3 + globalization seed)
 - ≈ `scripts/raman_optimization.jl:235` uses `LBFGS()` from Optim.jl — the default line search is **HagerZhang**, which already has strong Wolfe conditions + backtracking. Phase 25 framing that the project has "weak globalization" overstates the gap for 1st-order work; it is accurate only for hypothetical Newton-style work.
 - ≈ `scripts/amplitude_optimization.jl:273` uses `Fminbox(LBFGS(m=10))` with true box constraints (δ_bound). Again, this is a real globalization layer, not a bare local method.
-- ! **The real globalization gap** is for the indefinite-Hessian / truncated-Newton regime (when the Hessian has negative eigenvalues — which `phase13_hessian_eigspec.jl`'s bottom-K analysis is set up to detect). That is a trust-region vs. Wolfe-line-search distinction, not a "need to add line search" one.
+- ! **The real globalization gap** is for the indefinite-Hessian / truncated-Newton regime (when the Hessian has negative eigenvalues — which `hessian_eigspec.jl`'s bottom-K analysis is set up to detect). That is a trust-region vs. Wolfe-line-search distinction, not a "need to add line search" one.
 
 ### "Tsit5 reltol=1e-8 for both forward and adjoint"
 - ✓ `src/simulation/simulate_disp_mmf.jl:182`, `:186`.
@@ -80,8 +80,8 @@ Legend: ✓ verified · ≈ partially verified · ✗ wrong · ? not verified ·
 |---|------|-----------|----------|------|----------------|
 | A1 | Cost-surface coherence | `raman_optimization.jl:121-172` | HIGH | log_cost scales physics gradient but not regularizer gradient; at deep suppression the regularizer effectively vanishes. | Yes |
 | A2 | Chirp sensitivity bug | `raman_optimization.jl:332, 361` | MEDIUM | `lin_to_dB` applied to already-dB values (domain error on negative log10). | Yes |
-| A3 | Hessian / cost mismatch | `phase13_hvp.jl:74`, `raman_optimization.jl:77` | MEDIUM | HVPs probe linear physics cost; L-BFGS minimizes dB cost + regularizers. | Yes |
-| A4 | FD-HVP step size | `phase13_hvp.jl:48` | MEDIUM | Fixed ε=1e-4 is wrong at convergence where ‖∇J‖ is small; need adaptive ε. | Yes |
+| A3 | Hessian / cost mismatch | `hvp.jl:74`, `raman_optimization.jl:77` | MEDIUM | HVPs probe linear physics cost; L-BFGS minimizes dB cost + regularizers. | Yes |
+| A4 | FD-HVP step size | `hvp.jl:48` | MEDIUM | Fixed ε=1e-4 is wrong at convergence where ‖∇J‖ is small; need adaptive ε. | Yes |
 | A5 | Absorbing boundary | `helpers.jl:59-63` | HIGH | Super-Gaussian attenuator silently absorbs edge energy; no mass-loss metric. Edge-fraction check is post-absorption. | Yes |
 | A6 | ODE abstol | `simulate_disp_mmf.jl:182`, `sensitivity_disp_mmf.jl:301` | MEDIUM | Default abstol=1e-6 becomes comparable to signal at -60…-80 dB. | Yes |
 | A7 | ETD vs Tsit5 | `simulate_disp_mmf.jl:182` | LOW-MEDIUM | Interaction picture is a partial ETD; full exponential integrator may outperform Tsit5 at equal accuracy. | Yes |

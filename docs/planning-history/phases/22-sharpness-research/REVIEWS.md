@@ -20,7 +20,7 @@ The current implementation passed a full smoke cycle covering:
 `results/raman/phase_sweep_simple/sweep2_LP_fiber.jld2` stores
 `record["config"]` as `Dict{Symbol,Any}`, not `Dict{String,Any}`. The first
 smoke failure was a row-lookup miss caused by string-key access. The loader in
-`scripts/sharpness_phase22_lib.jl::_load_pareto_seed()` now reads symbol keys.
+`scripts/lib.jl::_load_pareto_seed()` now reads symbol keys.
 
 ### Fixed during review: low-resolution Hessian path should be dense, not Arpack
 

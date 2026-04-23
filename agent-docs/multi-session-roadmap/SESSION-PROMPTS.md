@@ -370,11 +370,6 @@ Read first:
 - docs/recent-phase-synthesis-29-34.md
 - docs/why-phase-31-changed-the-roadmap.md
 
-Start with:
-git status
-git fetch origin
-git pull --ff-only origin main
-
 Mission:
 Design and begin a serious refactor plan for this codebase. This is a public repo and it currently feels bloated, messy, script-heavy, and structurally embarrassing. The goal is to make it cleaner, more coherent, easier to work in, easier to extend, safer to evolve, and visibly more professional without losing useful existing functionality.
 

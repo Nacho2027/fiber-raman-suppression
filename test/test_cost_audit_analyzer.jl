@@ -21,8 +21,8 @@ BLAS.set_num_threads(1)
 const _PHASE16_WISDOM = joinpath(@__DIR__, "..", "results", "raman", "phase14", "fftw_wisdom.txt")
 isfile(_PHASE16_WISDOM) && try; FFTW.import_wisdom(_PHASE16_WISDOM); catch; end
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "raman_optimization.jl"))
 
 const _SUMMARY_A   = joinpath(@__DIR__, "..", "results", "cost_audit", "A", "summary.csv")
 const _SUMMARY_ALL = joinpath(@__DIR__, "..", "results", "cost_audit", "summary_all.csv")

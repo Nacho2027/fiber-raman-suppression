@@ -24,7 +24,7 @@ Phase 31 therefore does **four** things, not more:
 3. **Select** along a Pareto front the "operational" recommended model. The question is not "which gets lowest dB" — Phase 35 says full-grid wins on dB — but "which achieves the best simplicity/robustness/transferability at acceptable depth loss," which is the over-parameterization hypothesis from Phase 27's seed.
 4. **Contract** the result back onto the existing infrastructure: no new solver, no new optimization-theory component. Every new file extends or re-uses an existing pattern (see `31-PATTERNS.md` — all 8 inferred files have exact analogs).
 
-**Primary recommendation:** Implement Phase 31 as **2 plans** — Plan 01 `phase31_basis_lib.jl` + `phase31_penalty_lib.jl` + `phase31_run.jl` + unit tests (library + canonical-point sweep); Plan 02 `phase31_transfer.jl` + `phase31_analyze.jl` (transferability probe + figures + Pareto). Both plans run on the burst VM through `burst-run-heavy`. Total burst time budget ~60 min heavy + ~15 min transfer. Every driver that produces a `phi_opt` emits the full standard image set via `save_standard_set(...)`.
+**Primary recommendation:** Implement Phase 31 as **2 plans** — Plan 01 `basis_lib.jl` + `penalty_lib.jl` + `run.jl` + unit tests (library + canonical-point sweep); Plan 02 `transfer.jl` + `analyze.jl` (transferability probe + figures + Pareto). Both plans run on the burst VM through `burst-run-heavy`. Total burst time budget ~60 min heavy + ~15 min transfer. Every driver that produces a `phi_opt` emits the full standard image set via `save_standard_set(...)`.
 
 ---
 
@@ -66,7 +66,7 @@ Derived from Phase 27 Report §Recommended Future Work, item C (Reduced-basis / 
 | P31-A | Deliver a basis-family catalog with dimension count, Gram conditioning, and physics interpretation for at least `{polynomial_chirp, cubic_spline, DCT, linear}` at `N_phi ∈ {4, 8, 16, 32, 64, 128}`. | §Basis Family Catalog |
 | P31-B | Deliver a penalty-family catalog with gradient forms and expected scaling behaviour for at least `{tikhonov_φ, curvature_GDD, TV_φ, DCT_sparsity_soft}`, properly placed BEFORE the log-cost rescaling block. | §Penalty Family Catalog + §Log-Cost Scaling Pitfall |
 | P31-C | Produce a head-to-head comparison on the canonical SMF-28 point: every basis and every penalty mode evaluated on `(J_dB, σ_3dB, N_eff, TV, curvature, polynomial_R², Hessian_indefiniteness, κ_H_restricted, wall_time)`. | §Evaluation Metrics + §Execution Architecture |
-| P31-D | Produce a transferability table: apply each optimum to the HNLF L=0.5 m P=0.01 W point *without re-optimizing* and at least one perturbed pulse (+5% FWHM, +10% energy), and report `ΔJ_dB`. | §Transferability + analog `phase14_robustness_test.jl` |
+| P31-D | Produce a transferability table: apply each optimum to the HNLF L=0.5 m P=0.01 W point *without re-optimizing* and at least one perturbed pulse (+5% FWHM, +10% energy), and report `ΔJ_dB`. | §Transferability + analog `robustness_test.jl` |
 | P31-E | Use L-curve and AIC-like criteria to recommend a penalty strength / basis size per family. This is the *model-selection* core of the phase. | §Model-Selection Machinery |
 | P31-F | Verify no basis / penalty configuration makes the Phase 35 saddle-masking worse. Specifically: record the Hessian-indefiniteness ratio (`|λ_min| / λ_max`) in the coefficient-space Hessian. | §Common Pitfalls §Saddle Masking |
 | P31-G | Every driver that produces a `phi_opt` calls `save_standard_set(...)` — no exceptions, including "quick" sweep points. | Project CLAUDE.md mandate |
@@ -80,11 +80,11 @@ Phase 31 is a single-tier (Julia simulation + analysis) project. The tier mappin
 
 | Capability | Primary tier | Secondary tier | Rationale |
 |------------|-------------|----------------|-----------|
-| Basis matrix construction | `scripts/phase31_basis_lib.jl` | — | Adds new `kind` branches to the existing `build_phase_basis` or wraps and dispatches. Extension, not replacement. |
-| Penalty gradient assembly | `scripts/phase31_penalty_lib.jl` | `scripts/raman_optimization.jl::cost_and_gradient` (read-only) | New penalties extend the pattern of the existing GDD/boundary blocks. Placed **before** log-cost rescaling. |
-| Basis-space optimization driver | `scripts/phase31_run.jl` | `scripts/sweep_simple_param.jl::optimize_phase_lowres` | Existing driver already supports any basis; Phase 31 parameterizes over kinds/penalties/λ and records extended metrics. |
-| Analysis and Pareto | `scripts/phase31_analyze.jl` | `scripts/sweep_simple_analyze.jl::pareto_front`, `scripts/phase13_primitives.jl::polynomial_project` | Reuse Pareto utility verbatim; polynomial residual reuses phase13. |
-| Transferability probe | `scripts/phase31_transfer.jl` | `scripts/raman_optimization.jl::chirp_sensitivity`, `scripts/phase14_robustness_test.jl` | Outer loop over (basis, N_phi, λ); inner kernel is the existing perturbation+forward pattern. |
+| Basis matrix construction | `scripts/basis_lib.jl` | — | Adds new `kind` branches to the existing `build_phase_basis` or wraps and dispatches. Extension, not replacement. |
+| Penalty gradient assembly | `scripts/penalty_lib.jl` | `scripts/raman_optimization.jl::cost_and_gradient` (read-only) | New penalties extend the pattern of the existing GDD/boundary blocks. Placed **before** log-cost rescaling. |
+| Basis-space optimization driver | `scripts/run.jl` | `scripts/sweep_simple_param.jl::optimize_phase_lowres` | Existing driver already supports any basis; Phase 31 parameterizes over kinds/penalties/λ and records extended metrics. |
+| Analysis and Pareto | `scripts/analyze.jl` | `scripts/sweep_simple_analyze.jl::pareto_front`, `scripts/primitives.jl::polynomial_project` | Reuse Pareto utility verbatim; polynomial residual reuses phase13. |
+| Transferability probe | `scripts/transfer.jl` | `scripts/raman_optimization.jl::chirp_sensitivity`, `scripts/robustness_test.jl` | Outer loop over (basis, N_phi, λ); inner kernel is the existing perturbation+forward pattern. |
 | Standard images emission | any driver producing `phi_opt` | `scripts/standard_images.jl::save_standard_set` | Project-mandated contract from CLAUDE.md. |
 | Numerical trust reporting | `scripts/numerical_trust.jl` (Phase 28 canonical) | — | Hook in at JLD2 save time. Phase 31 inherits, does not re-invent. |
 | Physics model (forward + adjoint solve) | `src/simulation/*.jl` | — | Read-only. No physics change permitted in Phase 31. |
@@ -101,7 +101,7 @@ Phase 31 is a single-tier (Julia simulation + analysis) project. The tier mappin
 | `FFTW.jl` | pinned via Manifest | DCT-II basis construction + spectral-grid FFTs with deterministic `ESTIMATE` planning. | Project-locked for bit-reproducibility (Phase 15, Phase 28). |
 | `Interpolations.jl` | 0.16.2 | Cubic / linear spline bases via `cubic_spline_interpolation` / `linear_interpolation`. | Already used in `sweep_simple_param.jl` for the `:cubic` and `:linear` branches. |
 | `JLD2.jl` | pinned | Structured save of results + manifest. | Project convention in every sweep driver. |
-| `Arpack.jl` | pinned | Hessian bottom-K eigenvalue extraction for indefiniteness ratio and restricted-`κ`. Reuse `HVPOperator` from `scripts/phase13_hessian_eigspec.jl`. | Phase 13 infrastructure; no re-derivation needed. |
+| `Arpack.jl` | pinned | Hessian bottom-K eigenvalue extraction for indefiniteness ratio and restricted-`κ`. Reuse `HVPOperator` from `scripts/hessian_eigspec.jl`. | Phase 13 infrastructure; no re-derivation needed. |
 | `LinearAlgebra` (stdlib) | 1.9 | Gram matrix, condition number, pseudoinverse for continuation_upsample. | Stdlib. |
 | `Statistics` (stdlib) | 1.9 | Perturbation mean/std for robustness. | Stdlib. |
 
@@ -109,7 +109,7 @@ Phase 31 is a single-tier (Julia simulation + analysis) project. The tier mappin
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `Polynomials.jl` | already indirectly via `phase13_primitives.jl` | Fit `phi_opt` to a polynomial basis post-hoc for interpretability. | `phase31_analyze.jl` only, for the polynomial R² interpretability metric. |
+| `Polynomials.jl` | already indirectly via `primitives.jl` | Fit `phi_opt` to a polynomial basis post-hoc for interpretability. | `analyze.jl` only, for the polynomial R² interpretability metric. |
 
 ### Alternatives Considered
 
@@ -176,11 +176,11 @@ Canonical setup (once per run)
               phase31_results_{branch}.jld2
                                │
                                ▼
-                     phase31_analyze.jl
+                     analyze.jl
                      (Pareto, L-curve, AIC plot)
                                │
                                ▼
-                     phase31_transfer.jl
+                     transfer.jl
                      (apply to HNLF + perturbed
                       pulses, evaluate without
                       re-opt, record ΔJ_dB)
@@ -199,18 +199,18 @@ Decision points:
 
 ```
 scripts/
-├── phase31_basis_lib.jl     # new bases: :polynomial, :hermite (optional), wrapper
-├── phase31_penalty_lib.jl   # Tikhonov, TV, DCT-sparsity, higher-order curvature
-├── phase31_run.jl           # Branch A + Branch B + optional Branch C driver
-├── phase31_transfer.jl      # transferability probe — ingests Branch A+B+C output
-├── phase31_analyze.jl       # Pareto + L-curve + AIC/BIC + candidates.md
+├── basis_lib.jl     # new bases: :polynomial, :hermite (optional), wrapper
+├── penalty_lib.jl   # Tikhonov, TV, DCT-sparsity, higher-order curvature
+├── run.jl           # Branch A + Branch B + optional Branch C driver
+├── transfer.jl      # transferability probe — ingests Branch A+B+C output
+├── analyze.jl       # Pareto + L-curve + AIC/BIC + candidates.md
 └── (existing, untouched)
     ├── sweep_simple_param.jl
     ├── raman_optimization.jl
     ├── amplitude_optimization.jl
-    ├── phase13_primitives.jl
-    ├── phase13_hvp.jl
-    ├── phase14_robustness_test.jl
+    ├── primitives.jl
+    ├── hvp.jl
+    ├── robustness_test.jl
     ├── standard_images.jl
     ├── visualization.jl
     └── determinism.jl
@@ -289,7 +289,7 @@ end
 
 **When to use:** Before recording `N_eff`, `TV`, `phase_curvature`, `polynomial_R²`, Hessian-ratio — any quantity that depends on the specific representative in the gauge orbit.
 
-**Example (reuse from `phase13_primitives.jl`):** `gauge_fix(φ, input_band_mask)` (already tested).
+**Example (reuse from `primitives.jl`):** `gauge_fix(φ, input_band_mask)` (already tested).
 
 ### Anti-Patterns to Avoid
 
@@ -310,7 +310,7 @@ Six candidate families. Rows ranked by priority for Phase 31 inclusion.
 |--------|----------------|------------------|-----------|-------------------------------|------------------------|--------------------|
 | **`:dct`** | `{4, 8, 16, 32, 64, 128, 256}` | orthonormal DCT-II, first `N_phi` columns, masked to bandwidth | `N_phi` | κ(G) = 1 on masked support (orthonormal) — ideal | Band-limited phase in frequency. Closest analog of a pixelated pulse shaper SLM. | **Yes**, `build_phase_basis(..., kind=:dct, bandwidth_mask=bw_mask)` |
 | **`:cubic`** | `{4, 8, 16, 32, 64, 128}` | cubic spline through equally-spaced knots on bandwidth support | `N_phi` | κ(G) scales polynomially with `N_phi` for well-spaced knots; `_sanity_check_basis` warns if > `LR_COND_LIMIT` = 1e12 | Smooth phase with compact knots. Physical analog: phase after PSF smoothing of SLM pixels. **Current default.** | **Yes**, same function, `kind=:cubic` |
-| **`:polynomial`** | orders `{2, 3, 4, 5, 6, 8}` → `N_phi ∈ {3, 4, 5, 6, 7, 9}` | Legendre polynomials of `ω - ω0` scaled by bandwidth half-width. Order `k` contains GDD + TOD + ... | `N_phi = order + 1` | Legendre basis on `[-1, 1]` is orthonormal → κ(G) = 1 + mask-induced perturbation | **Physically direct**: coefficients ARE the dispersion orders (β₂-like, β₃-like, β₄-like). Bridges optimization to textbook nonlinear-fiber theory. | **No** — new `kind=:polynomial` branch to add to `build_phase_basis` (or wrapper in `phase31_basis_lib.jl`) |
+| **`:polynomial`** | orders `{2, 3, 4, 5, 6, 8}` → `N_phi ∈ {3, 4, 5, 6, 7, 9}` | Legendre polynomials of `ω - ω0` scaled by bandwidth half-width. Order `k` contains GDD + TOD + ... | `N_phi = order + 1` | Legendre basis on `[-1, 1]` is orthonormal → κ(G) = 1 + mask-induced perturbation | **Physically direct**: coefficients ARE the dispersion orders (β₂-like, β₃-like, β₄-like). Bridges optimization to textbook nonlinear-fiber theory. | **No** — new `kind=:polynomial` branch to add to `build_phase_basis` (or wrapper in `basis_lib.jl`) |
 | **`:linear`** | `{4, 8, 16, 32, 64, 128}` | piecewise-linear tent functions through knots on bandwidth | `N_phi` | similar to `:cubic` but less smooth → slightly worse κ(G) | Ablation / baseline — cheapest smoothness. | **Yes**, `kind=:linear` |
 | **`:hermite`** *(optional)* | orders `{3, 5, 7, 9}` → `N_phi` same | Physicist's Hermite polynomials (Gaussian-weighted) — basis orthonormal under Gaussian measure on `ω` | `N_phi = order + 1` | orthonormal under weighted inner product; κ(G_mask) depends on how closely `\|uω0\|²` resembles a Gaussian | Connects to the Gaussian-pulse ansatz; interpretable in terms of Gauss-Hermite mode content of the shaped pulse. | **No** — only add if Plan 01 has budget left. Defer-safe. |
 | **`:chirp_ladder`** *(explicit reduced form)* | fixed `N_phi = 4` ≡ `{ω², ω³, ω⁴, ω⁵}` | quadratic + cubic + quartic + quintic chirp, no constant/linear (gauge-fixed by construction) | 4 | κ(G) moderate (< 1e6 typical on bandwidth masked to `ω ∈ [-Δω, +Δω]`) | The "minimum-description-length" ansatz; what the physics textbooks would write by hand. Phase 35's verdict: `N_phi = 4` is the ONLY minimum-like branch → this is the canonical low-dim reference. | **No** — simple wrapper on `:polynomial` with the constant and linear rows zeroed out. |
@@ -439,7 +439,7 @@ The "elbow" is the λ that balances fit against regularization. Detect either vi
 
 Already a standard tool; see Hansen, *The L-curve and its use in the numerical treatment of inverse problems* (1999).
 
-**Implementation cost:** ~30 lines in `phase31_analyze.jl`. Requires recording `J_raman` (NOT `J_total`) in the JLD2 row — achievable by adding `"J_raman"` to the `package_result` Dict from the existing amplitude-optimization `breakdown` dict pattern.
+**Implementation cost:** ~30 lines in `analyze.jl`. Requires recording `J_raman` (NOT `J_total`) in the JLD2 row — achievable by adding `"J_raman"` to the `package_result` Dict from the existing amplitude-optimization `breakdown` dict pattern.
 
 ### 2. Generalized Cross-Validation (GCV)
 
@@ -466,7 +466,7 @@ Train on canonical SMF-28 L=2 m P=0.2 W. Evaluate on HNLF L=0.5 m P=0.01 W *and*
 
 Transferability is a Phase-specific surrogate for out-of-sample validation — we don't have enough operating points for true k-fold CV but we have enough for train-on-one / test-on-two.
 
-**Implementation cost:** already coded in `phase14_robustness_test.jl` + `chirp_sensitivity`. Rewrapping into `phase31_transfer.jl` is copy-paste + JLD2 ingest.
+**Implementation cost:** already coded in `robustness_test.jl` + `chirp_sensitivity`. Rewrapping into `transfer.jl` is copy-paste + JLD2 ingest.
 
 ### Recommended set for Phase 31: **L-curve + AIC + transferability**.
 
@@ -482,16 +482,16 @@ All metrics must be recorded in every JLD2 row.
 |--------|------------------|----------------|---------------|
 | `J_dB` | `10 · log10(J_raman)` | depth of Raman-band suppression — the headline | existing, `cost_and_gradient` with `log_cost=true` |
 | `J_raman_linear` | `J_raman` (unregularized, linear) | for L-curve y-axis | record from `breakdown["J_raman"]` |
-| `sigma_3dB` | from Gaussian-perturbation sweep: smallest σ such that `J_dB(φ + σ·n) - J_dB(φ) ≥ 3 dB`, averaged over `N_trial` realizations | robustness (Phase 22 convention) | port from `scripts/phase14_robustness_test.jl` |
+| `sigma_3dB` | from Gaussian-perturbation sweep: smallest σ such that `J_dB(φ + σ·n) - J_dB(φ) ≥ 3 dB`, averaged over `N_trial` realizations | robustness (Phase 22 convention) | port from `scripts/robustness_test.jl` |
 | `N_eff` | `phase_neff(φ_opt, bw_mask)` — entropy of DCT power spectrum | "effective # of active DCT modes" | `scripts/sweep_simple_param.jl:407` |
 | `TV` | `phase_tv(φ_opt, bw_mask)` — normalized total variation of unwrapped φ | phase smoothness | `sweep_simple_param.jl:440` |
 | `curvature` | `phase_curvature(φ_opt, sim, bw_mask)` — `‖∂²φ/∂ω²‖_2` on bw | how bendy the chirp is | `sweep_simple_param.jl:464` |
-| `polynomial_R²` | residual fraction of `φ_opt` projected onto `{ω², ω³, ω⁴}` polynomial basis — **1 - (‖φ_opt - φ_proj‖ / ‖φ_opt‖)** | interpretability — how close is the optimum to a textbook chirp? | `scripts/phase13_primitives.jl::polynomial_project` |
+| `polynomial_R²` | residual fraction of `φ_opt` projected onto `{ω², ω³, ω⁴}` polynomial basis — **1 - (‖φ_opt - φ_proj‖ / ‖φ_opt‖)** | interpretability — how close is the optimum to a textbook chirp? | `scripts/primitives.jl::polynomial_project` |
 | `hess_indef_ratio` | `|λ_min_bottom_20| / λ_max_top_20` in the **coefficient-space** Hessian | saddle-masking check (Phase 35); **SHOULD** be small (< 0.05) if basis is not artificially flattening | Arpack wrapper on coefficient-space HVP |
 | `kappa_B` | `κ(B^T B)` | basis conditioning | `_sanity_check_basis` — promote to JLD2 field |
 | `kappa_H_restricted` | `λ_max(H_c) / |λ_min_nonzero(H_c)|` in coefficient space | restricted-Hessian conditioning; ties to Phase 28 |
-| `J_transfer_HNLF` | `cost_and_gradient(φ_opt, uω0_HNLF, fiber_HNLF, sim, band_mask_HNLF; log_cost=true)` | is this optimum re-usable? | `phase31_transfer.jl` |
-| `J_transfer_perturb` | worst-case `ΔJ_dB` under `±5%` FWHM / `±10%` P perturbations, no re-opt | robustness to pulse drift | `phase31_transfer.jl` |
+| `J_transfer_HNLF` | `cost_and_gradient(φ_opt, uω0_HNLF, fiber_HNLF, sim, band_mask_HNLF; log_cost=true)` | is this optimum re-usable? | `transfer.jl` |
+| `J_transfer_perturb` | worst-case `ΔJ_dB` under `±5%` FWHM / `±10%` P perturbations, no re-opt | robustness to pulse drift | `transfer.jl` |
 | `wall_time_s` | from Optim.jl result | cost of the method | `result.time_run` |
 | `iterations` | `Optim.iterations(result)` | convergence speed | existing |
 | `converged` | `Optim.f_converged(result)` | did it stop on f_tol or on max_iter? | existing |
@@ -535,7 +535,7 @@ coefficient_oracle = c -> begin
     _, dc = cost_and_gradient_lowres(c, B, uω0, fiber, sim, band_mask; kwargs...)
     dc
 end
-hvp = make_fd_hvp(coefficient_oracle)  # existing: phase13_hvp.jl::fd_hvp
+hvp = make_fd_hvp(coefficient_oracle)  # existing: hvp.jl::fd_hvp
 # Arpack bottom-K and top-K
 op = HVPOperator(hvp, N_phi * M)
 lam_top = eigs(op, nev=10, which=:LR)[1]
@@ -571,7 +571,7 @@ slope = (log(residuals[end]) - log(residuals[1])) / (log(epsilons[end]) - log(ep
 @test abs(slope - 2.0) < 0.3
 ```
 
-Required test for EACH new penalty in `phase31_penalty_lib.jl`. Enforces the Phase 27 second-opinion recommendation (row 3 of the "What Phase 27 missed" table).
+Required test for EACH new penalty in `penalty_lib.jl`. Enforces the Phase 27 second-opinion recommendation (row 3 of the "What Phase 27 missed" table).
 
 ---
 
@@ -581,28 +581,28 @@ Required test for EACH new penalty in `phase31_penalty_lib.jl`. Enforces the Pha
 
 **Plan 01 — Library + Branch A (basis) sweep at canonical point.** Waves:
 
-- **Wave 1** (library): `phase31_basis_lib.jl`, `phase31_penalty_lib.jl`, `test/test_phase31_basis.jl`. No optimization yet. Unit tests + gradient finite-difference tests + basis conditioning tests. Runs on `claude-code-host`, not burst.
-- **Wave 2** (Branch A run): `phase31_run.jl` invoked with `--branch=A`. Runs on burst VM through `burst-run-heavy A-phase31 'julia -t auto --project=. scripts/phase31_run.jl --branch=A'`. Outputs 21 JLD2 rows (see basis program) + 21 × 4 standard images per optimum.
+- **Wave 1** (library): `basis_lib.jl`, `penalty_lib.jl`, `test/test_phase31_basis.jl`. No optimization yet. Unit tests + gradient finite-difference tests + basis conditioning tests. Runs on `claude-code-host`, not burst.
+- **Wave 2** (Branch A run): `run.jl` invoked with `--branch=A`. Runs on burst VM through `burst-run-heavy A-phase31 'julia -t auto --project=. scripts/run.jl --branch=A'`. Outputs 21 JLD2 rows (see basis program) + 21 × 4 standard images per optimum.
 
 Wall time estimate: Wave 1 ~5 min (tests), Wave 2 ~25 min on burst (21 runs × ~70 s each, some parallelism via `Threads.@threads` with `deepcopy(fiber)`).
 
 **Plan 02 — Branch B (penalty) sweep + transfer + analyze.** Waves:
 
-- **Wave 1** (Branch B run): `phase31_run.jl --branch=B`. 21 more JLD2 rows on the penalty ladder. ~25 min on burst.
-- **Wave 2** (transfer + optional Branch C): `phase31_transfer.jl`. Reads Branch A + B results, applies each `phi_opt` to HNLF + perturbed configs, records `J_transfer`. No optimization — just forward solves. ~10 min on burst.
-- **Wave 3** (analysis): `phase31_analyze.jl` — Pareto, L-curve, AIC, candidates.md, FINDINGS.md. Runs locally (no burst). ~5 min.
+- **Wave 1** (Branch B run): `run.jl --branch=B`. 21 more JLD2 rows on the penalty ladder. ~25 min on burst.
+- **Wave 2** (transfer + optional Branch C): `transfer.jl`. Reads Branch A + B results, applies each `phi_opt` to HNLF + perturbed configs, records `J_transfer`. No optimization — just forward solves. ~10 min on burst.
+- **Wave 3** (analysis): `analyze.jl` — Pareto, L-curve, AIC, candidates.md, FINDINGS.md. Runs locally (no burst). ~5 min.
 
 **Total phase budget:** ~70 min burst compute + ~15 min local + ~30 min test/plumbing = well under the 2 hr natural session limit.
 
 ### Parallelism plan
 
-Inside `phase31_run.jl`:
+Inside `run.jl`:
 
 - **Branch A**: parallelize over `(kind, N_phi)` pairs via `Threads.@threads`. Each thread does `deepcopy(fiber)` (Rule 1 from CLAUDE.md Compute Discipline). Expected speedup ~3.5× at 8 threads (documented in the threading benchmarks).
 - **Branch B**: same — parallelize over `(penalty_name, lambda)` pairs.
 - **Continuation ladder within a kind**: stay sequential (one thread walks `N_phi = 4 → 8 → ... → 256` using warm-start). Don't try to parallelize the ladder itself.
 
-Inside `phase31_transfer.jl`:
+Inside `transfer.jl`:
 
 - Parallelize over `(result_row × transfer_config)`. Each task is a single forward solve — cheap and perfectly parallel. Expected speedup ~8× at full burst threads.
 
@@ -657,7 +657,7 @@ Dict(
     # ─── Trust (Phase 28 bundle) ───
     "trust_report"     => Dict(...),  # reuse scripts/numerical_trust.jl
 
-    # ─── Transferability (filled by phase31_transfer.jl, nullable in phase31_run.jl) ───
+    # ─── Transferability (filled by transfer.jl, nullable in run.jl) ───
     "J_transfer_HNLF"  => J_transfer_HNLF,
     "J_transfer_perturb" => Dict("+5pct_FWHM"=>ΔJ, "+10pct_P"=>ΔJ, ...),
 
@@ -693,7 +693,7 @@ No exceptions. CLAUDE.md rule is absolute. Skipping this makes the work "incompl
 
 ### Manifest
 
-`phase31_run.jl` writes a `manifest.json` alongside the JLD2 with:
+`run.jl` writes a `manifest.json` alongside the JLD2 with:
 
 - `run_tag`, `git_commit`, `julia_version`, `threads`
 - `fftw_wisdom_sha256`
@@ -707,13 +707,13 @@ Pattern: see `scripts/determinism.jl::ensure_deterministic_environment()` output
 
 ## Test Plan (for `test/test_phase31_basis.jl`)
 
-Eight required testsets, all against the existing Test.jl harness (`test_phase13_primitives.jl` is the template):
+Eight required testsets, all against the existing Test.jl harness (`test_primitives.jl` is the template):
 
 1. **`:identity` reproduces full-res cost.** At `N_phi = Nt`, `cost_and_gradient_lowres(vec(φ), I, uω0, fiber, sim, band_mask)` = `cost_and_gradient(φ, uω0, fiber, sim, band_mask)` byte-exact.
 2. **New `:polynomial` basis builds without warnings at orders 2–8.** `kappa_B` < 1e4 for each order on the canonical bandwidth.
 3. **New `:chirp_ladder` basis has exactly 4 columns and zero overlap with gauge null modes.** `cos_similarity(B[:,k], const) < 1e-10` and `cos_similarity(B[:,k], ω_linear) < 1e-10` for all k.
 4. **Coefficient-space gradient finite-difference test** for each new kind. For each `kind ∈ {:polynomial, :chirp_ladder, :hermite}`: random c, compute gradient, verify `|grad_FD - grad_adjoint| / |grad_adjoint| < 1e-4` at 5 random coefficient indices.
-5. **Taylor-remainder-2 slope test** for each penalty in `phase31_penalty_lib.jl`. Set `λ_raman = 0` (impossible via kwargs — instead set `uω0` such that `J_raman ≈ 0`), enable one `λ_penalty` at a time, verify slope ≈ 2.
+5. **Taylor-remainder-2 slope test** for each penalty in `penalty_lib.jl`. Set `λ_raman = 0` (impossible via kwargs — instead set `uω0` such that `J_raman ≈ 0`), enable one `λ_penalty` at a time, verify slope ≈ 2.
 6. **Continuation upsample preservation** across kind boundaries: `continuation_upsample(c_polynomial_order4, B_polynomial_order4, B_dct_64)` produces a `c_dct` such that `B_dct * c_dct ≈ B_polynomial * c_polynomial` to machine precision on the bandwidth.
 7. **Orthonormal-basis fast path**: for `:dct`, `continuation_upsample` reduces to `B_fine' * φ_prev` bit-exact.
 8. **Hessian indefiniteness check is non-trivial**: at the Phase 35 known-minimum `:chirp_ladder` optimum, `hess_indef_ratio < 0.01` (PSD). At full-grid `:identity` optimum, `hess_indef_ratio > 0.005` (indefinite). Both results from Phase 35 must be reproduced.
@@ -764,7 +764,7 @@ The regularizer's effective strength GROWS as the optimizer succeeds at Raman su
 **How to avoid:** Gauge-fix `φ_opt` before computing any simplicity / interpretability metric:
 
 ```julia
-phi_opt_gauged = gauge_fix(phi_opt, bandwidth_mask)  # from phase13_primitives.jl
+phi_opt_gauged = gauge_fix(phi_opt, bandwidth_mask)  # from primitives.jl
 # then
 N_eff = phase_neff(phi_opt_gauged, bw_mask)
 TV = phase_tv(phi_opt_gauged, bw_mask)
@@ -801,9 +801,9 @@ Better still: pick gauge-free bases by construction (`:chirp_ladder`, `:polynomi
 
 ### Pitfall 7: FD-HVP Step Size at Deep Optima (Phase 27 Addendum Defect #5)
 
-**What goes wrong:** `phase13_hvp.jl:48` uses fixed `ε = 1e-4`. At −80 dB, `‖∇J‖_linear ~ 1e-8`, so the optimal `ε_fd ≈ √(eps_mach · ‖∇J‖) / ‖v‖ ≈ 1e-8 / ‖v‖`. A fixed `1e-4` is 4 orders of magnitude too large — the HVP is dominated by truncation error, not roundoff.
+**What goes wrong:** `hvp.jl:48` uses fixed `ε = 1e-4`. At −80 dB, `‖∇J‖_linear ~ 1e-8`, so the optimal `ε_fd ≈ √(eps_mach · ‖∇J‖) / ‖v‖ ≈ 1e-8 / ‖v‖`. A fixed `1e-4` is 4 orders of magnitude too large — the HVP is dominated by truncation error, not roundoff.
 
-**How to avoid for Phase 31:** When computing `hess_indef_ratio` and `κ_H_restricted` for any competitive optimum, use an adaptive `ε` in the coefficient-space HVP. This is small wrapper-level code in `phase31_run.jl`:
+**How to avoid for Phase 31:** When computing `hess_indef_ratio` and `κ_H_restricted` for any competitive optimum, use an adaptive `ε` in the coefficient-space HVP. This is small wrapper-level code in `run.jl`:
 
 ```julia
 g_norm = norm(dc)  # coefficient gradient at optimum
@@ -872,7 +872,7 @@ Verified on `claude-code-host` (primary dev) and required on `fiber-raman-burst`
 | P31-A | Basis catalog populated with correct dimensions and conditioning | unit | `julia --project=. test/test_phase31_basis.jl` → testsets 2, 3, 6, 7 | ❌ Wave 0 |
 | P31-B | Penalty catalog with correct gradient forms | unit | testset 5 (Taylor-remainder slope) | ❌ Wave 0 |
 | P31-C | Canonical-point head-to-head runs | integration | manual inspection of `results/raman/phase31/phase31_runs.jld2` row count == 21 + 21 = 42 | ❌ Wave 0 |
-| P31-D | Transferability table present | integration | `results/raman/phase31/phase31_runs.jld2` rows all have `J_transfer_HNLF` populated after `phase31_transfer.jl` runs | ❌ Wave 0 |
+| P31-D | Transferability table present | integration | `results/raman/phase31/phase31_runs.jld2` rows all have `J_transfer_HNLF` populated after `transfer.jl` runs | ❌ Wave 0 |
 | P31-E | L-curve / AIC recommendations in candidates.md | manual | visual: L-curve elbow and AIC minimum annotated | ❌ Wave 0 |
 | P31-F | No saddle-masking artifacts | automated | testset 8 (Phase 35 reproduction); + post-hoc script compares ambient vs coefficient Hessian ratios | ❌ Wave 0 |
 | P31-G | Standard images emitted | integration | `ls results/raman/phase31/sweep_*/images/*_phase_profile.png | wc -l` ≥ 42 | ❌ Wave 0 |
@@ -889,11 +889,11 @@ Verified on `claude-code-host` (primary dev) and required on `fiber-raman-burst`
 All test files are new:
 
 - [ ] `test/test_phase31_basis.jl` — 9 testsets covering P31-A/B/F and the Phase 35 reproduction
-- [ ] `scripts/phase31_basis_lib.jl` — adds `:polynomial`, optional `:hermite`, `:chirp_ladder` kinds
-- [ ] `scripts/phase31_penalty_lib.jl` — adds `:tikhonov`, `:tod`, `:tv_phi`, `:dct_l1` penalties
-- [ ] `scripts/phase31_run.jl` — driver
-- [ ] `scripts/phase31_transfer.jl` — transfer probe
-- [ ] `scripts/phase31_analyze.jl` — Pareto + L-curve + AIC
+- [ ] `scripts/basis_lib.jl` — adds `:polynomial`, optional `:hermite`, `:chirp_ladder` kinds
+- [ ] `scripts/penalty_lib.jl` — adds `:tikhonov`, `:tod`, `:tv_phi`, `:dct_l1` penalties
+- [ ] `scripts/run.jl` — driver
+- [ ] `scripts/transfer.jl` — transfer probe
+- [ ] `scripts/analyze.jl` — Pareto + L-curve + AIC
 
 Framework install: no new packages needed. `Pkg.instantiate()` is a no-op.
 
@@ -904,7 +904,7 @@ Framework install: no new packages needed. `Pkg.instantiate()` is a no-op.
 ### Example 1: Polynomial basis construction (new code)
 
 ```julia
-# In scripts/phase31_basis_lib.jl
+# In scripts/basis_lib.jl
 
 """
     build_polynomial_basis(Nt, order; ω_grid, ω0, Δω_band, start_order=2) -> Matrix{Float64}
@@ -956,7 +956,7 @@ end
 ### Example 2: Tikhonov-on-φ penalty (new code)
 
 ```julia
-# In scripts/phase31_penalty_lib.jl
+# In scripts/penalty_lib.jl
 
 """
     apply_tikhonov_phi!(J_total, grad_total, φ, bw_mask; λ)
@@ -1003,7 +1003,7 @@ end
 ### Example 3: Driver skeleton for Branch A (new code)
 
 ```julia
-# In scripts/phase31_run.jl (shortened excerpt)
+# In scripts/run.jl (shortened excerpt)
 
 function run_branch_A(; canonical=:smf28_L2_P02, dry_run=false)
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(;
@@ -1053,7 +1053,7 @@ end
 ### Example 4: Transferability (new code)
 
 ```julia
-# In scripts/phase31_transfer.jl (excerpt)
+# In scripts/transfer.jl (excerpt)
 
 function transfer_probe(phi_opt, kind, N_phi, source_config)
     # Transfer target 1: HNLF canonical
@@ -1092,7 +1092,7 @@ end
 | `λ_gdd = 1e-4` default in `optimize_spectral_phase` | Same default, but Phase 27 flagged its effective-weight drift | Phase 27 addendum | Phase 31 documents but does not fix; points to future seed. |
 | Amplitude shaping used `build_dct_basis` with `δ · B · c` wrapping | Same, still the reuse target | Phase ~15 | Phase 31 parallels the DCT path for phase. |
 | `cost_and_gradient` had linear cost/gradient | Switched to `log_cost=true` default (dB) | Phase 16 | All Phase 31 runs inherit — `f_tol = 0.01 dB`. |
-| Gauge directions not measured | `gauge_fix` + `polynomial_project` in `phase13_primitives.jl` | Phase 13 | Phase 31 metrics use gauge-fixed φ. |
+| Gauge directions not measured | `gauge_fix` + `polynomial_project` in `primitives.jl` | Phase 13 | Phase 31 metrics use gauge-fixed φ. |
 | Hessian analyzed only at one canonical | Phase 22 extended to 26 (config × flavor × λ) optima | Phase 22 | All indefinite — Phase 31 must not claim to produce minima without measurement. |
 | Phase 31 planned as greenfield reduced-basis | Seed reframes as extension of existing DCT code | Phase 27 second-opinion defect #7 | This research honors the reframe. |
 
@@ -1116,7 +1116,7 @@ end
 | A6 | `save_standard_set` does not add more than ~3 s per call | §Standard images emission | [ASSUMED] — not directly benchmarked but implied by image-generation patterns in prior phases. Low risk. |
 | A7 | HNLF L=0.5 m P=0.01 W is a meaningfully different transfer target from SMF-28 canonical | §Transferability | [VERIFIED: Phase 13 FINDINGS, Phase 22] — both points behave qualitatively differently (HNLF has much higher gamma / shorter nonlinear length). |
 | A8 | AIC with `k ≈ N_phi - 2` correctly penalizes complexity for gauge-reduced bases | §Model-Selection Machinery §3 | [ASSUMED] — standard inverse-problems heuristic but not rigorously derived for nonlinear objectives. Interpret AIC ranking as a sorting tool, not a hypothesis test. |
-| A9 | Polynomial R² metric on orders `{2, 3, 4}` gives a useful interpretability score | §Evaluation Metrics | [VERIFIED: `phase13_primitives.jl::polynomial_project` already exists and was used in Phase 13 FINDINGS] |
+| A9 | Polynomial R² metric on orders `{2, 3, 4}` gives a useful interpretability score | §Evaluation Metrics | [VERIFIED: `primitives.jl::polynomial_project` already exists and was used in Phase 13 FINDINGS] |
 
 ---
 
@@ -1131,13 +1131,13 @@ All seven questions are resolved before planning. Decisions below bind Plan 01 /
    - RESOLVED: **Keep `{3, 4, 5, 6, 8}` (orders `{2, 3, 4, 5, 7}`) in Plan 01 Branch A.** Orders 7 and 8 overlap enough with the DCT ladder at `N_phi=8` to let the Pareto analysis detect redundancy — that is itself a useful finding. No trimming at Plan 02.
 
 3. **Should the transferability probe re-optimize or stay forward-only?**
-   - RESOLVED: **Forward-only in Plan 02.** `scripts/phase31_transfer.jl` evaluates each `phi_opt` on HNLF and perturbed canonical configs without re-running the optimizer. Measures raw transferability. Fine-tuning-transfer is deferred to a follow-on seed.
+   - RESOLVED: **Forward-only in Plan 02.** `scripts/transfer.jl` evaluates each `phi_opt` on HNLF and perturbed canonical configs without re-running the optimizer. Measures raw transferability. Fine-tuning-transfer is deferred to a follow-on seed.
 
 4. **Should Plan 01 or Plan 02 own the numerical trust report integration?**
    - RESOLVED: **DEFERRED out of Phase 31.** No `trust_report` field is required in the JLD2 rows. `scripts/numerical_trust.jl` was designed for `optimize_spectral_phase` (full-grid) and its schema does not match `optimize_phase_lowres` output. Integration is out of scope for this phase and is recorded as a follow-on seed. Plan 01 / Plan 02 JLD2 schemas drop `trust_report` from the required key list.
 
 5. **Does the `hess_indef_ratio_ambient` probe work on a basis-restricted optimum?**
-   - RESOLVED: **DEFERRED out of Phase 31 — coefficient-space only.** Plan 01 records `hess_indef_ratio` (coefficient-space) and `kappa_H_restricted` only. Ambient-Hessian probe (full-Nt HVP at `φ_opt = B · c_opt`) is NOT computed. Plan 02's `phase31_analyze.jl` flags every basis-restricted PSD optimum as `PSD_UNVERIFIED_AMBIENT` and explicitly surfaces this limitation in `FINDINGS.md` as an open follow-on. The ambient probe becomes a seed if any row lands with `hess_indef_ratio < 0.01`.
+   - RESOLVED: **DEFERRED out of Phase 31 — coefficient-space only.** Plan 01 records `hess_indef_ratio` (coefficient-space) and `kappa_H_restricted` only. Ambient-Hessian probe (full-Nt HVP at `φ_opt = B · c_opt`) is NOT computed. Plan 02's `analyze.jl` flags every basis-restricted PSD optimum as `PSD_UNVERIFIED_AMBIENT` and explicitly surfaces this limitation in `FINDINGS.md` as an open follow-on. The ambient probe becomes a seed if any row lands with `hess_indef_ratio < 0.01`.
 
 6. **Should we include the `TV_φ` penalty despite the physics being unusual?**
    - RESOLVED: **YES — keep `TV` in Branch B.** Low cost-to-include; a positive finding would be novel. Removal at analysis time is trivial if results are uninterpretable.
@@ -1153,12 +1153,12 @@ Every proposed file matches an existing analog with "exact" or "role-match" qual
 
 | Proposed file | Analog | Responsibility | Quality |
 |---------------|--------|----------------|---------|
-| `scripts/phase31_basis_lib.jl` | `scripts/sweep_simple_param.jl` | basis construction | exact |
-| `scripts/phase31_penalty_lib.jl` | `scripts/amplitude_optimization.jl::amplitude_cost` + `scripts/raman_optimization.jl::cost_and_gradient` (GDD block) | penalty functionals + gradients | exact |
-| `scripts/phase31_run.jl` | `scripts/sweep_simple_run.jl` | optimization sweep driver | exact |
-| `scripts/phase31_transfer.jl` | `scripts/phase14_robustness_test.jl` + `scripts/raman_optimization.jl::chirp_sensitivity` | no-reopt forward evaluation for robustness / transfer | role-match |
-| `scripts/phase31_analyze.jl` | `scripts/sweep_simple_analyze.jl::pareto_front` + `scripts/phase13_gauge_and_polynomial.jl` | analysis + figures | exact |
-| `test/test_phase31_basis.jl` | `test/test_phase13_primitives.jl` | contract tests | exact |
+| `scripts/basis_lib.jl` | `scripts/sweep_simple_param.jl` | basis construction | exact |
+| `scripts/penalty_lib.jl` | `scripts/amplitude_optimization.jl::amplitude_cost` + `scripts/raman_optimization.jl::cost_and_gradient` (GDD block) | penalty functionals + gradients | exact |
+| `scripts/run.jl` | `scripts/sweep_simple_run.jl` | optimization sweep driver | exact |
+| `scripts/transfer.jl` | `scripts/robustness_test.jl` + `scripts/raman_optimization.jl::chirp_sensitivity` | no-reopt forward evaluation for robustness / transfer | role-match |
+| `scripts/analyze.jl` | `scripts/sweep_simple_analyze.jl::pareto_front` + `scripts/gauge_and_polynomial.jl` | analysis + figures | exact |
+| `test/test_phase31_basis.jl` | `test/test_primitives.jl` | contract tests | exact |
 
 Phase 31 is strictly **recombination + benchmarking** on top of existing infrastructure. No new optimizer, no new solver, no new physics. This is the locked-decision-1 alignment.
 
@@ -1194,7 +1194,7 @@ Phase 31 is strictly **recombination + benchmarking** on top of existing infrast
   - `scripts/sweep_simple_analyze.jl` (Pareto utility)
   - `scripts/amplitude_optimization.jl` (DCT basis, penalty breakdown dict, `cost_and_gradient_lowdim`)
   - `scripts/raman_optimization.jl` (cost/gradient, GDD + boundary penalties, `chirp_sensitivity`, log-cost block)
-  - `scripts/phase14_robustness_test.jl` (perturbation-without-reopt pattern)
+  - `scripts/robustness_test.jl` (perturbation-without-reopt pattern)
 - **In-repo planning artifacts:**
   - `.planning/phases/27-numerical-analysis-audit-and-cs-4220-application-roadmap/27-REPORT.md` — full + second-opinion addendum
   - `.planning/phases/22-sharpness-research/SUMMARY.md` — 26-row Hessian-indefinite table

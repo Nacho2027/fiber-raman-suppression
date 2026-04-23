@@ -103,7 +103,7 @@ Implication: the cubic-N_phi=128 basin is PSD in coefficient space, but its ambi
 - `results/raman/phase31/aic_ranking.csv` (41 rows, AIC = 2·N_eff + 2·J_dB)
 - `results/raman/phase31/sweep_A/images/` and `sweep_B/images/` (84 + 84 standard images per optimum)
 - `agent-docs/phase31-reduced-basis/candidates.md` (top-10 AIC recommendation)
-- `scripts/phase31_{basis,penalty}_lib.jl`, `scripts/phase31_run.jl`, `scripts/phase31_transfer.jl`, `scripts/phase31_analyze.jl`, `test/test_phase31_basis.jl`
+- `scripts/phase31_{basis,penalty}_lib.jl`, `scripts/run.jl`, `scripts/transfer.jl`, `scripts/analyze.jl`, `test/test_phase31_basis.jl`
 
 ## Follow-on questions (for future phases)
 

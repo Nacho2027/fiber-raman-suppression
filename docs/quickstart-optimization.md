@@ -31,7 +31,7 @@ stop and debug before going further — something is broken in your install.
 make optimize
 ```
 
-Under the hood this runs `julia --project -t auto scripts/raman_optimization.jl`.
+Under the hood this runs `julia --project -t auto scripts/canonical/optimize_raman.jl`.
 You will see L-BFGS iterations printed every few seconds. Expected output:
 
 - ~30 L-BFGS iterations.
@@ -60,7 +60,7 @@ results/raman/smf28_L2.0m_P0.2W_<timestamp>/
 
 The four `{tag}_*.png` files are the research group's **standard image
 set** — every driver that produces a `phi_opt` must generate them via
-`save_standard_set(...)` from `scripts/standard_images.jl` (Project-rule
+`save_standard_set(...)` from `scripts/lib/standard_images.jl` (Project-rule
 in `CLAUDE.md`). A run without the standard set is not considered
 complete. If you are writing a new driver, the end of it must look like:
 
@@ -74,7 +74,7 @@ save_standard_set(phi_opt, uω0, fiber, sim,
 ```
 
 To backfill the standard images for older JLD2 runs, use
-`scripts/regenerate_standard_images.jl` on the burst VM — see
+`scripts/canonical/regenerate_standard_images.jl` on the burst VM — see
 [quickstart-sweep.md](./quickstart-sweep.md#step-5--generate-report-cards-heatmaps-and-standard-images).
 
 Quick scalar peek:
@@ -86,7 +86,7 @@ jq '{J_final_dB, n_iter, converged}' results/raman/smf28_*/_result.json
 Or in Julia:
 
 ```julia
-include("scripts/polish_output_format.jl")
+using MultiModeNoise: load_run
 loaded = load_run("results/raman/smf28_L2.0m_P0.2W_<timestamp>/_result.jld2")
 @show loaded.metadata["J_final_dB"]
 @show loaded.metadata["n_iter"]
@@ -121,11 +121,11 @@ For the full plot anatomy tour see
 
 - **`make optimize` hangs after 10 minutes with no output:**
   The first run includes Julia precompilation (~90 s). If it's still silent
-  after 3 minutes, something is wrong. Run `julia --project -t auto scripts/raman_optimization.jl`
+  after 3 minutes, something is wrong. Run `julia --project -t auto scripts/canonical/optimize_raman.jl`
   directly to see the error.
 - **Final J in dB is -3 to -5 (no suppression):**
   The optimizer is barely iterating. Check `max_iter` at the top of
-  `scripts/raman_optimization.jl`. The default is 30; setting it to 5 would
+  `scripts/lib/raman_optimization.jl`. The default is 30; setting it to 5 would
   reproduce this symptom.
 - **Plots are blank:**
   Check `ENV["MPLBACKEND"]` is set to `"Agg"` before `using PyPlot`.

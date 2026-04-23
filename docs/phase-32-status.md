@@ -20,9 +20,9 @@ The main candidates were:
 
 The phase has real implementation artifacts:
 
-- `scripts/phase32_richardson_audit.jl`
-- `scripts/phase32_demo.jl`
-- `scripts/phase32_mpe_offline.jl`
+- `scripts/research/phases/phase32/richardson_audit.jl`
+- `scripts/research/phases/phase32/demo.jl`
+- `scripts/research/phases/phase32/mpe_offline.jl`
 
 and partial results under `results/phase32/`.
 
@@ -110,4 +110,4 @@ Until that happens, the reliable takeaway is simply:
 - `results/phase32/richardson_audit.jld2`
 - `results/phase32/expt1_polywarmstart_L100m/results_cold.jld2`
 - `results/phase32/expt1_polywarmstart_L100m/results_naive.jld2`
-- `.planning/phases/32-extrapolation-and-acceleration-for-parameter-studies-and-con/32-RESULTS.md`
+- `docs/planning-history/phases/32-extrapolation-and-acceleration-for-parameter-studies-and-con/32-RESULTS.md`

@@ -225,7 +225,7 @@ is linear in `p` with no intercept. Least-squares estimate:
 $$\hat p = \frac{\sum_i (x_i - 1) \cdot y_i}{\sum_i (x_i - 1)^2}$$
 
 Clamp to `[0, 1]`; the RMSE on predicted `T(n)` is the fit-quality metric.
-This is the formula used in `fit_amdahl` in `scripts/phase29_roofline_model.jl`.
+This is the formula used in `fit_amdahl` in `scripts/roofline_model.jl`.
 
 ### Gustafson's Law (fixed work per thread)
 
@@ -307,13 +307,13 @@ narratives in the memo; performance work cannot solve the saddle problem.
   threads, (B) Tullio threading, (C) multi-start `cost_and_gradient` via
   `Threads.@threads`, (D) embarrassingly parallel forward solves. Uses
   `BT_` constant prefix, median-of-3, box-drawing summary table. This is the
-  analog for `scripts/phase29_bench_kernels.jl`. See
+  analog for `scripts/bench_kernels.jl`. See
   `benchmark_threading.jl:44` for `BT_FFTW_THREAD_COUNTS = [1,2,4,8]` — Phase
   29 extends to `[1,2,4,8,16,22]`.
-- `scripts/phase15_benchmark.jl` (320+ lines) — subprocess-isolated FFTW
+- `scripts/benchmark.jl` (320+ lines) — subprocess-isolated FFTW
   MEASURE-vs-ESTIMATE comparison; introduced the `BENCH_JSON: {…}` regex
   contract + git-tree swap + revert. This is the analog for
-  `scripts/phase29_bench_solves.jl` + `scripts/_phase29_bench_solves_run.jl`.
+  `scripts/bench_solves.jl` + `scripts/bench_solves_run.jl`.
 - `scripts/benchmark_optimization.jl` — grid-size benchmarks + multi-start
   with `deepcopy(fiber)` per thread at `:635,704` (this is the canonical
   `deepcopy(fiber)` pattern the planner cites for any Phase 29 parallel
@@ -322,9 +322,9 @@ narratives in the memo; performance work cannot solve the saddle problem.
 - `scripts/run_benchmarks.jl` — driver that runs grid-size + time-window +
   continuation + multi-start + parallel gradient validation end-to-end;
   Phase 29 does NOT re-run this.
-- `scripts/phase13_primitives.jl` — include-guarded pure-function module
+- `scripts/primitives.jl` — include-guarded pure-function module
   (`_PHASE13_PRIMITIVES_LOADED` pattern) with `@assert` preconditions. This
-  is the module-shape analog for `scripts/phase29_roofline_model.jl`.
+  is the module-shape analog for `scripts/roofline_model.jl`.
 - `scripts/numerical_trust.jl` — threshold + ranked-verdict pattern; analog
   for the Phase 29 regime classifier.
 - `scripts/determinism.jl` — `ensure_deterministic_environment()` pins FFTW
@@ -336,7 +336,7 @@ narratives in the memo; performance work cannot solve the saddle problem.
 ## 7. Forward-only vs adjoint-only vs full_cg call paths
 
 This is the key content that unblocks Blocker 2 of the plan: the three modes
-(`"forward"`, `"adjoint"`, `"full_cg"`) in `scripts/_phase29_bench_solves_run.jl`
+(`"forward"`, `"adjoint"`, `"full_cg"`) in `scripts/bench_solves_run.jl`
 must measure distinct quantities. The current draft has all three calling
 `cost_and_gradient(...)` — that makes the "subtract forward from full" trick
 recover ≈ 0, because all three branches do identical work.
@@ -516,7 +516,7 @@ in the codebase.)*
 2. **Two machines, two ridges**: 6.5 FLOP/byte on e2, 13 FLOP/byte on c3.
    All production kernels below both ridges → memory-bound everywhere.
 3. **Amdahl fit**: least-squares in `1/n` space, formula in §4, implemented
-   in `scripts/phase29_roofline_model.jl :: fit_amdahl`.
+   in `scripts/roofline_model.jl :: fit_amdahl`.
 4. **Three modes with distinct measurement paths**: forward-only via
    `solve_disp_mmf`, adjoint-only via `solve_adjoint_disp_mmf` with a
    pre-captured forward `ũω`, full_cg via `cost_and_gradient`. §7 has the

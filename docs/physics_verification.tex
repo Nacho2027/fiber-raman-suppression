@@ -129,7 +129,7 @@ Therefore
               {E_\text{total}}.
   \label{eq:terminal_explicit}
 \end{equation}
-Implemented in \texttt{scripts/common.jl} L269 as
+Implemented in \texttt{scripts/lib/common.jl} L269 as
 \texttt{dJ = uwf .* (band\_mask .- J) ./ E\_total}.
 
 \subsection{Adjoint operator in the interaction picture}
@@ -249,7 +249,7 @@ super-Gaussian boundary absorber at the edge of the time window to eat up to
 $\sim 50\%$ of pulse energy before it reached the fiber exit and corrupted $J$
 measurements.
 
-Implemented in \texttt{scripts/common.jl} L191--215: L208 computes
+Implemented in \texttt{scripts/lib/common.jl} L191--215: L208 computes
 $\phi_\text{NL}$, L209 divides by $T_0$ to get Eq.~(\ref{eq:domega_spm}), L210
 applies Eq.~(\ref{eq:dt_spm}), and L213--214 sums walk-off plus SPM with a
 safety factor of 2.
@@ -295,7 +295,7 @@ we evaluate $R(\epsilon)$ for $\epsilon \in \{10^0, 10^{-1}, 10^{-2}, 10^{-3}\}$
 against a randomly drawn unit-norm direction $\delta\varphi$, using
 \texttt{cost\_and\_gradient} from \texttt{scripts/raman\_optimization.jl} L50
 for both the linear term (one forward+adjoint solve) and each perturbed forward
-solve. Code: \texttt{scripts/verification.jl} L271--330. Measured slopes
+solve. Code: \texttt{scripts/research/analysis/verification.jl} L271--330. Measured slopes
 between consecutive $\epsilon$ pairs: $2.01$, $2.07$, $2.09$ — all within the
 acceptance band $[1.4, 2.6]$, confirming the hand-derived adjoint of Section~2
 has no first-order bias.

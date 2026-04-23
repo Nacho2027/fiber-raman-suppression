@@ -8,10 +8,10 @@ Files touched:
 
 - `scripts/raman_optimization.jl`
 - `scripts/numerical_trust.jl`
-- `scripts/phase13_hvp.jl`
-- `scripts/phase13_hessian_eigspec.jl`
+- `scripts/hvp.jl`
+- `scripts/hessian_eigspec.jl`
 - `test/test_phase27_numerics_regressions.jl`
-- `test/test_phase13_hvp.jl`
+- `test/test_hvp.jl`
 - `test/test_phase28_trust_report.jl`
 - `scripts/test_optimization.jl`
 - `docs/cost-convention.md`

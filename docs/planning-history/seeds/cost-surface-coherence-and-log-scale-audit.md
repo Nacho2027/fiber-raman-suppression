@@ -14,7 +14,7 @@ differentiate a *different* cost surface. Verified in-code:
 | `scripts/raman_optimization.jl:121-129` (log_cost=true, default) | 10·log₁₀(J_linear) | **No** — GDD/boundary gradients added linearly |
 | `scripts/raman_optimization.jl:127-128` (log_cost=false) | J_linear | N/A |
 | `scripts/amplitude_optimization.jl:402-446` | J_linear + regs | Yes, flat weights |
-| `scripts/phase13_hvp.jl:74` (HVP oracle) | J_linear, no regularizers | N/A |
+| `scripts/hvp.jl:74` (HVP oracle) | J_linear, no regularizers | N/A |
 | `scripts/raman_optimization.jl:332` (chirp sensitivity) | dB (default) | N/A |
 | `scripts/raman_optimization.jl:361` (plot_chirp_sensitivity) | **applies 10·log₁₀ a second time → DomainError** | N/A |
 
@@ -26,10 +26,10 @@ Consequences verified by reading code:
    weight therefore drops ~1 dB per dB of suppression. The user-facing
    knob `λ_gdd = 1e-4` is not a fixed weight.
 
-2. `phase13_hvp.jl::build_oracle` constructs its Hessian-probe cost
+2. `hvp.jl::build_oracle` constructs its Hessian-probe cost
    from `cost_and_gradient` with `log_cost=false, λ_gdd=0,
    λ_boundary=0`. So the **Hessian analyzed by
-   `phase13_hessian_eigspec.jl`** is the Hessian of the **linear
+   `hessian_eigspec.jl`** is the Hessian of the **linear
    physics-only** cost — not the Hessian of the **regularized dB cost**
    that L-BFGS is actually minimizing. Every Arpack eigenvalue in the
    existing analysis is on a related-but-distinct surface.
@@ -54,7 +54,7 @@ before 2nd-order optimizer work. This seed is the concrete, code-
 locatable sub-piece of that priority: *what cost are we actually
 differentiating, where, and with what scaling?*
 
-Without this, a truncated-Newton rollout that reuses `phase13_hvp.jl`
+Without this, a truncated-Newton rollout that reuses `hvp.jl`
 inherits a Hessian on surface A while being evaluated on surface B, and
 every "Newton improved by ΔdB" comparison becomes ambiguous.
 
@@ -64,7 +64,7 @@ every "Newton improved by ΔdB" comparison becomes ambiguous.
   project — explicit args for (i) log vs linear, (ii) which regularizers
   are included, (iii) whether log-scaling applies to the full
   `J_total` or only to the physics piece.
-- Make the HVP oracle (`phase13_hvp.jl::build_oracle`) and
+- Make the HVP oracle (`hvp.jl::build_oracle`) and
   `chirp_sensitivity` take the same cost-convention args.
 - Fix the `plot_chirp_sensitivity` latent bug; add a unit test that
   covers both `log_cost=true` and `log_cost=false` paths end-to-end.
@@ -81,7 +81,7 @@ every "Newton improved by ΔdB" comparison becomes ambiguous.
 - Unit tests for each gradient path that verify *both* the O(ε²) slope
   and the ratio against FD.
 - A canonical Hessian-probe cost (log / linear choice) documented in
-  `phase13_hvp.jl` and reflected in the Arpack-analysis run summaries.
+  `hvp.jl` and reflected in the Arpack-analysis run summaries.
 - Fixed chirp-sensitivity path with a regression test.
 - A run-summary line that says which cost surface was used, which the
   next seed (absorbing-boundary) and the existing conditioning seed
@@ -110,7 +110,7 @@ seed should explicitly inherit the verification notes in
 
 - Can run concurrently with `absorbing-boundary-and-honest-edge-energy`.
 - Must precede any truncated-Newton or sharpness-aware-optimization phase
-  that uses `phase13_hvp.jl`.
+  that uses `hvp.jl`.
 - Must precede any comparison study of L-BFGS vs. other optimizers.
 
 ## Success condition

@@ -47,11 +47,11 @@ fiber-raman-suppression/
 │   ├── mmf_setup.jl                   # [C] setup_mmf_raman_problem (NPZ-cached GRIN eigensolve)
 │   ├── mmf_raman_optimization.jl      # [C] MMF phase-only optimizer (shared φ across modes)
 │   ├── mmf_joint_optimization.jl      # [C] Phase 17 — joint (φ, c_m) optimization
-│   ├── mmf_run_phase16_all.jl         # [C] Batch runner for Phase 16 configs
-│   ├── mmf_run_phase16_aggressive.jl  # [C] Aggressive-regularization variant
+│   ├── run_all.jl         # [C] Batch runner for Phase 16 configs
+│   ├── run_aggressive.jl  # [C] Aggressive-regularization variant
 │   ├── mmf_m1_limit_run.jl            # [C] M=1 sanity check (MMF → SMF limit)
 │   ├── mmf_smoke_test.jl              # [C] Pipeline smoke test
-│   ├── mmf_analyze_phase16.jl         # [C] Post-hoc analysis
+│   ├── analyze.jl         # [C] Post-hoc analysis
 │   ├── sweep_simple_param.jl          # [E] Low-dim cosine phase basis + parameterization
 │   ├── sweep_simple_run.jl            # [E] Session E sweep driver (N_φ × L × P × fiber)
 │   ├── sweep_simple_analyze.jl        # [E] Pareto front extraction
@@ -83,17 +83,17 @@ fiber-raman-suppression/
 │   ├── cost_audit_spawn_direct.sh     # [H] Ephemeral-VM spawner
 │   ├── cost_audit_spawn_direct_BC.sh  # [H] Ephemeral-VM spawner (BC)
 │   ├── cost_audit_spawn_direct_final.sh  # [H] Ephemeral-VM spawner (final)
-│   ├── phase13_primitives.jl          # Landscape diagnostics (gauge fix, polynomials)
-│   ├── phase13_hvp.jl                 # Hessian-vector products
-│   ├── phase13_gauge_and_polynomial.jl
-│   ├── phase13_hessian_eigspec.jl     # Top-k eigenspectrum
-│   ├── phase13_hessian_figures.jl
-│   ├── phase14_ab_comparison.jl       # Sharpness A/B (full, Phase 14)
-│   ├── phase14_figures.jl
-│   ├── phase14_robustness_test.jl
-│   ├── phase14_snapshot_vanilla.jl
-│   ├── phase15_benchmark.jl           # Deterministic environment benchmark
-│   ├── _phase15_benchmark_run.jl      # Internal run file for phase15
+│   ├── primitives.jl          # Landscape diagnostics (gauge fix, polynomials)
+│   ├── hvp.jl                 # Hessian-vector products
+│   ├── gauge_and_polynomial.jl
+│   ├── hessian_eigspec.jl     # Top-k eigenspectrum
+│   ├── hessian_figures.jl
+│   ├── ab_comparison.jl       # Sharpness A/B (full, Phase 14)
+│   ├── figures.jl
+│   ├── robustness_test.jl
+│   ├── snapshot_vanilla.jl
+│   ├── benchmark.jl           # Deterministic environment benchmark
+│   ├── benchmark_run.jl      # Internal run file for phase15
 │   ├── benchmark_optimization.jl      # Grid / window / multi-start / parallel-gradient suites
 │   ├── benchmark_threading.jl         # Threading scaling benchmark
 │   ├── run_benchmarks.jl              # Legacy orchestrator
@@ -125,8 +125,8 @@ fiber-raman-suppression/
 │   ├── tier_slow.jl                   # Slow tier (integration)
 │   ├── tier_full.jl                   # Full tier (regression)
 │   ├── test_determinism.jl            # FFTW planner + wisdom reproducibility
-│   ├── test_phase13_primitives.jl     # Gauge-fix + polynomial param
-│   ├── test_phase13_hvp.jl            # HVP correctness
+│   ├── test_primitives.jl     # Gauge-fix + polynomial param
+│   ├── test_hvp.jl            # HVP correctness
 │   ├── test_phase14_sharpness.jl      # Sharpness estimator
 │   ├── test_phase14_regression.jl     # Phase 14 regression
 │   ├── test_phase16_mmf.jl            # [C] MMF Raman pipeline integration

@@ -16,7 +16,7 @@ using Test
 using LinearAlgebra
 using Statistics
 
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_preconditioner.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 @testset "Phase 34 Plan 02 — Preconditioner factories" begin
@@ -131,12 +131,12 @@ include(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"))
 
     @testset "preconditioner is zero-HVP (source check)" begin
         # Verify the preconditioner source file does not reference fd_hvp
-        # (the finite-difference HVP primitive from phase13_hvp.jl).
+        # (the finite-difference HVP primitive from hvp.jl).
         # Note: Plan 03 intentionally added build_dct_precond (which takes a
         # generic H_op callable) and _build_dct_basis to this file.
         # The zero-HVP claim applies to build_diagonal_precond and
         # build_dispersion_precond — those must not call fd_hvp.
-        src = read(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"), String)
+        src = read(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_preconditioner.jl"), String)
         @test !occursin("fd_hvp", src)
         # Plan 03 additions (expected to be present after Plan 03):
         @test occursin("build_dct_precond", src)

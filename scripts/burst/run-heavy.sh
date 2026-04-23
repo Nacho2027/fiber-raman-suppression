@@ -9,7 +9,7 @@
 #
 # Usage (from claude-code-host):
 #   burst-ssh "cd fiber-raman-suppression && scripts/burst/run-heavy.sh \
-#              E-sweep2 'julia -t auto --project=. scripts/sweep_simple_run.jl'"
+#              E-sweep2 'julia -t auto --project=. scripts/research/sweep_simple/sweep_simple_run.jl'"
 #
 # session-tag convention: <Letter>-<short-name>, matching CLAUDE.md Rule P6.
 # Examples: A-multivar, E-sweep2, F-longfiber-T5, H-cost-audit, etc.

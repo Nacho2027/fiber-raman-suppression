@@ -5,10 +5,10 @@ using Printf
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "common.jl"))
-include(joinpath(_ROOT, "scripts", "determinism.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()
-include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
 
 @testset "Phase 27 numerics regressions" begin
     @testset "Boundary checker measures pre-attenuator edge fraction" begin

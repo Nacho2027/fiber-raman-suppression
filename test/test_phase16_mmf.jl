@@ -26,9 +26,9 @@ using Printf
 
 using MultiModeNoise
 
-include(joinpath(@__DIR__, "..", "scripts", "mmf_setup.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "mmf", "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "src", "mmf_cost.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "mmf_raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "mmf", "mmf_raman_optimization.jl"))
 
 const PHASE16_SEED = 20260417
 

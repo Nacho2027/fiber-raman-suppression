@@ -11,8 +11,8 @@ all critical primitives:
 
 - `scripts/sharpness_optimization.jl` for gauge-projected Hutchinson trace
   estimation and sharpness-regularized L-BFGS
-- `scripts/phase13_hvp.jl` for finite-difference HVPs
-- `scripts/phase13_hessian_eigspec.jl` for Arpack matrix-free eigenspectra
+- `scripts/hvp.jl` for finite-difference HVPs
+- `scripts/hessian_eigspec.jl` for Arpack matrix-free eigenspectra
 - `scripts/sweep_simple_param.jl` for the reduced `N_phi=57` cubic-basis
   parameterization
 - `scripts/simple_profile_driver.jl` for the existing `sigma_3dB` Gaussian
@@ -87,8 +87,8 @@ This avoids noisy line-search failures and makes `Optim.LBFGS()` usable.
 
 Do not rebuild eigenspectrum code from scratch. Reuse:
 
-- `fd_hvp` from `scripts/phase13_hvp.jl`
-- `HVPOperator` pattern from `scripts/phase13_hessian_eigspec.jl`
+- `fd_hvp` from `scripts/hvp.jl`
+- `HVPOperator` pattern from `scripts/hessian_eigspec.jl`
 - `Arpack.eigs(...; which=:LR/:SR)` for top and bottom wings
 
 Only wrap these in session-owned `scripts/sharpness_*` entry points that save

@@ -23,7 +23,8 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # common.jl uses @sprintf — macros resolve at parse time and need Printf
 # visible in the including scope (matches test/test_determinism.jl pattern).
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "test_repo_structure.jl"))
 
 @testset "Phase 16 — fast tier" begin
 
@@ -108,8 +109,6 @@ include(joinpath(_ROOT, "scripts", "common.jl"))
     end
 
     @testset "Output format round trip (D2 schema)" begin
-        include(joinpath(_ROOT, "scripts", "polish_output_format.jl"))
-
         mktempdir() do dir
             path = joinpath(dir, "rt.jld2")
             result = (
@@ -159,8 +158,6 @@ include(joinpath(_ROOT, "scripts", "common.jl"))
     end
 
     @testset "Determinism helper smoke test (Phase 15)" begin
-        include(joinpath(_ROOT, "scripts", "determinism.jl"))
-
         ensure_deterministic_environment()
         st1 = deterministic_environment_status()
         @test st1.applied == true

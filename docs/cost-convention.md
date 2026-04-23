@@ -4,7 +4,7 @@ This file is the authoritative objective convention for shared Raman numerics.
 
 ## Canonical single-mode phase objective
 
-`scripts/raman_optimization.jl::cost_and_gradient` defines the scalar objective as:
+`scripts/lib/raman_optimization.jl::cost_and_gradient` defines the scalar objective as:
 
 - linear surface:
   `J_surface = J_physics + λ_gdd * R_gdd(φ) + λ_boundary * R_boundary(φ)`
@@ -22,7 +22,7 @@ The helper `raman_cost_surface_spec(; log_cost, λ_gdd, λ_boundary, objective_l
 
 ## Multivariable path
 
-`scripts/multivar_optimization.jl::cost_and_gradient_multivar` now follows the same pattern:
+`scripts/research/multivar/multivar_optimization.jl::cost_and_gradient_multivar` now follows the same pattern:
 
 - assemble the full linear surface from physics plus enabled regularizers
 - apply `10*log10(...)` only after that full scalar is assembled when `cfg.log_cost=true`
@@ -31,7 +31,7 @@ The helper `multivar_cost_surface_spec(cfg; objective_label=...)` names that sur
 
 ## MMF shared-phase path
 
-`scripts/mmf_raman_optimization.jl::cost_and_gradient_mmf` now matches the same rule:
+`scripts/research/mmf/mmf_raman_optimization.jl::cost_and_gradient_mmf` now matches the same rule:
 
 - linear surface:
   `J_mmf_variant + λ_gdd*R_gdd + λ_boundary*R_boundary`
@@ -42,7 +42,7 @@ Historically this path applied the log transform before the regularizers. That i
 
 ## HVP convention
 
-`scripts/phase13_hvp.jl::build_oracle(config; log_cost, λ_gdd, λ_boundary)` differentiates the exact same scalar named by those arguments.
+`scripts/research/phases/phase13/hvp.jl::build_oracle(config; log_cost, λ_gdd, λ_boundary)` differentiates the exact same scalar named by those arguments.
 
 Defaults:
 

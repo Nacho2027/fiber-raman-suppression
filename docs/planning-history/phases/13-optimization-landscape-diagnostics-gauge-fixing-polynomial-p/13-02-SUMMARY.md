@@ -7,14 +7,14 @@ tags: [hessian, eigendecomposition, arpack, lanczos, hvp, adjoint, saddle-point,
 # Dependency graph
 requires:
   - phase: 13-01
-    provides: "gauge_polynomial_analysis.jld2 and phase13_primitives.jl (input_band_mask, gauge_fix)"
+    provides: "gauge_polynomial_analysis.jld2 and primitives.jl (input_band_mask, gauge_fix)"
   - phase: 07-parameter-sweeps
     provides: "results/raman/sweeps/{smf28,hnlf}/.../opt_result.jld2 canonical optima used as the Hessian base points"
   - phase: 15-01
     provides: "ensure_deterministic_fftw() + ESTIMATE planner — prerequisite for reproducible HVPs"
 provides:
-  - "HVP primitive (scripts/phase13_hvp.jl) with Taylor-remainder-validated O(eps^2) accuracy"
-  - "Arpack matrix-free Lanczos wrapper for top-K / bottom-K Hessian eigendecomposition (scripts/phase13_hessian_eigspec.jl)"
+  - "HVP primitive (scripts/hvp.jl) with Taylor-remainder-validated O(eps^2) accuracy"
+  - "Arpack matrix-free Lanczos wrapper for top-K / bottom-K Hessian eigendecomposition (scripts/hessian_eigspec.jl)"
   - "Hessian eigenspectra at 2 canonical L-BFGS optima (results/raman/phase13/hessian_{smf28,hnlf}_canonical.jld2)"
   - "3 publication-quality diagnostic figures (phase13_04..06)"
   - "results/raman/phase13/FINDINGS.md — Phase 13 synthesis document with indefinite_hessian verdict"
@@ -28,14 +28,14 @@ tech-stack:
     - "P13_ const prefix extended to hessian_eigspec + hessian_figures scripts"
     - "HVP oracle closure built once, passed by reference to the operator; avoids per-call setup overhead"
     - "JLD2 schema with both top and bottom eigenpairs + full reproducibility metadata (eps, tol, maxiter, threading)"
-    - "Figure rendering decoupled into a separate standalone script (phase13_hessian_figures.jl) so figures can be regenerated without rerunning the eigendecomposition"
+    - "Figure rendering decoupled into a separate standalone script (hessian_figures.jl) so figures can be regenerated without rerunning the eigendecomposition"
 
 key-files:
   created:
-    - scripts/phase13_hvp.jl
-    - scripts/phase13_hessian_eigspec.jl
-    - scripts/phase13_hessian_figures.jl
-    - test/test_phase13_hvp.jl
+    - scripts/hvp.jl
+    - scripts/hessian_eigspec.jl
+    - scripts/hessian_figures.jl
+    - test/test_hvp.jl
     - results/raman/phase13/hessian_smf28_canonical.jld2
     - results/raman/phase13/hessian_hnlf_canonical.jld2
     - results/raman/phase13/FINDINGS.md
@@ -48,7 +48,7 @@ key-decisions:
   - "Arpack matrix-free eigs used with :LR and :SR; no shift-invert attempted (requires factorisation, impossible for matrix-free HVP). Consequence: the 2 theoretically-predicted gauge null-modes at lambda=0 are NOT in the reported 40-vector spectrum. Their existence is a symmetry theorem (cost invariant under phi -> phi + C + alpha*omega) and their position was inferred from projection norms, not measured directly."
   - "Both canonical optima analysed at Nt=8192 (production grid). Cross-validation against dense Hessian at Nt=2^8 confirmed HVP machinery is correct."
   - "FFTW pinned to ESTIMATE + single thread to satisfy Plan 01's determinism finding (MEASURE drifts 1 rad between runs). BLAS also pinned to single thread for bit-reproducible reductions."
-  - "Figures decoupled from compute: scripts/phase13_hessian_figures.jl reads the JLD2 outputs and is idempotent / cheap. This plan's remaining tasks (figures + FINDINGS) could therefore be finished on the 2-vCPU local host after the burst VM delivered the raw data."
+  - "Figures decoupled from compute: scripts/hessian_figures.jl reads the JLD2 outputs and is idempotent / cheap. This plan's remaining tasks (figures + FINDINGS) could therefore be finished on the 2-vCPU local host after the burst VM delivered the raw data."
   - "Headline verdict indefinite_hessian rather than non_gauge_flatness: both configs have bottom-20 eigenvalues that are ALL negative (100%), with |lambda_min|/lambda_max = 2.6% (SMF) / 0.41% (HNLF) — saddle, not flat region."
 
 patterns-established:
@@ -86,7 +86,7 @@ Detailed synthesis (gauge + polynomial + Hessian spectrum + routing): `results/r
 
 ## Accomplishments
 
-1. **Matrix-free HVP library** shipped (`scripts/phase13_hvp.jl`, `test/test_phase13_hvp.jl`). Symmetric central-difference HVP on top of the existing first-order adjoint gradient. Taylor-remainder slope ≈ 2.0 verified (commit `b962091`). HVP symmetry `|v' H w - w' H v| < 1e-5 |v' H w|`.
+1. **Matrix-free HVP library** shipped (`scripts/hvp.jl`, `test/test_hvp.jl`). Symmetric central-difference HVP on top of the existing first-order adjoint gradient. Taylor-remainder slope ≈ 2.0 verified (commit `b962091`). HVP symmetry `|v' H w - w' H v| < 1e-5 |v' H w|`.
 2. **Arpack matrix-free eigendecomposition** at two canonical L-BFGS optima (SMF-28 L=2 m P=0.2 W; HNLF L=0.5 m P=0.01 W) via `HVPOperator <: LinearAlgebra.AbstractMatrix`-like duck typing. `:LR` and `:SR` wings, `nev = 20` each. Wall time on burst: 31.8 s / 204.4 s (SMF) and 7.0 s / 108.9 s (HNLF) for `:LR` / `:SR` respectively.
 3. **Three figures** rendered and committed at 300 DPI:
    - Fig 4: signed-log stem of top-20 + bottom-20 eigenvalues; sign pattern INDEFINITE annotated.
@@ -113,10 +113,10 @@ This resumption (Tasks 3 + 5 + 6):
 
 ## Files Created/Modified
 
-- `scripts/phase13_hvp.jl` (~400 lines) — `fd_hvp`, `build_oracle`, `validate_hvp_taylor`, `ensure_deterministic_fftw`
-- `scripts/phase13_hessian_eigspec.jl` (~620 lines) — entry point: loads phi_opt, builds oracle, runs `Arpack.eigs`, saves JLD2. Also contains an inline `make_figures()` that is superseded by the dedicated figure script for this deliverable.
-- `scripts/phase13_hessian_figures.jl` (~310 lines) — standalone figure renderer consuming the two JLD2s; runs locally without burst.
-- `test/test_phase13_hvp.jl` — Taylor-remainder slope, HVP symmetry, dense-Hessian cross-validation at Nt=2^8
+- `scripts/hvp.jl` (~400 lines) — `fd_hvp`, `build_oracle`, `validate_hvp_taylor`, `ensure_deterministic_fftw`
+- `scripts/hessian_eigspec.jl` (~620 lines) — entry point: loads phi_opt, builds oracle, runs `Arpack.eigs`, saves JLD2. Also contains an inline `make_figures()` that is superseded by the dedicated figure script for this deliverable.
+- `scripts/hessian_figures.jl` (~310 lines) — standalone figure renderer consuming the two JLD2s; runs locally without burst.
+- `test/test_hvp.jl` — Taylor-remainder slope, HVP symmetry, dense-Hessian cross-validation at Nt=2^8
 - `results/raman/phase13/hessian_smf28_canonical.jld2` (2.8 MB) — 20 top + 20 bottom eigenpairs, phi_opt, full metadata
 - `results/raman/phase13/hessian_hnlf_canonical.jld2` (2.8 MB) — same structure, HNLF config
 - `results/raman/phase13/FINDINGS.md` (295 lines) — Phase 13 synthesis, headline verdict `indefinite_hessian`, routing for Phase 14
@@ -127,7 +127,7 @@ This resumption (Tasks 3 + 5 + 6):
 ## Decisions Made
 
 1. **Matrix-free Lanczos without shift-invert.** Anticipated in the plan's "deviations allowed"; no fallback used because bottom eigenvalues are well-resolved in their own magnitude range (~1e-7 to 1e-8) and the gauge null-modes' non-appearance is a known limitation, not a bug.
-2. **Separate figure script.** Plan Task 3 specified `scripts/phase13_hessian_figures.jl`; chose to build this as a new file rather than reuse the embedded `make_figures()` in `phase13_hessian_eigspec.jl` so figure regeneration doesn't require reloading the full HVP stack.
+2. **Separate figure script.** Plan Task 3 specified `scripts/hessian_figures.jl`; chose to build this as a new file rather than reuse the embedded `make_figures()` in `hessian_eigspec.jl` so figure regeneration doesn't require reloading the full HVP stack.
 3. **Headline verdict chosen as `indefinite_hessian`.** Over `non_gauge_flatness` because all 20 reported bottom eigenvalues are NEGATIVE (not just small). This is a stronger and more actionable statement: L-BFGS is at a saddle, not a flat minimum basin.
 4. **Sharpness-aware recommendation.** Phase 14 should use a full (signed-abs) sharpness penalty rather than a PSD-truncated one — the negative-curvature directions carry the physics. Documented in FINDINGS § Routing.
 5. **HVP eps=1e-4 kept at default.** Taylor-remainder test bounds HVP noise at ~1e-9; smallest reported |lambda| is 2.4e-8 (HNLF) — comfortably above the floor.
@@ -140,20 +140,20 @@ This resumption (Tasks 3 + 5 + 6):
 - **Found during:** Task 2 (first Arpack :SM attempt on smf28_canonical)
 - **Issue:** Plan suggested `eigs(op; which=:SM, sigma=0.0)` for bottom eigenvalues via shift-invert. Arpack's shift-invert path requires `factorize(H - sigma*I)`, which is impossible for a matrix-free operator (no explicit Hessian). The call errored with "shift-invert needs a factorization".
 - **Fix:** Replaced with `:SR` (smallest real / smallest algebraic) which uses plain Lanczos on the unshifted operator. The returned wing is the 20 most-negative-algebraic eigenvalues, which is what we need for saddle detection. Documented the gauge-mode-visibility consequence in FINDINGS § Workstream 3 Limitations.
-- **Files modified:** `scripts/phase13_hessian_eigspec.jl`
+- **Files modified:** `scripts/hessian_eigspec.jl`
 - **Committed in:** `941dab6` (Task 1/2 commit)
 
 **2. [Rule 2 - Missing critical] Determinism pinning at HVP entry**
 - **Found during:** Task 2 (HVP was producing slightly different eigenvalues per run)
 - **Issue:** Without `ensure_deterministic_fftw()` and BLAS pinning at script entry, consecutive Arpack runs on the same `phi_opt` returned different `lambda_top[1]` at the 1e-9 relative level — consistent with Plan 01's FFTW.MEASURE diagnosis. The eigenspectrum is the central deliverable; not fixing this would make the result non-reproducible.
 - **Fix:** Added `ensure_deterministic_fftw()` + `BLAS.set_num_threads(1)` calls at the top of `run_eigendecomposition`. Also logged `FFTW.get_num_threads()` and `BLAS.get_num_threads()` into the JLD2 so the run is auditable.
-- **Files modified:** `scripts/phase13_hessian_eigspec.jl`, `scripts/phase13_hvp.jl`
+- **Files modified:** `scripts/hessian_eigspec.jl`, `scripts/hvp.jl`
 - **Committed in:** `941dab6`
 
 **3. [Rule 1 - Bug] Figure 4 y-axis symlog linthresh = 0**
 - **Found during:** Task 3 (first figure render)
 - **Issue:** Passing `linthresh=thr` when `thr = 1e-6 * lambda_max` and `lambda_max ≈ 1e-5` gives `linthresh ≈ 1e-11`, fine; but if a future run had `lambda_max = 0` (pure flat), `thr = 0` would crash matplotlib symlog. Preempted with `max(thr, 1e-16)`.
-- **Files modified:** `scripts/phase13_hessian_figures.jl`
+- **Files modified:** `scripts/hessian_figures.jl`
 - **Committed in:** `568078c`
 
 **4. [Rule 2 - Missing critical] Gauge-mode cosine similarity annotation**
@@ -184,10 +184,10 @@ This resumption (Tasks 3 + 5 + 6):
 
 ## Self-Check
 
-- [x] `scripts/phase13_hvp.jl` exists — FOUND (15 KB)
-- [x] `scripts/phase13_hessian_eigspec.jl` exists — FOUND (28 KB)
-- [x] `scripts/phase13_hessian_figures.jl` exists — FOUND (new file this commit)
-- [x] `test/test_phase13_hvp.jl` exists — FOUND (from Task 1 commit)
+- [x] `scripts/hvp.jl` exists — FOUND (15 KB)
+- [x] `scripts/hessian_eigspec.jl` exists — FOUND (28 KB)
+- [x] `scripts/hessian_figures.jl` exists — FOUND (new file this commit)
+- [x] `test/test_hvp.jl` exists — FOUND (from Task 1 commit)
 - [x] `results/raman/phase13/hessian_smf28_canonical.jld2` exists (2.8 MB) — FOUND
 - [x] `results/raman/phase13/hessian_hnlf_canonical.jld2` exists (2.8 MB) — FOUND
 - [x] `results/images/phase13/phase13_04_hessian_eigvals_stem.png` exists — FOUND

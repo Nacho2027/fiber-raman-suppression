@@ -117,8 +117,8 @@ The deliverable is a report that states plainly whether genuine minima are:
 - `.planning/phases/22-sharpness-research/SUMMARY.md`
 - `.planning/phases/27-numerical-analysis-audit-and-cs-4220-application-roadmap/27-REPORT.md`
 - `scripts/sweep_simple_param.jl`
-- `scripts/phase13_hvp.jl`
-- `scripts/phase13_hessian_eigspec.jl`
+- `scripts/hvp.jl`
+- `scripts/hessian_eigspec.jl`
 - `scripts/standard_images.jl`
 - `results/raman/phase_sweep_simple/sweep1_Nphi.jld2`
 

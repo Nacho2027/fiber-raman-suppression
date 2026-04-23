@@ -78,8 +78,8 @@ and no "drive-by" physics edits hidden inside the audit.
 - `scripts/common.jl`
 - `scripts/raman_optimization.jl`
 - `scripts/determinism.jl`
-- `scripts/phase13_hvp.jl`
-- `scripts/phase13_hessian_eigspec.jl`
+- `scripts/hvp.jl`
+- `scripts/hessian_eigspec.jl`
 - `scripts/benchmark_threading.jl`
 - `src/helpers/helpers.jl`
 - `src/simulation/simulate_disp_mmf.jl`

@@ -56,8 +56,8 @@ else
     @warn "FFTW wisdom file missing at $_REG_WISDOM_PATH — regression drift may exceed tolerances"
 end
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Load the snapshot
@@ -66,7 +66,7 @@ include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
 const _REG_SNAP_PATH = joinpath(@__DIR__, "..", "results", "raman", "phase14",
                                 "vanilla_snapshot.jld2")
 
-@assert isfile(_REG_SNAP_PATH) "snapshot file missing: $_REG_SNAP_PATH — run scripts/phase14_snapshot_vanilla.jl first"
+@assert isfile(_REG_SNAP_PATH) "snapshot file missing: $_REG_SNAP_PATH — run scripts/snapshot_vanilla.jl first"
 
 snap = JLD2.load(_REG_SNAP_PATH)
 @info "Loaded snapshot" path = _REG_SNAP_PATH version = snap["snapshot_version"] created_at = snap["created_at"]

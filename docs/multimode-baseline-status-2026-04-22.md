@@ -5,17 +5,17 @@
 This pass did not refactor the shared single-mode optimizer. It added MMF-only
 trust infrastructure:
 
-- `scripts/mmf_setup.jl`
+- `scripts/research/mmf/mmf_setup.jl`
   - conservative MMF time-window recommendation
   - automatic MMF time-window / `Nt` upsizing for undersized runs
 - `src/mmf_cost.jl`
   - `mmf_mode_band_fractions`
   - `mmf_cost_report`
-- `scripts/mmf_raman_optimization.jl`
+- `scripts/research/mmf/mmf_raman_optimization.jl`
   - forward-only MMF trust metrics
   - per-run summaries of `sum`, `fundamental`, and `worst_mode`
   - boundary-edge diagnostic attached to each MMF baseline run
-- `scripts/mmf_phase36_baseline.jl`
+- `scripts/research/mmf/baseline.jl`
   - focused MMF regime / cost-comparison driver for burst
 
 ## Tests
@@ -89,7 +89,7 @@ Why:
 
 ## Practical next step
 
-Run `scripts/mmf_phase36_baseline.jl` on burst again, but only as a fully
+Run `scripts/research/mmf/baseline.jl` on burst again, but only as a fully
 observed heavy session, and treat the `Nt = 4096` path as screening only.
 The publishable / durable baseline should come from the aggressive `GRIN_50`,
 `L = 2.0 m`, `P = 0.5 W` rerun with the new MMF trust checks enabled.

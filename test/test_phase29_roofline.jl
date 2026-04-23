@@ -1,7 +1,7 @@
 using Test
 
 const _PHASE29_ROOT = normpath(joinpath(@__DIR__, ".."))
-include(joinpath(_PHASE29_ROOT, "scripts", "phase29_roofline_model.jl"))
+include(joinpath(_PHASE29_ROOT, "scripts", "roofline_model.jl"))
 
 @testset "Phase 29 roofline model" begin
 

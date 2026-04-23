@@ -11,7 +11,7 @@
 #   3. determinism         — Same-seed → bit-identical φ_opt at 5 L-BFGS iters.
 #
 # The first two gates are skipped until Task 2 produces
-# scripts/cost_audit_noise_aware.jl. `determinism` runs unconditionally and
+# scripts/research/cost_audit/cost_audit_noise_aware.jl. `determinism` runs unconditionally and
 # calls the full nonlinear solver → MUST run on fiber-raman-burst per
 # CLAUDE.md Rule 1.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -29,10 +29,10 @@ BLAS.set_num_threads(1)
 const _PHASE16_WISDOM = joinpath(@__DIR__, "..", "results", "raman", "phase14", "fftw_wisdom.txt")
 isfile(_PHASE16_WISDOM) && try; FFTW.import_wisdom(_PHASE16_WISDOM); catch; end
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "raman_optimization.jl"))
 
-const _CA_NOISE_AWARE_PATH = joinpath(@__DIR__, "..", "scripts", "cost_audit_noise_aware.jl")
+const _CA_NOISE_AWARE_PATH = joinpath(@__DIR__, "..", "scripts", "research", "cost_audit", "cost_audit_noise_aware.jl")
 if isfile(_CA_NOISE_AWARE_PATH)
     include(_CA_NOISE_AWARE_PATH)
     const _CA_READY = true
@@ -43,7 +43,7 @@ end
 @testset "Phase 16 cost audit — unit" begin
     @testset "d04_gradient (FD ≈ analytic for curvature block)" begin
         if !_CA_READY
-            @test_skip "cost_audit_noise_aware.jl not yet present (Task 2)"
+            @test_skip "scripts/research/cost_audit/cost_audit_noise_aware.jl not yet present (Task 2)"
         else
             # P(φ) is quadratic in each φ[i], so centered FD is mathematically
             # exact — the measured residual is pure round-off scaling as
@@ -88,7 +88,7 @@ end
 
     @testset "d04_zero_penalty (γ_curv=0 ≡ D-01 byte-identical)" begin
         if !_CA_READY
-            @test_skip "cost_audit_noise_aware.jl not yet present (Task 2)"
+            @test_skip "scripts/research/cost_audit/cost_audit_noise_aware.jl not yet present (Task 2)"
         else
             uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
                 Nt=1024, time_window=5.0, β_order=3,

@@ -31,7 +31,7 @@ Compared to the earlier CS 4220 pass, the book adds stronger emphasis on:
   repo: `DifferentialEquations.jl`, `FFTW.jl`, `Optim.jl`, `Arpack.jl`,
   `Tullio.jl`, and the current forward/adjoint code.
 - Reuse the existing matrix-free Hessian-vector-product work in
-  `scripts/phase13_hvp.jl` and `scripts/phase13_hessian_eigspec.jl` rather than
+  `scripts/hvp.jl` and `scripts/hessian_eigspec.jl` rather than
   inventing a second Hessian toolchain.
 - Reuse the current deterministic environment work in `scripts/determinism.jl`
   as the baseline reproducibility policy.
@@ -214,7 +214,7 @@ Relevant course/book material:
 - `nmds`: Krylov Subspaces, Eigenvalue Problems and the SVD
 
 Direct codebase application:
-- `scripts/phase13_hvp.jl` and `scripts/phase13_hessian_eigspec.jl` already
+- `scripts/hvp.jl` and `scripts/hessian_eigspec.jl` already
   implement matrix-free HVPs and Arpack-based eigenspectrum extraction.
 - This is the strongest bridge from CS 4220 / `nmds` to existing code.
 
@@ -448,7 +448,7 @@ Phase 27 flagged scaling generically. Code-verified specifics:
    are **not** multiplied by this factor. Effective regularizer weight
    therefore drops by 10 dB per 10 dB of suppression. The user-facing
    knob `λ_gdd = 1e-4` is not a fixed weight.
-2. **Hessian probe objective ≠ L-BFGS objective.** `phase13_hvp.jl:74`
+2. **Hessian probe objective ≠ L-BFGS objective.** `hvp.jl:74`
    probes the linear physics Hessian; `raman_optimization.jl` optimizes
    dB cost with regularizers. Eigenspectrum analysis is of a related but
    distinct surface.
@@ -480,7 +480,7 @@ Second-opinion verdict: agree with original. No addition.
 Phase 27 correctly identifies this as the strongest existing bridge.
 Two code-verified caveats:
 
-1. `P13_DEFAULT_EPS = 1e-4` in `phase13_hvp.jl:48` is a fixed FD step.
+1. `P13_DEFAULT_EPS = 1e-4` in `hvp.jl:48` is a fixed FD step.
    NMDS's Krylov chapter and CS 4220's FD notes both call this out:
    optimal ε scales as `sqrt(eps_mach · ‖∇J‖) / ‖v‖`. Fixed ε is
    right at one specific gradient magnitude and wrong everywhere else.
@@ -489,7 +489,7 @@ Two code-verified caveats:
    eigenspectrum at exactly the regime where curvature information
    would matter most.
 2. Matrix-free shift-invert for interior eigenvalues is acknowledged
-   impossible in `phase13_hessian_eigspec.jl:30-33`. The remedy (if
+   impossible in `hessian_eigspec.jl:30-33`. The remedy (if
    near-zero modes matter for gauge analysis) is LOBPCG or inexact-Newton
    CG with a diagonal preconditioner, **not** Arpack. The existing
    infrastructure is Lanczos; it will find extreme eigenvalues, not
@@ -569,7 +569,7 @@ Modes Surfaced by the Audit above.
    | `raman_optimization.jl:121-129` (log_cost=true default) | dB | No |
    | `raman_optimization.jl:127-128` (log_cost=false) | linear | N/A |
    | `amplitude_optimization.jl:402-446` | linear | Yes (flat 1.0 weight) |
-   | `phase13_hvp.jl:74` | linear, no regularizer | N/A |
+   | `hvp.jl:74` | linear, no regularizer | N/A |
    | `chirp_sensitivity` callsite `:332` | dB (default) | N/A |
    | `plot_chirp_sensitivity:361` | **applies 10·log10 again** → DomainError | N/A |
 

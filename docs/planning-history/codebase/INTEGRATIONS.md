@@ -82,7 +82,7 @@ using PyPlot
 Seen in `scripts/mmf_raman_optimization.jl:28`,
 `scripts/longfiber_regenerate_standard_images.jl:24`,
 `scripts/multivar_demo.jl:25`, `scripts/phase_analysis.jl:35`,
-`scripts/phase13_hessian_figures.jl:32`,
+`scripts/hessian_figures.jl:32`,
 `scripts/generate_sweep_reports.jl:28`,
 `scripts/longfiber_validate_100m_fix.jl:23`,
 `scripts/test_visualization_smoke.jl:27`.
@@ -95,8 +95,8 @@ Seen in `scripts/mmf_raman_optimization.jl:28`,
 - `scripts/generate_presentation_figures.jl`,
   `scripts/generate_sweep_reports.jl` — downstream figure generation
   from saved JLD2 results.
-- `scripts/phase13_hessian_figures.jl`,
-  `scripts/phase14_figures.jl` — phase-specific diagnostic figures.
+- `scripts/hessian_figures.jl`,
+  `scripts/figures.jl` — phase-specific diagnostic figures.
 
 **rcParams:** Verified by `scripts/test_visualization_smoke.jl:60-61`
 (e.g. `font.size == 10`).

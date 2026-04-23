@@ -24,10 +24,10 @@ Session C built a complete M=6 multimode-fiber Raman-suppression optimizer and v
 | `scripts/mmf_raman_optimization.jl` | `cost_and_gradient_mmf(φ, c_m, uω0_base, fiber, sim, band_mask; variant=:sum, λ_gdd, λ_boundary)`, `optimize_mmf_phase`, `plot_mmf_result`, `run_mmf_baseline` |
 | `scripts/mmf_m1_limit_run.jl` | M=1 reference via the protected SMF optimizer — gives apples-to-apples comparison |
 | `scripts/mmf_joint_optimization.jl` | Joint `(φ, c_m)` optimizer stub for Phase 17 (not needed for this phase) |
-| `scripts/mmf_run_phase16_all.jl` | End-to-end runner — 3 seeds × 2 configs (mild + aggressive) |
-| `scripts/mmf_run_phase16_aggressive.jl` | **This is the one to launch.** Aggressive config (L=2m, P=0.5W, 1 seed, M=6 + M=1). |
+| `scripts/run_all.jl` | End-to-end runner — 3 seeds × 2 configs (mild + aggressive) |
+| `scripts/run_aggressive.jl` | **This is the one to launch.** Aggressive config (L=2m, P=0.5W, 1 seed, M=6 + M=1). |
 | `scripts/mmf_smoke_test.jl` | Fast smoke (Nt=2^10, L=0.1m) — use to sanity-check after any code change |
-| `scripts/mmf_analyze_phase16.jl` | Post-processor: reads the JLD2 and writes markdown + figures |
+| `scripts/analyze.jl` | Post-processor: reads the JLD2 and writes markdown + figures |
 | `test/test_phase16_mmf.jl` | 4 testsets, 13 assertions. **Run these before trusting the stack.** |
 
 ### Key correctness assertions (already passing on burst VM)
@@ -81,7 +81,7 @@ Expected wall time: ~1–2 min. Produces no JLD2; purely a precompile + shape ch
 
 ```bash
 burst-ssh "cd fiber-raman-suppression && ~/bin/burst-run-heavy C2-agg \
-    'julia -t auto --project=. scripts/mmf_run_phase16_aggressive.jl'"
+    'julia -t auto --project=. scripts/run_aggressive.jl'"
 ```
 
 **Config** (hard-coded in the script): GRIN-50, L=2m, P_cont=0.5W, pulse FWHM 185 fs, `time_window = 20` ps (double baseline — critical, see Landmine 4 below), seed=42, max_iter=30 L-BFGS, both M=6 and M=1.
@@ -119,8 +119,8 @@ Pick (a) if the aggressive baseline shows non-trivial suppression at M=6. Pick (
 
 1. **`.planning/` is `.gitignore`'d.** The 10 MMF planning docs are on main only because they were force-added in commit `ee7e73c` on `sessions/C-multimode` before integration. If you create new planning files, you must `git add -f` them.
 2. **`scripts/mmf_m1_limit_run.jl` calls `setup_raman_problem` with `fiber_preset = :SMF28_beta2_only`.** This preset lives in `scripts/common.jl::FIBER_PRESETS`. It was present as of commit `aa2e9b3` and is still present after the 2026-04-19 integration pass. If anyone later renames SMF presets, this script will break — add a regression test if you touch it.
-3. **The mild config (L=1m, P=0.05W) is a CORRECT zero-improvement result, not a bug.** N_sol ≈ 0.9 → sub-soliton → no Raman to suppress. Don't "fix" `mmf_run_phase16_all.jl`'s mild-config run — the aggressive driver is the one that exercises the physics.
-4. **`scripts/mmf_run_phase16_aggressive.jl::run_m6` uses `time_window = 20.0` ps** (double the 10-ps baseline default) because at P=0.5W the SPM spectral broadening dominates. If you copy this driver to a smaller-power config, shrink the window or you waste grid points. If you raise P further, verify the window via `recommended_time_window()`.
+3. **The mild config (L=1m, P=0.05W) is a CORRECT zero-improvement result, not a bug.** N_sol ≈ 0.9 → sub-soliton → no Raman to suppress. Don't "fix" `run_all.jl`'s mild-config run — the aggressive driver is the one that exercises the physics.
+4. **`scripts/run_aggressive.jl::run_m6` uses `time_window = 20.0` ps** (double the 10-ps baseline default) because at P=0.5W the SPM spectral broadening dominates. If you copy this driver to a smaller-power config, shrink the window or you waste grid points. If you raise P further, verify the window via `recommended_time_window()`.
 5. **`scripts/mmf_raman_optimization.jl` includes `scripts/visualization.jl`** (read-only via `include`) to pull in the plotters that `save_standard_set` needs. If someone changes `plot_optimization_result_v2` or `plot_phase_diagnostic` signatures, this driver also needs updating.
 6. **Protected-file rule.** Session C touched NO shared files (`scripts/common.jl`, `scripts/raman_optimization.jl`, `scripts/sharpness_optimization.jl`, `src/simulation/*.jl`). Keep it that way — MMF work lives in its own namespace. If you need shared-file edits, escalate.
 7. **Rule P5 (burst-run-heavy) is mandatory.** Never `tmux new -d 'julia ...'` directly. Always `~/bin/burst-run-heavy <tag> '<cmd>'` so the watchdog and heavy-lock can do their job. Session C learned this the hard way during the 2026-04-17 burst-VM lockup.

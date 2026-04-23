@@ -28,7 +28,7 @@ with CLAUDE.md, the source wins and the divergence is flagged.
 **Files:**
 - Source modules: `snake_case.jl` — `simulate_disp_mmf.jl`, `sensitivity_disp_mmf.jl`, `mmf_cost.jl`
 - Scripts: `snake_case.jl`. Session-owned scripts are prefixed by session/topic so parallel sessions don't collide — `mmf_*.jl`, `multivar_*.jl`, `longfiber_*.jl`, `sweep_simple_*.jl`, `cost_audit_*.jl`, `phase13_*.jl`, `phase14_*.jl`, `phase15_*.jl`
-- Test files: `test_` prefix — `test_optimization.jl`, `test_phase13_primitives.jl`, `test_phase16_mmf.jl`
+- Test files: `test_` prefix — `test_optimization.jl`, `test_primitives.jl`, `test_phase16_mmf.jl`
 - Tier dispatch: `test/tier_{fast,slow,full}.jl` (new — see TESTING.md)
 - Shared script library: `scripts/common.jl` (single source of truth for fiber presets and setup)
 

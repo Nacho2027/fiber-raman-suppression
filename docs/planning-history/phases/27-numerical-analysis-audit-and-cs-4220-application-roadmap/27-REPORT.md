@@ -34,7 +34,7 @@ The `nmds` book reinforces the earlier audit and adds two new directions:
 | Conditioning and scaling | Optimization variables and objectives have mixed units / curvatures | `scripts/multivar_optimization.jl`, current scaling problems in planning concerns | Run a dedicated scaling / conditioning audit before more optimizer expansion |
 | Forward / backward / mixed error | Wrong grids or nondeterministic plans can fake good results | Phase 4, 15, 21, `scripts/determinism.jl` | Standardize numerical trust metrics across future phases |
 | Globalization / line search | Future Newton-like work will be fragile without safeguards | planned Newton / sharpness work, local-optimizer behavior | Require backtracking/trust-region logic in future second-order work |
-| Krylov / Lanczos | Matrix-free HVPs already exist | `scripts/phase13_hvp.jl`, `scripts/phase13_hessian_eigspec.jl` | Build truncated-Newton / curvature diagnostics on top of these |
+| Krylov / Lanczos | Matrix-free HVPs already exist | `scripts/hvp.jl`, `scripts/hessian_eigspec.jl` | Build truncated-Newton / curvature diagnostics on top of these |
 | Regularization / factor selection | Full-grid phase optimization is likely over-parameterized in some regimes | Phase decomposition work, reduced-basis hints in planning | Compare basis choices, not only penalty weights |
 | Continuation / homotopy | The project already warm-starts informally across regimes | sweep / long-fiber / matched-baseline workflows | Turn warm starts into explicit continuation schedules |
 | Performance modeling / roofline / Amdahl | The code is FFT-heavy and burst-compute-heavy; empirical timings alone are not enough | `scripts/benchmark_threading.jl`, FFT-heavy forward/adjoint pipeline | Add a modeled performance phase before further compute scaling work |
@@ -66,7 +66,7 @@ These are real strengths and should be built on rather than replaced:
   Taylor remainder tests, validation scripts, and explicit solver correctness
   work already exist.
 - **Matrix-free Hessian tooling**:
-  `scripts/phase13_hvp.jl` and `scripts/phase13_hessian_eigspec.jl`.
+  `scripts/hvp.jl` and `scripts/hessian_eigspec.jl`.
 - **Honest-grid thinking**:
   Phase 21 recovery work shows the project now knows that "good dB on a bad
   grid" is not an acceptable result.
@@ -309,8 +309,8 @@ surfaces a numerical issue the report doesn't mention, flag it.
 - **dB cost fix is present** at `scripts/raman_optimization.jl:121-129`
   (`J_phys = 10·log10(J); log_scale = 10 / (J · ln 10)`).
 - **Matrix-free HVP + Lanczos eigenspectrum infrastructure exists** — not
-  speculative — via `scripts/phase13_hvp.jl::fd_hvp` and
-  `phase13_hessian_eigspec.jl::HVPOperator` (Arpack-compatible `mul!`
+  speculative — via `scripts/hvp.jl::fd_hvp` and
+  `hessian_eigspec.jl::HVPOperator` (Arpack-compatible `mul!`
   contract, top/bottom-20 wings).
 - **SPM-corrected recommended time window + auto-sizing** is implemented
   (`scripts/common.jl:191-215, 348-359`).
@@ -335,8 +335,8 @@ Per-topic verdicts for the concern areas requested by the user:
 | Conditioning | "under-specified" (generic) | **under-specified AND specifically locatable**: `helpers.jl:51-57` mixes ps / sec / THz / rad·ps⁻¹ in one dict. This is the concrete nondimensionalization target. | Phase 27's framing was abstract; the code location is exact. |
 | Scaling | "objectives and variables have mixed magnitudes" | **more severe than stated**: the log_cost factor (`raman_optimization.jl:124`) multiplies the physics gradient by `10 / (J · ln 10)` which grows without bound as J → 0. Regularizer gradients (GDD, boundary) are **not** re-scaled. So `λ_gdd = 1e-4` means "1e-4 at the start of optimization, 1e-12 near convergence" in effective weight. | **Missed.** This is a genuine conceptual error, not a cosmetic one. |
 | Forward/backward error | "promote to acceptance gates" | **correct direction, missed concrete tool**: gradient validation (`raman_optimization.jl:254-285`) uses a ratio check, never a Taylor-remainder-2 slope check (`‖J(φ+εv)−J(φ)−ε∇J·v‖ = O(ε²)` as ε halves). CS 4220's standard verification idiom is the slope check, which catches the "approximately correct but mis-scaled" gradient the ratio check cannot. | **Missed.** |
-| Globalization | "mandatory for Newton work" | **half right**: for 1st-order, globalization already exists (HagerZhang + Fminbox). The real gap is **trust-region / indefinite-Hessian handling** once HVPs show negative eigenvalues, which `phase13_hessian_eigspec.jl` is explicitly set up to detect. | **Misframed.** |
-| Newton / Krylov / preconditioning | "build on HVP/Lanczos path" | **correct direction, under-instrumented**: FD-HVP uses fixed `ε = 1e-4` (`phase13_hvp.jl:48`). Optimal ε is `sqrt(eps_mach · ‖∇J‖) / ‖v‖`. At deep suppression (‖∇J‖_linear ~ 1e-8), a fixed 1e-4 step is way outside the noise sweet spot. Additionally, `build_oracle` uses `log_cost=false, λ_gdd=0, λ_boundary=0` (`phase13_hvp.jl:74`) — so the **Hessian being analyzed is not the Hessian of the objective L-BFGS is minimizing**. Future truncated-Newton that reuses this oracle must resolve the log-vs-linear question first. | **Missed.** |
+| Globalization | "mandatory for Newton work" | **half right**: for 1st-order, globalization already exists (HagerZhang + Fminbox). The real gap is **trust-region / indefinite-Hessian handling** once HVPs show negative eigenvalues, which `hessian_eigspec.jl` is explicitly set up to detect. | **Misframed.** |
+| Newton / Krylov / preconditioning | "build on HVP/Lanczos path" | **correct direction, under-instrumented**: FD-HVP uses fixed `ε = 1e-4` (`hvp.jl:48`). Optimal ε is `sqrt(eps_mach · ‖∇J‖) / ‖v‖`. At deep suppression (‖∇J‖_linear ~ 1e-8), a fixed 1e-4 step is way outside the noise sweet spot. Additionally, `build_oracle` uses `log_cost=false, λ_gdd=0, λ_boundary=0` (`hvp.jl:74`) — so the **Hessian being analyzed is not the Hessian of the objective L-BFGS is minimizing**. Future truncated-Newton that reuses this oracle must resolve the log-vs-linear question first. | **Missed.** |
 | FFT-aware numerics | not addressed | **one specific gap**: the super-Gaussian order-30 attenuator (`helpers.jl:59-63`) is a **hard absorbing boundary**, not a tracked one. Any energy walking into the outer 15% of the time window is silently absorbed inside the ODE. `check_boundary_conditions` measures *surviving* edge energy, not *absorbed* energy. At long fiber / high power — exactly the regimes Phase 27 cares about — the reported dB is the dB of a partly-absorbed field. | **Missed.** Structural, not cosmetic. |
 | Continuation | "turn warm starts into explicit schedules" | **agree, and the seed is correctly scoped**. No change. | ✓ |
 | Extrapolation | "future backlog" | **agree, low priority**. No change. | ✓ |
@@ -361,7 +361,7 @@ Per-topic verdicts for the concern areas requested by the user:
    optimization. **Severity: high (will contaminate any future
    regularization study, including the reduced-basis seed).**
 
-3. **Hessian probe vs. objective mismatch.** `phase13_hvp.jl:74`
+3. **Hessian probe vs. objective mismatch.** `hvp.jl:74`
    probes the **linear physics-only** Hessian. L-BFGS in
    `raman_optimization.jl` optimizes the **dB cost with GDD + boundary
    regularization**. Future truncated-Newton work built on this HVP path
@@ -375,7 +375,7 @@ Per-topic verdicts for the concern areas requested by the user:
    deepest regimes (Session D, Phase 18 / 21) is an untested empirical
    question. **Severity: medium, previously unexamined.**
 
-5. **FD-HVP step size is fixed at `1e-4`.** `phase13_hvp.jl:48`.
+5. **FD-HVP step size is fixed at `1e-4`.** `hvp.jl:48`.
    The HVP-symmetry note in the file docstring ("guaranteed only up to
    finite-difference noise") becomes a live concern at L-BFGS
    convergence, which is exactly where curvature probes matter most.
@@ -407,7 +407,7 @@ Per-topic verdicts for the concern areas requested by the user:
 
 9. **Condition-number probe would be almost free.** Arpack already
    extracts top-K and bottom-K eigenvalues in
-   `phase13_hessian_eigspec.jl`. Reporting
+   `hessian_eigspec.jl`. Reporting
    `κ = λ_max / max(|λ_min_nonzero|, eps)` as a per-run trust metric is
    a handful of lines and plugs directly into the conditioning seed.
    **Severity: leverage.**

@@ -15,7 +15,7 @@
 using Test
 using LinearAlgebra
 
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_pcg.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_pcg.jl"))
 # trust_region_core.jl is brought in transitively via trust_region_pcg.jl.
 
 # ─────────────────────────────────────────────────────────────────────────────

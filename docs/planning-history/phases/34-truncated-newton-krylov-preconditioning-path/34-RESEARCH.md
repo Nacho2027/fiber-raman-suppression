@@ -28,7 +28,7 @@ yet demonstrate: outer-loop convergence from cold starts.
 
 The codebase is ready. Phase 33 ships a frozen `DirectionSolver` / `SubproblemResult`
 interface in `scripts/trust_region_core.jl`; Phase 13 ships a validated, adaptive
-`fd_hvp` oracle in `scripts/phase13_hvp.jl`; and Phase 33's outer loop (`optimize_spectral_phase_tr`
+`fd_hvp` oracle in `scripts/hvp.jl`; and Phase 33's outer loop (`optimize_spectral_phase_tr`
 in `scripts/trust_region_optimize.jl`) already handles gauge projection, adaptive HVP ε,
 edge-fraction pre-flight, and telemetry. Phase 34 only needs to provide new
 `solve_subproblem` methods and a new benchmark driver.
@@ -50,9 +50,9 @@ existing `build_dct_basis` machinery in `scripts/amplitude_optimization.jl`.
 | Outer-loop trust-region control | `scripts/trust_region_optimize.jl` (frozen) | — | Phase 34 MUST NOT modify; passes solver via keyword |
 | Gauge projection (inner solve) | `scripts/trust_region_optimize.jl` (frozen H_op closure) | — | Already projects every HVP input; PCG inherits this |
 | Adaptive HVP ε | `scripts/trust_region_optimize.jl` (frozen H_op closure) | — | Already implemented; PCG reuses same H_op callable |
-| Benchmark driver | `scripts/phase34_benchmark_run.jl` (new) | `scripts/phase33_benchmark_common.jl` (additive edit) | Phase 33 pattern; new driver forks, common config gains Phase-34 block |
-| Δ₀-sweep diagnostic | `scripts/phase34_benchmark_run.jl` | — | New open question 5 from Phase 33 report |
-| HVP oracle | `scripts/phase13_hvp.jl` (read-only) | `scripts/trust_region_optimize.jl`'s `build_raman_oracle` | Two oracle paths exist; Phase 34 reuses the TR one, not the Phase 13 one |
+| Benchmark driver | `scripts/benchmark_run.jl` (new) | `scripts/benchmark_common.jl` (additive edit) | Phase 33 pattern; new driver forks, common config gains Phase-34 block |
+| Δ₀-sweep diagnostic | `scripts/benchmark_run.jl` | — | New open question 5 from Phase 33 report |
+| HVP oracle | `scripts/hvp.jl` (read-only) | `scripts/trust_region_optimize.jl`'s `build_raman_oracle` | Two oracle paths exist; Phase 34 reuses the TR one, not the Phase 13 one |
 | Standard image set | `scripts/standard_images.jl` (read-only) | — | Phase 33 wires it through `TrustRegionResult.minimizer` |
 
 ---
@@ -117,15 +117,15 @@ surface. A bad alignment produces small ρ and radius collapse.
 
 ### Source files
 
-- **`scripts/phase13_hvp.jl`** — original matrix-free HVP library from Phase 13.
+- **`scripts/hvp.jl`** — original matrix-free HVP library from Phase 13.
   Contains `fd_hvp`, `build_oracle` (Phase-13 API, not used by Phase 34),
   `validate_hvp_taylor`, `build_full_hessian_small`, `ensure_deterministic_fftw`.
 - **`scripts/trust_region_optimize.jl`** — Phase 33 entry point. Contains the
-  `build_raman_oracle` helper (local, not the same as `phase13_hvp.jl::build_oracle`
+  `build_raman_oracle` helper (local, not the same as `hvp.jl::build_oracle`
   — see `33-01-SUMMARY.md §Deviations Rule 3`), plus the `H_op` closure that Phase 34
   inherits.
 
-Phase 14's executor must NOT call `phase13_hvp.jl::build_oracle` directly. That function
+Phase 14's executor must NOT call `hvp.jl::build_oracle` directly. That function
 takes a `NamedTuple` config and has `log_cost=false, λ_gdd=0, λ_boundary=0` hard-wired
 inside it, making it probe the linear physics Hessian rather than the dB-cost Hessian.
 Phase 34 uses `build_raman_oracle` from `trust_region_optimize.jl` instead, which is
@@ -140,7 +140,7 @@ From `trust_region_optimize.jl` lines 295–308, the `H_op` closure that every
    [VERIFIED: `trust_region_optimize.jl:299`]
 2. Projects the input vector onto the gauge-complement subspace via `_project_gauge`
    before the HVP: `v_proj = _proj(v)` [VERIFIED: `trust_region_optimize.jl:304`]
-3. Calls `fd_hvp(φ, v_proj, oracle.grad_fn; eps=ε_hvp)` from `phase13_hvp.jl`
+3. Calls `fd_hvp(φ, v_proj, oracle.grad_fn; eps=ε_hvp)` from `hvp.jl`
    [VERIFIED: `trust_region_optimize.jl:305`]
 4. Projects the output: `return _proj(Hv)` [VERIFIED: `trust_region_optimize.jl:307`]
 
@@ -513,7 +513,7 @@ specific reference]
 ### Non-negotiable: match Phase 33 benchmark set exactly
 
 Phase 34 must use the same benchmark matrix as Phase 33 to enable head-to-head comparison.
-The configs are defined in `scripts/phase33_benchmark_common.jl` [VERIFIED]:
+The configs are defined in `scripts/benchmark_common.jl` [VERIFIED]:
 
 ```julia
 BENCHMARK_CONFIGS = [
@@ -530,8 +530,8 @@ BENCHMARK_CONFIGS = [
 START_TYPES = [:cold, :warm, :perturbed]
 ```
 
-Phase 34's benchmark driver `scripts/phase34_benchmark_run.jl` forks from
-`phase33_benchmark_run.jl` and calls `optimize_spectral_phase_tr(...; solver=PreconditionedCGSolver(...))`
+Phase 34's benchmark driver `scripts/benchmark_run.jl` forks from
+`benchmark_run.jl` and calls `optimize_spectral_phase_tr(...; solver=PreconditionedCGSolver(...))`
 with otherwise-identical config. The Phase-33 `SteihaugSolver` results
 (`results/raman/phase33/SYNTHESIS.md`) are the comparison baseline.
 
@@ -694,18 +694,18 @@ result = optimize_spectral_phase_tr(uω0, fiber, sim, band_mask; solver=solver,
 
 - `scripts/trust_region_preconditioner.jl` — preconditioner construction
 - `scripts/trust_region_pcg.jl` — `PreconditionedCGSolver` + `solve_subproblem`
-- `scripts/phase34_benchmark_run.jl` — benchmark driver
-- `scripts/phase34_benchmark_synthesis.jl` — synthesis (optional, fork phase33_benchmark_synthesis.jl)
+- `scripts/benchmark_run.jl` — benchmark driver
+- `scripts/phase34_benchmark_synthesis.jl` — synthesis (optional, fork benchmark_synthesis.jl)
 - `test/test_trust_region_preconditioner.jl`
 - `test/test_trust_region_pcg_integration.jl`
-- Additive edits to `scripts/phase33_benchmark_common.jl` (new Phase-34 config block)
+- Additive edits to `scripts/benchmark_common.jl` (new Phase-34 config block)
 
 ### Files Phase 34 MUST NOT modify (frozen by Phase 33)
 
 - `scripts/trust_region_core.jl`
 - `scripts/trust_region_telemetry.jl`
 - `scripts/trust_region_optimize.jl`
-- `scripts/phase33_benchmark_run.jl`
+- `scripts/benchmark_run.jl`
 - `scripts/raman_optimization.jl`, `scripts/common.jl`, `scripts/phase13_*.jl`,
   `scripts/numerical_trust.jl`, `scripts/determinism.jl`, `scripts/standard_images.jl`,
   `src/**`
@@ -788,10 +788,10 @@ components, the gauge projection in `H_op` will not be sufficient to prevent lea
 - [ ] `scripts/trust_region_pcg.jl` — new, Wave 0
 - [ ] `test/test_trust_region_preconditioner.jl` — new, Wave 0
 - [ ] `test/test_trust_region_pcg_integration.jl` — new, Wave 0
-- [ ] Additive entry in `scripts/phase33_benchmark_common.jl` for Phase-34 config block
+- [ ] Additive entry in `scripts/benchmark_common.jl` for Phase-34 config block
 
 Existing infrastructure already covers: `trust_region_core.jl`, `trust_region_optimize.jl`,
-`trust_region_telemetry.jl`, `phase13_hvp.jl`, `amplitude_optimization.jl::build_dct_basis`.
+`trust_region_telemetry.jl`, `hvp.jl`, `amplitude_optimization.jl::build_dct_basis`.
 
 ### Per-task commit validation command
 ```bash
@@ -937,7 +937,7 @@ All four open questions are resolved by Plans 01-04. Dispositions appended inlin
    schema lock); Phase-34-specific metadata (`solver_type`, `preconditioner`, `K_dct`,
    `precond_wired`) is appended to the per-slot `_result.jld2` by the Plan 03 driver,
    not to telemetry.csv. This keeps the Phase-33 CSV schema byte-compatible with the
-   existing `phase33_benchmark_synthesis.jl`.
+   existing `benchmark_synthesis.jl`.
 
 4. **Will the DCT preconditioner at K=64 be stable given the Hessian's mixed positive/negative
    eigenvalues?**
@@ -960,7 +960,7 @@ All four open questions are resolved by Plans 01-04. Dispositions appended inlin
 | `fiber-raman-burst` burst VM | All benchmark runs (CLAUDE.md Rule 1) | On-demand | GCP c3-highcpu-22 | None — burst is mandatory for Julia simulation |
 | `scripts/trust_region_core.jl` | Phase 34 subtypes this | ✓ | Phase 33 frozen | — |
 | `scripts/trust_region_optimize.jl` | Phase 34 calls `optimize_spectral_phase_tr` | ✓ | Phase 33 frozen | — |
-| `scripts/phase13_hvp.jl` | H_op closure uses `fd_hvp` | ✓ | Phase 13 | — |
+| `scripts/hvp.jl` | H_op closure uses `fd_hvp` | ✓ | Phase 13 | — |
 | `scripts/amplitude_optimization.jl::build_dct_basis` | DCT preconditioner | ✓ | Phase 31 existing | Implement DCT from scratch |
 | `Arpack.jl` | Existing λ-probe in outer loop | ✓ | In Project.toml | — |
 | HNLF warm-start JLD2 (`results/raman/phase21/phase13/hnlf_reanchor.jld2`) | bench-02 warm start | Must verify before run | Phase 21 result | Skip bench-02 warm if not present |
@@ -978,9 +978,9 @@ runs. Ensure `burst-start` and `burst-run-heavy` wrappers are available on `clau
   `TRExitCode`, `update_radius` implementations
 - `scripts/trust_region_optimize.jl` — partial read; verified `H_op` closure lines 295–308,
   `build_raman_oracle`, `optimize_spectral_phase_tr` signature
-- `scripts/phase13_hvp.jl` — full read; verified `fd_hvp`, `build_oracle` (Phase-13 API),
+- `scripts/hvp.jl` — full read; verified `fd_hvp`, `build_oracle` (Phase-13 API),
   `P13_DEFAULT_EPS = 1e-4`, `ensure_deterministic_fftw`
-- `scripts/phase33_benchmark_common.jl` — full read; verified `BENCHMARK_CONFIGS`,
+- `scripts/benchmark_common.jl` — full read; verified `BENCHMARK_CONFIGS`,
   `START_TYPES`
 - `.planning/phases/33-globalized-second-order-optimization-for-raman-suppression/33-REPORT.md` — full read
 - `.planning/phases/33-globalized-second-order-optimization-for-raman-suppression/33-01-SUMMARY.md` — full read

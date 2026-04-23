@@ -24,14 +24,14 @@ These no longer need tracking:
 | Non-deterministic FFTW planner | Pinned to `ESTIMATE` for reproducibility via `scripts/determinism.jl::ensure_deterministic_environment()`; validated bit-identical cross-process (Phase 15). Cost: +21.4% runtime. | `scripts/determinism.jl`, Phase 15 merge |
 | Standard-image set not produced by drivers | Project-level rule in `CLAUDE.md` mandates `save_standard_set(...)` at the end of every driver producing `phi_opt`. Most drivers wired (see Partial Wiring below). Legacy drivers patched in commit `12cea85`. | `scripts/standard_images.jl` (158 LoC) |
 | README minimal (7 lines, Windows paths) | Session B docs suite replaced it along with 9 supporting docs + Makefile | commit `eb691df` |
-| Duplicate `simulate_disp_gain_smf.jl` placeholder | Deleted in Phase 25. `scripts/phase15_benchmark.jl` now swaps FFTW planner flags only in the three live simulation files, and codebase docs were updated to stop advertising the dead SMF gain file. | Phase 25 |
+| Duplicate `simulate_disp_gain_smf.jl` placeholder | Deleted in Phase 25. `scripts/benchmark.jl` now swaps FFTW planner flags only in the three live simulation files, and codebase docs were updated to stop advertising the dead SMF gain file. | Phase 25 |
 | `pulse_form` silent fallthrough | Fixed in Phase 25. `get_initial_state` and `get_initial_state_gain_smf` now throw `ArgumentError` for unsupported pulse shapes, and `test/tier_fast.jl` covers the regression. | Phase 25 |
 
 ## Critical Issues
 
 ### The `fiber` Dict is mutated during solves — per-thread `deepcopy(fiber)` is a footgun
 
-- **Issue:** `fiber["zsave"]` is set to `nothing` (or to a `LinRange`) inside many drivers and library callers as a *side effect* of running a forward solve. See `scripts/raman_optimization.jl:203`, `scripts/longfiber_optimize_100m.jl:193`, `scripts/sweep_simple_param.jl:318`, `scripts/simple_profile_driver.jl:325,610`, `scripts/phase14_robustness_test.jl:129`, `scripts/multivar_optimization.jl:561`, `scripts/phase13_hvp.jl:89`, `scripts/test_multivar_gradients.jl:55`, `scripts/cost_audit_driver.jl:273`, `scripts/sharpness_optimization.jl:476`. Any `Threads.@threads` loop sharing one `fiber` instance across threads will race on this assignment.
+- **Issue:** `fiber["zsave"]` is set to `nothing` (or to a `LinRange`) inside many drivers and library callers as a *side effect* of running a forward solve. See `scripts/raman_optimization.jl:203`, `scripts/longfiber_optimize_100m.jl:193`, `scripts/sweep_simple_param.jl:318`, `scripts/simple_profile_driver.jl:325,610`, `scripts/robustness_test.jl:129`, `scripts/multivar_optimization.jl:561`, `scripts/hvp.jl:89`, `scripts/test_multivar_gradients.jl:55`, `scripts/cost_audit_driver.jl:273`, `scripts/sharpness_optimization.jl:476`. Any `Threads.@threads` loop sharing one `fiber` instance across threads will race on this assignment.
 - **Status:** The `deepcopy(fiber)` pattern is documented in `CLAUDE.md` (§"When the `deepcopy(fiber)` pattern is required", lines 593–608) and is followed in the major parallel drivers: `scripts/sweep_simple_run.jl:447` (the 64-config `Threads.@threads` in `run_sweep2`), `scripts/benchmark_optimization.jl:635,725`, `scripts/benchmark_threading.jl:298,313,367,381`. There are 40+ call sites using `deepcopy(fiber)` across the scripts (grep confirms).
 - **Risk surface for new code:** There is no mechanical enforcement. A new `Threads.@threads` or `@spawn` loop that forgets `deepcopy` will hit a silent race — not a crash — because the mutations are consistent types. Results would be wrong but look plausible. MMF `Threads.@threads` (Phase 16/18) is a likely next introduction point.
 - **Severity:** CRITICAL (silent-correctness risk)
@@ -92,10 +92,10 @@ These no longer need tracking:
 ### Phase 18 MMF baseline: aggressive run never confirmed
 
 - **Issue:** Phase 18-mmf-baseline-execute. Session C built the M=6 scaffolding (13/13 tests pass on burst VM), but only the *sub-soliton* config (L=1m, P=0.05W, N_sol ≈ 0.9) ran to completion — with a correct zero-improvement result (no Raman to suppress). The **aggressive config** (L=2m, P=0.5W, N_sol ≈ 2–3, firmly Raman-active) was queued on the burst VM as `C-phase16-agg` (pid 16617 at handoff) but the VM became unreachable before the run confirmed. Queued job may still be alive or may have completed unseen.
-- **Files:** `scripts/mmf_run_phase16_aggressive.jl`, `scripts/mmf_raman_optimization.jl`, `scripts/mmf_m1_limit_run.jl`, `test/test_phase16_mmf.jl`, `.planning/phases/18-mmf-baseline-execute/CONTEXT.md`, `.planning/phases/16-multimode-raman-suppression-baseline/16-01-SUMMARY.md` (has `_TBD_` rows waiting)
+- **Files:** `scripts/run_aggressive.jl`, `scripts/mmf_raman_optimization.jl`, `scripts/mmf_m1_limit_run.jl`, `test/test_phase16_mmf.jl`, `.planning/phases/18-mmf-baseline-execute/CONTEXT.md`, `.planning/phases/16-multimode-raman-suppression-baseline/16-01-SUMMARY.md` (has `_TBD_` rows waiting)
 - **Impact:** Zero real multimode Raman-suppression numbers exist on main. The Phase 16 summary is a placeholder.
 - **Severity:** HIGH (blocks the whole multimode direction)
-- **Fix approach:** CONTEXT.md is explicit — re-verify tests, run smoke, launch `mmf_run_phase16_aggressive.jl` through `burst-run-heavy C2-agg`. Expected wall 30–90 min. Check `burst-status` first for the stale pid 16617. Inspect `results/burst-logs/C-phase16-agg_*.log` if present.
+- **Fix approach:** CONTEXT.md is explicit — re-verify tests, run smoke, launch `run_aggressive.jl` through `burst-run-heavy C2-agg`. Expected wall 30–90 min. Check `burst-status` first for the stale pid 16617. Inspect `results/burst-logs/C-phase16-agg_*.log` if present.
 
 ### Massive untracked results and presentation artifacts — single-machine-only
 
@@ -212,7 +212,7 @@ These no longer need tracking:
 
 The project rule (CLAUDE.md top section) is: *"Every optimization driver that produces a `phi_opt` MUST, before exiting, call `save_standard_set(...)`"*. Most drivers comply. Verified grep:
 
-- **Wired:** `amplitude_optimization.jl`, `cost_audit_driver.jl`, `longfiber_optimize_100m.jl`, `longfiber_validate_50m.jl`, `mmf_joint_optimization.jl`, `mmf_m1_limit_run.jl`, `mmf_raman_optimization.jl`, `mmf_run_phase16_aggressive.jl`, `multivar_demo.jl`, `sharp_ab_slim.jl`, `sharpness_optimization.jl`, `raman_optimization.jl`, `sweep_simple_*.jl`.
+- **Wired:** `amplitude_optimization.jl`, `cost_audit_driver.jl`, `longfiber_optimize_100m.jl`, `longfiber_validate_50m.jl`, `mmf_joint_optimization.jl`, `mmf_m1_limit_run.jl`, `mmf_raman_optimization.jl`, `run_aggressive.jl`, `multivar_demo.jl`, `sharp_ab_slim.jl`, `sharpness_optimization.jl`, `raman_optimization.jl`, `sweep_simple_*.jl`.
 - **Audit correction:** `scripts/sharp_robustness_slim.jl` and `scripts/sharp_ab_figures.jl` were previously misclassified here. They are post-processing scripts that consume existing optima; they do not themselves produce a fresh `phi_opt`, so the mandatory `save_standard_set(...)` rule does not apply to them.
 - **Severity:** MEDIUM (non-compliant drivers ship phi_opt without the standard PNG set; advisor won't have the expected visuals)
 - **Fix approach:** Add `save_standard_set(...)` call at the end of each non-wired driver. For `multivar_optimization.jl`, also handle the joint-space `(φ, A, E)` result correctly — the standard set is phase-centric; amplitude rendering may need an extension.

@@ -36,11 +36,11 @@ re_verification:
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
 | 1 | Every performance kernel (FFT, Kerr tullio, Raman tullio, forward RHS, adjoint RHS) has a reproducible median-of-N wall-time measurement at Nt=8192, M=1 | VERIFIED | `results/phase29/kernels.jld2` `results_table` contains 10 entries (A_fft × 6 FFTW thread counts + B_kerr_tullio + C_raman_conv + D_forward_rhs + E_adjoint_rhs). Each entry is a NamedTuple with `time_median_s`, `time_runs` (5 samples), `reps_per_block`, `throughput_gb_s`, `plan_flags`. Sample: `B_kerr_tullio.time_median_s = 0.004751`, 5 runs in `time_runs`. Canonical config `nt=8192, m=1, p_cont_w=0.2, l_fiber_m=2.0, seed=42`. |
-| 2 | Each measured kernel has a modeled arithmetic intensity (FLOP/byte) and is labeled MEMORY_BOUND / COMPUTE_BOUND / SERIAL_BOUND against a captured hardware roofline | VERIFIED | `29-REPORT.md` lines 35–50 "Roofline Regimes" table populated with real AI values: FFT=1.02, Kerr=0.06, Raman=1.42, Forward-RHS=1.69, Adjoint-RHS=2.64. All classified MEMORY_BOUND. Ceiling 300 GB/s (Apple M3 Max). Utilization column ranges 0.1–2.1%. Not a stub — arithmetic per kernel uses `assemble_roofline_memo` from `phase29_roofline_model.jl`. |
+| 2 | Each measured kernel has a modeled arithmetic intensity (FLOP/byte) and is labeled MEMORY_BOUND / COMPUTE_BOUND / SERIAL_BOUND against a captured hardware roofline | VERIFIED | `29-REPORT.md` lines 35–50 "Roofline Regimes" table populated with real AI values: FFT=1.02, Kerr=0.06, Raman=1.42, Forward-RHS=1.69, Adjoint-RHS=2.64. All classified MEMORY_BOUND. Ceiling 300 GB/s (Apple M3 Max). Utilization column ranges 0.1–2.1%. Not a stub — arithmetic per kernel uses `assemble_roofline_memo` from `roofline_model.jl`. |
 | 3 | Forward-solve, adjoint-solve, and full cost_and_gradient wall times are measured across Julia thread counts {1,2,4,8,16,22} in fresh subprocesses and fit to an Amdahl model | VERIFIED | `results/phase29/solves.jld2` `solves` dict has 18 keys (3 modes × 6 thread counts), each a Vector{Float64} of 3 timed runs. `amdahl_fits.json` gives p=0.000 (forward), p=0.000 (adjoint), p=0.0496 (full_cg); RMSE 5.5e-2 / 3.2e-2 / 3.9e-2. `solve_bench.log` shows 72 fresh-subprocess spawns (`┌ Info: spawn` lines) with WARMUP + RUN-1/2/3 tags per (mode, n_threads). |
 | 4 | The final `29-REPORT.md` opens with an Executive Verdict naming the dominant bottleneck and a one-line recommendation | VERIFIED | `29-REPORT.md` line 6–8: `## Executive Verdict` names "SERIAL_BOUND (orchestration + single-threaded RHS dominate)", cites measured p=0.000, recommends `"do not pay for more than 4 burst-VM threads… invest tuning effort in the FFT plan and per-RHS allocation path"`. No longer deferred. |
 | 5 | The Phase 15 deterministic invariant (FFTW.ESTIMATE + FFTW/BLAS threads=1) is preserved for all src/ code | VERIFIED | `git diff HEAD~1 HEAD -- src/` empty for the bugfix commit (53decda) and for the phase-29 run commits. `julia --project=. test/test_determinism.jl` exits 0 with **7/7 passing in 26.9s**; log shows `max(|Δφ|) = 0.000e+00 rad (must be 0.0)`. Phase 29 drivers vary FFTW state locally only in Block A. |
-| 6 | Every pure analysis function in `phase29_roofline_model.jl` has a unit test with a canned numeric answer | VERIFIED | `julia --project=. test/test_phase29_roofline.jl` exits 0 with **43/43 passing in 0.6s**. Covers `arithmetic_intensity`, `roofline_bound`, `fit_amdahl` (synthetic p=0.9 recovery to atol=1e-10), `fit_gustafson`, `kernel_regime_verdict`, `assemble_roofline_memo`. |
+| 6 | Every pure analysis function in `roofline_model.jl` has a unit test with a canned numeric answer | VERIFIED | `julia --project=. test/test_phase29_roofline.jl` exits 0 with **43/43 passing in 0.6s**. Covers `arithmetic_intensity`, `roofline_bound`, `fit_amdahl` (synthetic p=0.9 recovery to atol=1e-10), `fit_gustafson`, `kernel_regime_verdict`, `assemble_roofline_memo`. |
 | 7 | The report recommends concrete tuning targets (which kernels are worth tuning, where -t 22 genuinely helps) | VERIFIED | `29-REPORT.md` lines 53–58 "Recommendations" now **populated from measured data** (no longer TODO): (1) keep FFTW.set_num_threads(1) — 16.3x anti-scaling at n_fftw≥2; (2) production `-t 1` or `-t 2`, speedup ceiling 1.00x; (3) DO NOT use c3-highcpu-22 for canonical M=1 SMF-28 (speedup ≤1.1x); (4) next tuning target = adjoint RHS, 3.3x forward (945 vs 288 µs), cause = ODESolution interpolation. |
 
 **Score:** 7/7 truths verified
@@ -49,11 +49,11 @@ re_verification:
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| `scripts/phase29_bench_kernels.jl` | VERIFIED | 458 lines (was 457, +1 line for `using MultiModeNoise:` import added in 53decda). Canonical config hardcoded. Parse-clean. |
-| `scripts/phase29_bench_solves.jl` | VERIFIED | 154 lines (was 149, +5 for NaN/null coercion added in 53decda). P29S_THREAD_COUNTS covers full {1,2,4,8,16,22} ladder. |
-| `scripts/_phase29_bench_solves_run.jl` | VERIFIED | 151 lines (was 139, +12 for broadcasting fix + NaN→nothing JSON coercion). Three distinct call paths (forward / adjoint / full_cg) intact. |
-| `scripts/phase29_roofline_model.jl` | VERIFIED | 219 lines, unchanged. 6 exported functions all tested. |
-| `scripts/phase29_report.jl` | VERIFIED | 328 lines (was 172, +156 for populated Roofline Regimes + Recommendations builders). Consumes kernels.jld2 + solves.jld2 + hw_profile.json + amdahl_fits.json. |
+| `scripts/bench_kernels.jl` | VERIFIED | 458 lines (was 457, +1 line for `using MultiModeNoise:` import added in 53decda). Canonical config hardcoded. Parse-clean. |
+| `scripts/bench_solves.jl` | VERIFIED | 154 lines (was 149, +5 for NaN/null coercion added in 53decda). P29S_THREAD_COUNTS covers full {1,2,4,8,16,22} ladder. |
+| `scripts/bench_solves_run.jl` | VERIFIED | 151 lines (was 139, +12 for broadcasting fix + NaN→nothing JSON coercion). Three distinct call paths (forward / adjoint / full_cg) intact. |
+| `scripts/roofline_model.jl` | VERIFIED | 219 lines, unchanged. 6 exported functions all tested. |
+| `scripts/report.jl` | VERIFIED | 328 lines (was 172, +156 for populated Roofline Regimes + Recommendations builders). Consumes kernels.jld2 + solves.jld2 + hw_profile.json + amdahl_fits.json. |
 | `test/test_phase29_roofline.jl` | VERIFIED | 104 lines, 43/43 tests passing. |
 | `results/phase29/.gitkeep` | VERIFIED | Present as directory anchor. |
 | `results/phase29/kernels.jld2` | VERIFIED (NEW) | 27 KB, 10-entry `results_table` plus `hw_profile`, `fftw_thread_sweep`, canonical-config keys. |
@@ -69,18 +69,18 @@ re_verification:
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| phase29_bench_kernels.jl | setup_raman_problem | include+call | WIRED | Kernel log shows "Setup complete: Nt=8192, M=1" |
-| phase29_bench_kernels.jl | get_p_disp_mmf / get_p_adjoint_disp_mmf | MultiModeNoise import | WIRED | Explicit import added in 53decda; Block D (`288 µs/call`) + Block E (`945 µs/call`) executed |
-| phase29_bench_solves.jl | _phase29_bench_solves_run.jl | subprocess | WIRED | solve_bench.log shows 72 `┌ Info: spawn` entries with mode/tag/n_threads |
-| phase29_report.jl | phase29_roofline_model.jl | include + assemble_roofline_memo | WIRED | Report sections populated with real AI / ceiling / regime outputs |
-| phase29_report.jl | kernels.jld2 / solves.jld2 / amdahl_fits.json / hw_profile.json | JLD2.load / JSON3 | WIRED | All four files consumed and cited in generated report |
-| test_phase29_roofline.jl | phase29_roofline_model.jl | include | WIRED | 43/43 tests |
+| bench_kernels.jl | setup_raman_problem | include+call | WIRED | Kernel log shows "Setup complete: Nt=8192, M=1" |
+| bench_kernels.jl | get_p_disp_mmf / get_p_adjoint_disp_mmf | MultiModeNoise import | WIRED | Explicit import added in 53decda; Block D (`288 µs/call`) + Block E (`945 µs/call`) executed |
+| bench_solves.jl | bench_solves_run.jl | subprocess | WIRED | solve_bench.log shows 72 `┌ Info: spawn` entries with mode/tag/n_threads |
+| report.jl | roofline_model.jl | include + assemble_roofline_memo | WIRED | Report sections populated with real AI / ceiling / regime outputs |
+| report.jl | kernels.jld2 / solves.jld2 / amdahl_fits.json / hw_profile.json | JLD2.load / JSON3 | WIRED | All four files consumed and cited in generated report |
+| test_phase29_roofline.jl | roofline_model.jl | include | WIRED | 43/43 tests |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Source | Produces Real Data | Status |
 |----------|-------------|--------------------|--------|
-| 29-REPORT.md Executive Verdict | phase29_report.jl → amdahl_fits.json (`p` values) | p=0.000/0.000/0.0496 (real fits from 18 subprocess runs × 3 samples) | FLOWING |
+| 29-REPORT.md Executive Verdict | report.jl → amdahl_fits.json (`p` values) | p=0.000/0.000/0.0496 (real fits from 18 subprocess runs × 3 samples) | FLOWING |
 | 29-REPORT.md Kernel Timings table | kernels.jld2 results_table | 10 NamedTuples with time_median_s from 100–500 reps each | FLOWING |
 | 29-REPORT.md Amdahl Fits | amdahl_fits.json | 3 mode blocks with non-trivial RMSE values | FLOWING |
 | 29-REPORT.md Roofline Regimes | roofline_model.jl + kernels.jld2 + hw_profile.json | AI values 0.06–2.64, ceiling 300 GB/s keyed off Apple M3 Max | FLOWING |

@@ -20,14 +20,14 @@ The flagship demo was a long-fiber SMF-28 ladder at `L = 1 -> 10 -> 100 m`.
 
 The continuation scaffold exists in:
 
-- `scripts/continuation.jl`
-- `scripts/phase30_demo.jl`
+- `scripts/research/analysis/continuation.jl`
+- `scripts/research/phases/phase30/demo.jl`
 
 The first heavy run was attempted on `2026-04-21`, but the empirical head-to-head did not complete.
 
 ## What actually happened
 
-From `.planning/phases/30-continuation-and-homotopy-schedules-for-hard-raman-regimes/30-RESULTS.md`:
+From the Phase 30 planning-history result note:
 
 - the cold-start arm ran step 1 at `L = 1 m` to about `-38.07 dB`
 - the cold-start arm degraded badly at `L = 10 m`, reaching only about `-1.17 dB`
@@ -73,4 +73,4 @@ Until then, Phase 30 should be treated as "framework landed, benchmark inconclus
 
 ## Source
 
-- Primary status artifact: `.planning/phases/30-continuation-and-homotopy-schedules-for-hard-raman-regimes/30-RESULTS.md`
+- Primary status artifact: `docs/planning-history/phases/30-continuation-and-homotopy-schedules-for-hard-raman-regimes/30-RESULTS.md`

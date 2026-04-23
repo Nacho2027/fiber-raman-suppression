@@ -34,9 +34,9 @@ ENV["MPLBACKEND"] = "Agg"  # in case common.jl transitively loads PyPlot
 using JLD2
 using MultiModeNoise
 
-include(joinpath(@__DIR__, "..", "common.jl"))
-include(joinpath(@__DIR__, "..", "numerical_trust.jl"))
-include(joinpath(@__DIR__, "..", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "research", "analysis", "numerical_trust.jl"))
+include(joinpath(@__DIR__, "..", "lib", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Thresholds (defense: PLAN.md)

@@ -59,7 +59,7 @@ cd fiber-raman-suppression
 make install
 
 # Then, on the burst VM (fiber-raman-burst) for heavy runs:
-julia -t auto --project=. scripts/run_sweep.jl
+julia -t auto --project=. scripts/canonical/run_sweep.jl
 ```
 
 `claude-code-host` is small (4 vCPU, 16 GB); use it for editing and `make
@@ -70,7 +70,7 @@ belong. See the burst-VM helper commands (`burst-start`, `burst-ssh`,
 
 ## Determinism note
 
-The project uses `scripts/determinism.jl` to pin FFTW planning to `ESTIMATE`
+The project uses `scripts/lib/determinism.jl` to pin FFTW planning to `ESTIMATE`
 (not `MEASURE`) so that two runs from the same seed produce bit-identical
 output. All entry-point scripts include this helper automatically. If you
 run Julia interactively and need reproducibility, `include` it before any
@@ -96,7 +96,7 @@ scripts as-is (they set it themselves).
 ### FFTW plan errors or non-deterministic output
 
 If you see run-to-run variability in saved arrays, confirm
-`scripts/determinism.jl` was loaded — every entry-point script does this
+`scripts/lib/determinism.jl` was loaded — every entry-point script does this
 automatically. The Phase 15 fix requires `FFTW.ESTIMATE` for bit-identity.
 
 ## Next steps

@@ -54,7 +54,7 @@ rsync -az --delete \
       -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
       fiber-raman-burst:~/fiber-raman-suppression/
 burst-ssh "cd fiber-raman-suppression && \
-           ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/run_sweep.jl'"
+           ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl'"
 ```
 
 Under the hood the wrapper runs your command inside tmux session
@@ -69,7 +69,7 @@ three options:
 1. **Wait for the lock** (good if the other job is close to done):
    ```bash
    WAIT_TIMEOUT_SEC=3600 burst-ssh "cd fiber-raman-suppression && \
-       ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/run_sweep.jl'"
+       ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl'"
    ```
 
 2. **Spawn an ephemeral second VM** (good if you can't wait, and for
@@ -77,7 +77,7 @@ three options:
    multi-config sweep without disturbing the primary VM). Run this from
    `claude-code-host`, NOT from inside the burst VM:
    ```bash
-   ~/bin/burst-spawn-temp B-sweep2 'julia -t auto --project=. scripts/run_sweep.jl'
+   ~/bin/burst-spawn-temp B-sweep2 'julia -t auto --project=. scripts/canonical/run_sweep.jl'
    ```
    The spawner creates a fresh VM from a machine image of
    `fiber-raman-burst`, runs your job, and destroys the VM on exit (the
@@ -150,14 +150,14 @@ Every optimized `phi_opt` in the repo must also have the four-image
 **standard set** (`{tag}_phase_profile.png`, `{tag}_evolution.png`,
 `{tag}_phase_diagnostic.png`, `{tag}_evolution_unshaped.png`) per the
 Project-level rule in `CLAUDE.md`. New drivers call
-`save_standard_set(...)` from `scripts/standard_images.jl` automatically
+`save_standard_set(...)` from `scripts/lib/standard_images.jl` automatically
 (see [quickstart-optimization.md](./quickstart-optimization.md)). For
 sweep JLD2s produced before the rule landed, backfill via:
 
 ```bash
 burst-ssh "cd fiber-raman-suppression && \
            ~/bin/burst-run-heavy R-stdimages \
-           'julia -t auto --project=. scripts/regenerate_standard_images.jl'"
+           'julia -t auto --project=. scripts/canonical/regenerate_standard_images.jl'"
 ```
 
 A sweep without the standard image set is NOT considered complete.
@@ -177,7 +177,7 @@ schema is documented in [output-format.md](./output-format.md).
 - **Sweep died midway:** tmux session is still running (`tmux ls`) or crashed.
   Check `sweep_run.log`. Individual point failures are logged but don't abort
   the sweep — you can re-run the missing points by editing
-  `scripts/run_sweep.jl` to skip completed points.
+  `scripts/canonical/run_sweep.jl` to skip completed points.
 - **Photon number drift > 5% at high-power points:** the time window is too
   small. The SPM-aware `recommended_time_window` should handle this, but if
   you see the warning, increase the safety factor in `setup_raman_problem`.

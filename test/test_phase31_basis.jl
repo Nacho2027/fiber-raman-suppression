@@ -26,11 +26,11 @@ using Printf
 using Logging
 using MultiModeNoise
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "determinism.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()
-include(joinpath(@__DIR__, "..", "scripts", "phase31_basis_lib.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "phase31_penalty_lib.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase31", "basis_lib.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase31", "penalty_lib.jl"))
 
 Random.seed!(4220)
 const TEST_Nt = 1024

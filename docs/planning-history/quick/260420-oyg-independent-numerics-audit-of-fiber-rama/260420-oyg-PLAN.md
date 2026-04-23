@@ -70,8 +70,8 @@ Out of scope (do NOT touch):
 - `scripts/raman_optimization.jl`
 - `scripts/amplitude_optimization.jl`
 - `scripts/run_benchmarks.jl`
-- `scripts/phase13_hessian_eigspec.jl`
-- `scripts/phase13_hvp.jl` (referenced by Phase 25 — verify it exists)
+- `scripts/hessian_eigspec.jl`
+- `scripts/hvp.jl` (referenced by Phase 25 — verify it exists)
 - `scripts/determinism.jl`
 - `scripts/benchmark_threading.jl`
 - `src/simulation/simulate_disp_mmf.jl`

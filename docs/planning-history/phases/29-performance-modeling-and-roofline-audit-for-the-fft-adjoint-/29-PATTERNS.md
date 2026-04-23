@@ -14,23 +14,23 @@ pass. All new code lives under `scripts/` and emits artifacts under
 
 | New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
 |-------------------|------|-----------|----------------|---------------|
-| `scripts/phase29_bench_kernels.jl` | benchmark driver (kernel-level: FFT, Kerr tullio, Raman tullio, single RHS step) | batch / measure-then-report | `scripts/benchmark_threading.jl` | exact (same role, same flow) |
-| `scripts/phase29_bench_solves.jl` | benchmark driver (forward solve, adjoint solve, full cost_and_gradient) | subprocess-isolated batch | `scripts/phase15_benchmark.jl` | exact |
-| `scripts/phase29_roofline_model.jl` | analysis/modeling (arithmetic intensity, roofline, Amdahl fits) | transform: raw timings → modeled bottlenecks | `scripts/phase13_primitives.jl` (library-style analysis module) | role-match |
-| `scripts/phase29_report.jl` | report generator (markdown memo from timing JSON/JLD2) | transform: metrics → markdown | `scripts/phase15_benchmark.jl` (md generation section) + `scripts/numerical_trust.jl` (report assembly) | role-match |
+| `scripts/bench_kernels.jl` | benchmark driver (kernel-level: FFT, Kerr tullio, Raman tullio, single RHS step) | batch / measure-then-report | `scripts/benchmark_threading.jl` | exact (same role, same flow) |
+| `scripts/bench_solves.jl` | benchmark driver (forward solve, adjoint solve, full cost_and_gradient) | subprocess-isolated batch | `scripts/benchmark.jl` | exact |
+| `scripts/roofline_model.jl` | analysis/modeling (arithmetic intensity, roofline, Amdahl fits) | transform: raw timings → modeled bottlenecks | `scripts/primitives.jl` (library-style analysis module) | role-match |
+| `scripts/report.jl` | report generator (markdown memo from timing JSON/JLD2) | transform: metrics → markdown | `scripts/benchmark.jl` (md generation section) + `scripts/numerical_trust.jl` (report assembly) | role-match |
 | `test/test_phase29_roofline.jl` | unit/regression test for the model helpers | test | `test/test_phase28_trust_report.jl` | exact |
 | `.planning/phases/29-.../29-01-PLAN.md` | plan doc | phase-scoped | `.planning/phases/28-.../28-01-PLAN.md` | exact |
 | `.planning/phases/29-.../29-REPORT.md` | final memo (roofline + Amdahl verdict) | phase-scoped | `.planning/phases/27-.../27-REPORT.md` | exact |
 
 Notes:
 - No `src/` edits. `benchmark_threading.jl` already touches `setup_raman_problem` read-only; Phase 29 follows that discipline.
-- The "modeling" file (`phase29_roofline_model.jl`) is pure analysis on timing data — no physics, no ODE calls. It is the one file with no exact analog because the repo has no prior roofline code; use `phase13_primitives.jl` for the **module shape** (include guard, constants, pure functions, docstrings with `# Arguments / # Returns`) and the Phase-27 report for the **domain language** (roofline, Amdahl, Gustafson, memory-bound / compute-bound).
+- The "modeling" file (`roofline_model.jl`) is pure analysis on timing data — no physics, no ODE calls. It is the one file with no exact analog because the repo has no prior roofline code; use `primitives.jl` for the **module shape** (include guard, constants, pure functions, docstrings with `# Arguments / # Returns`) and the Phase-27 report for the **domain language** (roofline, Amdahl, Gustafson, memory-bound / compute-bound).
 
 ---
 
 ## Pattern Assignments
 
-### `scripts/phase29_bench_kernels.jl` (benchmark driver, kernel-level)
+### `scripts/bench_kernels.jl` (benchmark driver, kernel-level)
 
 **Analog:** `scripts/benchmark_threading.jl`
 
@@ -65,7 +65,7 @@ end # if main script
 
 Copy verbatim — replace the first docstring with Phase 29's kernel-benchmark
 scope. Keep the `abspath(PROGRAM_FILE) == @__FILE__` guard so the file can be
-`include`d by `phase29_report.jl` without re-running.
+`include`d by `report.jl` without re-running.
 
 **Constant-prefix convention** (`benchmark_threading.jl:32-44`, STATE.md
 "Script Constant Prefixes" rule):
@@ -211,7 +211,7 @@ This is the project-wide convention for terminal summary tables (also used in
 `benchmark_optimization.jl:98-100`). Mandatory — don't switch to DataFrames
 or Markdown-only output.
 
-**Data persistence pattern** (`phase15_benchmark.jl:47-51, 65`):
+**Data persistence pattern** (`benchmark.jl:47-51, 65`):
 
 ```julia
 const BENCHMARK_DIR  = joinpath(PROJECT_ROOT, "results", "raman", "phase15")
@@ -226,16 +226,16 @@ without re-running the bench), markdown for human-readable memo.
 
 ---
 
-### `scripts/phase29_bench_solves.jl` (benchmark driver, subprocess-isolated)
+### `scripts/bench_solves.jl` (benchmark driver, subprocess-isolated)
 
-**Analog:** `scripts/phase15_benchmark.jl`
+**Analog:** `scripts/benchmark.jl`
 
 **Why a separate driver:** full forward+adjoint solves are expensive and
 need subprocess isolation for clean steady-state numbers (Phase 15 already
 learned this — compiled method caching and FFT planning state leak across
 calls in a single process).
 
-**Subprocess runner pattern** (`phase15_benchmark.jl:120-147`):
+**Subprocess runner pattern** (`benchmark.jl:120-147`):
 
 ```julia
 function _run_one_subprocess(mode::AbstractString, tag::AbstractString)
@@ -262,11 +262,11 @@ end
 
 Copy wholesale. Phase 29's `mode` argument becomes the kernel-or-solve tag
 (`"forward"`, `"adjoint"`, `"full_cg"`, `"multi_start_4"`), and the worker
-file (`scripts/_phase29_bench_solves_run.jl` — analog to
-`_phase15_benchmark_run.jl`) prints `BENCH_JSON: {...}` with
+file (`scripts/bench_solves_run.jl` — analog to
+`benchmark_run.jl`) prints `BENCH_JSON: {...}` with
 `elapsed_s / J / iters / Nt / M / julia_threads / fftw_threads`.
 
-**Warmup-then-measure, N fresh subprocesses** (`phase15_benchmark.jl:167-177`):
+**Warmup-then-measure, N fresh subprocesses** (`benchmark.jl:167-177`):
 
 ```julia
 @info "=== ESTIMATE leg: 1 warm-up + $N_RUNS timed runs (fresh subprocess each) ==="
@@ -284,7 +284,7 @@ subprocesses. The serial-fraction measurement NEEDS fresh subprocesses
 because precompile + first-call overhead confounds Amdahl-style fits
 badly.
 
-**Git-tree safety pattern** (`phase15_benchmark.jl:187-219`, `try / finally`
+**Git-tree safety pattern** (`benchmark.jl:187-219`, `try / finally`
 swap + revert): NOT needed for Phase 29 — we are not patching source. The
 phase explicitly says "we model kernels before tuning them" (CONTEXT.md).
 Keep the `try / finally` only if you end up doing before/after FFTW thread
@@ -303,12 +303,12 @@ const P29S_THREAD_COUNTS = [1, 2, 4, 8, 16, 22]  # 22 = burst VM ceiling
 
 ---
 
-### `scripts/phase29_roofline_model.jl` (analysis library)
+### `scripts/roofline_model.jl` (analysis library)
 
-**Analog:** `scripts/phase13_primitives.jl` (for module shape) +
+**Analog:** `scripts/primitives.jl` (for module shape) +
 `scripts/numerical_trust.jl` (for verdict/threshold language)
 
-**Module shape** (`phase13_primitives.jl:1-53`):
+**Module shape** (`primitives.jl:1-53`):
 
 ```julia
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -316,7 +316,7 @@ const P29S_THREAD_COUNTS = [1, 2, 4, 8, 16, 22]  # 22 = burst VM ceiling
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # READ-ONLY consumer of timing JLD2 artifacts produced by
-# scripts/phase29_bench_kernels.jl and scripts/phase29_bench_solves.jl.
+# scripts/bench_kernels.jl and scripts/bench_solves.jl.
 # This module DOES NOT run simulations. All it does is turn timings into
 # modeled bottlenecks (memory-bound vs compute-bound, serial fraction,
 # speedup ceiling).
@@ -374,7 +374,7 @@ For Phase 29 the verdicts are regime labels ("MEMORY_BOUND", "COMPUTE_BOUND",
 of thresholds, ranked verdict function — so the report generator reads like
 the trust report already in the codebase.
 
-**Docstring style** (`phase13_primitives.jl:59-80`):
+**Docstring style** (`primitives.jl:59-80`):
 
 ```julia
 """
@@ -404,12 +404,12 @@ the modeling functions take raw numbers that MUST be in consistent units
 
 ---
 
-### `scripts/phase29_report.jl` (report generator)
+### `scripts/report.jl` (report generator)
 
-**Analog:** `scripts/phase15_benchmark.jl` (markdown assembly section,
+**Analog:** `scripts/benchmark.jl` (markdown assembly section,
 `:229-298`) + `scripts/numerical_trust.jl` (report Dict assembly, `:105-180`)
 
-**Markdown template pattern** (`phase15_benchmark.jl:231-299`):
+**Markdown template pattern** (`benchmark.jl:231-299`):
 
 ```julia
 md = """
@@ -470,7 +470,7 @@ matches how Rivera Lab reads reports — verdict first, data second.
 
 **Analog:** `test/test_phase28_trust_report.jl`
 
-Covers the pure functions in `phase29_roofline_model.jl`:
+Covers the pure functions in `roofline_model.jl`:
 - `arithmetic_intensity` returns correct FLOP/byte for known kernels.
 - `fit_amdahl` recovers `p` exactly from synthetic `(1−p) + p/n` data.
 - `roofline_bound` picks correct regime at known AI (below/above ridge).
@@ -528,7 +528,7 @@ this is non-negotiable. The `fiber` dict has mutable fields (`fiber["zsave"]`)
 the ODE solver writes — sharing across threads races.
 
 ### Results directory layout
-**Source:** `phase15_benchmark.jl:49-51`, STATE.md
+**Source:** `benchmark.jl:49-51`, STATE.md
 **Apply to:** All Phase 29 artifacts.
 
 ```
@@ -552,7 +552,7 @@ un-reproducible across machines.
 - Kernel microbenchmarks at `Nt=8192, M=1` on `claude-code-host` are
   borderline; prefer burst VM to avoid Claude Code memory contention.
 - Forward+adjoint full-solve benchmarks → burst VM always, through
-  `~/bin/burst-run-heavy P29-roofline 'julia -t N --project=. scripts/phase29_bench_solves.jl'`.
+  `~/bin/burst-run-heavy P29-roofline 'julia -t N --project=. scripts/bench_solves.jl'`.
 - Thread-sweep studies (measuring scaling from `-t 1` to `-t 22`) need the
   22-core burst VM specifically (c3-highcpu-22).
 
@@ -564,9 +564,9 @@ un-reproducible across machines.
 |------|------|-----------|--------|
 | (none) | | | All Phase 29 files have close analogs in-tree. |
 
-The closest-to-no-analog case is `phase29_roofline_model.jl` — no prior
+The closest-to-no-analog case is `roofline_model.jl` — no prior
 roofline code exists in the repo — but the module shape, constant
-prefix, and verdict-threshold patterns from `phase13_primitives.jl` and
+prefix, and verdict-threshold patterns from `primitives.jl` and
 `numerical_trust.jl` cover the code-shape needs. The ONLY new knowledge
 is domain (FLOP counts for each kernel, memory-traffic estimates, Amdahl
 fitting) and that belongs in RESEARCH.md, not patterns.
@@ -586,8 +586,8 @@ fitting) and that belongs in RESEARCH.md, not patterns.
 **Key analogs consulted (by path):**
 - `scripts/benchmark_threading.jl` — kernel-level FFTW / Tullio / multi-start benchmark
 - `scripts/benchmark_optimization.jl` — grid-size benchmarks, multi-start with `deepcopy(fiber)`
-- `scripts/phase15_benchmark.jl` — subprocess-isolated timing driver + md generation
-- `scripts/phase13_primitives.jl` — pure-function analysis module with include guard
+- `scripts/benchmark.jl` — subprocess-isolated timing driver + md generation
+- `scripts/primitives.jl` — pure-function analysis module with include guard
 - `scripts/numerical_trust.jl` — threshold/verdict/report assembly pattern
 - `scripts/determinism.jl` — FFTW/BLAS thread-pinning convention
 - `src/simulation/simulate_disp_mmf.jl` — forward RHS to benchmark

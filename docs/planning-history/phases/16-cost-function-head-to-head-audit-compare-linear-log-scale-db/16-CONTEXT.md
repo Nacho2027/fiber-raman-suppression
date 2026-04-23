@@ -52,7 +52,7 @@ Systematically compare **four cost-function variants** for spectral-phase Raman-
   1. **Final J (linear and dB).** `MultiModeNoise.lin_to_dB(J_final)`.
   2. **Wall time (s).** `@elapsed` around the `optimize_spectral_phase*` call only (excluding setup).
   3. **Iterations** until L-BFGS termination and **iterations to 90% of final ΔJ_dB** (convergence-rate proxy — reuses Phase 6's cross-run metric).
-  4. **Hessian eigenspectrum at optimum.** Reuse `scripts/phase13_primitives.jl` (or its equivalent). We take the top-32 eigenvalues via Lanczos/Arpack on the Hessian-vector product machinery already in the codebase. Report: top eigenvalue λ_max (curvature), λ₁/λ_32 (condition number proxy), full log-spectrum saved as JLD2.
+  4. **Hessian eigenspectrum at optimum.** Reuse `scripts/primitives.jl` (or its equivalent). We take the top-32 eigenvalues via Lanczos/Arpack on the Hessian-vector product machinery already in the codebase. Report: top eigenvalue λ_max (curvature), λ₁/λ_32 (condition number proxy), full log-spectrum saved as JLD2.
   5. **Robustness under perturbation.** For each σ ∈ {0.01, 0.05, 0.1, 0.2} rad, draw `n_trials=10` `φ_perturbed = φ_opt + σ·randn(Nt)` and report mean and max `J_perturbed - J_opt` in dB (i.e. degradation). Matches Session D's perturbation framework exactly (reuse constants if visible).
 
 - **D-15 [auto]: Secondary / diagnostic metrics.**
@@ -153,7 +153,7 @@ Downstream agents MUST read these before planning or implementing.
 - `.planning/sessions/<session>-status.md` for append-only session logs (Rule P3).
 
 ### Integration Points
-- **Phase 13 Hessian machinery** — `scripts/phase13_primitives.jl` defines HVP; Phase 16 analyzer imports it for eigenspectrum computation.
+- **Phase 13 Hessian machinery** — `scripts/primitives.jl` defines HVP; Phase 16 analyzer imports it for eigenspectrum computation.
 - **Phase 15 determinism** — already on main, structural guarantee for D-09 (no action needed beyond using the merged src/ code).
 - **Phase 14 regression test** — Session H must not break it. We run `test/test_phase14_regression.jl` once before closing the phase as a smoke test.
 

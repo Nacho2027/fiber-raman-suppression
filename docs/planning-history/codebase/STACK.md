@@ -47,7 +47,7 @@ services, no network I/O, no secrets.
   `scripts/mmf_raman_optimization.jl:28`,
   `scripts/longfiber_regenerate_standard_images.jl:24`,
   `scripts/multivar_demo.jl:25`, `scripts/phase_analysis.jl:35`,
-  `scripts/phase13_hessian_figures.jl:32`,
+  `scripts/hessian_figures.jl:32`,
   `scripts/generate_sweep_reports.jl:28`).
 - Jupyter (`notebooks/*.ipynb`) used for exploratory work only
   (EDFA/YDFA gain, MMF squeezing, supercontinuum). Not part of the

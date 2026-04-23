@@ -13,7 +13,7 @@
 - **Locked decision 1** — "extends existing basis infrastructure before inventing new basis code" → new driver under an owned `phase31` namespace, consuming `scripts/sweep_simple_param.jl`.
 - **Locked decision 2** — "amplitude DCT path is the first reuse target for phase reduction" → phase-side DCT helper parallels `build_dct_basis` in `scripts/amplitude_optimization.jl`.
 - **Locked decision 3** — "explicit basis restriction and penalty-based regularization are compared, not conflated" → two driver branches (basis-restricted vs penalty-on-full-grid) plus an analysis/Pareto script.
-- **Locked decision 4** — "interpretability, robustness, transferability matter as much as best dB" → simplicity metrics (already in `sweep_simple_param.jl`), transfer/robustness probe (analog: `chirp_sensitivity` + `phase14_robustness_test.jl`).
+- **Locked decision 4** — "interpretability, robustness, transferability matter as much as best dB" → simplicity metrics (already in `sweep_simple_param.jl`), transfer/robustness probe (analog: `chirp_sensitivity` + `robustness_test.jl`).
 - **Seed** `.planning/seeds/reduced-basis-phase-regularization.md`.
 
 **The planner should confirm this file list during expansion of `31-RESEARCH.md`; if it adds/removes files, re-run the mapper.** Until then, every entry below has a concrete analog in the codebase so the planner can start from copy-with-edits rather than greenfield scaffolding.
@@ -24,24 +24,24 @@
 
 | New / modified file | Role | Data flow | Closest analog | Match quality |
 |---|---|---|---|---|
-| `scripts/phase31_basis_lib.jl` | library (extension) | transform | `scripts/sweep_simple_param.jl` | exact |
-| `scripts/phase31_penalty_lib.jl` | library (regularizer) | transform | `scripts/amplitude_optimization.jl` `amplitude_cost` + `scripts/raman_optimization.jl` `λ_gdd` block | exact |
-| `scripts/phase31_run.jl` | driver / sweep | batch | `scripts/sweep_simple_run.jl` | exact |
-| `scripts/phase31_analyze.jl` | analysis / figures | transform | `scripts/sweep_simple_analyze.jl` + `scripts/phase13_gauge_and_polynomial.jl` | exact |
-| `scripts/phase31_transfer.jl` | driver (robustness) | batch | `scripts/phase14_robustness_test.jl` + `chirp_sensitivity` in `scripts/raman_optimization.jl` | role-match |
-| `test/test_phase31_basis.jl` | test | assertion | `test/test_phase13_primitives.jl` | exact |
+| `scripts/basis_lib.jl` | library (extension) | transform | `scripts/sweep_simple_param.jl` | exact |
+| `scripts/penalty_lib.jl` | library (regularizer) | transform | `scripts/amplitude_optimization.jl` `amplitude_cost` + `scripts/raman_optimization.jl` `λ_gdd` block | exact |
+| `scripts/run.jl` | driver / sweep | batch | `scripts/sweep_simple_run.jl` | exact |
+| `scripts/analyze.jl` | analysis / figures | transform | `scripts/sweep_simple_analyze.jl` + `scripts/gauge_and_polynomial.jl` | exact |
+| `scripts/transfer.jl` | driver (robustness) | batch | `scripts/robustness_test.jl` + `chirp_sensitivity` in `scripts/raman_optimization.jl` | role-match |
+| `test/test_phase31_basis.jl` | test | assertion | `test/test_primitives.jl` | exact |
 | `.planning/phases/31-.../01-PLAN.md` (expanded) | doc | n/a | `.planning/phases/30-*/01-PLAN.md` (nearest prior phase) | doc-convention |
 | `results/raman/phase31/**` (output tree) | data | file-I/O | `results/raman/phase_sweep_simple/` (from Session E) | exact |
 
 Notes:
-- `sweep_simple_param.jl` already contains `build_phase_basis(Nt, N_phi; kind=:cubic/:dct/:linear/:identity, bandwidth_mask)`, `cost_and_gradient_lowres`, `optimize_phase_lowres`, `continuation_upsample`, and the simplicity metrics `phase_neff / phase_tv / phase_curvature`. Per locked decision 1, **new basis code for Phase 31 must extend this file (or include it), NOT re-implement basis construction**. `phase31_basis_lib.jl` is for Phase-31-specific additions (e.g., polynomial / Hermite / B-spline kinds, or a reduced-chirp-ladder basis if the expanded research motivates it).
+- `sweep_simple_param.jl` already contains `build_phase_basis(Nt, N_phi; kind=:cubic/:dct/:linear/:identity, bandwidth_mask)`, `cost_and_gradient_lowres`, `optimize_phase_lowres`, `continuation_upsample`, and the simplicity metrics `phase_neff / phase_tv / phase_curvature`. Per locked decision 1, **new basis code for Phase 31 must extend this file (or include it), NOT re-implement basis construction**. `basis_lib.jl` is for Phase-31-specific additions (e.g., polynomial / Hermite / B-spline kinds, or a reduced-chirp-ladder basis if the expanded research motivates it).
 - Amplitude DCT in `amplitude_optimization.jl:180 build_dct_basis` is the *reuse target* called out in locked decision 2. The equivalent phase-side path **already exists** as `:dct` kind in `sweep_simple_param.jl:154-170`. Phase 31 should use it directly — the "reuse" is confirming this already-wired path meets the phase-31 requirements, not cloning `build_dct_basis` again.
 
 ---
 
 ## Pattern Assignments
 
-### `scripts/phase31_basis_lib.jl` (library extension, transform)
+### `scripts/basis_lib.jl` (library extension, transform)
 
 **Analog:** `scripts/sweep_simple_param.jl`
 
@@ -71,7 +71,7 @@ function build_phase_basis(Nt::Int, N_phi::Int;
     return B
 end
 ```
-For new `:polynomial` / `:hermite` / `:chirp_ladder` kinds, append a branch to `build_phase_basis` (upstream edit to `sweep_simple_param.jl` if owned by this session, otherwise a thin wrapper in `phase31_basis_lib.jl` that dispatches on `kind` and falls back to the existing implementation). Reuse `_sanity_check_basis(B)` for condition-number + Gram-matrix checks.
+For new `:polynomial` / `:hermite` / `:chirp_ladder` kinds, append a branch to `build_phase_basis` (upstream edit to `sweep_simple_param.jl` if owned by this session, otherwise a thin wrapper in `basis_lib.jl` that dispatches on `kind` and falls back to the existing implementation). Reuse `_sanity_check_basis(B)` for condition-number + Gram-matrix checks.
 
 **Cost/gradient wrapper pattern** (`sweep_simple_param.jl:228-246`):
 ```julia
@@ -97,7 +97,7 @@ This already chains through the full-grid adjoint gradient — no re-derivation 
 
 ---
 
-### `scripts/phase31_penalty_lib.jl` (library regularizer, transform)
+### `scripts/penalty_lib.jl` (library regularizer, transform)
 
 **Analog 1 — Tikhonov / TV / flatness on a coefficient-space variable:** `scripts/amplitude_optimization.jl:55-155`
 
@@ -165,7 +165,7 @@ Any new regularizer must be added to `J_total` / `grad_total` BEFORE this block 
 
 ---
 
-### `scripts/phase31_run.jl` (driver, batch)
+### `scripts/run.jl` (driver, batch)
 
 **Analog:** `scripts/sweep_simple_run.jl`
 
@@ -190,7 +190,7 @@ include(joinpath(@__DIR__, "standard_images.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
 ensure_deterministic_environment()
 ```
-Add `include("phase31_basis_lib.jl")` and `include("phase31_penalty_lib.jl")` after `sweep_simple_param.jl` so library order is stable.
+Add `include("basis_lib.jl")` and `include("penalty_lib.jl")` after `sweep_simple_param.jl` so library order is stable.
 
 **Results-directory and run-tag pattern** (`sweep_simple_run.jl:54-71`):
 ```julia
@@ -247,7 +247,7 @@ Phase 31 should extend this with fields for regularizer breakdown (`J_raman`, `J
 
 ---
 
-### `scripts/phase31_analyze.jl` (analysis / figures)
+### `scripts/analyze.jl` (analysis / figures)
 
 **Analog 1 — Pareto-front construction:** `scripts/sweep_simple_analyze.jl:39-54`
 
@@ -271,9 +271,9 @@ end
 ```
 Reuse verbatim. Phase 31's interesting axes are likely `(J_dB, N_phi)` for the basis branch and `(J_dB, λ_penalty)` for the penalty branch, with the two overlaid on a third figure.
 
-**Analog 2 — JLD2-ingest + record-building + diagnostic figures:** `scripts/phase13_gauge_and_polynomial.jl:69-190, 489-567`
+**Analog 2 — JLD2-ingest + record-building + diagnostic figures:** `scripts/gauge_and_polynomial.jl:69-190, 489-567`
 
-**File discovery** (`phase13_gauge_and_polynomial.jl:69-80`):
+**File discovery** (`gauge_and_polynomial.jl:69-80`):
 ```julia
 function find_opt_files(root::AbstractString)
     isdir(root) || return String[]
@@ -288,17 +288,17 @@ function find_opt_files(root::AbstractString)
     return sort(paths)
 end
 ```
-For Phase 31 rename the target filename to match what `phase31_run.jl` writes.
+For Phase 31 rename the target filename to match what `run.jl` writes.
 
-**Polynomial-projection post-hoc diagnostic** (`phase13_gauge_and_polynomial.jl:228-279` = `polynomial_project` in `phase13_primitives.jl`): once Phase 31 has a `phi_opt` from the full-grid penalty branch, project onto a polynomial basis and report `residual_fraction` to measure "how close is the penalty-regularized optimum to a low-order polynomial?". This is the interpretability metric locked decision 4 asks for.
+**Polynomial-projection post-hoc diagnostic** (`gauge_and_polynomial.jl:228-279` = `polynomial_project` in `primitives.jl`): once Phase 31 has a `phi_opt` from the full-grid penalty branch, project onto a polynomial basis and report `residual_fraction` to measure "how close is the penalty-regularized optimum to a low-order polynomial?". This is the interpretability metric locked decision 4 asks for.
 
 ---
 
-### `scripts/phase31_transfer.jl` (robustness/transfer probe)
+### `scripts/transfer.jl` (robustness/transfer probe)
 
 **Analog 1 — chirp/TOD sensitivity:** `scripts/raman_optimization.jl:309-` (`chirp_sensitivity`)
 
-**Analog 2 — robustness framework:** `scripts/phase14_robustness_test.jl`
+**Analog 2 — robustness framework:** `scripts/robustness_test.jl`
 
 Transfer / robustness structure: take one optimum `phi_opt` (from a reduced basis OR a penalty), perturb the input conditions (pulse FWHM, energy, `β₂`, `γ`), re-evaluate cost without re-optimizing, and record the degradation. `chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask; gdd_range, tod_range)` already returns the J vs (GDD, TOD) map in the standard shape — use it as the inner kernel and loop over (basis-kind, N_phi) on the outside.
 
@@ -306,9 +306,9 @@ Transfer / robustness structure: take one optimum `phi_opt` (from a reduced basi
 
 ### `test/test_phase31_basis.jl` (test, assertion)
 
-**Analog:** `test/test_phase13_primitives.jl`
+**Analog:** `test/test_primitives.jl`
 
-**Test harness pattern** (`test_phase13_primitives.jl:17-50`):
+**Test harness pattern** (`test_primitives.jl:17-50`):
 ```julia
 using Test
 using LinearAlgebra
@@ -316,7 +316,7 @@ using Statistics
 using Random
 using FFTW
 
-include(joinpath(@__DIR__, "..", "scripts", "phase13_primitives.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "primitives.jl"))
 
 const TEST_Nt = 1024
 # ... fixtures ...
@@ -335,7 +335,7 @@ end
 3. Coefficient-space gradient `∂J/∂c` matches finite differences to < 1e-4 rel err (pattern from `amplitude_optimization.jl:324-338` and `raman_optimization.jl:252-291`).
 4. `continuation_upsample(c, B_coarse, B_fine)` preserves `φ = B·c` up to basis expressiveness (test that the fine-basis reconstruction's `J` is within 0.5 dB of the coarse-basis `J` at seed time).
 5. For an orthonormal basis (`:dct`), `continuation_upsample` reduces to `B_fineᵀ · φ_prev` bit-exact.
-6. Regularizer gradient finite-diff check: each penalty added in `phase31_penalty_lib.jl` passes the same FD test in isolation (set `λ_raman=0`, enable one `λ_*` at a time).
+6. Regularizer gradient finite-diff check: each penalty added in `penalty_lib.jl` passes the same FD test in isolation (set `λ_raman=0`, enable one `λ_*` at a time).
 
 ---
 
@@ -363,7 +363,7 @@ ensure_deterministic_environment()
 
 ### Constant prefix convention
 
-**Source:** project CLAUDE.md "Script Constant Prefixes"; examples in `phase13_gauge_and_polynomial.jl:42-57` (`P13_*`), `saddle_phase35_run.jl:32-43` (`P28_*`), `sweep_simple_run.jl:54-69` (`LR_*`).
+**Source:** project CLAUDE.md "Script Constant Prefixes"; examples in `gauge_and_polynomial.jl:42-57` (`P13_*`), `saddle_run.jl:32-43` (`P28_*`), `sweep_simple_run.jl:54-69` (`LR_*`).
 **Apply to:** all module constants in Phase 31 — use `P31_` prefix. Example: `const P31_RESULTS_DIR`, `const P31_MAX_ITER`, `const P31_NPHI_LADDER`.
 
 ### `@assert` design-by-contract
@@ -374,7 +374,7 @@ ensure_deterministic_environment()
 ### Standard-images emission (MANDATORY per project CLAUDE.md)
 
 **Source:** CLAUDE.md "Standard output images — mandatory for every optimization run"; implementation in `scripts/standard_images.jl`; caller example in `sweep_simple_run.jl:253-260` plus `finalize_standard_images` at :268-`.
-**Apply to:** `phase31_run.jl` and `phase31_transfer.jl` — any script that produces a `phi_opt` must call `save_standard_set(phi_opt, uω0, fiber, sim, band_mask, Δf, raman_threshold; tag=..., fiber_name=..., L_m=..., P_W=..., output_dir=...)` before exit. Do NOT skip even for "quick" sweep points.
+**Apply to:** `run.jl` and `transfer.jl` — any script that produces a `phi_opt` must call `save_standard_set(phi_opt, uω0, fiber, sim, band_mask, Δf, raman_threshold; tag=..., fiber_name=..., L_m=..., P_W=..., output_dir=...)` before exit. Do NOT skip even for "quick" sweep points.
 
 ### JLD2 save layout
 
@@ -384,12 +384,12 @@ ensure_deterministic_environment()
 ### Log-cost + gradient scaling
 
 **Source:** `raman_optimization.jl:165-172`; memory note `project_dB_linear_fix.md`.
-**Apply to:** `phase31_penalty_lib.jl`. If you extend `cost_and_gradient` (or write a parallel one), the log-scale application MUST be the last thing before returning, and BOTH `J_total` and `grad_total` must be scaled consistently. The f_tol then changes from `1e-10` (linear) to `0.01` (dB).
+**Apply to:** `penalty_lib.jl`. If you extend `cost_and_gradient` (or write a parallel one), the log-scale application MUST be the last thing before returning, and BOTH `J_total` and `grad_total` must be scaled consistently. The f_tol then changes from `1e-10` (linear) to `0.01` (dB).
 
 ### Multi-thread fiber safety
 
 **Source:** project CLAUDE.md "Running Simulations — Compute Discipline" + `scripts/benchmark_optimization.jl:635, 704`.
-**Apply to:** any `Threads.@threads` block in `phase31_run.jl` / `phase31_transfer.jl`:
+**Apply to:** any `Threads.@threads` block in `run.jl` / `transfer.jl`:
 ```julia
 Threads.@threads for i in 1:n_tasks
     fiber_local = deepcopy(fiber)
@@ -401,7 +401,7 @@ end
 ### Burst-VM execution
 
 **Source:** project CLAUDE.md "Running Simulations" + `scripts/burst/README.md` + Rule P5.
-**Apply to:** the planner's run recipe for Phase 31. Any driver that actually runs optimizations must be launched on `fiber-raman-burst` through `burst-run-heavy <TAG> 'julia -t auto --project=. scripts/phase31_run.jl'`, not on `claude-code-host`. The session tag format is `^[A-Za-z]-[A-Za-z0-9_-]+$` — suggested tag for this phase's session: `A-phase31` (or whichever session letter the user assigns in `.planning/notes/parallel-session-prompts.md`).
+**Apply to:** the planner's run recipe for Phase 31. Any driver that actually runs optimizations must be launched on `fiber-raman-burst` through `burst-run-heavy <TAG> 'julia -t auto --project=. scripts/run.jl'`, not on `claude-code-host`. The session tag format is `^[A-Za-z]-[A-Za-z0-9_-]+$` — suggested tag for this phase's session: `A-phase31` (or whichever session letter the user assigns in `.planning/notes/parallel-session-prompts.md`).
 
 ---
 
@@ -415,5 +415,5 @@ None — every file in the inferred list maps onto an existing pattern. If the e
 
 **Analog search scope:** `scripts/` (all `.jl`), `src/`, `test/`, `.planning/seeds/`, `.planning/phases/13*, 22*, 26*, 28*, 35*` (READ of headers only, no full-file reads beyond those referenced above).
 **Files scanned (Grep / Glob):** ~95 Julia files under `scripts/`; 5 test files; 17 seed files.
-**Files read in depth:** `scripts/sweep_simple_param.jl`, `scripts/sweep_simple_run.jl`, `scripts/sweep_simple_analyze.jl` (partial), `scripts/amplitude_optimization.jl` (lines 1-360, 850-928), `scripts/raman_optimization.jl` (lines 1-320), `scripts/common.jl` (lines 300-470), `scripts/phase13_primitives.jl` (lines 120-400), `scripts/phase13_gauge_and_polynomial.jl` (lines 1-200), `scripts/saddle_phase35_run.jl` (lines 1-80), `test/test_phase13_primitives.jl` (lines 1-80).
+**Files read in depth:** `scripts/sweep_simple_param.jl`, `scripts/sweep_simple_run.jl`, `scripts/sweep_simple_analyze.jl` (partial), `scripts/amplitude_optimization.jl` (lines 1-360, 850-928), `scripts/raman_optimization.jl` (lines 1-320), `scripts/common.jl` (lines 300-470), `scripts/primitives.jl` (lines 120-400), `scripts/gauge_and_polynomial.jl` (lines 1-200), `scripts/saddle_run.jl` (lines 1-80), `test/test_primitives.jl` (lines 1-80).
 **Pattern extraction date:** 2026-04-21.

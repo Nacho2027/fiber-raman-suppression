@@ -81,9 +81,9 @@ L × P grid colored by `J_final_dB`.
 | Artifact | Likely cause |
 |----------|--------------|
 | Spectral ringing at window edges | Time window undersized relative to dispersive walk-off + SPM broadening. Increase `time_window_ps`. |
-| Noise-like structure in unwrapped phase | Mask threshold too permissive. The plotter masks below a power threshold before unwrapping; adjust in `scripts/visualization.jl`. |
+| Noise-like structure in unwrapped phase | Mask threshold too permissive. The plotter masks below a power threshold before unwrapping; adjust in `scripts/lib/visualization.jl`. |
 | Convergence history shows NaN late | Numerical instability — reduce `Nt`, tighten tolerances, or lower `P_W`. |
-| Evolution colormap all dark | Power normalization is off; check the P_ref normalization call-site in `scripts/visualization.jl`. |
+| Evolution colormap all dark | Power normalization is off; check the P_ref normalization call-site in `scripts/lib/visualization.jl`. |
 
 ## See also
 

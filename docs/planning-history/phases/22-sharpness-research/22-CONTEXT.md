@@ -205,8 +205,8 @@ All image sets go under:
 - `results/raman/phase13/FINDINGS.md`
 - `results/raman/phase17/SUMMARY.md`
 - `scripts/sharpness_optimization.jl`
-- `scripts/phase13_hvp.jl`
-- `scripts/phase13_hessian_eigspec.jl`
+- `scripts/hvp.jl`
+- `scripts/hessian_eigspec.jl`
 - `scripts/sweep_simple_param.jl`
 - `results/raman/phase_sweep_simple/candidates.md`
 - `results/raman/phase17/baseline.jld2`

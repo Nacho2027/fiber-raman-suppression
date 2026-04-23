@@ -2,7 +2,7 @@ using Test
 using LinearAlgebra
 using JLD2
 
-include(joinpath(@__DIR__, "..", "scripts", "phase31_extension_lib.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase31", "extension_lib.jl"))
 
 @testset "Phase 31 extension helpers" begin
     @testset "project phi to basis reproduces least-squares coefficient" begin

@@ -26,17 +26,17 @@ using MultiModeNoise
 
 # Pin determinism before any simulation call (matches optimize_spectral_phase_tr's
 # internal pin — double-pinning is idempotent).
-include(joinpath(@__DIR__, "..", "scripts", "determinism.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()
-include(joinpath(@__DIR__, "..", "scripts", "phase13_hvp.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase13", "hvp.jl"))
 ensure_deterministic_fftw()
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_core.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_telemetry.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_optimize.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_preconditioner.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_pcg.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_core.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_telemetry.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_optimize.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_preconditioner.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_pcg.jl"))
 
 # Shared problem config — SMF28 at short fiber / low power / narrow time window
 # so the Raman-shifted band falls within the Nt=128 spectral grid.

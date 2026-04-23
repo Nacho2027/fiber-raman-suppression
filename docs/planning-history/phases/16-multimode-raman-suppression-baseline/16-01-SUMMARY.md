@@ -39,7 +39,7 @@ status: DRAFT — auto-fill from results/raman/phase16/phase16_summary.jld2 once
 | `src/mmf_cost.jl` | 132 | `mmf_cost_sum`, `mmf_cost_fundamental`, `mmf_cost_worst_mode` (log-sum-exp smooth-max) |
 | `scripts/mmf_raman_optimization.jl` | 333 | `cost_and_gradient_mmf` (shared φ across modes), `optimize_mmf_phase`, `plot_mmf_result`, `run_mmf_baseline` |
 | `scripts/mmf_m1_limit_run.jl` | 96 | M=1 reference via existing SMF optimizer |
-| `scripts/mmf_run_phase16_all.jl` | 129 | End-to-end runner (3 seeds × 2 configs) |
+| `scripts/run_all.jl` | 129 | End-to-end runner (3 seeds × 2 configs) |
 | `scripts/mmf_joint_optimization.jl` | 387 | Joint (φ, c_m) optimizer — stub for Phase 17 / free-exploration |
 | `scripts/mmf_smoke_test.jl` | 77 | Fast smoke test for contended VMs (Nt=2^10, L=0.1m) |
 | `test/test_phase16_mmf.jl` | 110 | 4 testsets, 13 assertions |

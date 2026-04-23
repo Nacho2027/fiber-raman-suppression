@@ -44,10 +44,10 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
                 println(io, """
                 using Random, Optim
                 const _ROOT = "$_ROOT"
-                include(joinpath(_ROOT, "scripts", "determinism.jl"))
+                include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
                 ensure_deterministic_environment()
-                include(joinpath(_ROOT, "scripts", "common.jl"))
-                include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
+                include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+                include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
                 Random.seed!(42)
                 uω0, fiber, sim, band_mask, _, _ = setup_raman_problem(;
                     fiber_preset=:SMF28, Nt=2^10, time_window=10.0,

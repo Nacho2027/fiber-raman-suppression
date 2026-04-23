@@ -2,9 +2,9 @@
 
 [← back to docs index](./README.md) · [project README](../README.md)
 
-Extend `FIBER_PRESETS` in `scripts/common.jl` with a new fiber type. This doc
+Extend `FIBER_PRESETS` in `scripts/lib/common.jl` with a new fiber type. This doc
 describes the extension without showing a diff — the actual edit is out of
-scope for handoff polish (Session B does NOT modify `scripts/common.jl`); it
+scope for handoff polish (Session B does NOT modify `scripts/lib/common.jl`); it
 is a guide for Session A or future maintainers.
 
 ## What a preset contains
@@ -37,7 +37,7 @@ Example (current):
 2. Gather the fiber parameters from datasheet or measurement:
    - γ in W⁻¹·m⁻¹.
    - β₂ (and β₃, optionally β₄) at your operating wavelength.
-3. Add the entry to `FIBER_PRESETS` in `scripts/common.jl`.
+3. Add the entry to `FIBER_PRESETS` in `scripts/lib/common.jl`.
 4. **Important:** If your preset has exactly two β coefficients, you MUST set
    `β_order=3` when calling `setup_raman_problem` (Phase 10 gotcha). With
    three coefficients, use `β_order=4`. This applies to every entry-point
@@ -51,7 +51,7 @@ make test
 
 # Then run a canonical optimization with your new preset:
 julia --project -t auto -e '
-  include("scripts/raman_optimization.jl")
+  include("scripts/lib/raman_optimization.jl")
   run_optimization(fiber_preset=:SMF_ESM, L_fiber=1.0, P_cont=0.1)
 '
 ```
@@ -74,4 +74,4 @@ Off by 1000 produces `J_final_dB ≈ 0` (optimizer has nothing to work with).
 - [cost-function-physics.md](./cost-function-physics.md) — what γ and β₂ physically mean.
 - [quickstart-optimization.md](./quickstart-optimization.md) — how to run a canonical test.
 - [output-format.md](./output-format.md) — the `fiber_preset` field in saved results.
-- `scripts/common.jl` — the live `FIBER_PRESETS` dictionary (read-only context for Session B).
+- `scripts/lib/common.jl` — the live `FIBER_PRESETS` dictionary (read-only context for Session B).

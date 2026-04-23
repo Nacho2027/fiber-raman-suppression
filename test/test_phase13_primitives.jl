@@ -2,7 +2,7 @@
 # Phase 13 primitives — unit tests
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Run:  julia --project=. test/test_phase13_primitives.jl
+# Run:  julia --project=. test/test_primitives.jl
 #
 # Tests defined here (minimum 6 per plan 13-01-PLAN.md Task 1):
 #   1. gauge_fix idempotence           — applying twice == applying once
@@ -22,7 +22,7 @@ using Random
 using FFTW
 
 # Make the primitives available
-include(joinpath(@__DIR__, "..", "scripts", "phase13_primitives.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase13", "primitives.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixture: mimic the real JLD2 grid (Nt=1024 for fast tests)

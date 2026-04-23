@@ -1,0 +1,171 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[margin=0.9in,top=1in,headheight=15pt]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage[unicode=true]{hyperref}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\usepackage{float}
+
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+
+\pdfstringdefDisableCommands{%
+  \def\varphi{phi}\def\lambda{lambda}\def\mathrm#1{#1}%
+  \def\geq{>=}\def\leq{<=}\def\approx{~}%
+}
+
+\graphicspath{{../artifacts/presentation-2026-04-17/}}
+
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.15}
+
+\titleformat{\section}{\large\bfseries\color{blue!40!black}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{blue!30!black}}{\thesubsection}{0.7em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Advisor Briefing --- 2026-04-17}
+\fancyhead[R]{\small \thepage}
+
+\newtcolorbox{say}{colback=blue!3,colframe=blue!40!black,title=\textbf{What to tell him},fonttitle=\normalsize}
+
+\begin{document}
+
+\begin{center}
+{\large\bfseries Advisor Meeting Briefing --- Raman Suppression Overnight Results}\\[2pt]
+{\small Compiled \today{} from work on Phases 13--17 and Sessions A / C / D / E / F / H}
+\end{center}
+
+\vspace{-0.5em}
+\rule{\linewidth}{0.4pt}
+
+\section*{The one-sentence bottom line}
+
+We now understand \emph{why} the optimizer was behaving strangely across runs, we found that a pulse shaper with $\sim 128$ pixels (instead of the full grid's 16384) already reaches the suppression floor, and the best optimum we've seen so far is so narrow that typical SLM phase noise would destroy it --- but the same phase is an excellent \emph{starting point} for re-optimization at other operating points, including HNLF.
+
+\section{Why the optimizer was misbehaving: it was stopping at saddles}
+
+\textbf{The puzzle.} For months, identical-seed L-BFGS runs would finish at visibly different $\varphi_{\mathrm{opt}}(\omega)$. We couldn't tell if this was gauge freedom (two phases that encode the same physical pulse), a polynomial family, or real landscape structure.
+
+\textbf{What we did.} Three orthogonal tests:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Gauge projection.} Removed the constant and linear-$\omega$ parts of every $\varphi_{\mathrm{opt}}$. Result: \textbf{0 / 55} pairs collapsed together. They're not gauge copies.
+  \item \textbf{Polynomial projection.} Fit each $\varphi_{\mathrm{opt}}$ with orders 2--6 Taylor expansions. Result: median residual $= 92.4\%$. They're not low-order polynomials --- there is real high-frequency oscillation.
+  \item \textbf{Hessian eigenspectrum.} Built a matrix-free Hessian-vector product, checked symmetry and Taylor-remainder $\mathcal{O}(\epsilon^2)$, and fed it to Arpack for the top 20 and bottom 20 eigenvalues.
+\end{enumerate}
+
+\textbf{The result --- this is the key physics piece.} On both SMF-28 and HNLF canonical runs, $\lambda_{\max} > 0$ \emph{and} $\lambda_{\min} < 0$, all 20 top eigenvalues positive and all 20 bottom eigenvalues negative. The curvature ratio is $|\lambda_{\min}|/\lambda_{\max} = 2.6\%$ (SMF) and $0.41\%$ (HNLF). \textbf{Interpretation: L-BFGS is halting at saddle points, not minima}. ``Different starts give different optima'' is really ``different saddles; the stable-manifold directions that L-BFGS descends happen to intersect the random-start cone at slightly different places.''
+
+\textbf{How to explain the physics.} The cost $J = E_{\mathrm{band}}/E_{\mathrm{total}}$ has a gauge symmetry under $\varphi \to \varphi + c + \alpha \omega$ (global phase and group delay don't change pulse shape), so \emph{two} eigenvalues are exactly zero by theorem. The saddle signature says there are additional directions along which $J$ can still be decreased --- small negative curvatures --- but L-BFGS (first-order only) can't detect them. This is exactly the regime where Newton or trust-region methods are supposed to help.
+
+\begin{say}
+``We finally have a picture of what the optimization landscape looks like. The canonical optima are \emph{saddles}, not minima. The negative curvature is small ($\sim 1\%$ of the stiff direction) but robust and not noise. This motivates a switch from L-BFGS to a method that uses second-order information --- Newton on the reduced subspace is the obvious candidate.''
+\end{say}
+
+\textbf{Figures to show:} \texttt{01-landscape-hessian-eigenvalues.png} (the signed-log stem plot --- clearly shows the positive and negative wings), then \texttt{02-landscape-top-stiff-directions.png} and \texttt{03-landscape-bottom-soft-directions.png} (the actual eigenvectors; the bottom-5 are the ``escape'' directions).
+
+\section{Why runs weren't reproducing: FFTW was picking a different plan each time}
+
+\textbf{The puzzle.} Identical \texttt{Random.seed!(42)}, identical config, fresh Julia process $\to$ final phase differed by \textbf{1.04 rad} and final $J$ by \textbf{1.83 dB}. This was blocking any claim of ``this result is robust.''
+
+\textbf{Root cause.} \texttt{FFTW.MEASURE} runs timing microbenchmarks to pick the fastest FFT algorithm for the machine. The choice depends on wall-clock jitter, so two subprocesses pick different algorithms. Those algorithms differ at the last bit of floating-point (different reduction orders), and L-BFGS amplifies it iteration by iteration into fully different trajectories.
+
+\textbf{Fix.} Swap all 18 FFTW calls in \texttt{src/simulation/} from \texttt{MEASURE} to \texttt{ESTIMATE}. ESTIMATE uses a static cost model, so the plan is deterministic across processes. \textbf{Result: max $|\Delta\varphi| = 0.0$, $|\Delta J| = 0.0$ bit-for-bit.} Cost: \textbf{+21.4\%} runtime on the SMF-28 canonical run (well inside our $+30\%$ budget).
+
+\begin{say}
+``We had a quiet non-determinism bug that turned out to be FFTW's plan-selection heuristic --- it was picking a different FFT algorithm on each run based on timing noise, and L-BFGS amplified the bit-level difference into macroscopically different optima. The fix was a one-line planner swap; every downstream result (Hessian, sharpness study, all Phase-14 snapshots) is now bit-exact reproducible at a 21\% runtime cost.''
+\end{say}
+
+\section{How few shaper knobs do we actually need?}
+
+\textbf{The question.} A real pulse shaper has $\mathcal{O}(10^2)$ pixels; our optimization is over $\sim 10^4$ frequency bins. Does the optimizer need all that resolution, or is it finding structure a shaper could reproduce?
+
+\textbf{How it works.} We parameterize $\varphi(\omega) = B \, c$ with $B \in \mathbb{R}^{\mathrm{Nt} \times \mathrm{N}_\varphi}$ a fixed basis (cubic spline) and $c \in \mathbb{R}^{\mathrm{N}_\varphi}$ the optimization variable. The gradient in $c$-space is just the chain rule $\partial J / \partial c = B^\top \, \partial J / \partial \varphi$, so the adjoint method still gives us the gradient in one backward solve. We swept $\mathrm{N}_\varphi \in \{4, 8, 16, 32, 64, 128\}$ and measured both $J(\mathrm{N}_\varphi)$ and the \emph{effective mode count} $\mathrm{N}_{\mathrm{eff}}$ (DCT participation ratio --- essentially ``how many Fourier modes of $\varphi$ are non-trivial''):
+
+\begin{center}
+\small
+\begin{tabular}{rrrrr}
+\toprule
+$\mathrm{N}_\varphi$ & $J$ (dB) & iters & $\mathrm{N}_{\mathrm{eff}}$ & TV \\
+\midrule
+     4 & $-47.3$ &  8 & 1.999 & 0.36 \\
+    32 & $-58.2$ &  5 & 1.997 & 0.23 \\
+   128 & $-68.0$ &  7 & 1.997 & 0.32 \\
+ 16384 & $-68.0$ &  2 & 1.997 & 0.22 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Two things here, both important:}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{$\mathrm{N}_\varphi = 128$ reaches the full-resolution floor exactly.} So 128 shaper pixels is enough; more is wasted. This is directly experimentally actionable.
+  \item \textbf{$\mathrm{N}_{\mathrm{eff}} \approx 2$ regardless of $\mathrm{N}_\varphi$.} The optimized phase is \emph{effectively a DC $+$ quadratic chirp} no matter how many knobs we give the optimizer. The cost landscape has a strong preference for a 2-mode solution; extra degrees of freedom buy depth without buying new phase structure.
+\end{enumerate}
+
+\textbf{Physics interpretation.} This matches the Phase 13 polynomial finding --- $\varphi_{\mathrm{opt}}$ is dominated by low-order structure plus gauge modes, which collapse into a 2-mode DCT signature. The physical story: at low-to-moderate nonlinear phase, the dominant Raman-suppressing mechanism is \emph{reshaping the pulse into the right chirp} so that the peak-intensity window is shorter in time inside the fiber. Higher-order phase only refines edges.
+
+The Pareto sweep over $(L, P, \text{fiber})$ also found a \textbf{$-82.3$ dB} point at SMF-28, $L=0.25$ m, $P=0.1$ W with $\mathrm{N}_\varphi = 57$ (this is the new best suppression we've seen).
+
+\begin{say}
+``The optimizer is already ``shaper-compatible''. 128 shaper pixels exactly reach the full-resolution floor, and the effective complexity is only 2 modes --- DC plus a quadratic chirp. That's a concrete experimental number: we don't need a 640-pixel SLM, a 128-pixel one is already sufficient. The deepest suppression we have is $-82$ dB at SMF-28 $L=0.25$ m.''
+\end{say}
+
+\textbf{Figures:} \texttt{07-sweep-simple-pareto.png} (the Pareto front of $J_{\mathrm{dB}}$ vs complexity --- this is the headline plot for the sweep study).
+
+\section{Is that $-82$ dB optimum physically meaningful?}
+
+\textbf{The worry.} A deep but narrow minimum is useless for lab work, because SLM calibration noise (fractions of a radian rms) can kick us out of the basin. Session D tested this directly.
+
+\textbf{How the test works.} Start at the simple-phase baseline ($-76.9$ dB). Add Gaussian phase noise of width $\sigma$ and 20 replicates; measure the median suppression loss. The $\sigma_{3\mathrm{dB}}$ threshold is the noise level where median loss is 3 dB --- the basin width.
+
+\textbf{Result.}
+\begin{itemize}[leftmargin=*]
+  \item $\sigma_{3\mathrm{dB}} = 0.025$ rad. \textbf{Below typical SLM calibration noise ($\sim 0.05$ rad rms)}. The basin is razor-thin.
+  \item Eval-only transfer (apply the phase unchanged to 7 other $(L,P)$ configs) is catastrophic: 0/7 within 3 dB.
+  \item \textbf{But}: L-BFGS re-optimized from this phase as warm-start reaches $-70$ to $-82$ dB in 6--40 iterations on nearby SMF-28 configs \emph{and} HNLF $-79.5$ dB --- a fiber the baseline was never computed for.
+\end{itemize}
+
+\textbf{Reframe.} The simple phase isn't a globally flat basin. It's a high-quality \emph{starting point}: a short landscape path of L-BFGS iterations leads from it to a good local minimum at many nearby operating points. The simplicity is an initialization prior, not a generalization property.
+
+\begin{say}
+``So the $-82$ dB is real but brittle --- it would not survive an SLM with typical phase-calibration noise without closed-loop re-optimization. The silver lining is that the simple-phase structure is an excellent \emph{warm-start} for other fibers and other $(L, P)$ points. Before we push anything to the lab, we want either a flatter basin or a closed-loop re-optimization protocol.''
+\end{say}
+
+\textbf{Figures:} the evolution pair for the canonical run --- \texttt{08-smf28-L2m-P030W-evolution-optimized.png} vs \texttt{09-...-unshaped.png} shows what the optimized pulse physically \emph{does} inside the fiber (the spectrum broadens less, the Raman sideband is suppressed). And \texttt{11-smf28-L2m-P030W-phase-diagnostic.png} has all three phase views (wrapped / unwrapped / group delay) for the optimized phase.
+
+\section{What's currently running / blocked / next}
+
+\subsection*{Blocked on the burst VM}
+At 04:28 UTC this morning, seven concurrent heavy Julia jobs on the 22-core burst VM (four different sessions ignoring the ``one heavy at a time'' rule) hard-locked the kernel. SSH has been unreachable for over an hour. Recovery requires a hard reset, which destroys any in-flight state across all sessions. \textbf{Deferring that decision to you / me --- we lose Phase~14 A/B data and Session E sweep partials if we reset.}
+
+\subsection*{Shipped overnight but not yet run due to the VM freeze}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Multi-variable optimizer} (joint $\varphi$, amplitude $A$, pulse energy $E$ in one adjoint solve) --- 1000 LoC, 42/42 unit tests pass, gradient FD check and SMF-28 A/B demo pending.
+  \item \textbf{Multimode fiber extension} ($M > 1$) --- 2000 LoC scaffold, $M=1$ reference driver ready; first production run pending.
+  \item \textbf{100 m long-fiber propagation} (50$\times$ longer than anything we've done) --- 3700 LoC with checkpoint/resume, $\mathrm{Nt}=32768$, $T=160$ ps, MI gain verified negligible ($g_{\max} L = 0.013$); queue killed mid-flight.
+  \item \textbf{Cost-function head-to-head audit} --- 12-run matrix of 4 cost variants across 3 regimes (weak-NL, multi-modal, HNLF strong-$\gamma$); all code and tests land; never executed.
+  \item \textbf{Sharpness-aware optimizer} (Hutchinson trace-of-Hessian penalty to seek flat basins) --- Taylor slope $1.947$, 11/11 tests pass; A/B sweep pending. This is the direct follow-up to the Phase 13 saddle finding.
+\end{itemize}
+
+\subsection*{Proposed priorities after VM recovery (what to tell him we're doing next)}
+\begin{enumerate}[leftmargin=*]
+  \item Run the 14.02 A/B sweep --- does the sharpness penalty actually escape the saddle? (One-liner risk: pure $\mathrm{tr}(H)$ can sign-cancel at saddles; we might have to switch to $\sum|\lambda_i|$.)
+  \item Finish the $(L, P, \text{fiber})$ sweep (14 configs left); run Session D's perturbation protocol on the three Pareto candidates --- that's the gate before anything goes to the lab.
+  \item Newton on the reduced $\mathrm{N}_\varphi = 57$ subspace. The reduced Hessian is $57 \times 57$, small enough to factor directly; trust-region Newton on Pareto candidate \#3 plausibly reaches $-90$ dB. This is the natural follow-up to the Phase 13 diagnosis.
+  \item Run the long-fiber ($L = 100$ m) propagation and the multimode $M \geq 2$ run once infrastructure is stable.
+\end{enumerate}
+
+\vspace{0.8em}
+\hrule
+\vspace{0.3em}
+
+\textbf{Figures folder:} \texttt{docs/artifacts/presentation-2026-04-17/} (17 PNGs, named by topic so you can pull them up in order). \textbf{Full technical report:} \texttt{docs/reports/overnight-synthesis-2026-04-17.pdf} (22 pages, every claim traceable to a file path).
+
+\end{document}

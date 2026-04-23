@@ -77,10 +77,10 @@ make test-full
 | `scripts/test_optimization.jl` | 978 | Legacy TDD suite (RED/GREEN/REFACTOR log at top) |
 | `scripts/test_visualization_smoke.jl` | 328 | Plot-code assertions |
 | `test/test_phase14_sharpness.jl` | 260 | Phase 14 sharpness regression |
-| `test/test_phase13_primitives.jl` | 204 | Phase 13 Hessian primitives |
+| `test/test_primitives.jl` | 204 | Phase 13 Hessian primitives |
 | `test/tier_fast.jl` | 176 | Fast tier |
 | `test/test_phase16_mmf.jl` | 167 | MMF cost/gradient |
-| `test/test_phase13_hvp.jl` | 158 | Phase 13 HVP |
+| `test/test_hvp.jl` | 158 | Phase 13 HVP |
 | `test/test_phase14_regression.jl` | 151 | Phase 14 regression (tolerance-based, NOT byte-identity) |
 | `scripts/test_multivar_gradients.jl` | 148 | Multivar gradient FD check |
 | `test/test_determinism.jl` | 131 | Same-process bit-identity |
@@ -140,7 +140,7 @@ Import note: `using MultiModeNoise` is pulled in at the top of `tier_fast.jl` be
 1. **"Key Bug #1 regression — dB/linear cost returns linear J"** — small-grid (Nt=2^11) canonical SMF-28, 3 L-BFGS iterations, verifies that recomputing the cost with `log_cost=false` yields linear `J ∈ [0, 1]`. Catches anyone who accidentally ships the optimizer-internal dB value as if it were linear.
 2. **"End-to-end SMF-28 canonical — J_final_dB < -40"** — production-like Nt=2^13, `time_window=12`, `L_fiber=2.0`, `P_cont=0.2`, 30 iters. Asserts `J_final_dB < -40.0` (sanity bound — the canonical run reaches ~-45 dB).
 3. **"Taylor-remainder gradient check (smoke)"** — small grid; residuals at `ε ∈ {1e-2, 1e-3, 1e-4}`; log-log slope between 1.7 and 2.3 (the O(ε²) signature of a correct adjoint).
-4. Includes `test_phase13_primitives.jl` and `test_phase13_hvp.jl`.
+4. Includes `test_primitives.jl` and `test_hvp.jl`.
 
 Slow tier pattern to notice: it `include`s `determinism.jl` and calls `ensure_deterministic_environment()` BEFORE `include`ing the pipeline, so FFTW/BLAS threads are pinned before any plan is built.
 
@@ -307,8 +307,8 @@ test-file docstrings and CLAUDE.md.
 | End-to-end SMF-28 optimization | canonical stack | slow | `J_final_dB < -40` |
 | Adjoint gradient correctness (SMF) | `src/simulation/sensitivity_disp_mmf.jl` | slow | Taylor-remainder slope ≈ 2 |
 | Adjoint gradient correctness (MMF) | `src/mmf_cost.jl` | `test_phase16_mmf.jl` | Taylor + FD at M=6 |
-| Phase 13 Hessian primitives | `scripts/phase13_primitives.jl` | slow | unit tests |
-| HVP correctness | `scripts/phase13_hvp.jl` | slow | unit tests |
+| Phase 13 Hessian primitives | `scripts/primitives.jl` | slow | unit tests |
+| HVP correctness | `scripts/hvp.jl` | slow | unit tests |
 | Same-process determinism | full stack | full | byte-identity |
 | Cross-process determinism | full stack | full | spawn 2 subprocesses, compare |
 | Phase 14 vanilla regression | committed snapshot | full | tolerance-based (documented) |

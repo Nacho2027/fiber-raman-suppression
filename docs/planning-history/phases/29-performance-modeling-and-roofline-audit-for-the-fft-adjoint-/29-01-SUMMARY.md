@@ -33,11 +33,11 @@ tech-stack:
 
 key-files:
   created:
-    - scripts/phase29_bench_kernels.jl (457 lines)
-    - scripts/phase29_bench_solves.jl (149 lines)
-    - scripts/_phase29_bench_solves_run.jl (139 lines)
-    - scripts/phase29_roofline_model.jl (219 lines)
-    - scripts/phase29_report.jl (172 lines)
+    - scripts/bench_kernels.jl (457 lines)
+    - scripts/bench_solves.jl (149 lines)
+    - scripts/bench_solves_run.jl (139 lines)
+    - scripts/roofline_model.jl (219 lines)
+    - scripts/report.jl (172 lines)
     - test/test_phase29_roofline.jl (104 lines, 43 tests in 7 testsets)
     - results/phase29/.gitkeep
     - .planning/phases/29-.../29-REPORT.md (98 lines — scope-lock version)
@@ -48,7 +48,7 @@ key-decisions:
   - "Worker uses three DISTINCT call paths (solve_disp_mmf / solve_adjoint_disp_mmf / cost_and_gradient) so Amdahl fits on forward vs adjoint vs full-pipeline report independent serial fractions."
   - "Thread ladder capped at 22 (c3-highcpu-22 burst VM ceiling). Anything above 22 is out of scope for this phase."
   - "Canonical config frozen at SMF-28 L=2.0m P=0.2W Nt=8192 M=1 seed=42 (CLAUDE.md standard run). M>1 benchmarks deferred to a future MMF performance phase that can reuse the same driver."
-  - "Scope-lock 29-REPORT.md authored pre-execution to commit the measurement protocol; future phase29_report.jl run will overwrite it with numeric results."
+  - "Scope-lock 29-REPORT.md authored pre-execution to commit the measurement protocol; future report.jl run will overwrite it with numeric results."
   - "Phase 15 invariant preserved: no edit to src/; Phase 29 drivers vary FFTW state only locally (Block A sweep) and do NOT call ensure_deterministic_environment() so the global invariant is untouched."
 
 patterns-established:
@@ -81,10 +81,10 @@ completed: 2026-04-21
 
 ## Accomplishments
 
-- **Kernel-level microbenchmark driver** (`phase29_bench_kernels.jl`) measures the 5 canonical kernels (raw FFT, Kerr tullio, Raman convolution, forward RHS, adjoint RHS) at Nt=8192 M=1 and sweeps FFTW threads {1,2,4,8,16,22} on Block A; emits `kernels.jld2` + `hw_profile.json` (the latter including `git_commit` per STRIDE T-29-04).
-- **Subprocess-isolated solve benchmark** (`phase29_bench_solves.jl` + `_phase29_bench_solves_run.jl`) fits Amdahl independently for `forward`, `adjoint`, and `full_cg` — three genuinely distinct call paths (`solve_disp_mmf`, `solve_adjoint_disp_mmf` with pre-captured ũω+λωL, and `cost_and_gradient`) so the subtraction residual is not identically zero.
-- **Pure analysis library** (`phase29_roofline_model.jl`) with 6 exported functions, all `@assert`-guarded, plus 43 unit tests that pass in 0.6 s. Synthetic Amdahl recovery hits `p=0.9` to atol=1e-10.
-- **Report generator** (`phase29_report.jl`) consumes the artifacts and writes both `results/phase29/roofline.md` and `.planning/phases/29-.../29-REPORT.md` via `assemble_roofline_memo`.
+- **Kernel-level microbenchmark driver** (`bench_kernels.jl`) measures the 5 canonical kernels (raw FFT, Kerr tullio, Raman convolution, forward RHS, adjoint RHS) at Nt=8192 M=1 and sweeps FFTW threads {1,2,4,8,16,22} on Block A; emits `kernels.jld2` + `hw_profile.json` (the latter including `git_commit` per STRIDE T-29-04).
+- **Subprocess-isolated solve benchmark** (`bench_solves.jl` + `bench_solves_run.jl`) fits Amdahl independently for `forward`, `adjoint`, and `full_cg` — three genuinely distinct call paths (`solve_disp_mmf`, `solve_adjoint_disp_mmf` with pre-captured ũω+λωL, and `cost_and_gradient`) so the subtraction residual is not identically zero.
+- **Pure analysis library** (`roofline_model.jl`) with 6 exported functions, all `@assert`-guarded, plus 43 unit tests that pass in 0.6 s. Synthetic Amdahl recovery hits `p=0.9` to atol=1e-10.
+- **Report generator** (`report.jl`) consumes the artifacts and writes both `results/phase29/roofline.md` and `.planning/phases/29-.../29-REPORT.md` via `assemble_roofline_memo`.
 - **Scope-lock 29-REPORT.md** pre-commits measurement protocol (kernels, thread ladder, canonical config, plan flags, sample counts, subprocess discipline) with explicit future-pass commands citing `~/bin/burst-run-heavy` per CLAUDE.md Rule P5.
 
 ## Task Commits
@@ -99,20 +99,20 @@ _Note: No separate TDD RED/GREEN commits — plan frontmatter is `type: execute`
 
 ## Files Created/Modified
 
-- `scripts/phase29_bench_kernels.jl` (457 lines) — Blocks A–E kernel microbench, hw_profile.json, kernels.jld2 writer
-- `scripts/phase29_bench_solves.jl` (149 lines) — outer driver, BENCH_JSON parser, Amdahl fit loop, solves.jld2 + amdahl_fits.json writer
-- `scripts/_phase29_bench_solves_run.jl` (139 lines) — subprocess worker with 3 distinct call paths + isempty(ARGS) parse-check guard
-- `scripts/phase29_roofline_model.jl` (219 lines) — 6-function pure API under `_PHASE29_ROOFLINE_LOADED` include guard
-- `scripts/phase29_report.jl` (172 lines) — artifact consumer, `_executive_verdict` heuristic, markdown section builders
+- `scripts/bench_kernels.jl` (457 lines) — Blocks A–E kernel microbench, hw_profile.json, kernels.jld2 writer
+- `scripts/bench_solves.jl` (149 lines) — outer driver, BENCH_JSON parser, Amdahl fit loop, solves.jld2 + amdahl_fits.json writer
+- `scripts/bench_solves_run.jl` (139 lines) — subprocess worker with 3 distinct call paths + isempty(ARGS) parse-check guard
+- `scripts/roofline_model.jl` (219 lines) — 6-function pure API under `_PHASE29_ROOFLINE_LOADED` include guard
+- `scripts/report.jl` (172 lines) — artifact consumer, `_executive_verdict` heuristic, markdown section builders
 - `test/test_phase29_roofline.jl` (104 lines) — 43 tests in 7 testsets
 - `results/phase29/.gitkeep` — output directory anchor
 - `.planning/phases/29-performance-modeling-and-roofline-audit-for-the-fft-adjoint-/29-REPORT.md` (98 lines) — SCOPE-LOCK memo (not git-tracked: `.planning/` is gitignored per multi-machine workflow; propagated via sync helpers)
 
 ## CLAUDE.md Rules Respected
 
-- **Rule P5 (heavy-lock wrapper):** `phase29_bench_solves.jl` header + scope-lock memo both cite `~/bin/burst-run-heavy P29-solves 'julia -t 22 --project=. scripts/phase29_bench_solves.jl'` as the MANDATORY invocation. Same for `P29-kernels`.
+- **Rule P5 (heavy-lock wrapper):** `bench_solves.jl` header + scope-lock memo both cite `~/bin/burst-run-heavy P29-solves 'julia -t 22 --project=. scripts/bench_solves.jl'` as the MANDATORY invocation. Same for `P29-kernels`.
 - **Rule 1 (burst VM for simulations):** No simulations were run during this plan. Scope-lock memo explicitly routes the execution pass through `burst-start` → `burst-run-heavy` → `burst-stop`.
-- **Rule 2 (julia -t auto):** Driver spawns workers as `julia -t N --project=... _phase29_bench_solves_run.jl mode tag` with N from the full {1,2,4,8,16,22} ladder.
+- **Rule 2 (julia -t auto):** Driver spawns workers as `julia -t N --project=... bench_solves_run.jl mode tag` with N from the full {1,2,4,8,16,22} ladder.
 - **Rule 3 (burst-stop when done):** Scope-lock memo step 6 is `burst-stop — mandatory`.
 - **Phase 15 invariant preserved:** `git diff --name-only src/` returns empty after all 3 commits. Phase 29 drivers only locally sweep FFTW threads for Block A (reset to 1 after) and never call the determinism helper; `test/test_determinism.jl` still passes (7/7).
 - **STATE.md Script Constant Prefixes:** `P29K_` (kernels), `P29S_` (solves), `P29M_` (model), `P29R_` (report) — verified no collisions with existing prefixes (BT_, BM_, P13_, P15_, etc.).
@@ -139,8 +139,8 @@ Phase 15 regression: `test/test_determinism.jl` → **Pass 7/7** in 27.4 s — b
 
 ## Decisions Made
 
-1. **Three distinct solve call paths, not three cost_and_gradient calls.** Earlier drafts had `forward`/`adjoint`/`full_cg` all route through `cost_and_gradient`, which makes the "subtract forward from full" residual recover ≈ 0 and Amdahl fits become indistinguishable. Worker now calls `MultiModeNoise.solve_disp_mmf`, `solve_adjoint_disp_mmf` (with pre-captured ũω + λωL), and `cost_and_gradient` respectively — documented in `_phase29_bench_solves_run.jl` docstring with src-file:line citations.
-2. **Scope-lock memo before numeric results.** The 29-REPORT.md written today is explicitly labelled SCOPE-LOCK and will be overwritten by `phase29_report.jl` after the burst-VM execution pass. This pre-commits the measurement protocol so the future numbers cannot silently change the Nt, L, time_window, or thread ladder and invalidate cross-run comparisons (STRIDE T-29-04 mitigation).
+1. **Three distinct solve call paths, not three cost_and_gradient calls.** Earlier drafts had `forward`/`adjoint`/`full_cg` all route through `cost_and_gradient`, which makes the "subtract forward from full" residual recover ≈ 0 and Amdahl fits become indistinguishable. Worker now calls `MultiModeNoise.solve_disp_mmf`, `solve_adjoint_disp_mmf` (with pre-captured ũω + λωL), and `cost_and_gradient` respectively — documented in `bench_solves_run.jl` docstring with src-file:line citations.
+2. **Scope-lock memo before numeric results.** The 29-REPORT.md written today is explicitly labelled SCOPE-LOCK and will be overwritten by `report.jl` after the burst-VM execution pass. This pre-commits the measurement protocol so the future numbers cannot silently change the Nt, L, time_window, or thread ladder and invalidate cross-run comparisons (STRIDE T-29-04 mitigation).
 3. **FFTW plan flags: MEASURE locally for Block A, ESTIMATE elsewhere.** Block A exposes peak hardware throughput (MEASURE plans); Blocks C/D/E match the production Phase 15 invariant (ESTIMATE plans). Both numbers go to the memo — the ESTIMATE number is the "real pipeline" number, the MEASURE number is the "ceiling we're leaving on the table" number.
 
 ## Deviations from Plan
@@ -158,17 +158,17 @@ Phase 15 regression: `test/test_determinism.jl` → **Pass 7/7** in 27.4 s — b
 **2. [Rule 3 — Blocking verification] `isfile.*kernels.jld2` grep pattern required inline comment**
 - **Found during:** Task 3 (running Task 3 verify block)
 - **Issue:** The plan's acceptance-criterion grep `grep "isfile.*kernels.jld2"` requires the literal string `kernels.jld2` on the same line as `isfile`, but my implementation used the Julia constant `P29R_KERNELS_JLD2` so the literal filename never appeared next to `isfile`. The verify step returned 0 matches, failing acceptance.
-- **Fix:** Added trailing comments `# isfile kernels.jld2` and `# isfile solves.jld2` to the two fail-fast check lines in `scripts/phase29_report.jl`. Semantics unchanged — comments are a no-op at runtime but satisfy the grep contract without duplicating path strings.
-- **Files modified:** `scripts/phase29_report.jl`
+- **Fix:** Added trailing comments `# isfile kernels.jld2` and `# isfile solves.jld2` to the two fail-fast check lines in `scripts/report.jl`. Semantics unchanged — comments are a no-op at runtime but satisfy the grep contract without duplicating path strings.
+- **Files modified:** `scripts/report.jl`
 - **Verification:** `grep "isfile.*kernels.jld2"` and `grep "isfile.*solves.jld2"` both match exactly 1 line each; `julia --project=. -e 'include(...)'` still exits 0.
 - **Committed in:** `2ae225d` (Task 3 commit).
 
 **3. [Rule 1 — Bug] Kernel-driver docstring contained "ensure_deterministic_environment"**
 - **Found during:** Task 1 verify block
-- **Issue:** Acceptance criterion `grep "ensure_deterministic_environment" scripts/phase29_bench_kernels.jl returns NO matches` was failing: the docstring happened to contain the string literally when explaining why the driver does NOT call that helper.
+- **Issue:** Acceptance criterion `grep "ensure_deterministic_environment" scripts/bench_kernels.jl returns NO matches` was failing: the docstring happened to contain the string literally when explaining why the driver does NOT call that helper.
 - **Fix:** Rephrased the docstring paragraph to reference "the determinism helper in scripts/determinism.jl" instead of naming the function. Semantics and intent preserved.
-- **Files modified:** `scripts/phase29_bench_kernels.jl`
-- **Verification:** `grep -c "ensure_deterministic_environment" scripts/phase29_bench_kernels.jl` returns 0; include-parse still exits 0.
+- **Files modified:** `scripts/bench_kernels.jl`
+- **Verification:** `grep -c "ensure_deterministic_environment" scripts/bench_kernels.jl` returns 0; include-parse still exits 0.
 - **Committed in:** `ff1b0cc` (Task 1 commit — fix applied before the first commit was made).
 
 ---
@@ -199,12 +199,12 @@ burst-ssh "~/bin/burst-status"
 # Kernel-level run (~3–5 min)
 burst-ssh "cd fiber-raman-suppression && git pull && \
     ~/bin/burst-run-heavy P29-kernels \
-    'julia -t auto --project=. scripts/phase29_bench_kernels.jl'"
+    'julia -t auto --project=. scripts/bench_kernels.jl'"
 
 # Solve-level run (~25 min budget: 3 modes × 6 thread counts × 4 subprocesses)
 burst-ssh "cd fiber-raman-suppression && \
     ~/bin/burst-run-heavy P29-solves \
-    'julia -t 22 --project=. scripts/phase29_bench_solves.jl'"
+    'julia -t 22 --project=. scripts/bench_solves.jl'"
 
 # Pull artifacts back
 rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
@@ -215,7 +215,7 @@ rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
 burst-stop
 
 # Generate the populated memo
-julia --project=. scripts/phase29_report.jl
+julia --project=. scripts/report.jl
 ```
 
 ## Next Phase Readiness
@@ -227,11 +227,11 @@ julia --project=. scripts/phase29_report.jl
 ## Self-Check: PASSED
 
 Files on disk:
-- FOUND: scripts/phase29_bench_kernels.jl
-- FOUND: scripts/phase29_bench_solves.jl
-- FOUND: scripts/_phase29_bench_solves_run.jl
-- FOUND: scripts/phase29_roofline_model.jl
-- FOUND: scripts/phase29_report.jl
+- FOUND: scripts/bench_kernels.jl
+- FOUND: scripts/bench_solves.jl
+- FOUND: scripts/bench_solves_run.jl
+- FOUND: scripts/roofline_model.jl
+- FOUND: scripts/report.jl
 - FOUND: test/test_phase29_roofline.jl
 - FOUND: results/phase29/.gitkeep
 - FOUND: .planning/phases/29-performance-modeling-and-roofline-audit-for-the-fft-adjoint-/29-REPORT.md

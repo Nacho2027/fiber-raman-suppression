@@ -15,7 +15,7 @@ provides:
   - "test/test_determinism.jl: bit-identity regression test (max|Δφ|==0.0, |ΔJ|==0.0, ftrace equal)"
   - "src/simulation/*.jl: 18 call sites switched from flags=FFTW.MEASURE to flags=FFTW.ESTIMATE"
   - "6 entry-point scripts wired with deterministic-environment setup"
-  - "scripts/phase15_benchmark.jl + scripts/_phase15_benchmark_run.jl: subprocess-isolated benchmark driver/worker"
+  - "scripts/benchmark.jl + scripts/benchmark_run.jl: subprocess-isolated benchmark driver/worker"
   - "results/raman/phase15/{benchmark.md, benchmark.jld2}: quantified +21.4% slowdown, cross-process bit-identity"
 affects: [14-sharpness-aware-optimization, any-future-phase-requiring-reproducibility, burst-vm-runs, newton-method-sprint]
 
@@ -31,8 +31,8 @@ tech-stack:
 key-files:
   created:
     - "scripts/determinism.jl (102 lines) — ensure_deterministic_environment() + status query"
-    - "scripts/phase15_benchmark.jl (215 lines after rewrite) — subprocess-isolated driver"
-    - "scripts/_phase15_benchmark_run.jl (91 lines) — worker, 1 run per invocation"
+    - "scripts/benchmark.jl (215 lines after rewrite) — subprocess-isolated driver"
+    - "scripts/benchmark_run.jl (91 lines) — worker, 1 run per invocation"
     - "test/test_determinism.jl (131 lines) — bit-identity regression test"
     - "results/raman/phase15/benchmark.md (benchmark report)"
     - "results/raman/phase15/benchmark.jld2 (raw timings)"
@@ -113,13 +113,13 @@ This session (Tasks 4–7):
 
 ### Created this session
 
-- `scripts/_phase15_benchmark_run.jl` — 91-line worker script; takes `measure|estimate <tag>` CLI args, does ONE optimization run, emits `BENCH_JSON: {...}` on stdout.
+- `scripts/benchmark_run.jl` — 91-line worker script; takes `measure|estimate <tag>` CLI args, does ONE optimization run, emits `BENCH_JSON: {...}` on stdout.
 - `results/raman/phase15/benchmark.md` — benchmark report with wall-time table, J-consistency table, iteration counts, interpretation.
 - `results/raman/phase15/benchmark.jld2` — raw timings, J values, iter counts, config dict, slowdown %.
 
 ### Rewritten this session
 
-- `scripts/phase15_benchmark.jl` — full rewrite from in-process scaffold to subprocess-isolated driver. Now spawns fresh `julia --project=.` per run, parses JSON sentinels, performs always-revert git-free token swap for the MEASURE leg.
+- `scripts/benchmark.jl` — full rewrite from in-process scaffold to subprocess-isolated driver. Now spawns fresh `julia --project=.` per run, parses JSON sentinels, performs always-revert git-free token swap for the MEASURE leg.
 
 ### Modified this session (docs + state)
 
@@ -147,22 +147,22 @@ See `key-decisions` in frontmatter. Summary:
 - **Found during:** Task 4 (first benchmark run aborted at assertion `AssertionError: Expected 16 ESTIMATE occurrences at HEAD, found 18`).
 - **Issue:** Plan 15-01 estimated 16 sites based on a quick scan; actual count is 18 (4+4+4+6). The assertion halted the driver immediately before any timing was done.
 - **Fix:** Set `EXPECTED_FLAG_COUNT = 18` with an explanatory comment. All 18 sites were correctly swapped by commit 1caa08d — the error was in the driver's assumption, not in the src/ patch.
-- **Files modified:** `scripts/phase15_benchmark.jl`
+- **Files modified:** `scripts/benchmark.jl`
 - **Verification:** Second benchmark run passed the pre-swap, mid-swap, and post-revert assertions (all showed ESTIMATE=18, MEASURE=0 at boundaries).
 - **Committed in:** `<pending>` (benchmark-implementation commit).
 
 **2. [Rule 2 – Missing Critical] Benchmark driver was in-process, not subprocess-isolated**
 - **Found during:** Task 4, reading the existing scaffold `c6eccd3`.
 - **Issue:** The original scaffold loaded the pipeline once in the driver process, then attempted to retime in subprocesses for MEASURE only — producing asymmetric steady-state vs cold-start timings. Explicit prompt requirement: "fresh Julia process per run to avoid precompile/cache bias".
-- **Fix:** Rewrote driver to spawn a fresh subprocess for BOTH legs via a new `scripts/_phase15_benchmark_run.jl` worker. Added JSON sentinel (`BENCH_JSON:`) protocol so timings are robustly parseable out of the mixed stderr/stdout stream. Added a warm-up subprocess per leg (discarded) so timed runs are steady-state.
-- **Files modified:** `scripts/phase15_benchmark.jl` (full rewrite, -365 +215 lines net); `scripts/_phase15_benchmark_run.jl` (new, 91 lines).
+- **Fix:** Rewrote driver to spawn a fresh subprocess for BOTH legs via a new `scripts/benchmark_run.jl` worker. Added JSON sentinel (`BENCH_JSON:`) protocol so timings are robustly parseable out of the mixed stderr/stdout stream. Added a warm-up subprocess per leg (discarded) so timed runs are steady-state.
+- **Files modified:** `scripts/benchmark.jl` (full rewrite, -365 +215 lines net); `scripts/benchmark_run.jl` (new, 91 lines).
 - **Verification:** Warm-up timings (157 s, 165 s) were noticeably larger than timed runs (~156 s ESTIMATE, ~131 s MEASURE) — confirming subprocess startup + precompile was absorbed into warm-up and excluded from the timed numbers.
 
 **3. [Rule 2 – Missing Critical] `EXPECTED_FLAG_COUNT` literal in rendered benchmark.md**
 - **Found during:** Post-benchmark review of `benchmark.md`.
 - **Issue:** The driver's f-string template hardcoded "16 sites total" in the Method section — a direct leak of the original stale-estimate value into the rendered report.
 - **Fix:** Updated the template to interpolate `$(EXPECTED_FLAG_COUNT)` and list per-file breakdowns; applied the same fix directly to the already-rendered `benchmark.md` so no re-run was needed.
-- **Files modified:** `scripts/phase15_benchmark.jl`, `results/raman/phase15/benchmark.md`.
+- **Files modified:** `scripts/benchmark.jl`, `results/raman/phase15/benchmark.md`.
 
 ---
 
@@ -216,8 +216,8 @@ None.
 
 - `scripts/determinism.jl` exists: FOUND
 - `test/test_determinism.jl` exists: FOUND
-- `scripts/phase15_benchmark.jl` exists: FOUND
-- `scripts/_phase15_benchmark_run.jl` exists: FOUND
+- `scripts/benchmark.jl` exists: FOUND
+- `scripts/benchmark_run.jl` exists: FOUND
 - `results/raman/phase15/benchmark.md` exists: FOUND
 - `results/raman/phase15/benchmark.jld2` exists: FOUND
 - Commits 3074fba, 1caa08d, b8fed8b, f9c3c2c, c6eccd3 exist in git log: all FOUND

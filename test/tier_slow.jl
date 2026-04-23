@@ -21,10 +21,10 @@ using Optim
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "common.jl"))
-include(joinpath(_ROOT, "scripts", "determinism.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()
-include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
 
 @testset "Phase 16 — slow tier" begin
 
@@ -104,10 +104,10 @@ include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
 
     # Phase 13 tests live in their own files and use their own setup blocks.
     @testset "Phase 13 primitives" begin
-        include(joinpath(_ROOT, "test", "test_phase13_primitives.jl"))
+        include(joinpath(_ROOT, "test", "test_primitives.jl"))
     end
     @testset "Phase 13 HVP" begin
-        include(joinpath(_ROOT, "test", "test_phase13_hvp.jl"))
+        include(joinpath(_ROOT, "test", "test_hvp.jl"))
     end
 
 end

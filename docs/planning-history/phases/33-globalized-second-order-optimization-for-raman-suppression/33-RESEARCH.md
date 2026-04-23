@@ -31,7 +31,7 @@ Audit trust: all 3 surviving warm-starts have documented `edge_frac` values (ben
 ### Locked Decisions
 - Second-order **search directions** and **globalization** are separate design choices. This phase designs the globalization layer and the direction-solver **interface**, not a specific Krylov inner solver.
 - **Honest failure accounting is a required deliverable.** A run that exits without reaching second-order stationarity must say so, with a typed reason, not silently log "best achieved."
-- Build on the **existing HVP/Lanczos assets** (`scripts/phase13_hvp.jl`, `scripts/phase13_hessian_eigspec.jl`). No dense Hessians at `Nt = 2^13`. HVP is the curvature primitive.
+- Build on the **existing HVP/Lanczos assets** (`scripts/hvp.jl`, `scripts/hessian_eigspec.jl`). No dense Hessians at `Nt = 2^13`. HVP is the curvature primitive.
 - This phase stays **above** truncated-Newton specifics. Krylov inner solves, preconditioning, and `forcing sequence` work belong to Phase 34. Phase 33 must leave a clean `DirectionSolver` interface so Phase 34 can plug under it.
 
 ### Claude's Discretion
@@ -93,7 +93,7 @@ J(φ) = 10 · log₁₀( ∫_Raman |U(L,ω)|² dω / ∫_full |U(L,ω)|² dω )
 
 2. **Indefinite Hessian at every reached stopping point.** Phase 13 (SMF-28 L=2m P=0.2W and HNLF L=0.5m P=0.01W) and Phase 22 (26/26 sharpness flavors, canonical + pareto-57) both measured `λ_min < 0 < λ_max` with `|λ_min|/λ_max` ranging 0.005–0.38. Phase 35's reduced-basis ladder confirmed this is **branch-structural**, not a convergence artifact: the competitive-dB branch *is* indefinite from `N_φ ≥ 8` through full resolution. Any direction-solver must treat negative curvature as the normal case, not an edge case.
 
-3. **Gauge null space.** The cost is invariant under `φ → φ + C + α·(ω−ω_0)` (global phase + linear group delay, restricted to the input band). Analytically, this produces **two exact zero Hessian eigenvalues** along `{𝟙, ω−ω_band_center}`. Phase 13 Plan 02 confirmed these live in the ≈ 10⁻⁷–10⁻⁶ eigenvalue gap between the positive and negative wings; matrix-free Lanczos without shift-invert cannot resolve them directly, but any step must either project them out or suppress them by a penalty — otherwise the trust-region solver can make the radius grow to infinity along a zero-curvature direction that has no cost effect at all. The `gauge_fix` primitive in `scripts/phase13_primitives.jl` is the canonical projection operator.
+3. **Gauge null space.** The cost is invariant under `φ → φ + C + α·(ω−ω_0)` (global phase + linear group delay, restricted to the input band). Analytically, this produces **two exact zero Hessian eigenvalues** along `{𝟙, ω−ω_band_center}`. Phase 13 Plan 02 confirmed these live in the ≈ 10⁻⁷–10⁻⁶ eigenvalue gap between the positive and negative wings; matrix-free Lanczos without shift-invert cannot resolve them directly, but any step must either project them out or suppress them by a penalty — otherwise the trust-region solver can make the radius grow to infinity along a zero-curvature direction that has no cost effect at all. The `gauge_fix` primitive in `scripts/primitives.jl` is the canonical projection operator.
 
 ### What "globalization" actually has to do here
 
@@ -350,7 +350,7 @@ struct TRIterationRecord
 end
 ```
 
-The `kappa_eff` column is the condition-number probe Phase 27's second-opinion §item 9 flagged as "almost free." Reuse Arpack from `phase13_hessian_eigspec.jl`; run it on a schedule (every 10 iters + at exit) to amortize cost.
+The `kappa_eff` column is the condition-number probe Phase 27's second-opinion §item 9 flagged as "almost free." Reuse Arpack from `hessian_eigspec.jl`; run it on a schedule (every 10 iters + at exit) to amortize cost.
 
 A run's telemetry is saved as:
 - `results/raman/phase33/<tag>/telemetry.csv` — one row per iteration
@@ -435,7 +435,7 @@ end
 Phase 34 adds implementations but **does not touch** the trust-region outer loop, the telemetry schema, the exit-code taxonomy, the benchmark runner, or the acceptance-ratio logic. This is the "separation of concerns" Phase 33 is contractually required to produce (CONTEXT.md locked decision: "second-order search directions and globalization are separate design choices").
 
 Caller contract:
-- `H_op` is *guaranteed* symmetric up to FD noise (see `phase13_hvp.jl:89 — HVP symmetry`). Solvers may assume this.
+- `H_op` is *guaranteed* symmetric up to FD noise (see `hvp.jl:89 — HVP symmetry`). Solvers may assume this.
 - `g` is *guaranteed* in the gauge-complement subspace (projection happens at the outer TR level).
 - `Δ > 0` always.
 - `p` on return must satisfy `‖p‖ ≤ Δ · (1 + 1e-8)` (small tolerance for numerics).
@@ -452,7 +452,7 @@ Caller contract:
 | `scripts/trust_region_core.jl` | `TrustRegionState`, `DirectionSolver` abstract, `SteihaugSolver`, ρ-based radius update, exit-code enum | ~450 LOC |
 | `scripts/trust_region_optimize.jl` | `optimize_spectral_phase_tr(...)` — the top-level entry point. Mirrors `optimize_spectral_phase` from `raman_optimization.jl` but swaps L-BFGS for TRN | ~200 LOC |
 | `scripts/trust_region_telemetry.jl` | Telemetry records + CSV/JSON writers + extension of `numerical_trust.jl` schema | ~250 LOC |
-| `scripts/phase33_benchmark_run.jl` | Benchmark driver: iterates over the 4 configs × 3 start types, runs TR, emits standard images + telemetry | ~350 LOC |
+| `scripts/benchmark_run.jl` | Benchmark driver: iterates over the 4 configs × 3 start types, runs TR, emits standard images + telemetry | ~350 LOC |
 | `test/test_trust_region_steihaug.jl` | Unit tests for Steihaug solver against analytic quadratic problems (easy to verify exactly); Taylor-slope test on TR step predictions | ~200 LOC |
 | `test/test_trust_region_integration.jl` | Integration test: small `Nt = 2^8` Raman setup, full TR run, assert exit code + finite `phi_opt` | ~150 LOC |
 
@@ -461,9 +461,9 @@ Caller contract:
 Per CLAUDE.md Rule P1 and Phase 14 precedent (original optimizer untouched):
 - `scripts/raman_optimization.jl` — `cost_and_gradient` is the HVP oracle. Do not modify.
 - `scripts/common.jl` — `setup_raman_problem`, `spectral_band_cost`, fiber presets. Untouched.
-- `scripts/phase13_hvp.jl` — `fd_hvp`, `build_oracle`, `ensure_deterministic_fftw`. Reuse.
-- `scripts/phase13_primitives.jl` — `gauge_fix`, `input_band_mask`, `omega_vector`. Reuse.
-- `scripts/phase13_hessian_eigspec.jl` — Arpack wrapper for single-eigenvalue Lanczos. Reuse for `λ_min` estimates.
+- `scripts/hvp.jl` — `fd_hvp`, `build_oracle`, `ensure_deterministic_fftw`. Reuse.
+- `scripts/primitives.jl` — `gauge_fix`, `input_band_mask`, `omega_vector`. Reuse.
+- `scripts/hessian_eigspec.jl` — Arpack wrapper for single-eigenvalue Lanczos. Reuse for `λ_min` estimates.
 - `scripts/numerical_trust.jl` — Phase 28 schema. **Extend, not fork.**
 - `scripts/determinism.jl` — `ensure_deterministic_environment()` called at entry.
 - `scripts/standard_images.jl` — `save_standard_set(...)` called at exit of every benchmark config. **Mandatory per CLAUDE.md.**
@@ -521,7 +521,7 @@ Drawn from Phase 13, 22, 27, 28, 35.
 
 ### P3. Log-scale cost gradient has `1/J_dB` singularity as J → 0
 **Origin:** `raman_optimization.jl:167–171`. `log_scale = 10 / (J_clamped · ln 10)`. As `J → 0` (great Raman suppression), `log_scale → ∞`. Gradient magnitude blows up; any step that tries to descend further gets amplified; ρ misbehaves.
-**Mitigation:** (a) Clamp `log_scale` at an upper bound (say `1e12`) and log whenever clamp fires — this signals we are at the edge of where log-scale cost is well-defined. (b) Consider running the TR benchmark with `log_cost=false` for a sanity-check pass (linear physics cost) — this is also what `phase13_hvp.jl:build_oracle` uses for the HVP, so it keeps the Hessian probe and the optimization objective consistent. Worth planning Wave 1 around `log_cost=false` and adding `log_cost=true` runs only after the linear case works.
+**Mitigation:** (a) Clamp `log_scale` at an upper bound (say `1e12`) and log whenever clamp fires — this signals we are at the edge of where log-scale cost is well-defined. (b) Consider running the TR benchmark with `log_cost=false` for a sanity-check pass (linear physics cost) — this is also what `hvp.jl:build_oracle` uses for the HVP, so it keeps the Hessian probe and the optimization objective consistent. Worth planning Wave 1 around `log_cost=false` and adding `log_cost=true` runs only after the linear case works.
 
 ### P4. Regularizer gradient not log-rescaled
 **Origin:** Phase 27 second-opinion §item 2. `cost_and_gradient` log-rescales the *total* gradient including regularizer gradients. Effective `λ_gdd` shifts from 1e-4 at `J = 1` to 1e-12 at `J = 10⁻⁸`, i.e., the regularizer effectively vanishes as we get better at Raman suppression. This contaminates comparisons.
@@ -557,7 +557,7 @@ Drawn from Phase 13, 22, 27, 28, 35.
 | **Unit: gauge projection preserves `‖Π p‖ ≤ ‖p‖`** | Our projection is a real orthogonal projection. | `test/test_trust_region_integration.jl::test_gauge_projection_properties` |
 | **Integration: small-Nt Raman TR run** | End-to-end at `Nt = 2^8` completes, exit code is one of the typed set, `save_standard_set` writes images, telemetry CSV is valid. No `NAN` or `GAUGE_LEAK`. | `test/test_trust_region_integration.jl::test_raman_tr_smallNt` |
 | **Regression: L-BFGS path unchanged** | Running `test/test_determinism.jl` + `test/test_phase28_trust_report.jl` still passes byte-for-byte. | Existing test files — no changes. |
-| **Benchmark: TR from `φ*_lbfgs` → same `φ` within gauge** | On `bench-01-smf28-canonical`, if we start TR at the L-BFGS converged optimum, within a few iterations TR either (a) declares `CONVERGED_2ND_ORDER` if by some miracle the Hessian flipped to PD, or more realistically (b) takes a negative-curvature escape (as Phase 35 did) and reaches a deeper saddle, or (c) declares `CONVERGED_1ST_ORDER_SADDLE` if the saddle has no usable escape. All three are *valid* — the point is it doesn't diverge, NaN, or silently log "best achieved." | `scripts/phase33_benchmark_run.jl` |
+| **Benchmark: TR from `φ*_lbfgs` → same `φ` within gauge** | On `bench-01-smf28-canonical`, if we start TR at the L-BFGS converged optimum, within a few iterations TR either (a) declares `CONVERGED_2ND_ORDER` if by some miracle the Hessian flipped to PD, or more realistically (b) takes a negative-curvature escape (as Phase 35 did) and reaches a deeper saddle, or (c) declares `CONVERGED_1ST_ORDER_SADDLE` if the saddle has no usable escape. All three are *valid* — the point is it doesn't diverge, NaN, or silently log "best achieved." | `scripts/benchmark_run.jl` |
 | **Benchmark: ρ distribution is sensible** | Across all 12 benchmark runs, the distribution of accepted `ρ`-values has mean in [0.3, 1.5] and no more than 15% of iterations rejected. Rejection-by-cause histogram is interpretable. | Benchmark synthesis markdown |
 | **Benchmark: exit-code distribution** | All 12 runs exit with a typed code. No run silently hits `max_iter` without either `MAX_ITER_STALLED` or `MAX_ITER`. `GAUGE_LEAK` never fires. | Benchmark synthesis markdown |
 
@@ -571,16 +571,16 @@ Drawn from Phase 13, 22, 27, 28, 35.
 | Capability | Primary Tier | Secondary Tier | Rationale |
 |------------|-------------|----------------|-----------|
 | Forward / adjoint ODE solves | `src/simulation/*.jl` | — | Physics layer; unchanged by this phase |
-| HVP finite-difference | `scripts/phase13_hvp.jl` | — | Existing matrix-free curvature primitive |
+| HVP finite-difference | `scripts/hvp.jl` | — | Existing matrix-free curvature primitive |
 | Gradient oracle | `scripts/raman_optimization.jl::cost_and_gradient` | — | Unchanged; called via `build_oracle` |
 | Trust-region outer loop | `scripts/trust_region_core.jl` (NEW) | — | Globalization logic — Phase 33's core contribution |
 | Direction subproblem solver | `scripts/trust_region_core.jl::SteihaugSolver` (NEW) | `DirectionSolver` trait (NEW); Phase 34 adds concrete variants | Pluggable by design |
-| Gauge projection | `scripts/phase13_primitives.jl::gauge_fix` | — | Existing primitive, reused |
-| λ_min/λ_max probes | `scripts/phase13_hessian_eigspec.jl` (Arpack) | — | Existing matrix-free Lanczos, reused |
+| Gauge projection | `scripts/primitives.jl::gauge_fix` | — | Existing primitive, reused |
+| λ_min/λ_max probes | `scripts/hessian_eigspec.jl` (Arpack) | — | Existing matrix-free Lanczos, reused |
 | Telemetry schema | `scripts/trust_region_telemetry.jl` (NEW) + `scripts/numerical_trust.jl` (extend) | — | Extends Phase 28, does not fork |
 | Standard images | `scripts/standard_images.jl::save_standard_set` | — | Mandatory per CLAUDE.md |
-| Determinism | `scripts/determinism.jl` | `scripts/phase13_hvp.jl::ensure_deterministic_fftw` | Entry-point call, per Phase 15 convention |
-| Benchmark driver | `scripts/phase33_benchmark_run.jl` (NEW) | — | Orchestrates the 12 runs |
+| Determinism | `scripts/determinism.jl` | `scripts/hvp.jl::ensure_deterministic_fftw` | Entry-point call, per Phase 15 convention |
+| Benchmark driver | `scripts/benchmark_run.jl` (NEW) | — | Orchestrates the 12 runs |
 | Burst-VM execution | `~/bin/burst-run-heavy` wrapper | — | Mandatory per CLAUDE.md Rule P5 |
 
 ---
@@ -691,7 +691,7 @@ All dependencies available. No new installs required.
 | A7 | Log-cost clamp at J_clamped = 1e-15 is a safe lower bound for the benchmark regime | §Pitfalls P3 | Benchmark configs achieve J_dB ≈ -80 (J ≈ 1e-8), well above clamp. If future runs target -150 dB, clamp needs raising. |
 | A8 | `λ_gdd = 0, λ_boundary = 0` for Phase 33 benchmark sidesteps the regularizer rescaling issue | §Pitfalls P4 | Phase 27 finding — waiting on Phase 28 structural fix. Benchmark documents this choice explicitly. |
 
-**Confirmed (VERIFIED) claims (not assumed):** HVP primitive exists and is Taylor-validated (`scripts/phase13_hvp.jl:190`). Arpack Lanczos works matrix-free (`scripts/phase13_hessian_eigspec.jl:~200`). Hessian is indefinite at canonical optima (Phase 13 FINDINGS, Phase 22 SUMMARY, Phase 35 REPORT). L-BFGS with strong-Wolfe is the current 1st-order globalized baseline (`scripts/raman_optimization.jl:219–234`). Determinism contract is live (`test/test_determinism.jl` passes bit-identity). Standard-image mandate is project-wide (CLAUDE.md). Benchmark config `(SMF-28, L=2m, P=0.2W)` has an existing L-BFGS converged optimum serialized (`results/raman/sweeps/smf28/L2m_P0.2W/opt_result.jld2`).
+**Confirmed (VERIFIED) claims (not assumed):** HVP primitive exists and is Taylor-validated (`scripts/hvp.jl:190`). Arpack Lanczos works matrix-free (`scripts/hessian_eigspec.jl:~200`). Hessian is indefinite at canonical optima (Phase 13 FINDINGS, Phase 22 SUMMARY, Phase 35 REPORT). L-BFGS with strong-Wolfe is the current 1st-order globalized baseline (`scripts/raman_optimization.jl:219–234`). Determinism contract is live (`test/test_determinism.jl` passes bit-identity). Standard-image mandate is project-wide (CLAUDE.md). Benchmark config `(SMF-28, L=2m, P=0.2W)` has an existing L-BFGS converged optimum serialized (`results/raman/sweeps/smf28/L2m_P0.2W/opt_result.jld2`).
 
 ---
 
@@ -740,7 +740,7 @@ All dependencies available. No new installs required.
 - Phase 22 SUMMARY — 26/26 indefinite optima across sharpness sweep.
 - Phase 27 REPORT + second-opinion addendum — globalization recommendation, ρ / FD-HVP / gauge pitfalls.
 - Phase 35 REPORT + RESEARCH — saddle-rich verdict, neg-curvature escape mechanics.
-- `scripts/phase13_hvp.jl` — HVP primitive, Taylor-validated.
+- `scripts/hvp.jl` — HVP primitive, Taylor-validated.
 - `scripts/numerical_trust.jl` — Phase 28 schema we extend.
 - `scripts/raman_optimization.jl` — `cost_and_gradient` oracle.
 - `CLAUDE.md` — project-wide constraints (standard images, burst wrapper, determinism).

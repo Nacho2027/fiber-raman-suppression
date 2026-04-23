@@ -30,9 +30,9 @@ The aggressive follow-up at L=2m, P=0.5W (~10× peak power → N_sol ≈ 3 in SM
 | `scripts/mmf_raman_optimization.jl` | `cost_and_gradient_mmf` (shared φ), `optimize_mmf_phase`, `plot_mmf_result` | 333 |
 | `scripts/mmf_m1_limit_run.jl` | M=1 reference via protected SMF optimizer | 100 |
 | `scripts/mmf_joint_optimization.jl` | Joint (φ, c_m) optimizer for Phase 17 (free-exploration a) | 387 |
-| `scripts/mmf_run_phase16_all.jl` | End-to-end runner (3 seeds × 2 configs) | 129 |
+| `scripts/run_all.jl` | End-to-end runner (3 seeds × 2 configs) | 129 |
 | `scripts/mmf_smoke_test.jl` | Fast smoke test (passed, 71s) | 77 |
-| `scripts/mmf_analyze_phase16.jl` | Post-processor — markdown + figures from JLD2 | 189 |
+| `scripts/analyze.jl` | Post-processor — markdown + figures from JLD2 | 189 |
 | `test/test_phase16_mmf.jl` | 4 testsets — PASSED 13/13 on burst VM (5m36s) | 110 |
 
 ### Test results (burst VM, julia -t 4, 2026-04-17 03:15 UTC)
@@ -69,9 +69,9 @@ e3fa1d9 feat(16-01): MMF Raman optimization scaffolding
 
 ## Pending: baseline results
 
-Launched `scripts/mmf_run_phase16_all.jl` at 03:23 UTC on the burst VM:
+Launched `scripts/run_all.jl` at 03:23 UTC on the burst VM:
 ```
-cd ~/raman-wt-C && julia -t 6 --project=. scripts/mmf_run_phase16_all.jl > phase16_run.log 2>&1
+cd ~/raman-wt-C && julia -t 6 --project=. scripts/run_all.jl > phase16_run.log 2>&1
 ```
 
 Julia PID 31919 confirmed running for 10+ minutes (pre-compile) before SSH became unresponsive at ~04:11 UTC.
@@ -102,7 +102,7 @@ rsync -az -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
       ./results/raman/phase16/
 
 # 4. Generate comparison markdown + figures
-julia -t 2 --project=. scripts/mmf_analyze_phase16.jl
+julia -t 2 --project=. scripts/analyze.jl
 # → results/raman/phase16/phase16_comparison.md
 # → results/raman/phase16/phase16_improvement_bar.png
 # → results/raman/phase16/phase16_convergence_overlay.png
@@ -116,7 +116,7 @@ Then consider Phase 17 plan 01 (joint φ + c_m optimization) — see `.planning/
 ## Known issues / gotchas
 
 - **SSH congestion**: the burst VM was running 5+ concurrent Julia processes (total 30+ threads over 22 cores) when SSH became unresponsive. If this happens again, wait for some of the other sessions' heavy jobs to complete before pursuing my baseline.
-- **Phase 14 Plan 02 collision**: `phase14_ab_comparison.jl` has been running since 2026-04-16 — check with the owning session whether it should be terminated if it's stalled.
+- **Phase 14 Plan 02 collision**: `ab_comparison.jl` has been running since 2026-04-16 — check with the owning session whether it should be terminated if it's stalled.
 - **Planning artifacts gitignored**: my `.planning/` files are local-only on this checkout. Run `sync-planning-*` from the Mac side to propagate, or manually copy the relevant decision+status docs.
 - **Mode-weight gauge**: my code fixes c_1 ∈ ℝ₊ (positive real) to kill the global phase gauge. The joint optimizer's (r_m, α_m) parametrization handles this; for pure phase-only optimization (Plan 01), c_m is never varied so gauge doesn't arise.
 

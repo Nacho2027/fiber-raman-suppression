@@ -22,7 +22,7 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # numerical_trust, raman_optimization, longfiber_setup). Include guards prevent
 # duplicate definitions.
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "continuation.jl"))
+include(joinpath(_ROOT, "scripts", "research", "analysis", "continuation.jl"))
 
 @testset "Phase 30 continuation" begin
 

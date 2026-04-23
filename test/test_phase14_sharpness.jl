@@ -39,7 +39,7 @@ if isfile(_SH_WISDOM_PATH)
     end
 end
 
-include(joinpath(@__DIR__, "..", "scripts", "sharpness_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "sharpness_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Small-problem fixture (fast enough for unit tests)
@@ -142,7 +142,7 @@ end
         snap_path = joinpath(@__DIR__, "..", "results", "raman", "phase14",
                              "vanilla_snapshot.jld2")
         if !isfile(snap_path)
-            @warn "Skipping test 3 — snapshot $snap_path missing (run phase14_snapshot_vanilla.jl first)"
+            @warn "Skipping test 3 — snapshot $snap_path missing (run snapshot_vanilla.jl first)"
         else
             snap = JLD2.load(snap_path)
             phi_opt = snap["phi_opt"]

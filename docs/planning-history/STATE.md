@@ -123,7 +123,7 @@ When implementing Phase 14 (Sharpness-Aware / Hessian-in-Cost optimization), the
 All optimization entry-point scripts now call `ensure_deterministic_environment()` at top (from `scripts/determinism.jl`). This pins `FFTW.set_num_threads(1)` and `BLAS.set_num_threads(1)`, and the 18 `plan_fft`/`plan_ifft` call sites across `src/simulation/*.jl` were switched from `flags=FFTW.MEASURE` to `flags=FFTW.ESTIMATE` (commit 1caa08d). Consequence: identical seed → bit-identical `phi_opt`, `J_final`, and `ftrace`, both within a single process and across fresh Julia subprocesses. Verified by:
 
 - `test/test_determinism.jl` — asserts `maximum(abs(phi_opt_a - phi_opt_b)) == 0.0` (same-process)
-- `scripts/phase15_benchmark.jl` — 3 fresh subprocesses produced `max-min(J_final) = 0.0` on ESTIMATE (cross-process bit-identity); MEASURE leg reproduces the Phase 13 bug as a control (max-min = 1.055e-13)
+- `scripts/benchmark.jl` — 3 fresh subprocesses produced `max-min(J_final) = 0.0` on ESTIMATE (cross-process bit-identity); MEASURE leg reproduces the Phase 13 bug as a control (max-min = 1.055e-13)
 
 Performance cost: **+21.4%** wall time on SMF-28 canonical (L=2m, P=0.2W, Nt=8192, max_iter=30) — well within the +30% acceptance budget. See `results/raman/phase15/benchmark.md` for the full table.
 
@@ -166,7 +166,7 @@ Both fixes require re-running the sweep to get valid results.
 - [Phase 12-suppression-reach]: Bypass setup_raman_problem auto-sizing via direct MultiModeNoise calls for L>=10m — the wrapper always overrides explicit Nt/tw at long distances
 - [Phase 12-suppression-reach]: SMF-28 phi@2m maintains -57 dB Raman suppression at L=30m (15x opt horizon); HNLF reach collapses to <3 dB by z=15m — fiber-type-dependent suppression reach confirmed
 - [Phase ?]: M-kwarg wiring gap: optimize_spectral_phase_tr does not forward preconditioner M kwarg into solve_subproblem; ALL Phase 34 benchmark sweep variants run as identity Steihaug regardless of precond_sym — Discovered during Phase 34 Plan 03 implementation; the M kwarg wiring requires additive change in Phase 35/36
-- [Phase ?]: Conditioning hypothesis CONFIRMED: direct-wired PCG smoke at Nt=128 shows ALL preconditioners produce rho in [0.944, 0.994] >> eta_1=0.25 on the same cold-start oracle where Steihaug produces RADIUS_COLLAPSE — Phase 34 Plan 04 smoke script (scripts/phase34_pcg_smoke.jl); results in results/raman/phase34/pcg_smoke/smoke.jld2
+- [Phase ?]: Conditioning hypothesis CONFIRMED: direct-wired PCG smoke at Nt=128 shows ALL preconditioners produce rho in [0.944, 0.994] >> eta_1=0.25 on the same cold-start oracle where Steihaug produces RADIUS_COLLAPSE — Phase 34 Plan 04 smoke script (scripts/pcg_smoke.jl); results in results/raman/phase34/pcg_smoke/smoke.jld2
 
 ### Roadmap Evolution
 

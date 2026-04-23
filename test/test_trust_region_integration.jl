@@ -23,7 +23,7 @@ using LinearAlgebra
 using Random
 using Printf
 
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_optimize.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_optimize.jl"))
 
 ensure_deterministic_fftw()
 ensure_deterministic_environment()
@@ -180,7 +180,7 @@ ensure_deterministic_environment()
         # End-to-end test on a small Raman problem. Keep budgets tight so the
         # whole test finishes in a few seconds. The point is to verify the
         # TR entry point runs without NaN or GAUGE_LEAK on real physics.
-        include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
+        include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
         setup_t0 = time()
         uω0, fiber, sim, band_mask, _Δf, _rt = setup_raman_problem(
             fiber_preset = :SMF28,

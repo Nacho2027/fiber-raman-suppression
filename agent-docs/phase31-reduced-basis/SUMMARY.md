@@ -18,11 +18,11 @@ Compares reduced-basis phase parameterization (Branch A) against full-grid penal
 
 | File | Purpose |
 |---|---|
-| `scripts/phase31_basis_lib.jl` | Legendre polynomial + chirp_ladder basis builders; `build_basis_dispatch(kind, Nt, N_phi, bw_mask, sim)` routes to existing `:cubic`/`:dct`/`:linear` kinds in `sweep_simple_param.jl` |
-| `scripts/phase31_penalty_lib.jl` | `apply_tikhonov_phi!`, `apply_tod_curvature!`, `apply_tv_phi!`, `apply_dct_l1!` — in-place gradient accumulators, applied BEFORE log_cost rescale |
-| `scripts/phase31_run.jl` | Driver with `--branch=A|B`, deterministic env, resume-from-JLD2, save_standard_set per optimum, PyPlot + GC cleanup, manifest output. Plan 01 added `run_branch_A`; Plan 02 added `run_branch_B` (bypasses `optimize_phase_lowres` — would allocate 2 GB identity at full Nt; uses `Optim.LBFGS` directly on φ_vec with a cost+gradient wrapper that applies the penalty before log_cost rescale) |
-| `scripts/phase31_transfer.jl` | Forward-only J (no adjoint, 2.66s/call at Nt=16384) + early-exit σ_3dB + HNLF + 3 perturbed-canonical evaluations. `Threads.@threads` across 41 source rows |
-| `scripts/phase31_analyze.jl` | 4-panel Pareto, per-penalty L-curves, AIC ranking CSV, `candidates.md` + `FINDINGS.md` from `sweep_A_basis.jld2` + `sweep_B_penalty.jld2` + `transfer_results.jld2` |
+| `scripts/basis_lib.jl` | Legendre polynomial + chirp_ladder basis builders; `build_basis_dispatch(kind, Nt, N_phi, bw_mask, sim)` routes to existing `:cubic`/`:dct`/`:linear` kinds in `sweep_simple_param.jl` |
+| `scripts/penalty_lib.jl` | `apply_tikhonov_phi!`, `apply_tod_curvature!`, `apply_tv_phi!`, `apply_dct_l1!` — in-place gradient accumulators, applied BEFORE log_cost rescale |
+| `scripts/run.jl` | Driver with `--branch=A|B`, deterministic env, resume-from-JLD2, save_standard_set per optimum, PyPlot + GC cleanup, manifest output. Plan 01 added `run_branch_A`; Plan 02 added `run_branch_B` (bypasses `optimize_phase_lowres` — would allocate 2 GB identity at full Nt; uses `Optim.LBFGS` directly on φ_vec with a cost+gradient wrapper that applies the penalty before log_cost rescale) |
+| `scripts/transfer.jl` | Forward-only J (no adjoint, 2.66s/call at Nt=16384) + early-exit σ_3dB + HNLF + 3 perturbed-canonical evaluations. `Threads.@threads` across 41 source rows |
+| `scripts/analyze.jl` | 4-panel Pareto, per-penalty L-curves, AIC ranking CSV, `candidates.md` + `FINDINGS.md` from `sweep_A_basis.jld2` + `sweep_B_penalty.jld2` + `transfer_results.jld2` |
 | `test/test_phase31_basis.jl` | 8 testsets (identity reproduction, polynomial κ, chirp_ladder gauge orthogonality, coefficient-space FD gradient, Taylor-remainder-2 slope per penalty, continuation upsample, DCT orthonormal fast path, Phase 35 hess_indef_ratio reproduction). All pass. |
 
 ## What was executed
@@ -59,12 +59,12 @@ All runs on the Mac (16-core Apple Silicon, 48 GB, Julia 1.12.4, `-t auto` → 1
 ## Commits
 
 - `a829164` `feat(phase31-01): add basis + penalty libraries with unit tests`
-- `1873cc3` `feat(phase31-01): add phase31_run.jl driver with Branch A basis sweep`
+- `1873cc3` `feat(phase31-01): add run.jl driver with Branch A basis sweep`
 - `c34ac61` `fix(phase31-01): cap dense Hessian probe at N_phi=16 to keep per-run wall time bounded`
 - `38be4c5` `fix(phase31-01): resumable Branch A sweep + matplotlib GC to prevent PyCall segfault`
 - `efd5cbb` `docs(phase31): create agent-docs topic with Plan 01 SUMMARY + Plan 02 PLAN`
 - `ea655ba` `feat(phase31-02): implement run_branch_B penalty sweep`
-- `d48bfe0` `feat(phase31-02): add phase31_transfer.jl and phase31_analyze.jl`
+- `d48bfe0` `feat(phase31-02): add transfer.jl and analyze.jl`
 - `e23eede` `perf(phase31-02): forward-only J eval + early-exit sigma_3dB`
 
 ## Seeds for next phase
@@ -81,9 +81,9 @@ Follow-up files added in the Phase 31 namespace:
 
 | File | Purpose |
 |---|---|
-| `scripts/phase31_extension_lib.jl` | pure path-program + seed/projection helpers for continuation/refinement comparisons |
-| `scripts/phase31_extension_run.jl` | resumable follow-up driver comparing 5 continuation paths ending in full-grid refinement; emits standard images per step |
-| `scripts/phase31_extension_analyze.jl` | writes `FOLLOWUP-PHASE31-EXTENSION.md` from the follow-up JLD2 |
+| `scripts/extension_lib.jl` | pure path-program + seed/projection helpers for continuation/refinement comparisons |
+| `scripts/extension_run.jl` | resumable follow-up driver comparing 5 continuation paths ending in full-grid refinement; emits standard images per step |
+| `scripts/extension_analyze.jl` | writes `FOLLOWUP-PHASE31-EXTENSION.md` from the follow-up JLD2 |
 | `test/test_phase31_extension.jl` | unit tests for path-program, row selection, projection, and labeling helpers |
 
 Executed result:

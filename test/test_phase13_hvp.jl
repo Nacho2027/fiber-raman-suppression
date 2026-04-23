@@ -2,7 +2,7 @@
 # Phase 13 Plan 02 — HVP tests
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Run:  julia --project=. test/test_phase13_hvp.jl
+# Run:  julia --project=. test/test_hvp.jl
 #
 # These tests stamp out bugs BEFORE the eigendecomposition is run on the burst
 # VM. Per user directive: "stamp out all bugs by yourself before i even look
@@ -27,7 +27,7 @@ using FFTW
 using Printf
 
 # Make the HVP library + phase13 primitives available
-include(joinpath(@__DIR__, "..", "scripts", "phase13_hvp.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "phases", "phase13", "hvp.jl"))
 
 # Pin FFTW before any oracle call — test harness mirrors the real entry-point
 ensure_deterministic_fftw()

@@ -18,6 +18,12 @@ See also: [`../README.md`](../README.md) for the project-level overview.
 | [adding-a-fiber-preset.md](./adding-a-fiber-preset.md) | Extend `FIBER_PRESETS` with a new fiber type. |
 | [adding-an-optimization-variable.md](./adding-an-optimization-variable.md) | Extend the framework with a new optimization variable (stub — Session A in progress). |
 
+Canonical command-line entry points live under [`../scripts/canonical/`](../scripts/canonical/README.md).
+Reusable script libraries live under [`../scripts/lib/`](../scripts/lib/README.md), stable workflow drivers under
+[`../scripts/workflows/`](../scripts/workflows/README.md), and exploratory research drivers under
+[`../scripts/research/`](../scripts/research/README.md). The top level of `scripts/` is intentionally kept free of
+loose script files.
+
 ## Recent synthesis
 
 | Doc | Read when you want to... |
@@ -60,5 +66,5 @@ Everything else is reference material for the first time you need it.
 
 - [`../results/RESULTS_SUMMARY.md`](../results/RESULTS_SUMMARY.md) — plain-language summary of
   what the optimizer achieves across fiber presets.
-- [`../.planning/STATE.md`](../.planning/STATE.md) — running log of decisions, bugs fixed, open
-  concerns. Useful context for maintainers.
+- [`../agent-docs/current-agent-context/INDEX.md`](../agent-docs/current-agent-context/INDEX.md) — current
+  agent-maintained context for deeper numerics, methodology, and infrastructure work.

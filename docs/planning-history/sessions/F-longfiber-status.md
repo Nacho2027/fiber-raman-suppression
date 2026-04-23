@@ -58,7 +58,7 @@ Active tmuxes observed on fiber-raman-burst:
 - `D-transfer` (Session D, since 03:20Z)
 - `F-queue` (Session F launcher, since 03:22Z) — **ours**
 
-Phase 14 `phase14_ab_comparison.jl` julia process also active (etime ~3h 45min).
+Phase 14 `ab_comparison.jl` julia process also active (etime ~3h 45min).
 
 **Queue plan** (per `scripts/longfiber_burst_launcher.sh`):
 1. **T4** (L=100m forward solves, light) — starts immediately, no lock.

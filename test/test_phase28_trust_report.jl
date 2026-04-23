@@ -5,10 +5,10 @@ using JLD2
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "common.jl"))
-include(joinpath(_ROOT, "scripts", "determinism.jl"))
-include(joinpath(_ROOT, "scripts", "numerical_trust.jl"))
-include(joinpath(_ROOT, "scripts", "raman_optimization.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
+include(joinpath(_ROOT, "scripts", "research", "analysis", "numerical_trust.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
 
 @testset "Phase 28 trust report" begin
     @testset "utility verdicts are stable" begin

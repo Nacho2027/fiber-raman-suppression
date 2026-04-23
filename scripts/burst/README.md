@@ -17,7 +17,7 @@ This directory contains the mandatory coordination infrastructure for `fiber-ram
 ```bash
 # On claude-code-host, to run a heavy job on the burst VM:
 burst-ssh "cd fiber-raman-suppression && ~/bin/burst-run-heavy E-sweep2 \
-          'julia -t auto --project=. scripts/sweep_simple_run.jl'"
+          'julia -t auto --project=. scripts/research/sweep_simple/sweep_simple_run.jl'"
 ```
 
 If another session is holding the lock, `burst-run-heavy` fails immediately by default with a message showing who is holding it. To wait instead, set `WAIT_TIMEOUT_SEC=<n>`:
@@ -25,7 +25,7 @@ If another session is holding the lock, `burst-run-heavy` fails immediately by d
 ```bash
 burst-ssh "cd fiber-raman-suppression && WAIT_TIMEOUT_SEC=3600 \
           ~/bin/burst-run-heavy F-longfiber-T5 \
-          'julia -t auto --project=. scripts/longfiber_optimize_100m.jl'"
+          'julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl'"
 ```
 
 ## Session-tag convention

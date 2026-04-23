@@ -4,15 +4,15 @@ plan: 03
 subsystem: optimization
 tags: [synthesis, report, phase-33, trust-region, direction-solver-contract]
 dependency-graph:
-  requires: [scripts/phase33_benchmark_common.jl, results/raman/phase33/**, scripts/trust_region_core.jl]
-  provides: [scripts/phase33_benchmark_synthesis.jl, results/raman/phase33/SYNTHESIS.md, results/raman/phase33/rho_distribution.png, results/raman/phase33/exit_codes.png, results/raman/phase33/failure_taxonomy_by_config.png, 33-REPORT.md]
+  requires: [scripts/benchmark_common.jl, results/raman/phase33/**, scripts/trust_region_core.jl]
+  provides: [scripts/benchmark_synthesis.jl, results/raman/phase33/SYNTHESIS.md, results/raman/phase33/rho_distribution.png, results/raman/phase33/exit_codes.png, results/raman/phase33/failure_taxonomy_by_config.png, 33-REPORT.md]
   affects: []
 tech-stack:
   added: []
   patterns: [cross-run-synthesis, stacked-bar-taxonomy, verbatim-code-contract-in-report]
 key-files:
   created:
-    - scripts/phase33_benchmark_synthesis.jl
+    - scripts/benchmark_synthesis.jl
     - results/raman/phase33/SYNTHESIS.md
     - results/raman/phase33/rho_distribution.png
     - results/raman/phase33/exit_codes.png
@@ -42,7 +42,7 @@ Ingested 9-slot Phase 33 benchmark matrix, produced 3 synthesis PNGs + SYNTHESIS
 
 | File | Lines | Purpose |
 |---|---:|---|
-| `scripts/phase33_benchmark_synthesis.jl` | 563 | Ingest 9 (cfg × start_type) slots, emit SYNTHESIS.md + 3 figures; handles SKIPPED_P8 + MISSING as first-class classes |
+| `scripts/benchmark_synthesis.jl` | 563 | Ingest 9 (cfg × start_type) slots, emit SYNTHESIS.md + 3 figures; handles SKIPPED_P8 + MISSING as first-class classes |
 | `results/raman/phase33/SYNTHESIS.md` | 106 | Master table (9 rows), exit-code distribution, rejection-cause breakdown by config, per-config narrative, gauge-leak / NaN / P8 audits, accepted-step global statistics |
 | `results/raman/phase33/rho_distribution.png` | 273 KB | 3×3 grid of accepted-ρ histograms (mostly "no accepted steps" — that's the finding) |
 | `results/raman/phase33/exit_codes.png` | 174 KB | Stacked bar, 3 configs × {CONVERGED_1ST_ORDER_SADDLE, RADIUS_COLLAPSE, SKIPPED_P8} |
@@ -90,14 +90,14 @@ Ingested 9-slot Phase 33 benchmark matrix, produced 3 synthesis PNGs + SYNTHESIS
 None.
 
 - Plan 01: added `scripts/trust_region_core.jl`, `trust_region_telemetry.jl`, `trust_region_optimize.jl`, 2 test files. Zero modifications to `scripts/common.jl`, `raman_optimization.jl`, `phase13_*.jl`, `numerical_trust.jl`, `determinism.jl`, `standard_images.jl`, or `src/**`.
-- Plan 02: added `scripts/phase33_benchmark_run.jl`, `scripts/phase33_benchmark_common.jl`. Zero modifications to any shared file.
-- Plan 03: added `scripts/phase33_benchmark_synthesis.jl`, the 3 PNGs + SYNTHESIS.md + 33-REPORT.md. Zero modifications to any shared file.
+- Plan 02: added `scripts/benchmark_run.jl`, `scripts/benchmark_common.jl`. Zero modifications to any shared file.
+- Plan 03: added `scripts/benchmark_synthesis.jl`, the 3 PNGs + SYNTHESIS.md + 33-REPORT.md. Zero modifications to any shared file.
 
 Phase-33 namespace isolation held across all three waves. Rule P1 (per CLAUDE.md §Parallel Session Operation Protocol) was honored throughout.
 
 ## Self-Check: PASSED
 
-- `scripts/phase33_benchmark_synthesis.jl` — FOUND (563 LOC)
+- `scripts/benchmark_synthesis.jl` — FOUND (563 LOC)
 - `results/raman/phase33/SYNTHESIS.md` — FOUND (106 LOC)
 - `results/raman/phase33/rho_distribution.png` — FOUND (273 KB, 300 DPI)
 - `results/raman/phase33/exit_codes.png` — FOUND (174 KB, 300 DPI)

@@ -258,7 +258,7 @@ Every corrector-converged step emits a diagnosis row. Any detector firing halts 
 | D3 | Corrector burn | L-BFGS iterations to converge | > `m_corr_max = 3 · m_corr_typical` where typical is measured from first 2 successful steps | `result.iterations` from Optim |
 | D4 | Phase jump | ‖φ_opt_k − φ_init_k‖ / ‖φ_init_k‖ | > 10 (corrector moved 10× farther than predictor expected — predictor is wrong) | Direct compute |
 | D5 | Gradient norm after corrector | ‖∇J(φ_opt_k)‖ | > 10 · `gradcheck_pass` = 0.5 | Already reported by trust schema (gradient validation) — threshold here tighter than validation threshold |
-| D6 | Hessian eigenvalue sign change (optional, N_phi ladder) | sign of `eigs(H; nev=1, which=:SR)` bottom eigenvalue | Flips sign between step k-1 and k | Reuse `scripts/phase13_hessian_eigspec.jl::HVPOperator`. Only when `enable_hessian_probe = true` because HVP adds cost. |
+| D6 | Hessian eigenvalue sign change (optional, N_phi ladder) | sign of `eigs(H; nev=1, which=:SR)` bottom eigenvalue | Flips sign between step k-1 and k | Reuse `scripts/hessian_eigspec.jl::HVPOperator`. Only when `enable_hessian_probe = true` because HVP adds cost. |
 | D7 | Loss of descent | Optim converged flag | `result.g_converged == false` after `max_iter` | Optim return field |
 | D8 | Edge absorption growth | max edge fraction k vs. k-1 | > 10× previous, or > 0.01 absolute | trust report `boundary.max_edge_frac` |
 

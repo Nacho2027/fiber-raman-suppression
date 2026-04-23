@@ -52,7 +52,7 @@ Out of scope:
 - `src/simulation/simulate_disp_mmf.jl`
 - `src/simulation/simulate_disp_gain_mmf.jl`
 - `src/simulation/simulate_disp_gain_smf.jl`
-- `scripts/phase15_benchmark.jl`
+- `scripts/benchmark.jl`
 - `test/tier_fast.jl`
 - `.planning/STATE.md`
 - `.planning/codebase/CONCERNS.md`

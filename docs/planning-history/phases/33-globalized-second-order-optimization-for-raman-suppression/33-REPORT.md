@@ -37,9 +37,9 @@ Plan 01 (`33-01-SUMMARY.md`) landed the trust-region core in 3 scripts + 2 test 
 7. Phase-28 edge-fraction pre-flight before every benchmark config — any config with `edge_frac > 1e-3` emits an abort stub and skips the TR run (pitfall P8).
 8. `GAUGE_LEAK` hard assertion on every accepted step: `‖p − Π p‖ / ‖p‖ ≤ 1e-8`. Violation terminates with typed exit code, not silent propagation.
 
-Plan 02 (`scripts/phase33_benchmark_run.jl`) executed the 9-slot matrix on an ephemeral burst VM (per CLAUDE.md Rule 1 + Rule P5), emitting `_result.jld2`, `telemetry.csv`, a trust-report markdown, and the 4-panel standard image set per non-skipped slot.
+Plan 02 (`scripts/benchmark_run.jl`) executed the 9-slot matrix on an ephemeral burst VM (per CLAUDE.md Rule 1 + Rule P5), emitting `_result.jld2`, `telemetry.csv`, a trust-report markdown, and the 4-panel standard image set per non-skipped slot.
 
-Plan 03 added `scripts/phase33_benchmark_synthesis.jl`, three synthesis PNGs, `SYNTHESIS.md`, and this report.
+Plan 03 added `scripts/benchmark_synthesis.jl`, three synthesis PNGs, `SYNTHESIS.md`, and this report.
 
 ## What Was Found
 
@@ -117,7 +117,7 @@ The `RADIUS_COLLAPSE` outcomes are **not** a regression against L-BFGS — they 
 
 - **P3 — log_cost HVP inconsistency:** **not applicable.** All Wave 2 runs used `log_cost=false` (physics cost only), so the HVP oracle and the optimization objective agree byte-for-byte. disposition: deferred to a future phase if log-scale cost is reintroduced into the TR path.
 
-- **P4 — Regularizer bake-in:** **did not fire.** `λ_gdd = λ_boundary = 0.0` throughout Plan 02 benchmark (see `phase33_benchmark_run.jl:180-181`). Pitfall structurally sidestepped; Phase 28 follow-up owns the eventual structural fix.
+- **P4 — Regularizer bake-in:** **did not fire.** `λ_gdd = λ_boundary = 0.0` throughout Plan 02 benchmark (see `benchmark_run.jl:180-181`). Pitfall structurally sidestepped; Phase 28 follow-up owns the eventual structural fix.
 
 - **P5 — FFTW plan non-determinism:** **did not fire.** `ensure_deterministic_environment()` + `ensure_deterministic_fftw()` called at every `optimize_spectral_phase_tr` entry (trust_region_optimize.jl:621-622). No cross-process ρ drift observed.
 
@@ -217,7 +217,7 @@ Arguments:
   Δ       — current trust radius (Float64)
 
 Caller guarantees:
-  - `H_op` is symmetric up to FD noise (see phase13_hvp.jl:89).
+  - `H_op` is symmetric up to FD noise (see hvp.jl:89).
   - `g` is already in the gauge-complement subspace (projected by outer loop).
   - `Δ > 0`.
 
@@ -287,15 +287,15 @@ end
 | `scripts/trust_region_core.jl` | Outer-loop math, exit-code enum, `SubproblemResult` shape, `update_radius`. Any change here is a contract break. |
 | `scripts/trust_region_optimize.jl` | Wrapper `optimize_spectral_phase_tr` + `_optimize_tr_core`. Phase 34 passes its new solver via the `solver::DirectionSolver` keyword argument. |
 | `scripts/trust_region_telemetry.jl` | Telemetry schema — extending would break round-trip tests. If Phase 34 needs more fields, bump schema version to `33.1` additively (append columns to the end). |
-| `scripts/phase33_benchmark_run.jl` | Benchmark driver — Phase 34 should fork into `scripts/phase34_benchmark_run.jl` using the same `phase33_benchmark_common.jl` config (preferred) or extend the common with a Phase-34 config block. |
+| `scripts/benchmark_run.jl` | Benchmark driver — Phase 34 should fork into `scripts/benchmark_run.jl` using the same `benchmark_common.jl` config (preferred) or extend the common with a Phase-34 config block. |
 | `scripts/raman_optimization.jl`, `scripts/common.jl`, `scripts/phase13_*.jl`, `scripts/numerical_trust.jl`, `scripts/determinism.jl`, `scripts/standard_images.jl`, `src/**` | Already read-only per Phase 33. |
 
 ### What Phase 34 MAY add
 
 - `scripts/trust_region_preconditioner.jl` — preconditioner construction (diagonal, Lanczos-based, partial-ILU-free alternatives).
 - `scripts/trust_region_pcg.jl` — `PreconditionedCGSolver` + its `solve_subproblem` method.
-- `scripts/phase34_benchmark_run.jl` — benchmark driver that swaps `SteihaugSolver` → `PreconditionedCGSolver` with otherwise-identical config.
-- `scripts/phase33_benchmark_common.jl` MAY gain a Phase-34 config block, but the existing entries must remain byte-identical.
+- `scripts/benchmark_run.jl` — benchmark driver that swaps `SteihaugSolver` → `PreconditionedCGSolver` with otherwise-identical config.
+- `scripts/benchmark_common.jl` MAY gain a Phase-34 config block, but the existing entries must remain byte-identical.
 - `test/test_trust_region_preconditioner.jl` and `test/test_trust_region_pcg_integration.jl`.
 
 ## Open Questions — Status Post-Plan-02
@@ -322,9 +322,9 @@ From 33-RESEARCH.md §Open Questions, updated with Plan-02 evidence:
 - `scripts/trust_region_core.jl` — frozen.
 - `scripts/trust_region_telemetry.jl` — frozen (may append new columns with schema bump).
 - `scripts/trust_region_optimize.jl` — frozen (Phase 34 passes its new solver via `solver::DirectionSolver` keyword).
-- `scripts/phase33_benchmark_run.jl` — template to fork into `phase34_benchmark_run.jl`.
-- `scripts/phase33_benchmark_common.jl` — `BENCHMARK_CONFIGS`, `START_TYPES` (additive edits OK; existing entries must stay byte-identical).
-- `scripts/phase33_benchmark_synthesis.jl` — Phase 34 may reuse synthesis plotting code with a fork path for the new benchmark tag.
+- `scripts/benchmark_run.jl` — template to fork into `benchmark_run.jl`.
+- `scripts/benchmark_common.jl` — `BENCHMARK_CONFIGS`, `START_TYPES` (additive edits OK; existing entries must stay byte-identical).
+- `scripts/benchmark_synthesis.jl` — Phase 34 may reuse synthesis plotting code with a fork path for the new benchmark tag.
 
 ### Data
 - `results/raman/phase33/SYNTHESIS.md` — the 9-slot Steihaug reference baseline.
@@ -353,9 +353,9 @@ scripts/
 ├── trust_region_core.jl                            (241 LOC — frozen)
 ├── trust_region_telemetry.jl                       (294 LOC — frozen)
 ├── trust_region_optimize.jl                        (678 LOC — frozen)
-├── phase33_benchmark_common.jl                     (shared config)
-├── phase33_benchmark_run.jl                        (Plan 02 driver)
-└── phase33_benchmark_synthesis.jl                  (Plan 03 synthesis)
+├── benchmark_common.jl                     (shared config)
+├── benchmark_run.jl                        (Plan 02 driver)
+└── benchmark_synthesis.jl                  (Plan 03 synthesis)
 
 test/
 ├── test_trust_region_steihaug.jl                   (60/60 pass)

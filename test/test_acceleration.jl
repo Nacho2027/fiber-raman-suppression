@@ -18,8 +18,8 @@ using Test, LinearAlgebra, Random, Statistics, Printf
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 using MultiModeNoise
-include(joinpath(_ROOT, "scripts", "acceleration.jl"))
-include(joinpath(_ROOT, "scripts", "numerical_trust.jl"))
+include(joinpath(_ROOT, "scripts", "research", "analysis", "acceleration.jl"))
+include(joinpath(_ROOT, "scripts", "research", "analysis", "numerical_trust.jl"))
 
 @testset "Phase 32 acceleration primitives" begin
 
@@ -192,7 +192,7 @@ include(joinpath(_ROOT, "scripts", "numerical_trust.jl"))
 
     @testset "T17: include guard is idempotent" begin
         # Second include must not throw (const redefinition would)
-        @test_nowarn include(joinpath(_ROOT, "scripts", "acceleration.jl"))
+        @test_nowarn include(joinpath(_ROOT, "scripts", "research", "analysis", "acceleration.jl"))
         @test ACCELERATION_VERSION == "32.0"
     end
 end
@@ -299,7 +299,7 @@ end
         ))
         @test report["schema_version"] == "28.0"
         # grep-style invariant on the source file
-        src = read(joinpath(_ROOT, "scripts", "numerical_trust.jl"), String)
+        src = read(joinpath(_ROOT, "scripts", "research", "analysis", "numerical_trust.jl"), String)
         # Count occurrences of the literal constant definition line
         matches = collect(eachmatch(
             r"NUMERICAL_TRUST_SCHEMA_VERSION = \"28.0\"", src))

@@ -68,7 +68,7 @@ Cost: one forward solve + one backward solve ≈ 2 forward-solve times per
 gradient. Far cheaper than finite differences (which would need 8193 forward
 solves).
 
-Verification: `scripts/verification.jl` runs a Taylor-remainder test that
+Verification: `scripts/research/analysis/verification.jl` runs a Taylor-remainder test that
 confirms the residual scales as O(ε²). Slopes of 2.01 / 2.07 / 2.09 were
 recorded in Phase 4.
 
@@ -79,7 +79,7 @@ spatial-light-modulator (SLM) can carve phase-only; amplitude shaping requires
 either a loss-y amplitude SLM or a phase-to-amplitude conversion that itself
 discards energy.
 
-The `scripts/amplitude_optimization.jl` entry point is provided as an A/B
+The `scripts/lib/amplitude_optimization.jl` entry point is provided as an A/B
 comparison — phase-only is the default production path. See
 [adding-an-optimization-variable.md](./adding-an-optimization-variable.md)
 for the framework view.
@@ -88,7 +88,7 @@ for the framework view.
 
 Raman gain in silica peaks around 13.2 THz below the pump with a ~10-15 THz
 FWHM band. The cost-function mask (`band_mask`, constructed in
-`scripts/common.jl::setup_raman_problem`) is a boolean over `sim["fs"]`
+`scripts/lib/common.jl::setup_raman_problem`) is a boolean over `sim["fs"]`
 selecting this region. `compute_noise_map`-level precision is not needed —
 the mask merely has to enclose the Raman gain spectrum.
 

@@ -39,7 +39,7 @@ Build your own understanding of both the codebase and the numerical-analysis mat
 - `scripts/raman_optimization.jl`
 - `scripts/amplitude_optimization.jl`
 - `scripts/run_benchmarks.jl`
-- `scripts/phase13_hessian_eigspec.jl`
+- `scripts/hessian_eigspec.jl`
 - `scripts/determinism.jl`
 - `scripts/benchmark_threading.jl`
 - `src/simulation/`

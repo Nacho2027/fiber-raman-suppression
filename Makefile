@@ -40,7 +40,7 @@ test-full:
 	TEST_TIER=full $(JL) -t auto test/runtests.jl
 
 optimize:
-	$(JL) -t auto scripts/raman_optimization.jl
+	$(JL) -t auto scripts/canonical/optimize_raman.jl
 
 sweep:
 	@echo ""
@@ -49,17 +49,16 @@ sweep:
 	@echo ""
 	@echo "      burst-ssh \"cd fiber-raman-suppression && \\"
 	@echo "                 ~/bin/burst-run-heavy <SESSION-TAG> \\"
-	@echo "                 'julia -t auto --project=. scripts/run_sweep.jl'\""
+	@echo "                 'julia -t auto --project=. scripts/canonical/run_sweep.jl'\""
 	@echo ""
 	@echo "    See docs/quickstart-sweep.md for the full recipe."
 	@echo "    Press Ctrl-C within 3 seconds to abort this local run."
 	@echo ""
 	@sleep 3
-	$(JL) -t auto scripts/run_sweep.jl
+	$(JL) -t auto scripts/canonical/run_sweep.jl
 
 report:
-	$(JL) scripts/generate_sweep_reports.jl
-	$(JL) scripts/generate_presentation_figures.jl
+	$(JL) scripts/canonical/generate_reports.jl
 
 clean:
 	@rm -rf results/images/presentation/*.png

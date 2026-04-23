@@ -12,7 +12,7 @@
     - `mmf_trust_metrics`
     - baseline runner now returns reference/optimized trust summaries
 - Added a dedicated heavy-run driver:
-  - `scripts/mmf_phase36_baseline.jl`
+  - `scripts/baseline.jl`
     - regime sweep under `:sum`
     - cost-variant comparison on the strongest candidate regime
     - writes `results/raman/phase36/`

@@ -37,9 +37,9 @@ That is a real research transition: the comparisons are now more meaningful, but
 
 The old gap was visible in the code path:
 
-- `scripts/trust_region_optimize.jl` calls:
+- `scripts/research/trust_region/trust_region_optimize.jl` calls:
   `solve_subproblem(solver, g, H_op, Δ; M=M, proj=_proj)`
-- `scripts/trust_region_pcg.jl` expects:
+- `scripts/research/trust_region/trust_region_pcg.jl` expects:
   `solve_subproblem(...; M=nothing, proj=identity, ...)`
 
 The current bounded reruns through the real outer loop show:
@@ -92,6 +92,6 @@ Until then, the correct reading is:
 
 ## Sources
 
-- `scripts/trust_region_optimize.jl`
-- `scripts/trust_region_pcg.jl`
+- `scripts/research/trust_region/trust_region_optimize.jl`
+- `scripts/research/trust_region/trust_region_pcg.jl`
 - `results/raman/phase34/pcg_smoke/smoke.jld2`

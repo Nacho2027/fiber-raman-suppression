@@ -18,6 +18,9 @@ See `scripts/raman_optimization.jl` for the main optimization entry point and
 """
 module MultiModeNoise
 
+export OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
+       ensure_deterministic_environment, load_run, save_run
+
 using Tullio
 using SparseArrays
 using Arpack
@@ -41,5 +44,7 @@ include("analysis/analysis.jl")
 include("analysis/plotting.jl")
 
 include("helpers/helpers.jl")
+include("io/results.jl")
+include("runtime/determinism.jl")
 
 end

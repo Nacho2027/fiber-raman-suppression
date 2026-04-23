@@ -114,7 +114,7 @@ verification:
   greenfield but a gradient-validated DCT basis already exists for
   amplitude (`scripts/amplitude_optimization.jl:180-209`). The seed
   should explicitly scope extension, not invention.
-- `LOW-MEDIUM`: `phase13_hvp.jl:48` hardcodes `ε = 1e-4` for the FD-HVP.
+- `LOW-MEDIUM`: `hvp.jl:48` hardcodes `ε = 1e-4` for the FD-HVP.
   This is the wrong step at L-BFGS convergence (the regime where HVP
   matters most).
 - `LOW-MEDIUM`: `plot_chirp_sensitivity` at

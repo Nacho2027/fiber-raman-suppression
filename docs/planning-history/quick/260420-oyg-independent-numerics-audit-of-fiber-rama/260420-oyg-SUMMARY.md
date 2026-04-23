@@ -24,8 +24,8 @@ Working directory: `/home/ignaciojlizama/raman-wt-numerics` (branch
 
 2. **Verified** Phase 25 claims against actual code: `scripts/common.jl`,
    `scripts/raman_optimization.jl`, `scripts/amplitude_optimization.jl`,
-   `scripts/determinism.jl`, `scripts/phase13_hvp.jl`,
-   `scripts/phase13_hessian_eigspec.jl`, `scripts/benchmark_threading.jl`,
+   `scripts/determinism.jl`, `scripts/hvp.jl`,
+   `scripts/hessian_eigspec.jl`, `scripts/benchmark_threading.jl`,
    `src/simulation/simulate_disp_mmf.jl`,
    `src/simulation/sensitivity_disp_mmf.jl`, `src/helpers/helpers.jl`,
    `src/analysis/analysis.jl`. Full code audit trail in

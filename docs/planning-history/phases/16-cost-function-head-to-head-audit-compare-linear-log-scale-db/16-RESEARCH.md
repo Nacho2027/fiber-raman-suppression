@@ -6,7 +6,7 @@
 
 ## Summary
 
-Phase 16 is a methodology phase, not a discovery phase: the user has locked all 22 decisions in `16-CONTEXT.md`, and the research job is to (1) verify that those decisions are implementable against the existing codebase without touching shared files, (2) attach the ML loss-landscape literature the decision doc will cite, and (3) flag execution risks that the plan must guard against. The codebase scan confirms every reusable asset named in CONTEXT exists and exports the signatures CONTEXT claims (`optimize_spectral_phase`, `optimize_spectral_phase_sharp`, `make_sharp_problem`, `build_gauge_projector`, `fd_hvp`, `build_oracle`, `HVPOperator`, `input_band_mask`, `omega_vector`, `ensure_deterministic_environment`). The Phase-13 Hessian eigenspectrum pipeline (`scripts/phase13_hessian_eigspec.jl`, verified) is directly reusable for Phase 16's D-14 metric 4 — we wrap it, we do not reimplement it.
+Phase 16 is a methodology phase, not a discovery phase: the user has locked all 22 decisions in `16-CONTEXT.md`, and the research job is to (1) verify that those decisions are implementable against the existing codebase without touching shared files, (2) attach the ML loss-landscape literature the decision doc will cite, and (3) flag execution risks that the plan must guard against. The codebase scan confirms every reusable asset named in CONTEXT exists and exports the signatures CONTEXT claims (`optimize_spectral_phase`, `optimize_spectral_phase_sharp`, `make_sharp_problem`, `build_gauge_projector`, `fd_hvp`, `build_oracle`, `HVPOperator`, `input_band_mask`, `omega_vector`, `ensure_deterministic_environment`). The Phase-13 Hessian eigenspectrum pipeline (`scripts/hessian_eigspec.jl`, verified) is directly reusable for Phase 16's D-14 metric 4 — we wrap it, we do not reimplement it.
 
 The literature synthesis supports the conceptual bridge CONTEXT draws — "experimentally robust = flat minimum" — but forces one tightening: Zhuang et al. 2022 (GSAM) showed that low perturbed loss (SAM's proxy) can still sit in sharp basins, which argues the robustness metric (D-14 item 5) and the Hessian spectrum (item 4) should both weigh in the decision doc, not just one or the other. For the log-scale cost (D-02), the existing gradient chain-rule (`10/(J·ln10)` with `J_clamped = max(J, 1e-15)`) is mathematically correct and the clamp handles the only genuine failure mode (J→0); Phase 8 empirical record (20–28 dB deeper J) supports keeping it as a baseline horse in the race.
 
@@ -105,7 +105,7 @@ Phase 16 was added 2026-04-17; it does not map to the v2.0 requirement IDs (VERI
 | D-01…D-04 | Four cost-function variants | `optimize_spectral_phase` + `optimize_spectral_phase_sharp` + a new `cost_and_gradient_curvature_penalty` wrapper in `scripts/cost_audit_noise_aware.jl`. All verified callable. |
 | D-05…D-10 | Fair-comparison protocol | Grid choice matches existing canonical Phase 14 snapshot (Nt=8192, β_order=3, M=1); seeds reused across variants via `MersenneTwister(SEED)`; `f_abstol=0.01` matches the log_cost default in `optimize_spectral_phase:200`. Determinism guaranteed by Phase 15 (`FFTW.ESTIMATE` patched across 18 plan call sites in `src/simulation/*.jl`; FFTW+BLAS pinned to 1 thread). |
 | D-11…D-13 | Three (fiber, L, P) configs | All three reachable via `setup_raman_problem(fiber_preset=:SMF28 / :HNLF, L_fiber=…, P_cont=…)` with β_order=3 as required by 2-beta presets. |
-| D-14…D-15 | Per-run metrics | (1–3) directly from `Optim.OptimizationResult` (`Optim.minimum`, `Optim.iterations`, `Optim.f_trace`, wall clock). (4) via `scripts/phase13_hvp.jl :: build_oracle` + `HVPOperator` + `Arpack.eigs(:LR, nev=32)`, gauge-projected via `build_gauge_projector` from `sharpness_optimization.jl`. (5) by looping over σ values and calling `cost_and_gradient(φ_opt + σ·randn(), ...)`. |
+| D-14…D-15 | Per-run metrics | (1–3) directly from `Optim.OptimizationResult` (`Optim.minimum`, `Optim.iterations`, `Optim.f_trace`, wall clock). (4) via `scripts/hvp.jl :: build_oracle` + `HVPOperator` + `Arpack.eigs(:LR, nev=32)`, gauge-projected via `build_gauge_projector` from `sharpness_optimization.jl`. (5) by looping over σ values and calling `cost_and_gradient(φ_opt + σ·randn(), ...)`. |
 | D-16…D-19 | Reporting | CSVs via DataFrames+CSV.jl (already project deps); PNG figures via PyPlot @ 300 DPI matching project convention. |
 | D-20…D-22 | Execution discipline | Verified in "Project Constraints (from CLAUDE.md)" above. |
 
@@ -120,8 +120,8 @@ Phase 16 is a *wrapper-scripts* phase, so the tier map is much simpler than a mu
 | Physics forward/adjoint ODE solves | `src/simulation/*.jl` (MultiModeNoise core) | — | Canonical codebase layer; Phase 15 pinned the determinism here. |
 | Cost functions + L-BFGS (linear, log, GDD/boundary penalties) | `scripts/raman_optimization.jl` | `scripts/common.jl` (setup + shared utilities) | Already complete; `optimize_spectral_phase` is the dispatch entry for D-01/D-02. |
 | Sharpness regularizer + gauge projector | `scripts/sharpness_optimization.jl` | — | Already complete; `optimize_spectral_phase_sharp` is the dispatch for D-03. |
-| Gauge fix + polynomial projection + HVP | `scripts/phase13_primitives.jl` + `scripts/phase13_hvp.jl` | — | Already complete; reused for metric 4 (Hessian top-32). |
-| Hessian eigenspectrum pipeline | `scripts/phase13_hessian_eigspec.jl` | — | Already complete; Phase 16 wraps its `HVPOperator` pattern, not the full script. |
+| Gauge fix + polynomial projection + HVP | `scripts/primitives.jl` + `scripts/hvp.jl` | — | Already complete; reused for metric 4 (Hessian top-32). |
+| Hessian eigenspectrum pipeline | `scripts/hessian_eigspec.jl` | — | Already complete; Phase 16 wraps its `HVPOperator` pattern, not the full script. |
 | Determinism environment | `scripts/determinism.jl` | — | Already complete; Phase 16 calls `ensure_deterministic_environment()` at the top of every entry-point script. |
 | **New: D-04 cost wrapper (curvature penalty)** | `scripts/cost_audit_noise_aware.jl` | — | Wraps `cost_and_gradient` (unchanged) by adding `γ_curv · Σ_band (φ[i+1] - 2φ[i] + φ[i-1])² / Δω³`; autodiff-free analytical gradient mirrors the existing `λ_gdd` penalty code in `raman_optimization.jl:114–128`. |
 | **New: 12-run driver** | `scripts/cost_audit_driver.jl` | — | Sequential runner: 3 configs × 4 variants. Snapshots per-(variant, config) JLD2. |
@@ -137,7 +137,7 @@ Phase 16 is a *wrapper-scripts* phase, so the tier map is much simpler than a mu
 |---------|---------|---------|--------------|
 | Optim.jl | 1.13.3+ (Project.toml) | L-BFGS optimizer | `optimize_spectral_phase*` already use `Optim.only_fg!()`; we do not touch this. [CITED: julianlsolvers.github.io/Optim.jl] |
 | FFTW.jl | (unversioned, latest stable) | FFT plans | Phase 15 pinned `ESTIMATE` + 1 thread; Phase 16 imports wisdom for extra safety. [CITED: fftw.org/fftw3_doc] |
-| Arpack.jl | (unversioned) | Matrix-free Lanczos/Arnoldi `eigs` | Already used in `src/simulation/fibers.jl` for GRIN mode solver; reused in `phase13_hessian_eigspec.jl` for HVP-based eigendecomposition. [CITED: julialinearalgebra.github.io/Arpack.jl] — matrix-free contract: implement `size`, `eltype`, `issymmetric`, `mul!` on the operator. |
+| Arpack.jl | (unversioned) | Matrix-free Lanczos/Arnoldi `eigs` | Already used in `src/simulation/fibers.jl` for GRIN mode solver; reused in `hessian_eigspec.jl` for HVP-based eigendecomposition. [CITED: julialinearalgebra.github.io/Arpack.jl] — matrix-free contract: implement `size`, `eltype`, `issymmetric`, `mul!` on the operator. |
 | JLD2.jl | (unversioned) | Per-run snapshot I/O | Project-wide pattern; already used by `optimize_spectral_phase`'s `jldsave(...)` in `raman_optimization.jl:511`. |
 | CSV.jl | 0.10.15 | CSV writers for summaries | Already in `Project.toml`. |
 | DataFrames.jl | 1.8.1 | Tabular aggregation for summary_all.csv | Already in `Project.toml`. |
@@ -153,16 +153,16 @@ Phase 16 is a *wrapper-scripts* phase, so the tier map is much simpler than a mu
 | `scripts/common.jl` | `setup_raman_problem`, `FIBER_PRESETS`, `spectral_band_cost`, `check_boundary_conditions` | Required setup for every run. |
 | `scripts/raman_optimization.jl` | `cost_and_gradient`, `optimize_spectral_phase` | D-01, D-02 dispatch; D-04 wraps. |
 | `scripts/sharpness_optimization.jl` | `optimize_spectral_phase_sharp`, `make_sharp_problem`, `build_gauge_projector`, `cost_and_gradient_sharp`, `SO_input_band_mask` | D-03 dispatch; gauge projector reused for D-14 metric 4. |
-| `scripts/phase13_primitives.jl` | `input_band_mask`, `omega_vector`, `gauge_fix`, `polynomial_project` | Used via `scripts/phase13_hvp.jl`. |
-| `scripts/phase13_hvp.jl` | `build_oracle`, `fd_hvp`, `validate_hvp_taylor` | D-14 metric 4 HVP machinery. |
-| `scripts/phase13_hessian_eigspec.jl` | `HVPOperator` struct (AbstractMatrix-like adaptor for `Arpack.eigs`) | **Pattern reuse**, not import — Phase 16 defines its own `CA_HVPOperator` if desired to keep Rule P1 clean, but can also `include()` this script read-only. Recommend the latter. |
+| `scripts/primitives.jl` | `input_band_mask`, `omega_vector`, `gauge_fix`, `polynomial_project` | Used via `scripts/hvp.jl`. |
+| `scripts/hvp.jl` | `build_oracle`, `fd_hvp`, `validate_hvp_taylor` | D-14 metric 4 HVP machinery. |
+| `scripts/hessian_eigspec.jl` | `HVPOperator` struct (AbstractMatrix-like adaptor for `Arpack.eigs`) | **Pattern reuse**, not import — Phase 16 defines its own `CA_HVPOperator` if desired to keep Rule P1 clean, but can also `include()` this script read-only. Recommend the latter. |
 | `scripts/determinism.jl` | `ensure_deterministic_environment()` | Call once at top of every Phase 16 script. |
 
 ### Alternatives Considered
 
 | Instead of | Could Use | Tradeoff | Decision |
 |------------|-----------|----------|----------|
-| Arpack.jl (Fortran ARPACK wrapper) | KrylovKit.jl (pure-Julia Lanczos/Arnoldi) | KrylovKit is pure-Julia, thread-safe, and more actively maintained; Arpack has a known gotcha that `:SR` can stall at near-zero modes. | Keep Arpack — already used by `phase13_hessian_eigspec.jl` and `src/simulation/fibers.jl`; switching would require changing those too. Rule P1 forbids. [ASSUMED]: KrylovKit would likely be faster, but not verified for this codebase. |
+| Arpack.jl (Fortran ARPACK wrapper) | KrylovKit.jl (pure-Julia Lanczos/Arnoldi) | KrylovKit is pure-Julia, thread-safe, and more actively maintained; Arpack has a known gotcha that `:SR` can stall at near-zero modes. | Keep Arpack — already used by `hessian_eigspec.jl` and `src/simulation/fibers.jl`; switching would require changing those too. Rule P1 forbids. [ASSUMED]: KrylovKit would likely be faster, but not verified for this codebase. |
 | Hutchinson sharpness (Phase 14) | PyHessian-style Lanczos trace estimate | Hutchinson already implemented; Lanczos trace needs HVP which Phase 13 has but Phase 14 avoided. | Keep Hutchinson per D-03 lock. |
 | D-04 autodiff (Zygote/Enzyme) | Hand-coded analytical gradient (mirror `λ_gdd` pattern) | Hand-coded gradient is ≤ 30 lines and matches the existing project's explicit-gradient style (see REQUIREMENTS.md OUT-OF-SCOPE note about AD's poor fit with `DifferentialEquations.jl`). | Hand-code; the curvature penalty is a quadratic form in φ and its gradient is linear in φ. |
 | 2D loss-surface slice (Li 2018) | — | Compute cost ≈ 4× eigenspectrum (~200 forward solves per direction for a 30×30 grid). | CONTEXT defers; eigenspectrum is the quantitative substitute. |
@@ -315,7 +315,7 @@ Note: CONTEXT D-04 specifies the curvature average is **over the Raman band** (t
 **Example (already in codebase):**
 
 ```julia
-# Source: scripts/phase13_hessian_eigspec.jl:104-121
+# Source: scripts/hessian_eigspec.jl:104-121
 
 struct HVPOperator{F, V}
     n::Int
@@ -368,9 +368,9 @@ This gives a Hessian whose restriction to the non-gauge subspace is what we actu
 | Adjoint ODE gradient | Autodiff of `solve_disp_mmf` | `cost_and_gradient` (raman_optimization.jl:52) | REQUIREMENTS.md lists this as explicitly out of scope; hand-derived adjoint is exact and battle-tested. |
 | Sharpness estimator | New Hutchinson loop | `cost_and_gradient_sharp` (sharpness_optimization.jl:304) | Phase 14 has the gauge-projected Rademacher estimator with `n_samples=8` already verified. |
 | Gauge projector | New Gram-Schmidt code | `build_gauge_projector(ωs, input_band_mask)` (sharpness_optimization.jl:142) | Exact same projector that Phase 14 gauge-projects Hutchinson directions — reusing it for the Hessian projection guarantees consistency. |
-| Hessian-vector product | New finite-difference | `fd_hvp` (phase13_hvp.jl:148) | Already validated O(ε²) against Taylor remainder via `validate_hvp_taylor`. |
-| Matrix-free Lanczos on HVP | Raw Arpack wrapping | `HVPOperator` struct (phase13_hessian_eigspec.jl:104) | 18 lines, battle-tested at Nt=8192 for two configs in Phase 13 Plan 02. |
-| Input-band mask | New energy-cumulative mask | `SO_input_band_mask` (sharpness_optimization.jl:89) or `input_band_mask` (phase13_primitives.jl:106) — these two are *twins*, same algorithm | Pick `SO_input_band_mask` to stay within the sharpness_optimization.jl dependency set. |
+| Hessian-vector product | New finite-difference | `fd_hvp` (hvp.jl:148) | Already validated O(ε²) against Taylor remainder via `validate_hvp_taylor`. |
+| Matrix-free Lanczos on HVP | Raw Arpack wrapping | `HVPOperator` struct (hessian_eigspec.jl:104) | 18 lines, battle-tested at Nt=8192 for two configs in Phase 13 Plan 02. |
+| Input-band mask | New energy-cumulative mask | `SO_input_band_mask` (sharpness_optimization.jl:89) or `input_band_mask` (primitives.jl:106) — these two are *twins*, same algorithm | Pick `SO_input_band_mask` to stay within the sharpness_optimization.jl dependency set. |
 | FFTW wisdom + BLAS pinning | ad-hoc `FFTW.set_num_threads(1)` in every file | `ensure_deterministic_environment()` from `scripts/determinism.jl` | Phase 15's canonical single-source helper. |
 | Log-scale cost math | `10·log10(J)` + chain rule by hand | `log_cost=true` kwarg on `optimize_spectral_phase` (raman_optimization.jl:101–109) | Phase 8 fix already includes the `J_clamped = max(J, 1e-15)` guard against `J→0`. |
 | JLD2 manifest / per-run metadata | New JSON writer | Existing pattern: `jldsave(…; phi_opt=…, J_after=…, sim_Dt=…, …)` | `Phase13_hessian_eigspec.jl:269-315` shows 40+ keys; mimic the subset we need. |
@@ -435,7 +435,7 @@ This gives a Hessian whose restriction to the non-gauge subspace is what we actu
 
 ### Pitfall 5: Hessian eigenspectrum wall-time budget
 
-**What goes wrong:** Per `phase13_hessian_eigspec.jl` tolerances (`tol=1e-7`, `maxiter=500`), a `:LR` 20-eigenvalue extraction at Nt=8192 takes on the order of 2 forward+adjoint solves × (ncv ≥ 41 Lanczos vectors × some restarts) — with each HVP = 2 forward + 2 adjoint solves. On Phase 13's two completed runs this worked out to minutes per decomposition; at `nev=32` the cost scales super-linearly (ncv grows). Expect 5–20 min per (variant, config) eigendecomposition. For 12 variant-config pairs, that's ~1–4 hours of Hessian work alone.
+**What goes wrong:** Per `hessian_eigspec.jl` tolerances (`tol=1e-7`, `maxiter=500`), a `:LR` 20-eigenvalue extraction at Nt=8192 takes on the order of 2 forward+adjoint solves × (ncv ≥ 41 Lanczos vectors × some restarts) — with each HVP = 2 forward + 2 adjoint solves. On Phase 13's two completed runs this worked out to minutes per decomposition; at `nev=32` the cost scales super-linearly (ncv grows). Expect 5–20 min per (variant, config) eigendecomposition. For 12 variant-config pairs, that's ~1–4 hours of Hessian work alone.
 
 **Why it happens:** Krylov-subspace size `ncv` in Arpack defaults to `max(20, 2·nev+1) = 65` at `nev=32`. Each restart does ~ncv Lanczos steps; each step is 2 oracle calls; each oracle call is 1 forward + 1 adjoint solve.
 
@@ -474,12 +474,12 @@ This gives a Hessian whose restriction to the non-gauge subspace is what we actu
 
 ```julia
 # Source: scripts/cost_audit_driver.jl (new), pattern from
-# scripts/raman_optimization.jl:425 and scripts/phase13_hessian_eigspec.jl
+# scripts/raman_optimization.jl:425 and scripts/hessian_eigspec.jl
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "sharpness_optimization.jl"))
-include(joinpath(@__DIR__, "phase13_hvp.jl"))
+include(joinpath(@__DIR__, "hvp.jl"))
 include(joinpath(@__DIR__, "cost_audit_noise_aware.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
 ensure_deterministic_environment()
@@ -502,7 +502,7 @@ const CA_VARIANTS = [:linear, :log_dB, :sharp, :curvature]
 ### Example 2: Gauge-projected Hessian top-32 via Arpack
 
 ```julia
-# Source: new, pattern from scripts/phase13_hessian_eigspec.jl
+# Source: new, pattern from scripts/hessian_eigspec.jl
 
 function top32_eigenspectrum(phi_opt, uω0, fiber, sim, band_mask)
     # Build raw gradient oracle (log_cost=false, λ_gdd=0, λ_boundary=0
@@ -634,7 +634,7 @@ Phase 16 runs exclusively on the burst VM (`fiber-raman-burst`) per CLAUDE.md Ru
 | `/tmp/burst-heavy-lock` convention | CLAUDE.md Rule P5 serialization | ✓ (convention already in use by Session A/C/F per Phase 15 era) | — | — |
 | `burst-start` / `burst-ssh` / `burst-stop` helpers | Driver scripts | ✓ on `claude-code-host` only | — | Run the driver on burst VM directly (the helpers are for claude-code-host → burst orchestration). |
 | FFTW wisdom file `results/raman/phase14/fftw_wisdom.txt` | Belt-and-suspenders D-09 | ✓ (4295 bytes, verified) | fftw-3.3.10 | Import is wrapped in try/catch; warn and proceed if absent. |
-| `scripts/phase13_hvp.jl`, `scripts/phase13_hessian_eigspec.jl` | HVP & eigendecomposition reuse | ✓ (both verified present at 315 + 624 lines) | — | — |
+| `scripts/hvp.jl`, `scripts/hessian_eigspec.jl` | HVP & eigendecomposition reuse | ✓ (both verified present at 315 + 624 lines) | — | — |
 | `scripts/sharpness_optimization.jl` | D-03 | ✓ (496 lines) | — | — |
 | Phase 14 regression snapshot (`results/raman/phase14/vanilla_snapshot.jld2`) | Pre-phase-close smoke test | ✓ (verified present) | — | Smoke test skips with warning if missing. |
 
@@ -758,9 +758,9 @@ No other ASVS categories apply to this phase.
 - `/home/ignaciojlizama/raman-wt-H/scripts/raman_optimization.jl` lines 52–160 (`cost_and_gradient` + `log_cost` math), 166–220 (`optimize_spectral_phase` with `log_cost` and `f_abstol` dispatch).
 - `/home/ignaciojlizama/raman-wt-H/scripts/sharpness_optimization.jl` lines 142–193 (`build_gauge_projector`), 231–274 (`sharpness_estimator`), 304–350 (`cost_and_gradient_sharp`), 370–381 (`make_sharp_problem`), 425–496 (`optimize_spectral_phase_sharp` with defaults).
 - `/home/ignaciojlizama/raman-wt-H/scripts/common.jl` lines 260–276 (`spectral_band_cost`), 318–377 (`setup_raman_problem` incl. auto-sizing), 191–215 (`recommended_time_window`).
-- `/home/ignaciojlizama/raman-wt-H/scripts/phase13_hvp.jl` lines 84–119 (`build_oracle`), 148–165 (`fd_hvp`), 288–309 (`ensure_deterministic_fftw`).
-- `/home/ignaciojlizama/raman-wt-H/scripts/phase13_hessian_eigspec.jl` lines 104–124 (`HVPOperator`), 169–318 (`run_eigendecomposition`).
-- `/home/ignaciojlizama/raman-wt-H/scripts/phase13_primitives.jl` lines 106–127 (`input_band_mask`), 142–198 (`gauge_fix`), 228–279 (`polynomial_project`).
+- `/home/ignaciojlizama/raman-wt-H/scripts/hvp.jl` lines 84–119 (`build_oracle`), 148–165 (`fd_hvp`), 288–309 (`ensure_deterministic_fftw`).
+- `/home/ignaciojlizama/raman-wt-H/scripts/hessian_eigspec.jl` lines 104–124 (`HVPOperator`), 169–318 (`run_eigendecomposition`).
+- `/home/ignaciojlizama/raman-wt-H/scripts/primitives.jl` lines 106–127 (`input_band_mask`), 142–198 (`gauge_fix`), 228–279 (`polynomial_project`).
 - `/home/ignaciojlizama/raman-wt-H/scripts/determinism.jl` — `ensure_deterministic_environment()`.
 - `/home/ignaciojlizama/raman-wt-H/test/test_phase14_regression.jl` — regression gate pattern and tolerances.
 - `/home/ignaciojlizama/raman-wt-H/results/raman/phase14/fftw_wisdom.txt` — wisdom file (4 295 bytes, verified present).

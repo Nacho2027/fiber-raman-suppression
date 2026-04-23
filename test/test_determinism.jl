@@ -36,11 +36,11 @@ using Optim
 # Apply determinism BEFORE loading the pipeline. The include below triggers
 # the pipeline which also calls ensure_deterministic_environment(); this early
 # call makes the effect unambiguous and matches the end-user pattern.
-include(joinpath(@__DIR__, "..", "scripts", "determinism.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment(verbose=true)
 
-include(joinpath(@__DIR__, "..", "scripts", "common.jl"))
-include(joinpath(@__DIR__, "..", "scripts", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "lib", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared config — small-grid Raman suppression

@@ -16,7 +16,7 @@ using Test
 using LinearAlgebra
 using Printf
 
-include(joinpath(@__DIR__, "..", "scripts", "trust_region_core.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "research", "trust_region", "trust_region_core.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Small helper: wrap a dense symmetric matrix as an H_op closure

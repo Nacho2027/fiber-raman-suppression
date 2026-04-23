@@ -30,7 +30,7 @@ See `SUMMARY.md` and `BRANCH-A-NOTES.md`. Key results:
 - 20 rows at `results/raman/phase31/sweep_A_basis.jld2` (DCT N_phi=256 correctly skipped on bandwidth).
 - Best basis: **cubic N_phi=128 → −67.6 dB** (36 dB deeper than DCT at same dimensionality).
 - Polynomial plateau at −26.5 dB for all N_phi ∈ {3..8} — the quadratic-compensation basin dominates.
-- `scripts/phase31_basis_lib.jl`, `scripts/phase31_penalty_lib.jl`, `scripts/phase31_run.jl`, `test/test_phase31_basis.jl` committed. All 8 testsets pass.
+- `scripts/basis_lib.jl`, `scripts/penalty_lib.jl`, `scripts/run.jl`, `test/test_phase31_basis.jl` committed. All 8 testsets pass.
 
 ## Plan 02 — done (this topic)
 
@@ -73,7 +73,7 @@ Artifacts:
 - SI units as stated in the repo convention section.
 - Run simulations locally on the Mac (`julia -t auto`).
 - Log-cost + gradient rescale (`10 * log10(J)`, gradient scaled by `10 / (J * ln10)`) — penalties accumulate BEFORE the log_cost block.
-- Any `save_standard_set` call should be followed by `PyPlot.close("all")` + `GC.gc()` (known Julia 1.12 aarch64 PyCall finalizer segfault; already patched in `phase31_run.jl`).
+- Any `save_standard_set` call should be followed by `PyPlot.close("all")` + `GC.gc()` (known Julia 1.12 aarch64 PyCall finalizer segfault; already patched in `run.jl`).
 
 ## References
 

@@ -12,7 +12,7 @@ completed_at: 2026-04-20
   - `src/simulation/simulate_disp_mmf.jl`
   - `src/simulation/simulate_disp_gain_mmf.jl`
 - Deleted the dead placeholder file `src/simulation/simulate_disp_gain_smf.jl`.
-- Updated `scripts/phase15_benchmark.jl` so its planner-flag swap only touches live simulation files and uses the correct flag-count assertion.
+- Updated `scripts/benchmark.jl` so its planner-flag swap only touches live simulation files and uses the correct flag-count assertion.
 - Added fast-tier regression coverage for invalid pulse-form input.
 - Corrected stale living docs that still described the deleted file as active code or misclassified helper scripts as missing-driver bugs.
 

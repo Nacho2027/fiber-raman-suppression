@@ -11,8 +11,8 @@
 
 Today the pipeline optimizes two quantities, in separate scripts:
 
-- **Spectral phase** — `scripts/raman_optimization.jl` (the canonical path).
-- **Spectral amplitude** — `scripts/amplitude_optimization.jl` (A/B comparison path).
+- **Spectral phase** — `scripts/lib/raman_optimization.jl` (the canonical path).
+- **Spectral amplitude** — `scripts/lib/amplitude_optimization.jl` (A/B comparison path).
 
 Both consume the same adjoint machinery under the hood. The difference is in
 the `cost_and_gradient` wrapper that maps optimization variable → (J, ∇J).
