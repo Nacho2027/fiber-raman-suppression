@@ -1,6 +1,8 @@
 # GSD planning artifacts
 .planning/
 .claude/
+.codex
+.burst-sync/
 
 # Machine-specific MCP server config (paths differ per host)
 .mcp.json
