@@ -50,3 +50,19 @@
 - Required fix before next relaunch: commit and push
   `scripts/ops/parallel_research_lane.sh`, then relaunch the same MMF baseline
   so burst pulls the corrected bootstrap.
+- Fix committed and pushed as `b449ae2` (`fix(ops): instantiate clean research
+  worktrees`).
+- Relaunch at `2026-04-24T03:43:12Z` succeeded past package loading and entered
+  the actual Phase 36 driver.
+- Active remote wrapper log:
+  `results/burst-logs/M-mmfdeep_20260424T034316Z.log`.
+- Current stage as of the latest poll: mild `GRIN_50`, `L=1.0 m`, `P=0.05 W`,
+  `:sum` objective. Reference `J = 2.8345e-06` (`-55.48 dB`); objective
+  evaluations recovered to about `-55.51 dB`, which is consistent with the
+  existing expectation that mild is a no-headroom regime. Wait for the accepted
+  optimization/trust summary before treating this as final.
+- Permanent burst heavy lock is held by `M-mmfdeep`; do not start another heavy
+  MMF job on `fiber-raman-burst` until this run completes or is explicitly
+  stopped.
+- Next poll command:
+  `burst-ssh 'tail -n 420 /home/ignaciojlizama/fiber-raman-suppression/results/burst-logs/M-mmfdeep_20260424T034316Z.log; find /home/ignaciojlizama/fiber-raman-suppression/results/raman/phase36 -maxdepth 2 -type f | head -80'`
