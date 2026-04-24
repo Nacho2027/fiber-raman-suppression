@@ -350,14 +350,34 @@ That is a real result. It means the interesting scientific question has changed 
 - not "is `:dispersion` better?"
 - but "what changes around the `0.10 W` regime that makes dispersion preconditioning become useful there?"
 
-## Recommended next step
+## Final decision
 
-Near-term Phase 34 work should focus on:
+This note was originally written as a live status document while the bounded reruns were still open.
 
-- `:none` vs `:dispersion`
-- continuation-style starts, not same-config saddle starts
-- comparisons that treat hardest-rung final `J` as the primary decision metric
-- secondary reporting of acceptance reliability and bounded cost
-- identifying where the `:dispersion` gain helps, where it ties, and where it hurts
+That is no longer the right reading.
 
-The bounded reruns do **not** support spending more near-term effort on the current DCT preconditioner path.
+After the denser bounded validation and the longer-budget reruns, the correct project-level conclusion is:
+
+- the branch is now closed as an active Raman-suppression research path
+
+Why:
+
+- `:dispersion` never became a broad or stable win
+- the strongest signal was a localized bounded-case effect, not a transferable result
+- continuation remained the main driver of success throughout
+- `:dct` and the other alternatives did not justify more attention
+
+So the bounded reruns should now be read as a closure record, not as a prompt for open-ended follow-up.
+
+## What remains useful
+
+The useful durable conclusions from these reruns are:
+
+- the trust-region preconditioning path is now technically honest
+- gauge-safe PCG handling is necessary
+- continuation helps far more than preconditioning alone
+- `:dispersion` was the only candidate that ever looked plausible, and even that case was too narrow to keep alive as a Raman-suppression branch
+
+For the formal closure decision, see:
+
+- [phase-34-dispersion-closure.md](./phase-34-dispersion-closure.md)

@@ -76,19 +76,33 @@ Treat current Phase 34 evidence in two buckets.
 
 Those claims still need a harder bounded comparison and then a larger benchmark pass.
 
-## What should happen next
+## Current decision
 
-Before drawing stronger scientific conclusions from Phase 34 benchmarks, the right next steps are:
+This note should no longer be read as keeping the preconditioning hypothesis open for Raman suppression.
 
-1. compare `:none`, `:dispersion`, and `:dct` on a slightly harder but still bounded cold-start case
-2. decide whether Phase 34 should optimize for final objective, convergence speed, or cold-start recovery
-3. only then rerun a broader benchmark slice
+That was the right reading earlier, when the work was still disentangling wiring, gauge safety, and bounded-case behavior.
 
-Until then, the correct reading is:
+It is not the right reading now.
 
-- the **preconditioning hypothesis remains alive**
+The current project decision is:
+
+- the plumbing problem is fixed
+- the bounded evidence has been gathered
+- the dispersion-preconditioning branch is closed as an active Raman-suppression path
+
+Why:
+
+- the strongest post-fix signal was too localized to justify a durable Raman-suppression claim
+- continuation remained more important than preconditioning throughout
+- no alternative preconditioner produced a convincing broader result
+
+So the correct reading is now:
+
 - the **wiring problem is fixed**
-- the **current remaining question is effectiveness, not plumbing**
+- the **Phase 34 bounded comparisons were scientifically useful**
+- the **dispersion-preconditioning Raman branch is closed**
+
+If dispersion is revisited later, it should be under a different objective where dispersion is first-order physics, not as a continuation of this Raman-suppression thread.
 
 ## Sources
 
