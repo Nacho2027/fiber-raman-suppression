@@ -280,6 +280,30 @@ function _add_metadata_block!(fig, metadata; fontsize=8, x=0.01, y=0.01)
                   "alpha" => 0.7, "edgecolor" => "lightgray"))
 end
 
+function _tight_layout_with_optional_metadata!(fig, metadata; footer_y=0.006, bottom=0.045)
+    if isnothing(metadata)
+        fig.tight_layout()
+    else
+        fig.tight_layout(rect=(0.0, bottom, 1.0, 1.0))
+        _add_metadata_block!(fig, metadata; y=footer_y)
+    end
+end
+
+function _format_power_watts(P::Real)
+    P_float = Float64(P)
+    isfinite(P_float) || return "NaN W"
+    P_abs = abs(P_float)
+    if P_abs >= 1e3
+        return @sprintf("%.3g kW", P_float / 1e3)
+    elseif P_abs >= 1.0
+        return @sprintf("%.3g W", P_float)
+    elseif P_abs >= 1e-3
+        return @sprintf("%.3g mW", P_float * 1e3)
+    else
+        return @sprintf("%.3g uW", P_float * 1e6)
+    end
+end
+
 """
     compute_group_delay(φ_shifted, sim)
 
@@ -430,11 +454,7 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=n
     # Panel (3,2): empty — hide
     axs[3, 2].set_visible(false)
 
-    fig.tight_layout()
-
-    if !isnothing(metadata)
-        _add_metadata_block!(fig, metadata)
-    end
+    _tight_layout_with_optional_metadata!(fig, metadata)
 
     if !isnothing(save_path)
         savefig(save_path, dpi=300, bbox_inches="tight")
@@ -1011,8 +1031,9 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
 
         peak_in = maximum(r.P_in)
         peak_out = maximum(r.P_out)
-        axs[2, col].annotate(@sprintf("Peak in: %.0f W\nPeak out: %.0f W", peak_in, peak_out),
-            xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=9,
+        axs[2, col].annotate(@sprintf("Peak in: %s\nPeak out: %s",
+                _format_power_watts(peak_in), _format_power_watts(peak_out)),
+            xy=(0.05, 0.82), xycoords="axes fraction", va="top", fontsize=9,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
         # ── Row 3: Group delay τ(ω) [fs] ──
@@ -1044,11 +1065,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
     end
 
-    if !isnothing(metadata)
-        _add_metadata_block!(fig, metadata)
-    end
-
-    fig.tight_layout()
+    _tight_layout_with_optional_metadata!(fig, metadata)
 
     if !isnothing(save_path)
         savefig(save_path, dpi=300, bbox_inches="tight")
@@ -1187,8 +1204,9 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
 
         peak_in = maximum(r.P_in)
         peak_out = maximum(r.P_out)
-        axs[2, col].annotate(@sprintf("Peak in: %.1f W\nPeak out: %.1f W", peak_in, peak_out),
-            xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=9,
+        axs[2, col].annotate(@sprintf("Peak in: %s\nPeak out: %s",
+                _format_power_watts(peak_in), _format_power_watts(peak_out)),
+            xy=(0.05, 0.82), xycoords="axes fraction", va="top", fontsize=9,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
         # ── Row 3: Amplitude profile A(ω) on wavelength axis ──
@@ -1238,11 +1256,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
     end
 
-    if !isnothing(metadata)
-        _add_metadata_block!(fig, metadata)
-    end
-
-    fig.tight_layout()
+    _tight_layout_with_optional_metadata!(fig, metadata)
 
     if !isnothing(save_path)
         savefig(save_path, dpi=300, bbox_inches="tight")
