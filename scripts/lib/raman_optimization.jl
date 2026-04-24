@@ -42,12 +42,12 @@ using Optim
 using JLD2
 using JSON3
 
-include("common.jl")
-include("canonical_runs.jl")
-include("manifest_io.jl")
-include("objective_surface.jl")
-include("regularizers.jl")
-include("visualization.jl")
+include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "canonical_runs.jl"))
+include(joinpath(@__DIR__, "manifest_io.jl"))
+include(joinpath(@__DIR__, "objective_surface.jl"))
+include(joinpath(@__DIR__, "regularizers.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
 include(joinpath(@__DIR__, "..", "research", "analysis", "numerical_trust.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()

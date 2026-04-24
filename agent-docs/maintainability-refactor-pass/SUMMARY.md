@@ -27,6 +27,8 @@ Date: 2026-04-23
   - `scripts/research/analysis/physics_insight.jl`
   - `scripts/research/analysis/phase_analysis.jl`
   - `scripts/research/analysis/verification.jl`
+  - `scripts/research/analysis/phase_ablation.jl`
+  - `scripts/research/analysis/physics_completion.jl`
   - `scripts/research/propagation/propagation_reach.jl`
   - `scripts/research/propagation/propagation_z_resolved.jl`
   - `scripts/research/propagation/matched_quadratic_100m.jl`
@@ -47,16 +49,24 @@ Date: 2026-04-23
   payloads through the same field mapping and suppression-quality logic.
 - Added a shared sweep-aggregate row adapter in `scripts/lib/run_artifacts.jl`
   so maintained reports interpret aligned L x P aggregate grids in one place.
+- Added shared multistart aggregate adapters in `scripts/lib/run_artifacts.jl`
+  so maintained reports handle linear-vs-dB `J_final` compatibility and spread
+  classification in one place.
 - Rewired maintained artifact readers onto that adapter where safe:
   - `scripts/workflows/inspect_run.jl`
   - `scripts/workflows/generate_presentation_figures.jl`
   - `scripts/workflows/generate_sweep_reports.jl`
   - `scripts/workflows/run_sweep.jl`
+- Normalized remaining bare include paths inside the core optimization
+  libraries to the same `joinpath(@__DIR__, ...)` pattern used elsewhere:
+  - `scripts/lib/raman_optimization.jl`
+  - `scripts/lib/amplitude_optimization.jl`
 - Added fast regression coverage for:
   - the shared average→peak-power conversion helper
   - the canonical five-run registry contract
   - the shared canonical artifact-summary adapter
   - the shared sweep-aggregate row adapter
+  - the shared multistart aggregate adapters
 
 ## Duplication And Ambiguity Audit
 
@@ -85,11 +95,32 @@ Date: 2026-04-23
   Now:
   - shared authority in `scripts/lib/common.jl::peak_power_from_average_power`
 
+- Phase 10/11 research-analysis drivers no longer claim shared dependencies are
+  same-directory siblings.
+  Before:
+  - `scripts/research/analysis/phase_ablation.jl` resolved the project root as
+    `scripts/research` and included missing local `common.jl` / `visualization.jl`
+  - `scripts/research/analysis/physics_completion.jl` did the same for
+    `common.jl`, `visualization.jl`, and `raman_optimization.jl`
+  Now:
+  - both scripts compute the true repository root and include the maintained
+    shared files from `scripts/lib/`
+
+- Core optimization libraries no longer mix bare relative includes with
+  `@__DIR__`-anchored includes.
+  Before:
+  - `scripts/lib/raman_optimization.jl` used bare includes for local shared
+    files and anchored includes for other dependencies
+  - `scripts/lib/amplitude_optimization.jl` used bare includes for its local
+    shared files
+  Now:
+  - both use explicit `joinpath(@__DIR__, ...)` for local library dependencies
+
 ### Still active ambiguity
 
-- Maintained sweep/report workflows now share per-run artifact mapping and the
-  main sweep-aggregate grid-to-row mapping. Remaining report-layer duplication
-  is mostly formatting and legacy multistart summary handling.
+- Maintained sweep/report workflows now share per-run artifact mapping, the main
+  sweep-aggregate grid-to-row mapping, and multistart aggregate interpretation.
+  Remaining report-layer duplication is mostly markdown formatting.
 
 - Same-directory include chains still exist in maintained research code and can
   still obscure whether a dependency is study-local or shared:
@@ -124,8 +155,8 @@ Date: 2026-04-23
 
 ### Next
 
-- consider whether legacy multistart aggregate handling should get the same
-  adapter treatment as per-run and sweep-grid artifacts
+- consider whether report markdown assembly should be split into smaller
+  renderer helpers, but only if another report family starts reusing it
 - clean up the next maintained same-directory include chains in research
   analysis / propagation scripts
 - decide which research manifests deserve promotion and which should remain
@@ -158,3 +189,5 @@ Date: 2026-04-23
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/lib/raman_optimization.jl"); include("scripts/workflows/run_comparison.jl"); include("scripts/workflows/run_sweep.jl"); include("scripts/workflows/generate_presentation_figures.jl"); println("include smoke ok")'`
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/research/analysis/physics_insight.jl"); include("scripts/research/analysis/phase_analysis.jl"); include("scripts/research/propagation/propagation_reach.jl"); include("scripts/research/propagation/propagation_z_resolved.jl"); include("scripts/research/propagation/matched_quadratic_100m.jl"); include("scripts/research/benchmarks/benchmark_threading.jl"); include("scripts/research/benchmarks/benchmark_optimization.jl"); println("research include smoke ok")'`
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/workflows/run_benchmarks.jl"); include("scripts/research/analysis/verification.jl"); println("entrypoint include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/research/analysis/phase_ablation.jl"); include("scripts/research/analysis/physics_completion.jl"); println("research analysis include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/lib/raman_optimization.jl"); include("scripts/lib/amplitude_optimization.jl"); println("core optimization include smoke ok")'`

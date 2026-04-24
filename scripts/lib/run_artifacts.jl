@@ -179,4 +179,49 @@ function sort_sweep_points_by_suppression!(points)
     return points
 end
 
+function multistart_result_points(ms_results)
+    points = NamedTuple[]
+    for r in ms_results
+        J_raw = Float64(r.J_final)
+        J_dB = isnan(J_raw) ? NaN : (J_raw < 0 ? J_raw : MultiModeNoise.lin_to_dB(J_raw))
+        push!(points, (
+            start_idx = Int(r.start_idx),
+            sigma = Float64(r.sigma),
+            J_final = J_raw,
+            J_dB = J_dB,
+            converged = Bool(r.converged),
+        ))
+    end
+    return points
+end
+
+function multistart_spread_summary(points)
+    valid_J_dB = [p.J_dB for p in points if !isnan(p.J_dB)]
+    if isempty(valid_J_dB)
+        return (
+            n_valid = 0,
+            best_dB = NaN,
+            worst_dB = NaN,
+            spread_dB = NaN,
+            landscape = "No valid multistart results.",
+        )
+    end
+
+    best_dB = minimum(valid_J_dB)
+    worst_dB = maximum(valid_J_dB)
+    spread_dB = worst_dB - best_dB
+    landscape =
+        spread_dB < 3.0 ? "Relatively flat — single basin likely." :
+        spread_dB < 10.0 ? "Moderate variation — some local minima." :
+        "Wide spread — multiple distinct local minima."
+
+    return (
+        n_valid = length(valid_J_dB),
+        best_dB = best_dB,
+        worst_dB = worst_dB,
+        spread_dB = spread_dB,
+        landscape = landscape,
+    )
+end
+
 end # include guard

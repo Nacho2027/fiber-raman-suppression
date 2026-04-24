@@ -281,7 +281,7 @@ minimize energy transfer into the Raman-shifted frequency band.
     ms_path = joinpath(SR_SWEEP_DIR, "multistart_L2m_P030W.jld2")
     if isfile(ms_path)
         ms = load(ms_path)
-        ms_results = ms["ms_results"]  # Vector of NamedTuples
+        ms_points = multistart_result_points(ms["ms_results"])
 
         md *= """
 
@@ -290,25 +290,16 @@ minimize energy transfer into the Raman-shifted frequency band.
 | Start | Sigma | J [dB] | Converged |
 |-------|-------|--------|-----------|
 """
-        for r in ms_results
-            # J_final may be linear (>0) or already dB (<0) depending on log_cost setting
-            J_raw = r.J_final
-            J_dB = isnan(J_raw) ? NaN : (J_raw < 0 ? J_raw : MultiModeNoise.lin_to_dB(J_raw))
+        for r in ms_points
             md *= @sprintf("| %d | %.1f | %.1f | %s |\n",
-                r.start_idx, r.sigma, J_dB, r.converged ? "Yes" : "No")
+                r.start_idx, r.sigma, r.J_dB, r.converged ? "Yes" : "No")
         end
 
-        valid_J_dB = [let j=r.J_final; isnan(j) ? NaN : (j < 0 ? j : MultiModeNoise.lin_to_dB(j)) end
-                      for r in ms_results if !isnan(r.J_final)]
-        if length(valid_J_dB) > 0
-            best_ms = minimum(valid_J_dB)
-            worst_ms = maximum(valid_J_dB)
-            spread = worst_ms - best_ms
+        spread = multistart_spread_summary(ms_points)
+        if spread.n_valid > 0
             md *= @sprintf("\n**Spread:** %.1f dB (best: %.1f dB, worst: %.1f dB)\n",
-                spread, best_ms, worst_ms)
-            md *= spread < 3.0 ? "**Landscape:** Relatively flat — single basin likely.\n" :
-                  spread < 10.0 ? "**Landscape:** Moderate variation — some local minima.\n" :
-                  "**Landscape:** Wide spread — multiple distinct local minima.\n"
+                spread.spread_dB, spread.best_dB, spread.worst_dB)
+            md *= "**Landscape:** $(spread.landscape)\n"
         end
     else
         md *= "\n## Multi-Start\n\nNo multistart data found at $ms_path.\n"

@@ -115,6 +115,22 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
     @test sorted_points[1].J_after == 1e-5
     @test isnan(sorted_points[end].J_dB)
 
+    ms_points = multistart_result_points([
+        (start_idx = 1, sigma = 0.0, J_final = 1e-4, converged = true),
+        (start_idx = 2, sigma = 0.5, J_final = -42.0, converged = false),
+        (start_idx = 3, sigma = 1.0, J_final = NaN, converged = false),
+    ])
+    @test length(ms_points) == 3
+    @test ms_points[1].J_dB ≈ MultiModeNoise.lin_to_dB(1e-4)
+    @test ms_points[2].J_dB == -42.0
+    @test isnan(ms_points[3].J_dB)
+
+    ms_spread = multistart_spread_summary(ms_points)
+    @test ms_spread.n_valid == 2
+    @test ms_spread.best_dB == -42.0
+    @test ms_spread.worst_dB ≈ MultiModeNoise.lin_to_dB(1e-4)
+    @test occursin("single basin", ms_spread.landscape)
+
     rendered = sprint(io -> render_run_summary(summary; io=io))
     @test occursin("Standard image set complete: true", rendered)
     @test occursin("SMF-28", rendered)

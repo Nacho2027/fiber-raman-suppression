@@ -36,8 +36,8 @@ using PyPlot
 using MultiModeNoise
 using Optim
 
-include("common.jl")
-include("visualization.jl")
+include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "visualization.jl"))
 include(joinpath(@__DIR__, "determinism.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()

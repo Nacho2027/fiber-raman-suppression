@@ -54,11 +54,11 @@ using JLD2
 # ─────────────────────────────────────────────────────────────────────────────
 
 const _PC_SCRIPT_DIR   = dirname(abspath(@__FILE__))
-const _PC_PROJECT_ROOT = dirname(_PC_SCRIPT_DIR)  # scripts/ → project root
+const _PC_PROJECT_ROOT = normpath(joinpath(_PC_SCRIPT_DIR, "..", "..", ".."))
 
-include(joinpath(_PC_SCRIPT_DIR, "common.jl"))
-include(joinpath(_PC_SCRIPT_DIR, "visualization.jl"))
-include(joinpath(_PC_SCRIPT_DIR, "raman_optimization.jl"))
+include(joinpath(_PC_PROJECT_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_PC_PROJECT_ROOT, "scripts", "lib", "visualization.jl"))
+include(joinpath(_PC_PROJECT_ROOT, "scripts", "lib", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Include guard + constants (PC_ prefix)

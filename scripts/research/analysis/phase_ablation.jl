@@ -40,11 +40,11 @@ using PyPlot
 using JLD2
 using Interpolations
 
-# Include common utilities — path relative to this script's directory
+# Include shared library utilities through the project root, not local siblings.
 const _PAB_SCRIPT_DIR   = dirname(abspath(@__FILE__))
-const _PAB_PROJECT_ROOT = dirname(_PAB_SCRIPT_DIR)  # scripts/ → project root
-include(joinpath(_PAB_SCRIPT_DIR, "common.jl"))
-include(joinpath(_PAB_SCRIPT_DIR, "visualization.jl"))
+const _PAB_PROJECT_ROOT = normpath(joinpath(_PAB_SCRIPT_DIR, "..", "..", ".."))
+include(joinpath(_PAB_PROJECT_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_PAB_PROJECT_ROOT, "scripts", "lib", "visualization.jl"))
 
 if !(@isdefined _PAB_SCRIPT_LOADED)
 const _PAB_SCRIPT_LOADED = true
