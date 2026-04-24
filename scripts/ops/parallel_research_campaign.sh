@@ -102,6 +102,11 @@ mmf_lane_cmd="$(mk_lane_cmd mmf "$mmf_target" "$mmf_tag" "$mmf_machine_type" "$m
 multivar_lane_cmd="$(mk_lane_cmd multivar "$multivar_target" "$multivar_tag" "$multivar_machine_type" "$multivar_cmd" "$multivar_log")"
 longfiber_lane_cmd="$(mk_lane_cmd longfiber "$longfiber_target" "$longfiber_tag" "$longfiber_machine_type" "$longfiber_cmd" "$longfiber_log")"
 
+mk_tmux_cmd() {
+    local cmd="$1"
+    printf 'bash -lc %q' "$cmd"
+}
+
 cat <<EOF
 campaign_id=$campaign_id
 tmux_session=$tmux_session
@@ -123,9 +128,9 @@ if tmux has-session -t "$tmux_session" 2>/dev/null; then
     exit 4
 fi
 
-tmux new-session -d -s "$tmux_session" -n mmf "bash -lc $mmf_lane_cmd"
-tmux new-window -t "$tmux_session" -n multivar "bash -lc $multivar_lane_cmd"
-tmux new-window -t "$tmux_session" -n longfiber "bash -lc $longfiber_lane_cmd"
+tmux new-session -d -s "$tmux_session" -n mmf "$(mk_tmux_cmd "$mmf_lane_cmd")"
+tmux new-window -t "$tmux_session" -n multivar "$(mk_tmux_cmd "$multivar_lane_cmd")"
+tmux new-window -t "$tmux_session" -n longfiber "$(mk_tmux_cmd "$longfiber_lane_cmd")"
 tmux new-window -t "$tmux_session" -n notes "bash -lc 'cat <<\"TXT\"\nParallel research campaign: $campaign_id\n\nLocal logs:\n- $mmf_log\n- $multivar_log\n- $longfiber_log\n\nPoll with:\n  scripts/ops/parallel_research_poll.sh --log-root $log_root\n\nOr inspect panes with:\n  tmux capture-pane -pt $tmux_session:mmf\n  tmux capture-pane -pt $tmux_session:multivar\n  tmux capture-pane -pt $tmux_session:longfiber\nTXT\nexec bash'"
 
 echo "tmux session launched: $tmux_session"
