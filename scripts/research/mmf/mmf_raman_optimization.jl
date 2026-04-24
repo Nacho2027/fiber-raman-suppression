@@ -365,6 +365,8 @@ function plot_mmf_result(
     opt_result::NamedTuple;
     save_prefix::String = "mmf_opt",
     title_suffix::String = "",
+    variant::Symbol = :sum,
+    log_cost::Bool = true,
 )
     uω0_base = setup.uω0
     fiber    = setup.fiber
@@ -529,6 +531,12 @@ function run_mmf_baseline(;
     trust_ref = mmf_trust_metrics(φ0, setup)
     J_ref = trust_ref.cost_report.sum_lin
     J_ref_dB = trust_ref.cost_report.sum_dB
+    objective_spec = mmf_cost_surface_spec(
+        variant = variant,
+        log_cost = log_cost,
+        λ_gdd = 0.0,
+        λ_boundary = 0.0,
+    )
     @info @sprintf("Reference (φ=0): J_lin = %.4e (%.2f dB)", J_ref, J_ref_dB)
     @info "MMF objective surface: $(objective_spec.scalar_surface)"
 
@@ -565,6 +573,8 @@ function run_mmf_baseline(;
         φ0, opt.φ_opt, setup, opt;
         save_prefix = save_prefix,
         title_suffix = @sprintf("[%s, L=%gm, P=%gW]", String(preset), L_fiber, P_cont),
+        variant = variant,
+        log_cost = log_cost,
     )
 
     # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────
