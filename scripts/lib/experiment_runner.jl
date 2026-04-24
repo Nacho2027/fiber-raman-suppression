@@ -1,10 +1,12 @@
 """
 Thin execution layer for validated front-layer experiment specs.
 
-This currently supports the honest first slice only:
+This currently supports the honest first slices only:
 
 - `single_mode`
-- variables `[:phase]`
+- supported variables `[:phase]`
+- experimental variables `[:phase, :amplitude]`, `[:phase, :energy]`, and
+  `[:phase, :amplitude, :energy]`
 - objective `raman_band`
 - solver `lbfgs`
 """
@@ -168,6 +170,7 @@ function supported_experiment_run_kwargs(spec)
         λ_gdd = λ_gdd,
         λ_boundary = Float64(λ_boundary),
         log_cost = spec.objective.log_cost,
+        solver_reltol = spec.solver.reltol,
     )
 
     if mode == :phase_only

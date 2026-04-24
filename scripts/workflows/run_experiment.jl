@@ -7,6 +7,7 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl path/to/experiment.toml
     julia --project=. -t auto scripts/canonical/run_experiment.jl smf28_L2m_P0p2W
     julia --project=. -t auto scripts/canonical/run_experiment.jl --list
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --objectives
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
 
 The current implementation is intentionally narrow:
@@ -45,12 +46,20 @@ end
 function run_experiment_main(args=ARGS)
     if isempty(args)
         spec = load_experiment_spec()
-        return run_supported_experiment(spec)
+        result = run_supported_experiment(spec)
+        render_experiment_completion_summary(result)
+        return result
     end
 
     if args[1] == "--list"
         length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --list")
         _print_available_experiment_configs()
+        return nothing
+    end
+
+    if args[1] == "--objectives"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --objectives")
+        render_objective_registry()
         return nothing
     end
 
@@ -63,7 +72,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --dry-run [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --objectives | --dry-run [spec]]")
 
     spec = load_experiment_spec(args[1])
     result = run_supported_experiment(spec)

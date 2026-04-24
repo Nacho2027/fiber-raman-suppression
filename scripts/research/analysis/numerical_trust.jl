@@ -140,6 +140,7 @@ function build_numerical_trust_report(;
         ),
         "energy" => Dict(
             "drift" => energy_drift,
+            "metric" => "photon_number_drift",
             "verdict" => energy_verdict,
         ),
         "gradient_validation" => grad_block,
@@ -182,7 +183,7 @@ function write_numerical_trust_report(path::AbstractString, report::Dict{String,
         println(io, @sprintf("- Output edge fraction: `%.3e`", bc["output_edge_frac"]))
         println(io, @sprintf("- Max edge fraction: `%.3e`", bc["max_edge_frac"]))
         println(io)
-        println(io, "## Energy")
+        println(io, "## Photon Number Conservation")
         println(io, @sprintf("- Verdict: **%s**", en["verdict"]))
         println(io, @sprintf("- Relative drift: `%.3e`", en["drift"]))
         println(io)

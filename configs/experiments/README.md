@@ -21,6 +21,12 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research
 The dry-run output shows the resolved execution mode and whether export is
 currently supported for that mode.
 
+List objective/cost contracts available to configs:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
+```
+
 Run a validated config:
 
 ```bash
@@ -38,11 +44,14 @@ step is obvious.
 ## Safe Starting Surfaces
 
 - `research_engine_poc.toml` is the supported single-mode phase-only surface.
+- `research_engine_smoke.toml` is the tiny phase-only smoke surface for
+  CLI/artifact verification.
 - `smf28_phase_amplitude_energy_poc.toml` is the experimental single-mode
   phase/amplitude/energy surface.
 
-Use the supported config for baseline lab runs. Use the experimental config
-when deliberately testing multivariable controls.
+Use `research_engine_poc.toml` for baseline lab runs. Use
+`research_engine_smoke.toml` for quick mechanical verification. Use the
+experimental config when deliberately testing multivariable controls.
 
 ## Knobs Researchers Can Change First
 
@@ -52,6 +61,7 @@ when deliberately testing multivariable controls.
 - `problem.Nt`
 - `problem.time_window`
 - `controls.variables`
+- `objective.kind`, within the registered objective allowlist
 - `objective.regularizer` weights
 - `solver.max_iter`
 - `solver.validate_gradient`
@@ -66,6 +76,8 @@ If a combination is not supported, validation should fail before compute.
   and `["phase", "amplitude", "energy"]`.
 - The only implemented objective in this front layer is `raman_band`.
 - The only implemented solver in this front layer is `lbfgs`.
+- Objective names and allowed regularizers are code-defined in
+  `scripts/lib/objective_registry.jl`; configs select from that registry.
 - Export/SLM handoff is currently phase-only. Multivariable export requests are
   rejected during validation until the exporter can represent amplitude and
   energy controls explicitly.

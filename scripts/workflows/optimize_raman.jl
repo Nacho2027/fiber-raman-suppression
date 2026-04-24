@@ -55,6 +55,8 @@ function canonical_optimize_main(args=ARGS)
         sim = result_bundle.sim,
         band_mask = result_bundle.band_mask,
         Δf = result_bundle.Δf,
+        artifact_validation = hasproperty(result_bundle, :artifact_validation) ?
+            result_bundle.artifact_validation : nothing,
     )
 end
 

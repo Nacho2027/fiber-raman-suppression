@@ -54,6 +54,28 @@ Sweep:
 julia --project=. -t auto scripts/canonical/run_sweep.jl smf28_hnlf_default
 ```
 
+## Minimum Lab-Ready Gate
+
+A run is not lab-ready just because it produced a JLD2 file or PNGs. For the
+supported single-run surface, acceptance requires:
+
+- `scripts/canonical/inspect_run.jl <run_dir>` reports a complete standard
+  image set
+- `<prefix>_trust.md` reports overall `PASS`
+- determinism, boundary, photon-number conservation, gradient validation, and
+  cost-surface sections are all `PASS`
+- the four standard images are visually inspected:
+  `_phase_profile.png`, `_evolution.png`, `_phase_diagnostic.png`, and
+  `_evolution_unshaped.png`
+- an export bundle can be generated with `scripts/canonical/export_run.jl`
+
+The primary lab baseline is `smf28_L2m_P0p2W`. It must additionally report
+`converged=true` before being used as the reference baseline for lab handoff.
+
+The `hnlf_L0p5m_P0p01W` config is an approved comparison/reference run. Its
+trust report must still be `PASS`, but optimizer convergence is reported as a
+separate status rather than hidden.
+
 ## Experimental, not first-line lab surface
 
 These remain useful, but they are not part of the first supported lab contract:

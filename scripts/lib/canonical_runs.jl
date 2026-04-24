@@ -76,6 +76,7 @@ function _normalize_run_kwargs(run_table::AbstractDict{<:Any,<:Any})
         λ_gdd = get(run_table, "lambda_gdd", :auto),
         λ_boundary = Float64(get(run_table, "lambda_boundary", 1.0)),
         log_cost = Bool(get(run_table, "log_cost", true)),
+        solver_reltol = Float64(get(run_table, "solver_reltol", 1e-8)),
         pulse_fwhm = Float64(get(run_table, "pulse_fwhm", 185e-15)),
         pulse_rep_rate = Float64(get(run_table, "pulse_rep_rate", 80.5e6)),
         pulse_shape = String(get(run_table, "pulse_shape", "sech_sq")),

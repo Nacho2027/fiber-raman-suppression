@@ -33,6 +33,7 @@ Docs: docs/guides/quickstart-optimization.md
 try using Revise catch end
 using Printf
 using LinearAlgebra
+using Statistics
 using FFTW
 using Logging
 ENV["MPLBACKEND"] = "Agg"  # Non-interactive backend for headless execution
@@ -233,12 +234,14 @@ end
 Validate the adjoint gradient against finite differences.
 Tests a few random phase components to make sure they agree.
 """
-function validate_gradient(uω0_base, fiber, sim, band_mask; n_checks=5, ε=1e-5)
+function validate_gradient(uω0_base, fiber, sim, band_mask;
+    n_checks=5, ε=1e-5, λ_gdd=0.0, λ_boundary=0.0, log_cost::Bool=true)
     Nt = sim["Nt"]
     M = sim["M"]
     φ_test = 0.1 * randn(Nt, M)
 
-    J0, grad = cost_and_gradient(φ_test, uω0_base, fiber, sim, band_mask)
+    J0, grad = cost_and_gradient(φ_test, uω0_base, fiber, sim, band_mask;
+        λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
     # Pick indices where the pulse has significant amplitude (near center of spectrum)
     # The pulse energy is concentrated in the middle of the FFT grid
@@ -252,11 +255,13 @@ function validate_gradient(uω0_base, fiber, sim, band_mask; n_checks=5, ε=1e-5
     for idx in indices
         φ_plus = copy(φ_test)
         φ_plus[idx, 1] += ε
-        J_plus, _ = cost_and_gradient(φ_plus, uω0_base, fiber, sim, band_mask)
+        J_plus, _ = cost_and_gradient(φ_plus, uω0_base, fiber, sim, band_mask;
+            λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
         φ_minus = copy(φ_test)
         φ_minus[idx, 1] -= ε
-        J_minus, _ = cost_and_gradient(φ_minus, uω0_base, fiber, sim, band_mask)
+        J_minus, _ = cost_and_gradient(φ_minus, uω0_base, fiber, sim, band_mask;
+            λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
         fd_grad = (J_plus - J_minus) / (2ε)
         adj_grad = grad[idx, 1]
@@ -468,6 +473,7 @@ function build_raman_result_payload(;
     phi_opt,
     uω0,
     E_conservation::Real,
+    photon_number_drift::Real=E_conservation,
     bc_input_frac::Real,
     bc_output_frac::Real,
     bc_input_ok::Bool,
@@ -504,6 +510,7 @@ function build_raman_result_payload(;
         uomega0 = uω0,
         # Diagnostics
         E_conservation = Float64(E_conservation),
+        photon_number_drift = Float64(photon_number_drift),
         bc_input_frac = Float64(bc_input_frac),
         bc_output_frac = Float64(bc_output_frac),
         bc_input_ok = bc_input_ok,
@@ -540,6 +547,7 @@ function build_raman_manifest_entry(payload::NamedTuple, jld2_path::AbstractStri
         "time_window_ps" => payload.time_window_ps,
         "grad_norm" => payload.grad_norm,
         "E_conservation" => payload.E_conservation,
+        "photon_number_drift" => payload.photon_number_drift,
         "bc_ok" => payload.bc_input_ok && payload.bc_output_ok,
         "trust_overall" => payload.trust_report["overall_verdict"],
         "trust_report_md" => payload.trust_report_md,
@@ -553,9 +561,10 @@ end
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
     λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
-    log_cost::Bool=true, kwargs...)
+    log_cost::Bool=true, solver_reltol=1e-8, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
+    fiber["reltol"] = Float64(solver_reltol)
 
     # Construct metadata for figure annotations (META-01)
     _λ0 = get(kwargs, :λ0, 1550e-9)
@@ -587,7 +596,9 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     if validate
         @info "Gradient Validation"
-        grad_validation = validate_gradient(uω0, fiber, sim, band_mask; n_checks=3)
+        grad_validation = validate_gradient(uω0, fiber, sim, band_mask;
+            n_checks=3, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
+            log_cost=log_cost)
     else
         grad_validation = nothing
     end
@@ -605,22 +616,25 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask; log_cost=false)
     ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
 
-    # Boundary check on optimized input pulse
+    # Boundary check on optimized input pulse. Use the raw time-domain field:
+    # `check_boundary_conditions` divides by the attenuator for legacy callers,
+    # which falsely inflates near-zero edge noise in this trust path.
     uω0_opt = @. uω0 * cis(φ_after)
     ut0_opt = ifft(uω0_opt, 1)
-    bc_input_ok, bc_input_frac = check_boundary_conditions(ut0_opt, sim)
+    bc_input_ok, bc_input_frac = check_raw_temporal_edges(ut0_opt;
+        threshold=TRUST_THRESHOLDS.edge_frac_pass)
 
     # Boundary check on output pulse
     fiber_bc = deepcopy(fiber)
     fiber_bc["zsave"] = [fiber["L"]]
     sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
-    bc_output_ok, bc_output_frac = check_boundary_conditions(sol_bc["ut_z"][end, :, :], sim)
+    bc_output_ok, bc_output_frac = check_raw_temporal_edges(sol_bc["ut_z"][end, :, :];
+        threshold=TRUST_THRESHOLDS.edge_frac_pass)
 
-    # Energy conservation
-    E_in = sum(abs2.(uω0_opt))
+    # Photon-number conservation. For Raman/self-steepening GNLSE, photon
+    # number is the physical invariant; raw field energy can drift.
     uωf = sol_bc["uω_z"][end, :, :]
-    E_out = sum(abs2.(uωf))
-    E_conservation = abs(E_out / E_in - 1.0)
+    photon_drift = photon_number_drift(uω0_opt, uωf, sim)
 
     # Gradient norm (convergence quality)
     grad_norm = norm(grad_after)
@@ -648,7 +662,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     │  ‖∇J‖         %.2e
     ├─────────────────────────────────────────────────┤
     │  Peak power   in: %.0f W → out: %.0f W
-    │  Energy cons. %.2e (%.1f%%)
+    │  Photon drift %.2e (%.1f%%)
     ├─────────────────────────────────────────────────┤
     │  Boundary (input)   %.2e  %s
     │  Boundary (output)  %.2e  %s
@@ -658,13 +672,13 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         Nt, tw_ps,
         λ_gdd_val, λ_boundary,
         objective_spec.scalar_surface,
-        max_iter, elapsed,
+        Optim.iterations(result), elapsed,
         J_before, MultiModeNoise.lin_to_dB(J_before),
         J_after, MultiModeNoise.lin_to_dB(J_after),
         ΔJ_dB,
         grad_norm,
         P_peak_in, P_peak_out,
-        E_conservation, E_conservation * 100,
+        photon_drift, photon_drift * 100,
         bc_input_frac, bc_input_ok ? "OK" : "⚠ DANGER",
         bc_output_frac, bc_output_ok ? "OK" : "⚠ DANGER")
 
@@ -677,7 +691,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         det_status=det_status,
         edge_input_frac=bc_input_frac,
         edge_output_frac=bc_output_frac,
-        energy_drift=E_conservation,
+        energy_drift=photon_drift,
         gradient_validation=grad_validation,
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
@@ -713,7 +727,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         convergence_history = convergence_history,
         phi_opt = φ_after,
         uω0 = uω0,
-        E_conservation = E_conservation,
+        E_conservation = photon_drift,
+        photon_number_drift = photon_drift,
         bc_input_frac = bc_input_frac,
         bc_output_frac = bc_output_frac,
         bc_input_ok = bc_input_ok,

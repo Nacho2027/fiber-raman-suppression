@@ -186,9 +186,9 @@ function verification_main()
 # Threshold: 1% is the target per VERIF-02 requirement. Failure means the config
 # has significant pulse energy near the time-window boundary (see PITFALL-2).
 #
-# sim["ωs"] is the ABSOLUTE angular frequency grid (ω₀ already included):
-#   ωs = 2π*(f0 + fftshift(fftfreq(Nt, 1/Δt)))
-# Use abs.(omega_s) directly — do NOT add omega_0 again.
+# sim["ωs"] is the ABSOLUTE angular frequency grid (ω₀ already included), but
+# it is stored in shifted order while uomega is in FFT order. Use
+# fftshift(abs.(omega_s)) as the denominator. Do NOT add omega_0 again.
 
 """
     compute_photon_number(uomega, sim)
@@ -203,14 +203,14 @@ Photon number is the conserved quantity for the GNLSE with self-steepening
 (Agrawal NFF 6th ed. section 2.3; Brabec & Krausz 2000).
 """
 function compute_photon_number(uomega, sim)
-    omega_s = sim["ωs"]       # absolute angular frequency grid (rad/ps); includes ω₀
+    omega_s = sim["ωs"]       # shifted absolute angular frequency grid (rad/ps); includes ω₀
     Delta_t = sim["Δt"]       # time step (ps)
-    # sim["ωs"] = 2π*(f0 + fftshift(fftfreq(Nt, 1/Δt))) is already the absolute frequency.
-    # Do NOT add omega_0 again — that would double-count the carrier and increase the
-    # minimum denominator value artificially. Use abs.(omega_s) directly.
+    # sim["ωs"] = 2π*(f0 + fftshift(fftfreq(Nt, 1/Δt))) is already the absolute
+    # frequency. Do NOT add omega_0 again. Spectral fields are in FFT order, so
+    # shift the denominator back before dividing.
     # Near the band edge (negative frequencies), omega_s can be negative; abs() ensures
     # the denominator is always positive. At 1550nm, min|omega_s| ≈ 0.1 rad/ps (safe).
-    abs_omega = abs.(omega_s)
+    abs_omega = fftshift(abs.(omega_s))
     return sum(abs2.(uomega) ./ abs_omega) * Delta_t
 end
 

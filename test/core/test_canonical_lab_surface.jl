@@ -92,6 +92,19 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
     @test suppression_quality_label(1e-5) == "excellent"
     @test suppression_quality_label(1e-5; uppercase=true) == "EXCELLENT"
 
+    attenuated = zeros(Float64, 100, 1)
+    attenuated[50, 1] = 1.0
+    attenuated[1, 1] = 1e-12
+    sim_with_attenuator = Dict("Nt" => 100, "attenuator" => fill(1.0, 100, 1))
+    sim_with_attenuator["attenuator"][1, 1] = 1e-40
+    _, legacy_frac = check_boundary_conditions(attenuated, sim_with_attenuator)
+    raw_ok, raw_frac = check_raw_temporal_edges(attenuated)
+    clamped_edge = 1e-12 / sqrt(eps(Float64))
+    expected_legacy_frac = clamped_edge^2 / (1.0 + clamped_edge^2)
+    @test legacy_frac ≈ expected_legacy_frac
+    @test raw_frac < 1e-20
+    @test raw_ok
+
     aggregate = Dict{String,Any}(
         "L_vals" => [1.0, 2.0],
         "P_vals" => [0.05, 0.10],

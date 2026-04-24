@@ -3,6 +3,7 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 
 @testset "Experiment front layer" begin
     @test "research_engine_poc" in approved_experiment_config_ids()
+    @test "research_engine_smoke" in approved_experiment_config_ids()
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
@@ -15,8 +16,25 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test spec.objective.kind == :raman_band
     @test spec.solver.kind == :lbfgs
     @test spec.export_plan.profile == :neutral_csv_v1
+    @test :raman_band in registered_objective_kinds(:single_mode)
+    objective_contract = experiment_objective_contract(spec)
+    @test objective_contract.kind == :raman_band
+    @test objective_contract.backend == :raman_optimization
+    @test (:phase,) in objective_contract.supported_variables
+    @test :gdd in objective_contract.allowed_regularizers
     caps = validate_experiment_spec(spec)
     @test (:phase,) in caps.variables
+
+    smoke_spec = load_experiment_spec("research_engine_smoke")
+    @test smoke_spec.id == "smf28_phase_smoke"
+    @test smoke_spec.maturity == "supported"
+    @test smoke_spec.problem.regime == :single_mode
+    @test smoke_spec.controls.variables == (:phase,)
+    @test smoke_spec.solver.max_iter == 1
+    smoke_kwargs = supported_experiment_run_kwargs(smoke_spec)
+    @test smoke_kwargs.Nt == 1024
+    @test smoke_kwargs.L_fiber == 0.05
+    @test smoke_kwargs.P_cont == 0.001
 
     mv_spec = load_experiment_spec("smf28_phase_amplitude_energy_poc")
     @test mv_spec.id == "smf28_phase_amplitude_energy_poc"
@@ -52,6 +70,7 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test occursin("Execution: mode=phase_only", rendered)
     @test occursin("Controls: variables=[:phase]", rendered)
     @test occursin("Objective: kind=raman_band", rendered)
+    @test occursin("backend=raman_optimization", rendered)
 
     rendered_mv = render_experiment_plan(mv_spec)
     @test occursin("Execution: mode=multivar", rendered_mv)
@@ -93,6 +112,12 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test occursin("Artifact validation: complete", cli_summary)
     @test occursin("Standard images: complete", cli_summary)
 
+    objective_listing = sprint(io -> render_objective_registry(; io=io))
+    @test occursin("Registered objective contracts", objective_listing)
+    @test occursin("raman_band", objective_listing)
+    @test occursin("backend=raman_optimization", objective_listing)
+    @test occursin("regularizers=gdd, boundary", objective_listing)
+
     rm(string(save_prefix, "_phase_diagnostic.png"))
     @test_throws ArgumentError validate_experiment_artifacts(fake_bundle)
 
@@ -107,6 +132,18 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
         controls = (mv_spec.controls..., variables = (:phase, :mode_coeffs)),
     )
     @test_throws ArgumentError validate_experiment_spec(unsupported_mv)
+
+    unknown_objective = (
+        spec...,
+        objective = (spec.objective..., kind = :made_up_cost),
+    )
+    @test_throws ArgumentError validate_experiment_spec(unknown_objective)
+
+    unknown_regularizer = (
+        spec...,
+        objective = (spec.objective..., regularizers = Dict{Symbol,Any}(:not_a_real_penalty => 1.0)),
+    )
+    @test_throws ArgumentError validate_experiment_spec(unknown_regularizer)
 
     mv_export = (
         mv_spec...,
@@ -123,4 +160,11 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     wrapper = read(joinpath(_ROOT, "scripts", "canonical", "run_experiment.jl"), String)
     @test occursin("workflows\", \"run_experiment.jl", wrapper)
     @test occursin("run_experiment_main(ARGS)", wrapper)
+
+    workflow = read(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"), String)
+    @test count("render_experiment_completion_summary", workflow) >= 2
+    @test occursin("--objectives", workflow)
+
+    optimize_workflow = read(joinpath(_ROOT, "scripts", "workflows", "optimize_raman.jl"), String)
+    @test occursin("artifact_validation", optimize_workflow)
 end

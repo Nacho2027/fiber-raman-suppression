@@ -56,26 +56,6 @@ const SW_RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
-    compute_photon_number(uomega, sim)
-
-Photon number from spectral field and simulation parameters.
-Uses abs.(sim["ωs"]) directly — sim["ωs"] already includes ω₀ carrier offset.
-(Verified in Phase 4: no double-counting.)
-
-# Arguments
-- `uomega`: complex spectral field, shape (Nt, M)
-- `sim`: simulation parameter dict with keys "ωs" (rad/ps) and "Δt" (ps)
-"""
-function compute_photon_number(uomega, sim)
-    omega_s = sim["ωs"]      # absolute angular frequency grid [rad/ps]; includes ω₀
-    Delta_t = sim["Δt"]      # time step [ps]
-    # abs.(omega_s) avoids issues with negative-frequency bins.
-    # Near 1550nm, min|omega_s| ≈ 0.1 rad/ps (denominator is safe).
-    abs_omega = abs.(omega_s)
-    return sum(abs2.(uomega) ./ abs_omega) * Delta_t
-end
-
-"""
     compute_photon_drift(result, uω0, fiber, sim) -> Float64
 
 Re-propagate the optimized input field through the fiber and compute the
@@ -98,9 +78,7 @@ function compute_photon_drift(result, uω0, fiber, sim)
     fiber_prop["zsave"] = [fiber["L"]]
     sol = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_prop, sim)
     uωf = sol["uω_z"][end, :, :]
-    N_in  = compute_photon_number(uω0_opt, sim)
-    N_out = compute_photon_number(uωf, sim)
-    return abs(N_out / N_in - 1.0) * 100.0   # percent drift
+    return photon_number_drift(uω0_opt, uωf, sim) * 100.0
 end
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ const _EXPERIMENT_SPEC_JL_LOADED = true
 using TOML
 
 include(joinpath(@__DIR__, "canonical_runs.jl"))
+include(joinpath(@__DIR__, "objective_registry.jl"))
 
 const EXPERIMENT_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
 const DEFAULT_EXPERIMENT_SPEC = DEFAULT_CANONICAL_RUN_ID
@@ -119,6 +120,7 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             max_iter = Int(get(solver, "max_iter", 30)),
             validate_gradient = Bool(get(solver, "validate_gradient", false)),
             store_trace = Bool(get(solver, "store_trace", true)),
+            reltol = Float64(get(solver, "reltol", 1e-8)),
         ),
         artifacts = (
             bundle = _normalize_symbol(get(artifacts, "bundle", "standard")),
@@ -194,6 +196,7 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             max_iter = Int(run_spec.kwargs.max_iter),
             validate_gradient = Bool(run_spec.kwargs.validate),
             store_trace = true,
+            reltol = Float64(run_spec.kwargs.solver_reltol),
         ),
         artifacts = (
             bundle = :standard,
@@ -250,7 +253,7 @@ function experiment_capability_profile(regime::Symbol)
                 (:phase, :energy),
                 (:phase, :amplitude, :energy),
             ),
-            objectives = (:raman_band,),
+            objectives = registered_objective_kinds(regime),
             solvers = (:lbfgs,),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
@@ -284,8 +287,7 @@ function validate_experiment_spec(spec)
         "parameterization `$(spec.controls.parameterization)` is not supported for regime `$(spec.problem.regime)`"))
     spec.controls.initialization in caps.initializations || throw(ArgumentError(
         "initialization `$(spec.controls.initialization)` is not supported for regime `$(spec.problem.regime)`"))
-    spec.objective.kind in caps.objectives || throw(ArgumentError(
-        "objective `$(spec.objective.kind)` is not supported for regime `$(spec.problem.regime)`"))
+    objective_contract = experiment_objective_contract(spec)
     spec.solver.kind in caps.solvers || throw(ArgumentError(
         "solver `$(spec.solver.kind)` is not supported for regime `$(spec.problem.regime)`"))
     spec.problem.grid_policy in caps.grid_policies || throw(ArgumentError(
@@ -302,6 +304,8 @@ function validate_experiment_spec(spec)
     spec.solver.max_iter > 0 || throw(ArgumentError("solver.max_iter must be positive"))
 
     mode = experiment_execution_mode(spec)
+    spec.controls.variables in objective_contract.supported_variables || throw(ArgumentError(
+        "variables $(spec.controls.variables) are not supported by objective `$(spec.objective.kind)`"))
     if mode == :phase_only
         if !(spec.artifacts.bundle == :standard &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
@@ -339,6 +343,7 @@ function experiment_plan_lines(spec)
     reg_summary = isempty(reg_parts) ? "none" : join(reg_parts, ", ")
     mode = experiment_execution_mode(spec)
     export_supported = mode == :phase_only
+    objective_contract = experiment_objective_contract(spec)
 
     return [
         "Experiment spec: $(spec.id)",
@@ -349,7 +354,7 @@ function experiment_plan_lines(spec)
         "Execution: mode=$(mode) export_supported=$(export_supported)",
         "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W Nt=$(spec.problem.Nt) tw=$(spec.problem.time_window)ps grid=$(spec.problem.grid_policy)",
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization)",
-        "Objective: kind=$(spec.objective.kind) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
+        "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
         "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)",
         "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(spec.export_plan.profile)",
         "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",

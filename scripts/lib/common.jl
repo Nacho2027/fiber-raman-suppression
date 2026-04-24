@@ -9,7 +9,9 @@ Shared functions (single source of truth):
 - `print_fiber_summary` — compute and display characteristic lengths and soliton number
 - `recommended_time_window` — safe time window from dispersive walk-off
 - `spectral_band_cost` — fractional spectral energy in a frequency band
-- `check_boundary_conditions` — detect energy leakage at temporal window edges
+- `compute_photon_number` — conserved photon-number invariant for GNLSE checks
+- `temporal_edge_fraction` — measure raw temporal energy near FFT window edges
+- `check_boundary_conditions` — legacy edge check with attenuator recovery
 - `setup_raman_problem` — setup for phase optimization (single-mode fibers)
 - `setup_amplitude_problem` — setup for amplitude optimization (single-mode fibers)
 
@@ -309,8 +311,69 @@ function spectral_band_cost(uωf, band_mask)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Photon-number conservation
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    compute_photon_number(uomega, sim)
+
+Compute the photon-number invariant from a spectral field:
+`sum(abs2(uomega) / abs(ω)) * Δt`.
+
+`sim["ωs"]` is the absolute angular-frequency grid including the carrier, but
+it is stored in shifted order while propagated spectra are in FFT order. Use
+`fftshift(abs.(sim["ωs"]))` as the denominator. Photon number, not raw pulse
+energy, is the conserved quantity for the GNLSE with Raman and self-steepening.
+"""
+function compute_photon_number(uomega, sim)
+    abs_omega_fft_order = fftshift(abs.(sim["ωs"]))
+    @assert size(uomega, 1) == length(abs_omega_fft_order) "uomega length must match sim frequency grid"
+    return sum(abs2.(uomega) ./ abs_omega_fft_order) * sim["Δt"]
+end
+
+"""
+    photon_number_drift(uomega_in, uomega_out, sim)
+
+Return the fractional photon-number drift `abs(N_out / N_in - 1)`.
+"""
+function photon_number_drift(uomega_in, uomega_out, sim)
+    N_in = compute_photon_number(uomega_in, sim)
+    N_out = compute_photon_number(uomega_out, sim)
+    return abs(N_out / N_in - 1.0)
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Boundary condition check
 # ─────────────────────────────────────────────────────────────────────────────
+
+"""
+    temporal_edge_fraction(ut_z; edge_fraction=0.05)
+
+Measure the raw fraction of temporal-domain field energy in the first and last
+`edge_fraction` of the FFT time grid. This does not apply attenuator recovery
+and is the preferred trust metric for shaped input pulses and solver-returned
+`ut_z` fields.
+"""
+function temporal_edge_fraction(ut_z; edge_fraction=0.05)
+    @assert 0 < edge_fraction < 0.5 "edge_fraction must be between 0 and 0.5"
+    Nt = size(ut_z, 1)
+    n_edge = max(1, floor(Int, edge_fraction * Nt))
+    E_total = sum(abs2.(ut_z))
+    E_edges = sum(abs2.(ut_z[1:n_edge, :])) + sum(abs2.(ut_z[end-n_edge+1:end, :]))
+    return E_edges / max(E_total, eps())
+end
+
+"""
+    check_raw_temporal_edges(ut_z; threshold=1e-6, edge_fraction=0.05)
+
+Check raw temporal edge energy without attenuator recovery. Returns
+`(is_ok, edge_fraction)`.
+"""
+function check_raw_temporal_edges(ut_z; threshold=1e-6, edge_fraction=0.05)
+    @assert threshold > 0 "threshold must be positive"
+    frac = temporal_edge_fraction(ut_z; edge_fraction=edge_fraction)
+    return frac < threshold, frac
+end
 
 """
     check_boundary_conditions(ut_z, sim; threshold=1e-6)
@@ -318,6 +381,11 @@ end
 Check that field energy at temporal window edges is negligible.
 Returns (is_ok, edge_fraction) where edge_fraction is the fraction of
 total energy within the first and last 5% of the time grid.
+
+This is retained for legacy callers that intentionally want pre-attenuator
+recovery. For optimization trust reports, prefer `check_raw_temporal_edges` so
+the attenuator does not amplify harmless edge-roundoff into a false boundary
+failure.
 """
 function check_boundary_conditions(ut_z, sim; threshold=1e-6)
     @assert threshold > 0 "threshold must be positive"
