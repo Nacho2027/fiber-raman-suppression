@@ -46,6 +46,8 @@ step is obvious.
 - `research_engine_poc.toml` is the supported single-mode phase-only surface.
 - `research_engine_smoke.toml` is the tiny phase-only smoke surface for
   CLI/artifact verification.
+- `research_engine_export_smoke.toml` is the tiny phase-only smoke surface for
+  validating the neutral CSV experimental handoff bundle.
 - `research_engine_peak_smoke.toml` is the tiny phase-only smoke surface for
   the experimental peak-bin Raman objective.
 - `smf28_phase_amplitude_energy_poc.toml` is the experimental single-mode
@@ -53,6 +55,7 @@ step is obvious.
 
 Use `research_engine_poc.toml` for baseline lab runs. Use
 `research_engine_smoke.toml` for quick mechanical verification. Use
+`research_engine_export_smoke.toml` when checking the run-to-handoff path. Use
 `research_engine_peak_smoke.toml` only when testing objective dispatch. Use the
 experimental multivariable config when deliberately testing multivariable
 controls.
@@ -86,6 +89,10 @@ If a combination is not supported, validation should fail before compute.
 - Export/SLM handoff is currently phase-only. Multivariable export requests are
   rejected during validation until the exporter can represent amplitude and
   energy controls explicitly.
+- The current supported handoff profile is `neutral_csv_v1`: a simulation-axis
+  CSV with wavelength/frequency, wrapped phase, unwrapped phase, and group
+  delay plus JSON metadata/provenance. It is analysis-grade handoff, not a
+  vendor-specific SLM loading file.
 - Artifact validation checks file presence and naming only. It does not replace
   numerical trust checks or visual inspection of the standard image set.
 

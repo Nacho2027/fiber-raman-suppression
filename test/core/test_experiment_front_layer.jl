@@ -4,6 +4,7 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 @testset "Experiment front layer" begin
     @test "research_engine_poc" in approved_experiment_config_ids()
     @test "research_engine_smoke" in approved_experiment_config_ids()
+    @test "research_engine_export_smoke" in approved_experiment_config_ids()
     @test "research_engine_peak_smoke" in approved_experiment_config_ids()
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
 
@@ -41,6 +42,14 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test smoke_kwargs.Nt == 1024
     @test smoke_kwargs.L_fiber == 0.05
     @test smoke_kwargs.P_cont == 0.001
+
+    export_spec = load_experiment_spec("research_engine_export_smoke")
+    @test export_spec.id == "smf28_phase_export_smoke"
+    @test export_spec.export_plan.enabled
+    @test experiment_export_requested(export_spec)
+    export_contract = export_profile_contract(export_spec.export_plan.profile)
+    @test export_contract.profile == :neutral_csv_v1
+    @test :phase_profile_csv in export_contract.required_files
 
     peak_spec = load_experiment_spec("research_engine_peak_smoke")
     @test peak_spec.id == "smf28_phase_peak_smoke"
@@ -95,6 +104,10 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test occursin("Execution: mode=multivar", rendered_mv)
     @test occursin("export_supported=false", rendered_mv)
 
+    rendered_export = render_experiment_plan(export_spec)
+    @test occursin("export_requested=true", rendered_export)
+    @test occursin("export_profile=neutral_csv_v1", rendered_export)
+
     rendered_peak = render_experiment_plan(peak_spec)
     @test occursin("Objective: kind=raman_peak", rendered_peak)
     @test occursin("backend=raman_optimization", rendered_peak)
@@ -134,6 +147,33 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test occursin("Artifact: $artifact_path", cli_summary)
     @test occursin("Artifact validation: complete", cli_summary)
     @test occursin("Standard images: complete", cli_summary)
+
+    export_dir = joinpath(tmp, "export_handoff")
+    mkpath(export_dir)
+    phase_csv = joinpath(export_dir, "phase_profile.csv")
+    metadata_json = joinpath(export_dir, "metadata.json")
+    export_readme = joinpath(export_dir, "README.md")
+    source_config = joinpath(export_dir, "source_run_config.toml")
+    write(phase_csv, "index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_rad,phase_unwrapped_rad,group_delay_fs\n")
+    write(metadata_json, "{\"export_schema_version\":\"1.0\",\"phase_csv\":\"phase_profile.csv\"}\n")
+    write(export_readme, "# Experimental Handoff Bundle\n")
+    write(source_config, "id = \"smf28_phase_export_smoke\"\n")
+    exported = (
+        output_dir = export_dir,
+        phase_csv = phase_csv,
+        metadata_json = metadata_json,
+        readme = export_readme,
+    )
+    export_report = validate_experiment_export_bundle(export_spec, exported)
+    @test export_report.complete
+    @test isempty(export_report.missing)
+
+    write(phase_csv, "")
+    write(metadata_json, "not json\n")
+    malformed_export = validate_experiment_export_bundle(export_spec, exported; throw_on_error=false)
+    @test !malformed_export.complete
+    @test any(endswith("header"), malformed_export.missing)
+    @test any(endswith("parse"), malformed_export.missing)
 
     objective_listing = sprint(io -> render_objective_registry(; io=io))
     @test occursin("Registered objective contracts", objective_listing)
@@ -185,6 +225,18 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
         artifacts = (mv_spec.artifacts..., export_phase_handoff = true),
     )
     @test_throws ArgumentError validate_experiment_spec(mv_handoff)
+
+    export_without_unwrapped = (
+        export_spec...,
+        export_plan = (export_spec.export_plan..., include_unwrapped_phase = false),
+    )
+    @test_throws ArgumentError validate_experiment_spec(export_without_unwrapped)
+
+    export_without_group_delay = (
+        export_spec...,
+        export_plan = (export_spec.export_plan..., include_group_delay = false),
+    )
+    @test_throws ArgumentError validate_experiment_spec(export_without_group_delay)
 
     wrapper = read(joinpath(_ROOT, "scripts", "canonical", "run_experiment.jl"), String)
     @test occursin("workflows\", \"run_experiment.jl", wrapper)

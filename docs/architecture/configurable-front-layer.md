@@ -524,8 +524,10 @@ currently writes:
 - `README.md`
 - copied `source_run_config.toml` when present
 
-That is a good start, but for a real SLM-facing front layer the export contract
-should be made more explicit.
+That is a good start, but the export contract should stay device-agnostic for
+now. The repo should hand the lab a physically meaningful phase profile with
+enough metadata to convert it into whatever the eventual SLM or pulse-shaper
+software expects.
 
 Recommended handoff contents:
 
@@ -537,11 +539,13 @@ Recommended handoff contents:
 - source config id
 - source run id
 - export profile id
-- optional device-resampled phase map
+- optional generic pixel/raster phase map, once a non-vendor profile is needed
 
 ## How this fits an SLM workflow
 
-There are two distinct export levels.
+There are two distinct export levels. The first belongs in this repo now. The
+second should stay broad until the lab chooses real hardware and calibration
+assets.
 
 ### Level A: analysis-grade export
 
@@ -560,53 +564,63 @@ Current boundary: this export path is phase-only/canonical-run oriented. The
 front layer should reject experimental multivariable SLM/export handoff until
 the exporter can represent amplitude and energy controls explicitly.
 
-### Level B: device-grade export
+### Level B: generic pixel-map handoff
 
-This should be the next explicit layer, and it should be profile-driven.
+This is not a specific SLM exporter. It is the likely next broad handoff layer
+after the neutral CSV path.
 
-A device-grade export needs:
+A generic pixel-map handoff would need:
 
-- target device profile
-- target pixel count / canvas shape
+- target pixel count or canvas shape
 - phase range convention
-- wavelength of calibration
-- LUT or wavefront-compensation attachment
+- wavelength or spectral-axis calibration note
+- optional LUT or wavefront-compensation attachment reference
 - interpolation/resampling rule
 - clipping/wrapping rule
+- explicit statement that the file is not vendor-calibrated
 
 The workflow should be:
 
 ```text
 saved run
-    -> choose export profile
+    -> choose generic handoff profile
     -> choose axis/cropping rule
-    -> resample to device grid
-    -> wrap to device phase convention
-    -> apply LUT / correction map if available
-    -> save device bundle + preview
+    -> resample to a declared pixel grid
+    -> wrap to a declared phase convention
+    -> attach calibration references if available
+    -> save generic bundle + preview
 ```
 
-The important point is that the device-grade export should be a separate,
-explicit step. Do not blur "optimized continuous phase" and "what is actually
-loaded into hardware."
+The important point is that generic pixel-map handoff should be a separate,
+explicit step. Do not blur "optimized continuous phase", "generic array/image
+payload", and "what is actually loaded into one calibrated instrument."
 
 ### Why this is realistic
 
-This matches what common vendor software expects.
+This matches the common denominator across SLM software without overcommitting
+to one vendor.
 
 From vendor documentation:
 
-- HOLOEYE’s SDK can load float/int phase arrays directly and also accepts
-  common image files.
-- HOLOEYE’s software stack also supports wavefront-compensation overlays.
-- Santec’s GUI software explicitly supports BMP and CSV pattern data, alongside
-  an SDK.
+- HOLOEYE's SDK can load float/int phase arrays directly and also accepts
+  common image files. It also supports wavefront-compensation overlays.
+- Santec's GUI software supports BMP and CSV pattern data, and its SDK supports
+  image and sequence transfer.
+- Hamamatsu describes LCOS-SLM operation as PC-supplied digital image data that
+  the controller converts into pixel-voltage control signals. Hamamatsu also
+  shows that phase modulation depends on wavelength and gray-level calibration.
+- Meadowlark describes SLMs as independently addressed liquid-crystal pixels
+  used for programmable phase or amplitude masks, including arbitrary pulse
+  shaping.
 
-So the repo should not commit to one vendor-specific binary format first.
-Instead it should support:
+So the repo should not commit to one vendor-specific binary format first, and it
+should not claim that a neutral file is automatically hardware-ready. Instead
+it should support:
 
 - a neutral handoff bundle
-- then vendor/device-specific export profiles layered on top
+- later, a generic pixel/raster handoff bundle if the lab needs one
+- vendor/device-specific loading only after the lab has the real calibration
+  files, software stack, and acceptance tests
 
 ## Verification should be staged, not monolithic
 
@@ -655,21 +669,21 @@ For handoff/export:
 - wrapped phase range is correct
 - required metadata fields exist
 - copied source config exists
-- device profile constraints are satisfied
+- declared handoff-profile constraints are satisfied
 
 ### Stage 5: experiment-facing validation
 
 Before loading onto an SLM:
 
 - simulation export was generated from the intended run
-- export profile matches the actual device
+- handoff profile and units match the lab conversion script
 - calibration / correction assets are attached
 - preview image and phase histogram look sane
-- the resampled export can be replayed in simulation if needed
+- any resampled pixel-map export can be replayed in simulation if needed
 
-That last point matters: the device-resampled phase should be simulatable. The
-lab should be able to ask not only "what was the continuous optimum?" but also
-"what happens after we quantize, crop, wrap, and resample it for the device?"
+That last point matters: any discretized handoff phase should be simulatable.
+The lab should be able to ask not only "what was the continuous optimum?" but
+also "what happens after we quantize, crop, wrap, and resample it?"
 
 ## If I were Prof. Rivera
 

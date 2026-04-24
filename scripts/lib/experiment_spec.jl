@@ -22,6 +22,32 @@ include(joinpath(@__DIR__, "objective_registry.jl"))
 const EXPERIMENT_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
 const DEFAULT_EXPERIMENT_SPEC = DEFAULT_CANONICAL_RUN_ID
 
+const EXPORT_PROFILE_CONTRACTS = Dict{Symbol,Any}(
+    :neutral_csv_v1 => (
+        profile = :neutral_csv_v1,
+        maturity = :supported,
+        description = "Neutral phase-only CSV handoff on the simulation frequency/wavelength grid.",
+        required_files = (:phase_profile_csv, :metadata_json, :readme),
+        columns = (
+            :index,
+            :frequency_offset_THz,
+            :absolute_frequency_THz,
+            :wavelength_nm,
+            :phase_wrapped_rad,
+            :phase_unwrapped_rad,
+            :group_delay_fs,
+        ),
+    ),
+)
+
+registered_export_profiles() = sort!(collect(keys(EXPORT_PROFILE_CONTRACTS)); by=string)
+
+function export_profile_contract(profile::Symbol)
+    haskey(EXPORT_PROFILE_CONTRACTS, profile) || throw(ArgumentError(
+        "unknown export profile `$(profile)`; registered profiles: $(registered_export_profiles())"))
+    return EXPORT_PROFILE_CONTRACTS[profile]
+end
+
 function _approved_experiment_ids(dir::AbstractString)
     isdir(dir) || return String[]
     ids = String[]
@@ -259,7 +285,7 @@ function experiment_capability_profile(regime::Symbol)
             initializations = (:zero,),
             grid_policies = (:auto_if_undersized, :exact),
             artifact_bundles = (:standard, :experimental_multivar),
-            export_profiles = (:neutral_csv_v1,),
+            export_profiles = Tuple(registered_export_profiles()),
         )
     end
     throw(ArgumentError("unknown experiment regime :$regime"))
@@ -274,6 +300,9 @@ function experiment_execution_mode(spec)
     end
     return :multivar
 end
+
+experiment_export_requested(spec) =
+    Bool(spec.export_plan.enabled || spec.artifacts.export_phase_handoff)
 
 function validate_experiment_spec(spec)
     spec.maturity in ("supported", "experimental") || throw(ArgumentError(
@@ -294,8 +323,17 @@ function validate_experiment_spec(spec)
         "grid_policy `$(spec.problem.grid_policy)` is not supported for regime `$(spec.problem.regime)`"))
     spec.artifacts.bundle in caps.artifact_bundles || throw(ArgumentError(
         "artifact bundle `$(spec.artifacts.bundle)` is not supported for regime `$(spec.problem.regime)`"))
+    export_contract = export_profile_contract(spec.export_plan.profile)
     spec.export_plan.profile in caps.export_profiles || throw(ArgumentError(
         "export profile `$(spec.export_plan.profile)` is not supported for regime `$(spec.problem.regime)`"))
+    if :phase_unwrapped_rad in export_contract.columns && !spec.export_plan.include_unwrapped_phase
+        throw(ArgumentError(
+            "export profile `$(spec.export_plan.profile)` requires include_unwrapped_phase=true"))
+    end
+    if :group_delay_fs in export_contract.columns && !spec.export_plan.include_group_delay
+        throw(ArgumentError(
+            "export profile `$(spec.export_plan.profile)` requires include_group_delay=true"))
+    end
 
     spec.problem.Nt > 0 || throw(ArgumentError("problem.Nt must be positive"))
     spec.problem.time_window > 0 || throw(ArgumentError("problem.time_window must be positive"))
@@ -325,7 +363,7 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "multivar front-layer execution does not yet support manifest updates or trust-report writing"))
         end
-        if spec.export_plan.enabled || spec.artifacts.export_phase_handoff
+        if experiment_export_requested(spec)
             throw(ArgumentError(
                 "multivar front-layer execution does not yet support phase/SLM export handoff"))
         end
@@ -343,7 +381,9 @@ function experiment_plan_lines(spec)
     reg_summary = isempty(reg_parts) ? "none" : join(reg_parts, ", ")
     mode = experiment_execution_mode(spec)
     export_supported = mode == :phase_only
+    export_requested = experiment_export_requested(spec)
     objective_contract = experiment_objective_contract(spec)
+    export_contract = export_profile_contract(spec.export_plan.profile)
 
     return [
         "Experiment spec: $(spec.id)",
@@ -351,12 +391,12 @@ function experiment_plan_lines(spec)
         "Maturity: $(spec.maturity)",
         "Schema: $(spec.schema)",
         "Config path: $(spec.config_path)",
-        "Execution: mode=$(mode) export_supported=$(export_supported)",
+        "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested)",
         "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W Nt=$(spec.problem.Nt) tw=$(spec.problem.time_window)ps grid=$(spec.problem.grid_policy)",
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
         "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)",
-        "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(spec.export_plan.profile)",
+        "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(export_contract.profile)",
         "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",
     ]
 end

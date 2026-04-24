@@ -16,12 +16,14 @@ const _EXPERIMENT_RUNNER_JL_LOADED = true
 
 using Dates
 using FFTW
+using JSON3
 
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "experiment_spec.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "run_artifacts.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
+include(joinpath(@__DIR__, "..", "workflows", "export_run.jl"))
 
 function experiment_output_dir(spec;
                                timestamp::AbstractString=Dates.format(now(UTC), "yyyymmdd_HHMMss"),
@@ -122,6 +124,98 @@ function _attach_artifact_validation(run_bundle)
     return (; run_bundle..., artifact_validation = report)
 end
 
+function _export_report_error(missing)
+    return ArgumentError("experiment export validation failed; missing/invalid: $(join(missing, ", "))")
+end
+
+"""
+    validate_experiment_export_bundle(spec, exported; throw_on_error=true)
+
+Validate the neutral phase handoff bundle shape. This is intentionally a
+contract check, not a guarantee that a specific SLM can load the profile.
+"""
+function validate_experiment_export_bundle(spec, exported; throw_on_error::Bool=true)
+    contract = export_profile_contract(spec.export_plan.profile)
+    missing = String[]
+    checked = String[]
+
+    required = (
+        phase_profile_csv = String(exported.phase_csv),
+        metadata_json = String(exported.metadata_json),
+        readme = String(exported.readme),
+    )
+    for path in values(required)
+        abspath_path = abspath(path)
+        push!(checked, abspath_path)
+        isfile(abspath_path) || push!(missing, abspath_path)
+    end
+
+    source_config = joinpath(String(exported.output_dir), "source_run_config.toml")
+    push!(checked, abspath(source_config))
+    isfile(source_config) || push!(missing, abspath(source_config))
+
+    if isfile(required.phase_profile_csv)
+        lines = readlines(required.phase_profile_csv)
+        if isempty(lines)
+            push!(missing, string(required.phase_profile_csv, " header"))
+        else
+            header = split(first(lines), ",")
+            expected = String.(collect(contract.columns))
+            header == expected || push!(missing, string(required.phase_profile_csv, " header"))
+        end
+    end
+
+    if isfile(required.metadata_json)
+        try
+            metadata = JSON3.read(read(required.metadata_json, String))
+            if !hasproperty(metadata, :export_schema_version)
+                push!(missing, string(required.metadata_json, " export_schema_version"))
+            end
+            if !hasproperty(metadata, :phase_csv) || String(metadata.phase_csv) != basename(required.phase_profile_csv)
+                push!(missing, string(required.metadata_json, " phase_csv"))
+            end
+        catch
+            push!(missing, string(required.metadata_json, " parse"))
+        end
+    end
+
+    report = (
+        complete = isempty(missing),
+        profile = contract.profile,
+        checked = checked,
+        missing = missing,
+        output_dir = String(exported.output_dir),
+        phase_csv = required.phase_profile_csv,
+        metadata_json = required.metadata_json,
+        readme = required.readme,
+        source_config = source_config,
+    )
+
+    if !report.complete && throw_on_error
+        throw(_export_report_error(report.missing))
+    end
+    return report
+end
+
+function _attach_export_handoff(run_bundle)
+    spec = run_bundle.spec
+    experiment_export_requested(spec) || return run_bundle
+    experiment_execution_mode(spec) == :phase_only || throw(ArgumentError(
+        "front-layer export handoff currently supports phase-only runs"))
+
+    export_dir = joinpath(run_bundle.output_dir, "export_handoff")
+    exported = export_run_bundle(run_bundle.artifact_path, export_dir)
+    report = validate_experiment_export_bundle(
+        spec,
+        exported;
+        throw_on_error = spec.verification.block_on_failed_checks,
+    )
+    if !report.complete
+        @warn "Front-layer export validation found missing outputs" missing=report.missing
+    end
+    return (; run_bundle..., exported = exported, export_validation = report)
+end
+
 _experiment_status_word(ok::Bool) = ok ? "complete" : "incomplete"
 
 function render_experiment_completion_summary(run_bundle; io::IO=stdout)
@@ -142,6 +236,9 @@ function render_experiment_completion_summary(run_bundle; io::IO=stdout)
 
     if hasproperty(run_bundle, :exported)
         println(io, "Export handoff: ", run_bundle.exported.output_dir)
+        if hasproperty(run_bundle, :export_validation)
+            println(io, "Export validation: ", _experiment_status_word(run_bundle.export_validation.complete))
+        end
     end
     return nothing
 end
@@ -236,7 +333,7 @@ function run_supported_experiment(spec;
         )
 
         artifact_path = string(save_prefix, "_result.jld2")
-        return _attach_artifact_validation((
+        return _attach_artifact_validation(_attach_export_handoff((
             spec = spec,
             output_dir = output_dir,
             save_prefix = save_prefix,
@@ -248,7 +345,7 @@ function run_supported_experiment(spec;
             sim = sim,
             band_mask = band_mask,
             Δf = Δf,
-        ))
+        )))
     end
 
     include(joinpath(@__DIR__, "..", "research", "multivar", "multivar_optimization.jl"))

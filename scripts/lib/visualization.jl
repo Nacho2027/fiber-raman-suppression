@@ -991,7 +991,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
         axs[1, col].set_title("$(r.label) optimization")
-        axs[1, col].legend(fontsize=8)
+        axs[1, col].legend(fontsize=8, loc="upper right")
         axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
         J_val = sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
@@ -1177,7 +1177,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
         axs[1, col].set_title("$(r.label) optimization")
-        axs[1, col].legend(fontsize=8)
+        axs[1, col].legend(fontsize=8, loc="upper right")
         # AXIS-02: auto-zoom to signal-bearing region (replaces fixed λ0 ± offset)
         axs[1, col].set_xlim(spec_xlim...)
         axs[1, col].set_ylim(-60, 3)

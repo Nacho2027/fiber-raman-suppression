@@ -57,6 +57,8 @@ with five stable contracts:
   - documents the safe researcher-facing knobs and current support boundary
 - `configs/experiments/research_engine_smoke.toml`
   - provides a tiny phase-only smoke run for real CLI/artifact verification
+- `configs/experiments/research_engine_export_smoke.toml`
+  - provides a tiny phase-only smoke run for neutral CSV handoff verification
 - `configs/experiments/research_engine_peak_smoke.toml`
   - provides a tiny phase-only smoke run for experimental objective dispatch
 - `scripts/canonical/run_experiment.jl`
@@ -72,8 +74,9 @@ with five stable contracts:
   implementations code-defined.
 - Promote regimes gradually: supported single-mode first, then experimental
   multivar/long-fiber, then multimode after the baseline stabilizes.
-- Treat the current export path as analysis-grade handoff, then add explicit
-  device-grade export profiles for actual SLM loading.
+- Treat the current export path as analysis-grade handoff. Do not add
+  vendor-specific SLM export until the lab has selected hardware, calibration
+  files, and acceptance tests.
 
 ## Current implemented support boundary
 
@@ -109,6 +112,10 @@ and experimentally:
   tuples, backend, maturity, and allowed regularizers
 - experimental `raman_peak` objective dispatch is exposed as a phase-only smoke
   surface without changing the supported default `raman_band` path
+- phase-only export requests now call the canonical handoff exporter and attach
+  export validation to the returned run bundle
+- the supported export profile is `neutral_csv_v1`, an analysis-grade CSV/JSON
+  handoff on the simulation axis rather than a vendor-specific SLM file
 
 The loader already supports the richer config shape, but unsupported variable /
 objective / solver combinations fail validation clearly instead of silently
@@ -169,6 +176,13 @@ falling through.
   validation and standard image validation were complete, the standard image set
   was visually inspected, and the routine generated result directory plus
   manifest change were removed from the source boundary afterward.
+- Export smoke run completed at
+  `results/raman/smoke/smf28_phase_export_smoke_20260424_0456277`; artifact
+  validation, standard image validation, and export validation were complete.
+  The neutral handoff bundle contained `phase_profile.csv`, `metadata.json`,
+  `README.md`, and `source_run_config.toml`; the standard image set was visually
+  inspected, and generated outputs/manifest changes were left outside the
+  intended commit boundary.
 - Slow/full tiers were not run locally because the repo labels them burst-VM
   territory.
 

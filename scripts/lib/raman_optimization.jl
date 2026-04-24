@@ -684,7 +684,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     │  ΔJ           %.1f dB
     │  ‖∇J‖         %.2e
     ├─────────────────────────────────────────────────┤
-    │  Peak power   in: %.0f W → out: %.0f W
+    │  Peak power   in: %s → out: %s
     │  Photon drift %.2e (%.1f%%)
     ├─────────────────────────────────────────────────┤
     │  Boundary (input)   %.2e  %s
@@ -700,7 +700,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         J_after, MultiModeNoise.lin_to_dB(J_after),
         ΔJ_dB,
         grad_norm,
-        P_peak_in, P_peak_out,
+        _format_power_watts(P_peak_in), _format_power_watts(P_peak_out),
         photon_drift, photon_drift * 100,
         bc_input_frac, bc_input_ok ? "OK" : "⚠ DANGER",
         bc_output_frac, bc_output_ok ? "OK" : "⚠ DANGER")
