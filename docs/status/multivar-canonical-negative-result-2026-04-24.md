@@ -1,4 +1,4 @@
-# Multivariable Canonical Result: Negative At Current SMF-28 Point
+# Joint Multivariable Canonical Result: Negative At Current SMF-28 Point
 
 Date: 2026-04-24
 
@@ -10,14 +10,13 @@ Output directory: `results/raman/multivar/smf28_L2m_P030W/`
 
 ## Question
 
-Does the current multivariable phase+amplitude optimizer beat the maintained
-phase-only optimizer at the canonical SMF-28 `L = 2 m`, `P = 0.30 W` research
-point?
+Does the current joint phase+amplitude optimizer beat the maintained phase-only
+optimizer at the canonical SMF-28 `L = 2 m`, `P = 0.30 W` research point?
 
 ## Result
 
-No. The latest accepted burst run completed successfully, produced the required
-standard image sets, and returned a negative result:
+No. The latest accepted joint-optimizer burst run completed successfully,
+produced the required standard image sets, and returned a negative result:
 
 | Case | Final objective | Improvement | Gap vs phase-only |
 | --- | ---: | ---: | ---: |
@@ -25,8 +24,26 @@ standard image sets, and returned a negative result:
 | Joint phase+amplitude, cold start | `-18.3 dB` | `-16.78 dB` | `+22.52 dB` worse |
 | Joint phase+amplitude, warm start | `-31.2 dB` | `-29.72 dB` | `+9.58 dB` worse |
 
-The demo success criterion was not met. The comparison plot also shows the
-phase-only trace reaching a lower objective than either multivariable trace.
+The joint demo success criterion was not met. The comparison plot also shows
+the phase-only trace reaching a lower objective than either joint
+multivariable trace.
+
+## Follow-Up Ablation
+
+This result has been narrowed by a follow-up amplitude-on-fixed-phase ablation:
+
+- Follow-up run: `V-ampphase1`
+- Follow-up output:
+  `results/raman/multivar/amp_on_phase_20260424T055752Z/`
+- Follow-up status:
+  `docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md`
+
+That ablation found that amplitude-only shaping on top of the fixed phase-only
+optimum improved the physics objective from `-40.79 dB` to `-44.34 dB`, a
+`3.55 dB` improvement. Therefore, the correct conclusion is not "all
+multivariable control is low-value"; it is "cold/warm joint phase+amplitude is
+not ready, while fixed-phase amplitude shaping is a real but still experimental
+candidate."
 
 ## Verification
 
@@ -48,27 +65,22 @@ phase-only trace reaching a lower objective than either multivariable trace.
 
 ## Interpretation
 
-The current phase+amplitude control surface should not be promoted to a
-lab-facing default. At this canonical point, adding amplitude freedom makes the
-optimizer worse, not better. Warm-starting from the phase-only optimum still
-underperforms phase-only by about `9.6 dB`, and cold-start joint optimization is
-much worse.
+The current joint phase+amplitude control surface should not be promoted to a
+lab-facing default. At this canonical point, cold-start joint optimization is
+much worse than phase-only, and warm-starting the joint optimizer from the
+phase-only optimum still underperforms phase-only by about `9.6 dB`.
 
-This does not prove that all multivariable controls are useless. It does show
-that the current joint optimizer/configuration is not ready for lab dependence.
+This does not prove that all multivariable controls are useless. The subsequent
+amplitude-on-fixed-phase ablation now shows the opposite: one narrow
+multivariable variant is promising enough to keep alive. It does show that the
+current joint optimizer/configuration is not ready for lab dependence.
 
 ## Recommendation
 
-Keep multivariable optimization under `scripts/research/multivar/` and label it
-experimental in user-facing docs/configs. Do not expose it as a lab-ready
-workflow.
+Keep joint multivariable optimization under `scripts/research/multivar/` and
+label it experimental in user-facing docs/configs. Do not expose the joint
+optimizer as a lab-ready workflow.
 
-If one more salvage pass is justified, make it narrow:
-
-1. Run amplitude-only-on-top-of-fixed-phase as the next ablation.
-2. Require at least `3 dB` improvement over phase-only before considering any
-   broader multivariable path.
-3. If amplitude-only does not beat phase-only, close the current multivar lane
-   as low-value for the canonical SMF-28 point and defer future work until a new
-   physical hypothesis justifies it.
-
+The amplitude-only-on-fixed-phase salvage pass passed its `3 dB` threshold.
+Next work should focus on validating that narrow candidate, not broad joint
+optimizer tuning.

@@ -205,6 +205,50 @@ results/burst-logs/parallel/20260424T033354Z/multivar-live.log
 - Human-facing status note written at
   `docs/status/multivar-canonical-negative-result-2026-04-24.md`.
 
+### 2026-04-24 06:05 UTC
+
+- Follow-up broad ablation `V-mvabl1` was stopped after it completed the
+  non-decision `amp_unshaped` case and then spent excessive time in
+  `energy_unshaped`.
+- Partial `V-mvabl1` result:
+  - phase-only reference: `J_after = -40.79 dB`
+  - amplitude-only on unshaped input: `J_after = -1.66 dB`
+  - conclusion: unshaped amplitude-only is not useful, but this did not answer
+    the main closure question.
+- Launched focused closure ablation `V-ampphase1` with:
+
+```bash
+MV_AMP_PHASE_AMP_ITER=60 julia -t auto --project=. scripts/research/multivar/multivar_amp_on_phase_ablation.jl
+```
+
+- `V-ampphase1` completed with `rc=0`, copied results back, released the heavy
+  lock, and destroyed the ephemeral VM.
+- Output directory:
+  `results/raman/multivar/amp_on_phase_20260424T055752Z/`.
+- Numerical conclusion:
+  - phase-only reference physics objective: `-40.79 dB`
+  - amplitude-only on fixed phase physics objective: `-44.34 dB`
+  - improvement over phase-only: `-3.55 dB`
+  - amplitude range: `[0.908, 1.090]`
+  - decision threshold: `3.0 dB`
+  - verdict: PASS
+- Visual inspection completed for both full standard image sets:
+  - `phase_only_reference_phase_profile.png`
+  - `phase_only_reference_phase_diagnostic.png`
+  - `phase_only_reference_evolution.png`
+  - `phase_only_reference_evolution_unshaped.png`
+  - `amp_on_phase_phase_profile.png`
+  - `amp_on_phase_phase_diagnostic.png`
+  - `amp_on_phase_evolution.png`
+  - `amp_on_phase_evolution_unshaped.png`
+- Interpretation: the broad joint optimizer remains negative/experimental, but
+  fixed-phase amplitude shaping is now a promising multivar candidate. It
+  should not become lab-default yet; it needs deterministic rerun,
+  hardware-constrained export review, and a small robustness check around the
+  canonical point.
+- Human-facing follow-up status note written at
+  `docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md`.
+
 ## Decision Rules For This Session
 
 - Do not relaunch unless the existing `V-multivar` lane has clearly failed.
@@ -217,3 +261,6 @@ results/burst-logs/parallel/20260424T033354Z/multivar-live.log
   an amplitude-only-on-top-of-phase run, not generic optimizer tweaking.
 - If amplitude-only does not beat phase-only by at least `3 dB`, document a
   negative/low-value conclusion for current multivar at the canonical point.
+- Since amplitude-on-fixed-phase beat phase-only by `3.55 dB`, do not close the
+  multivar lane entirely. Close/defer broad joint optimization, and advance only
+  the fixed-phase amplitude candidate through validation.

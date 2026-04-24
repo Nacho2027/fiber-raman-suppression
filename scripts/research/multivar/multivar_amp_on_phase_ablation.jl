@@ -51,7 +51,7 @@ function _physics_cost_dB(uω0_shaped, fiber, sim, band_mask)
     return MultiModeNoise.lin_to_dB(J)
 end
 
-function _write_summary(; phase_dB, amp_dB, improvement_dB, outcome, summary_path)
+function _write_summary(; phase_dB, phase_iterations, amp_dB, improvement_dB, outcome, summary_path)
     passed = improvement_dB <= -MV_AMP_PHASE_THRESHOLD_DB
     open(summary_path, "w") do io
         println(io, "# Amplitude-On-Phase Closure Ablation")
@@ -63,7 +63,7 @@ function _write_summary(; phase_dB, amp_dB, improvement_dB, outcome, summary_pat
         println(io, "| case | J after dB | vs phase-only dB | iterations | A range |")
         println(io, "|---|---:|---:|---:|---|")
         println(io, @sprintf("| phase_only_reference | %.2f | %+0.2f | %d | [1.000, 1.000] |",
-            phase_dB, 0.0, 0))
+            phase_dB, 0.0, phase_iterations))
         println(io, @sprintf("| amp_on_phase | %.2f | %+0.2f | %d | [%.3f, %.3f] |",
             amp_dB,
             improvement_dB,
@@ -180,6 +180,7 @@ save_standard_set(
 summary_path = joinpath(MV_AMP_PHASE_OUT, "amp_on_phase_summary.md")
 passed = _write_summary(
     phase_dB = J_phase_dB,
+    phase_iterations = Optim.iterations(result_phase),
     amp_dB = J_amp_dB,
     improvement_dB = improvement_dB,
     outcome = outcome,
@@ -187,4 +188,3 @@ passed = _write_summary(
 )
 @info "wrote summary: $summary_path"
 @info passed ? "═══ amplitude-on-phase ablation PASS ═══" : "═══ amplitude-on-phase ablation FAIL ═══"
-
