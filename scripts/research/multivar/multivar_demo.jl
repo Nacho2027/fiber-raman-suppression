@@ -69,9 +69,12 @@ result_A, uω0_A, fiber_A, sim_A, band_mask_A, Δf_A = run_optimization(
 )
 φ_A = reshape(result_A.minimizer, sim_A["Nt"], sim_A["M"])
 conv_A = collect(Optim.f_trace(result_A))
-J_A_lin, _ = cost_and_gradient(φ_A, uω0_A, fiber_A, sim_A, band_mask_A)
+# Recompute on the linear physics surface for dB reporting. The phase-only
+# optimizer above uses log_cost=true, so the default cost_and_gradient output is
+# already in dB/log units and must not be passed through lin_to_dB again.
+J_A_lin, _ = cost_and_gradient(φ_A, uω0_A, fiber_A, sim_A, band_mask_A; log_cost = false)
 J_A_dB = MultiModeNoise.lin_to_dB(J_A_lin)
-J0_lin, _ = cost_and_gradient(zeros(size(φ_A)), uω0_A, fiber_A, sim_A, band_mask_A)
+J0_lin, _ = cost_and_gradient(zeros(size(φ_A)), uω0_A, fiber_A, sim_A, band_mask_A; log_cost = false)
 J0_dB = MultiModeNoise.lin_to_dB(J0_lin)
 ΔJ_A_dB = J_A_dB - J0_dB
 @info @sprintf("  phase-only: J_before=%.1f dB  J_after=%.1f dB  ΔJ=%.2f dB  (%.1f s)",
