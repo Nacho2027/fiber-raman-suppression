@@ -167,6 +167,7 @@ function supported_experiment_run_kwargs(spec)
         raman_threshold = spec.problem.raman_threshold,
         max_iter = spec.solver.max_iter,
         validate = spec.solver.validate_gradient || spec.verification.gradient_check,
+        objective_kind = spec.objective.kind,
         λ_gdd = λ_gdd,
         λ_boundary = Float64(λ_boundary),
         log_cost = spec.objective.log_cost,

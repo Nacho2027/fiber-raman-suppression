@@ -760,6 +760,57 @@ Output style:
 Think like an organizing editor setting up a clean technical note series for a research program.
 ```
 
+## Session N Prompt
+
+```text
+You are working in /home/ignaciojlizama/fiber-raman-suppression.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- scripts/README.md
+- docs/architecture/repo-navigation.md
+- docs/architecture/codebase-visual-map.md
+- docs/synthesis/recent-phase-synthesis-29-34.md
+- agent-docs/multi-session-roadmap/SESSION-PROMPTS.md
+
+Mission:
+Design the repo so it can become a configurable research engine rather than a codebase only the original author can operate. The goal is that a lab user can change what variables are optimized, what cost function is used, what fiber/mode regime is used, and what outputs are produced, then run the system without needing deep code surgery.
+
+Core idea:
+Make it realistically possible for other researchers to swap optimization variables, objectives, presets, and mode settings and then just run the workflow successfully.
+
+Main questions:
+1. What abstraction layer is needed so users can choose optimized variables, cost functions, and solver options without editing deep internals?
+2. How should single-mode, multimode, long-fiber, and multiparameter cases fit into one coherent front layer?
+3. What should be config-driven versus code-defined?
+4. What stable contracts are needed for:
+   - problem specification
+   - optimization variables
+   - objective/cost definition
+   - solver selection
+   - output/artifact generation
+5. What is feasible now versus later without overengineering the repo?
+
+Deliverables:
+- A concrete proposal for a configurable front-layer architecture
+- A definition of the minimum abstractions needed to let researchers swap variables/costs/regimes easily
+- A recommended API/config shape for common workflows
+- A sequencing plan for how this should be built after the current refactor/research-closure work
+- If safe, one thin proof-of-concept wrapper or schema sketch
+
+Constraints:
+- Do not build a giant framework
+- Do not hide the physics behind abstraction theater
+- Keep the design explicit, inspectable, and science-friendly
+- Favor strong presets and thin wrappers over maximal flexibility everywhere
+- Optimize for real lab usability, not abstract software elegance alone
+
+Output style:
+Think like you are designing a configurable scientific instrument interface on top of a research codebase. The result should make common changes easy without making the system mysterious.
+```
+
 ## Updated Strategic Priority Note
 
 Based on the current project state, the recommended order is:
@@ -767,6 +818,7 @@ Based on the current project state, the recommended order is:
 1. Continue the high-value refactor and architecture cleanup
 2. Finish or explicitly close the unfinished research lanes
 3. Define the lab-ready front layer and rollout plan
-4. Produce the mini LaTeX research-note series once the science threads and repo structure are stable enough to document cleanly
+4. Design the configurable research-engine layer so researchers can swap variables, objectives, and regimes without deep code edits
+5. Produce the mini LaTeX research-note series once the science threads and repo structure are stable enough to document cleanly
 
 The lab-readiness push is important, but it should follow the closure of the major unfinished research paths so the public/user-facing system is built on settled workflows rather than moving targets.

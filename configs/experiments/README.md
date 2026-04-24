@@ -46,12 +46,16 @@ step is obvious.
 - `research_engine_poc.toml` is the supported single-mode phase-only surface.
 - `research_engine_smoke.toml` is the tiny phase-only smoke surface for
   CLI/artifact verification.
+- `research_engine_peak_smoke.toml` is the tiny phase-only smoke surface for
+  the experimental peak-bin Raman objective.
 - `smf28_phase_amplitude_energy_poc.toml` is the experimental single-mode
   phase/amplitude/energy surface.
 
 Use `research_engine_poc.toml` for baseline lab runs. Use
-`research_engine_smoke.toml` for quick mechanical verification. Use the
-experimental config when deliberately testing multivariable controls.
+`research_engine_smoke.toml` for quick mechanical verification. Use
+`research_engine_peak_smoke.toml` only when testing objective dispatch. Use the
+experimental multivariable config when deliberately testing multivariable
+controls.
 
 ## Knobs Researchers Can Change First
 
@@ -74,7 +78,8 @@ If a combination is not supported, validation should fail before compute.
 - Supported execution is `single_mode` with `controls.variables = ["phase"]`.
 - Experimental execution allows `["phase", "amplitude"]`, `["phase", "energy"]`,
   and `["phase", "amplitude", "energy"]`.
-- The only implemented objective in this front layer is `raman_band`.
+- Implemented single-mode objectives are `raman_band` and experimental
+  `raman_peak`.
 - The only implemented solver in this front layer is `lbfgs`.
 - Objective names and allowed regularizers are code-defined in
   `scripts/lib/objective_registry.jl`; configs select from that registry.

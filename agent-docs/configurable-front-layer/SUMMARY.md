@@ -37,6 +37,9 @@ with five stable contracts:
   - loads front-layer configs from `configs/experiments/*.toml`
   - adapts existing canonical run configs from `configs/runs/*.toml`
   - validates the current capability slice
+- `scripts/lib/objective_registry.jl`
+  - defines the code-owned objective allowlist, supported variable tuples,
+    backend mapping, and allowed regularizers
 - `scripts/lib/experiment_runner.jl`
   - maps validated specs onto the existing `run_optimization(...)` and
     `run_multivar_optimization(...)` paths
@@ -45,12 +48,17 @@ with five stable contracts:
   - renders the shared run-completion summary used by the CLI
 - `scripts/workflows/run_experiment.jl`
   - supports `--list`
+  - supports `--objectives`
   - supports `--dry-run`
   - runs one validated experiment config
   - prints output directory, artifact path, artifact-validation status, and
     standard-image status after a completed run
 - `configs/experiments/README.md`
   - documents the safe researcher-facing knobs and current support boundary
+- `configs/experiments/research_engine_smoke.toml`
+  - provides a tiny phase-only smoke run for real CLI/artifact verification
+- `configs/experiments/research_engine_peak_smoke.toml`
+  - provides a tiny phase-only smoke run for experimental objective dispatch
 - `scripts/canonical/run_experiment.jl`
   - thin public wrapper
 - `scripts/workflows/optimize_raman.jl`
@@ -94,6 +102,13 @@ and experimentally:
   required standard images, and phase-only trust report presence
 - completed CLI runs print a compact summary pointing to the result directory
   and artifact-validation state
+- objective names and regularizers are now validated against a code-defined
+  registry before execution
+- dry-run output reports the objective backend, e.g. `backend=raman_optimization`
+- `--objectives` prints the registered objective contracts, supported variable
+  tuples, backend, maturity, and allowed regularizers
+- experimental `raman_peak` objective dispatch is exposed as a phase-only smoke
+  surface without changing the supported default `raman_band` path
 
 The loader already supports the richer config shape, but unsupported variable /
 objective / solver combinations fail validation clearly instead of silently
@@ -122,6 +137,40 @@ falling through.
 - red-first regression was added for CLI completion summary rendering; it
   failed before adding `render_experiment_completion_summary(...)` and passed
   after wiring the workflow to call it
+- red-first regression was added for `research_engine_smoke`; the config was
+  then added and used for a real local smoke optimization
+- red-first regression was added for objective registry inspection; it failed
+  before adding `objective_registry.jl` and passed after spec validation used
+  the registry
+- red-first regression was added for objective-listing UX; it failed before
+  adding `render_objective_registry(...)` and `run_experiment.jl --objectives`
+  and passed after implementation
+- review pass fixed the no-argument `run_experiment_main([])` path so it also
+  prints the completion summary after running the default config
+- review pass preserved `artifact_validation` in the canonical optimize wrapper
+  return bundle
+
+## Review Findings
+
+- Front-layer focused tests pass (`93/93`).
+- Workflow load, config listing, and dry-run entrypoints load successfully.
+- Full fast tier blocker was resolved by updating the stale
+  `test/core/test_canonical_lab_surface.jl` attenuator-recovery expectation to
+  match the current clamped `check_boundary_conditions` behavior.
+- `julia -t auto --project=. test/tier_fast.jl` passes (`95/95`;
+  canonical lab surface `59/59`, experiment front layer `93/93`).
+- Real smoke run completed at
+  `results/raman/smoke/smf28_phase_smoke_20260424_035468`; artifact validation
+  and standard image validation were complete, and the standard image set was
+  visually inspected. The routine generated result directory and manifest
+  change were removed from the source boundary afterward.
+- Experimental `raman_peak` smoke run completed at
+  `results/raman/smoke/smf28_phase_peak_smoke_20260424_0432955`; artifact
+  validation and standard image validation were complete, the standard image set
+  was visually inspected, and the routine generated result directory plus
+  manifest change were removed from the source boundary afterward.
+- Slow/full tiers were not run locally because the repo labels them burst-VM
+  territory.
 
 ## Environment note
 

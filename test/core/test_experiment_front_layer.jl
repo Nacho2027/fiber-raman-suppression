@@ -4,6 +4,7 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 @testset "Experiment front layer" begin
     @test "research_engine_poc" in approved_experiment_config_ids()
     @test "research_engine_smoke" in approved_experiment_config_ids()
+    @test "research_engine_peak_smoke" in approved_experiment_config_ids()
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
@@ -17,11 +18,16 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test spec.solver.kind == :lbfgs
     @test spec.export_plan.profile == :neutral_csv_v1
     @test :raman_band in registered_objective_kinds(:single_mode)
-    objective_contract = experiment_objective_contract(spec)
-    @test objective_contract.kind == :raman_band
-    @test objective_contract.backend == :raman_optimization
-    @test (:phase,) in objective_contract.supported_variables
-    @test :gdd in objective_contract.allowed_regularizers
+    band_contract = experiment_objective_contract(spec)
+    @test band_contract.kind == :raman_band
+    @test band_contract.backend == :raman_optimization
+    @test (:phase,) in band_contract.supported_variables
+    @test :gdd in band_contract.allowed_regularizers
+    @test :raman_peak in registered_objective_kinds(:single_mode)
+    peak_contract = objective_contract(:raman_peak, :single_mode)
+    @test peak_contract.kind == :raman_peak
+    @test peak_contract.supported_variables == ((:phase,),)
+    @test peak_contract.allowed_regularizers == (:gdd, :boundary)
     caps = validate_experiment_spec(spec)
     @test (:phase,) in caps.variables
 
@@ -35,6 +41,19 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     @test smoke_kwargs.Nt == 1024
     @test smoke_kwargs.L_fiber == 0.05
     @test smoke_kwargs.P_cont == 0.001
+
+    peak_spec = load_experiment_spec("research_engine_peak_smoke")
+    @test peak_spec.id == "smf28_phase_peak_smoke"
+    @test peak_spec.objective.kind == :raman_peak
+    @test experiment_objective_contract(peak_spec).kind == :raman_peak
+    @test supported_experiment_run_kwargs(peak_spec).objective_kind == :raman_peak
+
+    uωf = ComplexF64[1 + 0im, 2 + 0im, 3 + 0im, 4 + 0im]
+    band_mask = Bool[false, true, true, false]
+    J_peak, dJ_peak = spectral_peak_band_cost(reshape(uωf, :, 1), band_mask)
+    @test J_peak ≈ 9 / 30
+    @test dJ_peak[3, 1] ≈ uωf[3] * (1 - J_peak) / 30
+    @test dJ_peak[2, 1] ≈ uωf[2] * (0 - J_peak) / 30
 
     mv_spec = load_experiment_spec("smf28_phase_amplitude_energy_poc")
     @test mv_spec.id == "smf28_phase_amplitude_energy_poc"
@@ -75,6 +94,10 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
     rendered_mv = render_experiment_plan(mv_spec)
     @test occursin("Execution: mode=multivar", rendered_mv)
     @test occursin("export_supported=false", rendered_mv)
+
+    rendered_peak = render_experiment_plan(peak_spec)
+    @test occursin("Objective: kind=raman_peak", rendered_peak)
+    @test occursin("backend=raman_optimization", rendered_peak)
 
     tmp = mktempdir()
     save_prefix = joinpath(tmp, "opt")
@@ -144,6 +167,12 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
         objective = (spec.objective..., regularizers = Dict{Symbol,Any}(:not_a_real_penalty => 1.0)),
     )
     @test_throws ArgumentError validate_experiment_spec(unknown_regularizer)
+
+    peak_multivar = (
+        mv_spec...,
+        objective = (mv_spec.objective..., kind = :raman_peak),
+    )
+    @test_throws ArgumentError validate_experiment_spec(peak_multivar)
 
     mv_export = (
         mv_spec...,

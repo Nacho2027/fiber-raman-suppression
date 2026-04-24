@@ -79,13 +79,16 @@ function raman_cost_surface_spec(;
     log_cost::Bool=true,
     λ_gdd::Real=0.0,
     λ_boundary::Real=0.0,
+    objective_kind::Symbol=:raman_band,
     objective_label::AbstractString="single-mode Raman spectral phase optimization")
 
+    physics_label = objective_kind == :raman_peak ? "physics_peak" : "physics"
     return build_objective_surface_spec(;
         objective_label = objective_label,
         log_cost = log_cost,
-        linear_terms = ["physics", "λ_gdd*R_gdd", "λ_boundary*R_boundary"],
+        linear_terms = [physics_label, "λ_gdd*R_gdd", "λ_boundary*R_boundary"],
         trailing_fields = (
+            objective_kind = objective_kind,
             lambda_gdd = Float64(λ_gdd),
             lambda_boundary = Float64(λ_boundary),
             boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
@@ -97,6 +100,7 @@ end
 function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     uω0_shaped::Union{Nothing,AbstractMatrix}=nothing,
     uωf_buffer::Union{Nothing,AbstractMatrix}=nothing,
+    objective_kind::Symbol=:raman_band,
     λ_gdd=0.0,
     λ_boundary=0.0,
     log_cost::Bool=true)
@@ -128,7 +132,13 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     end
 
     # Cost and adjoint terminal condition
-    J, λωL = spectral_band_cost(uωf, band_mask)
+    if objective_kind == :raman_band
+        J, λωL = spectral_band_cost(uωf, band_mask)
+    elseif objective_kind == :raman_peak
+        J, λωL = spectral_peak_band_cost(uωf, band_mask)
+    else
+        throw(ArgumentError("unknown Raman objective kind `$(objective_kind)`"))
+    end
 
     # Adjoint solve: propagate λ backward from L to 0
     sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
@@ -168,7 +178,7 @@ end
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false,
-    log_cost::Bool=true)
+    log_cost::Bool=true, objective_kind::Symbol=:raman_band)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -206,6 +216,7 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
             φ = reshape(φ_vec, Nt, M)
             J, ∂J_∂φ = cost_and_gradient(φ, uω0_base, fiber, sim, band_mask;
                 uω0_shaped=uω0_shaped, uωf_buffer=uωf_buffer,
+                objective_kind=objective_kind,
                 λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
             if G !== nothing
                 G .= vec(∂J_∂φ)
@@ -235,12 +246,14 @@ Validate the adjoint gradient against finite differences.
 Tests a few random phase components to make sure they agree.
 """
 function validate_gradient(uω0_base, fiber, sim, band_mask;
-    n_checks=5, ε=1e-5, λ_gdd=0.0, λ_boundary=0.0, log_cost::Bool=true)
+    n_checks=5, ε=1e-5, objective_kind::Symbol=:raman_band,
+    λ_gdd=0.0, λ_boundary=0.0, log_cost::Bool=true)
     Nt = sim["Nt"]
     M = sim["M"]
     φ_test = 0.1 * randn(Nt, M)
 
     J0, grad = cost_and_gradient(φ_test, uω0_base, fiber, sim, band_mask;
+        objective_kind=objective_kind,
         λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
     # Pick indices where the pulse has significant amplitude (near center of spectrum)
@@ -256,11 +269,13 @@ function validate_gradient(uω0_base, fiber, sim, band_mask;
         φ_plus = copy(φ_test)
         φ_plus[idx, 1] += ε
         J_plus, _ = cost_and_gradient(φ_plus, uω0_base, fiber, sim, band_mask;
+            objective_kind=objective_kind,
             λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
         φ_minus = copy(φ_test)
         φ_minus[idx, 1] -= ε
         J_minus, _ = cost_and_gradient(φ_minus, uω0_base, fiber, sim, band_mask;
+            objective_kind=objective_kind,
             λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
 
         fd_grad = (J_plus - J_minus) / (2ε)
@@ -292,6 +307,7 @@ Directional Taylor-remainder check for the exact scalar objective returned by
 should decay like `O(ε²)` over the truncation-error regime.
 """
 function validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
+    objective_kind::Symbol=:raman_band,
     λ_gdd::Real=0.0,
     λ_boundary::Real=0.0,
     log_cost::Bool=true,
@@ -301,6 +317,7 @@ function validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
     @assert any(abs.(v) .> 0) "v must be nonzero"
 
     J0, grad0 = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
+        objective_kind=objective_kind,
         λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
     dir0 = sum(grad0 .* v)
 
@@ -308,6 +325,7 @@ function validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
     remainders = Float64[]
     for ε in eps_values
         Jp, _ = cost_and_gradient(φ .+ ε .* v, uω0, fiber, sim, band_mask;
+            objective_kind=objective_kind,
             λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
         push!(remainders, abs(Jp - J0 - ε * dir0))
     end
@@ -561,7 +579,7 @@ end
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
     λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
-    log_cost::Bool=true, solver_reltol=1e-8, kwargs...)
+    log_cost::Bool=true, objective_kind::Symbol=:raman_band, solver_reltol=1e-8, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
     fiber["reltol"] = Float64(solver_reltol)
@@ -592,12 +610,14 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
+        objective_kind=objective_kind,
         objective_label="single-mode Raman spectral phase optimization")
 
     if validate
         @info "Gradient Validation"
         grad_validation = validate_gradient(uω0, fiber, sim, band_mask;
-            n_checks=3, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
+            n_checks=3, objective_kind=objective_kind,
+            λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
             log_cost=log_cost)
     else
         grad_validation = nothing
@@ -605,15 +625,18 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 
     @info "Optimization" λ_gdd=λ_gdd_val λ_boundary=λ_boundary
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
-        max_iter=max_iter, φ0=φ0, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
+        max_iter=max_iter, φ0=φ0, objective_kind=objective_kind,
+        λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
         store_trace=true, log_cost=log_cost)
 
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
 
     # ── Run summary table ──
-    J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask; log_cost=false)
-    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask; log_cost=false)
+    J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask;
+        objective_kind=objective_kind, log_cost=false)
+    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask;
+        objective_kind=objective_kind, log_cost=false)
     ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
 
     # Boundary check on optimized input pulse. Use the raw time-domain field:

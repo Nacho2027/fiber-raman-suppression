@@ -310,6 +310,39 @@ function spectral_band_cost(uωf, band_mask)
     return J, dJ
 end
 
+"""
+    spectral_peak_band_cost(uωf, band_mask)
+
+Maximum fractional spectral energy in any one Raman-band frequency bin and its
+gradient. This is a deliberately sharper objective than `spectral_band_cost`:
+it asks whether the worst Raman leak was suppressed, not just the integrated
+band energy.
+
+Ties are resolved by the first maximum bin, so the objective is nonsmooth at
+exact ties. Use it as an experimental phase-only objective until the optimizer
+behavior is characterized.
+"""
+function spectral_peak_band_cost(uωf, band_mask)
+    @assert size(uωf, 1) == length(band_mask) "uωf rows ($(size(uωf,1))) must match band_mask length ($(length(band_mask)))"
+    @assert any(band_mask) "band_mask must have at least one true element"
+    E_total = sum(abs2.(uωf))
+    @assert E_total > 0 "field must have nonzero energy"
+
+    band_indices = findall(band_mask)
+    bin_energy = vec(sum(abs2.(uωf), dims=2))
+    peak_idx = band_indices[argmax(bin_energy[band_indices])]
+    J = bin_energy[peak_idx] / E_total
+
+    peak_mask = falses(length(band_mask))
+    peak_mask[peak_idx] = true
+    dJ = uωf .* (peak_mask .- J) ./ E_total
+
+    @assert 0 ≤ J ≤ 1 "fractional peak energy J=$J out of [0,1]"
+    @assert all(isfinite, dJ) "gradient contains non-finite values"
+
+    return J, dJ
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Photon-number conservation
 # ─────────────────────────────────────────────────────────────────────────────
