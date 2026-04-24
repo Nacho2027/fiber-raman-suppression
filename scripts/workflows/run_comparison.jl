@@ -15,7 +15,7 @@ paper-style figures and saves a unified comparison set.
 - `scripts/lib/common.jl` fiber presets and setup.
 
 # Outputs
-- `results/raman/<run_id>/_result.jld2` + `.json` — one per config.
+- `results/raman/<run_id>/opt_result.jld2` + `.json` — one per config.
 - `results/images/comparison_*.png` — overlay figures.
 - `results/images/summary_table.md` — J_before / J_after / Δ-dB / iterations.
 
@@ -42,38 +42,17 @@ using JSON3
 # Shared workflow dependencies live in ../lib; keep them explicit here so this
 # script does not rely on a same-directory include chain.
 include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "lib", "canonical_runs.jl"))
 include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
 include(joinpath(@__DIR__, "..", "lib", "raman_optimization.jl"))
 include(joinpath(@__DIR__, "..", "lib", "determinism.jl"))
 ensure_deterministic_environment()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 1: Constants (replicate from raman_optimization.jl guarded block)
-# These are inside the PROGRAM_FILE guard in raman_optimization.jl and are
-# therefore not available when that file is included. We define them here.
-# ─────────────────────────────────────────────────────────────────────────────
-
 const RC_RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
-
-# Fiber parameters — must match raman_optimization.jl exactly
-const RC_SMF28_GAMMA = 1.1e-3        # W⁻¹m⁻¹ (1.1 /W/km)
-const RC_SMF28_BETAS = [-2.17e-26, 1.2e-40]  # β₂ [s²/m], β₃ [s³/m]
-
-const RC_HNLF_GAMMA = 10.0e-3        # W⁻¹m⁻¹ (10 /W/km)
-const RC_HNLF_BETAS = [-0.5e-26, 1.0e-40]   # near-zero dispersion
-
-function rc_run_dir(fiber, params)
-    d = joinpath("results", "raman", fiber, params)
-    mkpath(d)
-    return d
-end
 
 # Default pulse parameters (must match common.jl defaults)
 const RC_PULSE_FWHM    = 185e-15   # s (185 fs)
 const RC_PULSE_REP_RATE = 80.5e6   # Hz
-# sech² pulse peak-power factor: P_peak = 0.881374 * P_cont / (FWHM_s * rep_rate)
-# Derived from sech² energy integral (see src/simulation/simulate_disp_mmf.jl line 113)
-const RC_SECH_FACTOR   = 0.881374
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
@@ -96,65 +75,15 @@ mkpath("results/images")
 @info "  Phase 6: Cross-Run Comparison — Re-running 5 configs"
 @info "═══════════════════════════════════════════════════════════"
 
-# ─── Run 1: SMF-28 baseline ──────────────────────────────────────────────────
-dir1 = rc_run_dir("smf28", "L1m_P005W")
-@info "\n▶ Run 1: SMF-28 baseline (L=1m, P=0.05W)"
-result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=50,
-    Nt=2^13, β_order=3, time_window=10.0,
-    gamma_user=RC_SMF28_GAMMA, betas_user=RC_SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir1, "opt")
-)
-GC.gc()
-
-# ─── Run 2: SMF-28 high power ────────────────────────────────────────────────
-dir2 = rc_run_dir("smf28", "L2m_P030W")
-@info "\n▶ Run 2: SMF-28 high power (L=2m, P=0.30W)"
-result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_optimization(
-    L_fiber=2.0, P_cont=0.30, max_iter=50, validate=false,
-    Nt=2^13, β_order=3, time_window=20.0,
-    gamma_user=RC_SMF28_GAMMA, betas_user=RC_SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir2, "opt")
-)
-GC.gc()
-
-# ─── Run 3: HNLF short fiber ─────────────────────────────────────────────────
-dir3 = rc_run_dir("hnlf", "L1m_P005W")
-@info "\n▶ Run 3: HNLF short fiber (L=1m, P=0.05W)"
-result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=80, validate=false,
-    Nt=2^14, β_order=3, time_window=15.0,
-    gamma_user=RC_HNLF_GAMMA, betas_user=RC_HNLF_BETAS,
-    fiber_name="HNLF",
-    save_prefix=joinpath(dir3, "opt")
-)
-GC.gc()
-
-# ─── Run 4: HNLF moderate fiber ──────────────────────────────────────────────
-dir4 = rc_run_dir("hnlf", "L2m_P005W")
-@info "\n▶ Run 4: HNLF moderate fiber (L=2m, P=0.05W)"
-result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_optimization(
-    L_fiber=2.0, P_cont=0.05, max_iter=100, validate=false,
-    Nt=2^14, β_order=3, time_window=30.0,
-    gamma_user=RC_HNLF_GAMMA, betas_user=RC_HNLF_BETAS,
-    fiber_name="HNLF",
-    save_prefix=joinpath(dir4, "opt")
-)
-GC.gc()
-
-# ─── Run 5: SMF-28 long fiber (cold start) ───────────────────────────────────
-dir5 = rc_run_dir("smf28", "L5m_P015W")
-@info "\n▶ Run 5: SMF-28 long fiber (L=5m, P=0.15W, cold start)"
-result5, uω0_5, fiber_5, sim_5, band_mask_5, Δf_5 = run_optimization(
-    L_fiber=5.0, P_cont=0.15, max_iter=100, validate=false,
-    Nt=2^13, β_order=3, time_window=30.0,
-    gamma_user=RC_SMF28_GAMMA, betas_user=RC_SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir5, "opt")
-)
-GC.gc()
+for spec in canonical_raman_run_specs()
+    dir = canonical_run_output_dir(spec.fiber_slug, spec.params_slug)
+    @info "\n▶ $(spec.label)"
+    run_optimization(;
+        spec.kwargs...,
+        save_prefix=joinpath(dir, "opt"),
+    )
+    GC.gc()
+end
 
 @info "═══ All 5 optimization runs complete ═══"
 
@@ -190,9 +119,9 @@ for run in all_runs
         betas[1]
     end
 
-    # Convert P_cont (average continuum power) to P_peak (sech² pulse peak power)
     fwhm_s  = run["fwhm_fs"] * 1e-15   # fs → s
-    P_peak  = RC_SECH_FACTOR * Float64(run["P_cont_W"]) / fwhm_s / RC_PULSE_REP_RATE  # W
+    P_peak  = peak_power_from_average_power(
+        Float64(run["P_cont_W"]), fwhm_s, RC_PULSE_REP_RATE)
 
     N = compute_soliton_number(Float64(run["gamma"]), P_peak,
                                 Float64(run["fwhm_fs"]), Float64(beta2))

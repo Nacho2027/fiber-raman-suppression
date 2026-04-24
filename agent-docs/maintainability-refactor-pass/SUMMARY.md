@@ -2,173 +2,159 @@
 
 Date: 2026-04-23
 
-## Changed
+## Changed In This Follow-On Slice
 
-- Added `setup_raman_problem_exact` in
-  `scripts/lib/common.jl:464-501`.
-- Generalized the private builder in `scripts/lib/common.jl:360-416` with an
-  `auto_size` switch so auto-sized and exact reconstruction share the same
-  preset resolution, validation, sim/fiber construction, launch-field
-  creation, and Raman-band masking.
-- Rewired exact-grid consumers to the shared helper:
-  - `scripts/validation/validate_results.jl:117-141`
-  - `scripts/lib/visualization.jl:1656-1668`
-  - `scripts/research/simple_profile/simple_profile_stdimages.jl:48-61`
-- Added a fast regression proving exact setup preserves the requested grid and
-  auto-sized setup still expands unsafe grids:
-  - `test/tier_fast.jl:147-184`
-- Made `src/io/results.jl` the real canonical result writer/reader for the
-  current Raman payload shape while remaining backward-compatible with the older
-  package-centric `save_run` contract.
-- Rewired canonical Raman result serialization in
-  `scripts/lib/raman_optimization.jl` through `MultiModeNoise.save_run`.
-- Moved canonical manifest authority into `src/io/results.jl` and exported:
-  - `read_run_manifest`
-  - `write_run_manifest`
-  - `update_run_manifest_entry`
-  - `upsert_run_manifest_entry!`
-  - `load_canonical_runs`
-- Converted `scripts/lib/manifest_io.jl` into a compatibility shim over the
-  package-level manifest helpers.
-- Rewired maintained readers to the canonical package helpers:
+- Added a shared canonical five-run registry in
+  `scripts/lib/canonical_runs.jl`.
+- Rewired both maintained users of that suite definition:
+  - `scripts/lib/raman_optimization.jl`
   - `scripts/workflows/run_comparison.jl`
+- Added `peak_power_from_average_power(...)` in `scripts/lib/common.jl` as the
+  one obvious maintained helper for average-power → peak-power conversion.
+- Rewired maintained callers onto that helper:
+  - `scripts/lib/common.jl::_auto_size_single_mode_grid`
+  - `scripts/lib/common.jl::print_fiber_summary`
+  - `scripts/lib/common.jl::setup_amplitude_problem`
+  - `scripts/workflows/run_sweep.jl`
+  - `scripts/workflows/run_comparison.jl`
+  - `scripts/workflows/generate_presentation_figures.jl`
+- Rewired maintained workflows that read canonical per-run artifacts to prefer
+  package-level canonical loading where safe:
+  - `scripts/workflows/run_sweep.jl`
+  - `scripts/workflows/generate_presentation_figures.jl`
+- Replaced the highest-value broken same-directory include chains in research
+  scripts with explicit shared-library or neighboring-research includes:
   - `scripts/research/analysis/physics_insight.jl`
-- Added fast coverage for both:
-  - legacy package-style `save_run` payloads
-  - canonical Raman `_result.jld2` payloads
-- Grouped the test tree into:
-  - `test/core/`
-  - `test/cost_audit/`
-  - `test/phases/`
-  - `test/trust_region/`
-  while keeping `test/runtests.jl` and tier files as the stable entrypoints.
-- Cleaned up the worst include-boundary problems without changing behavior:
-  - `scripts/workflows/run_comparison.jl` now includes `../lib` explicitly
-    instead of relying on a broken same-directory include assumption
-  - `scripts/workflows/generate_sweep_reports.jl` now exposes
-    `generate_sweep_reports_main()`
-  - `scripts/workflows/generate_presentation_figures.jl` now exposes
-    `generate_presentation_figures_main()`
-  - `scripts/canonical/generate_reports.jl` no longer depends on order-sensitive
-    `main` rebinding across included workflow files
-  - `scripts/research/simple_profile/simple_profile_driver.jl` now declares
-    `standard_images.jl` at top level instead of function-local hidden includes
-- Added a fast fresh-process include smoke check for the maintained scripts
-  above, and cleaned stale test header paths after the test-tree move.
-- Reorganized active human-facing docs into clearer buckets:
-  - `docs/guides/`
-  - `docs/architecture/`
-  - `docs/synthesis/`
-  - `docs/status/`
-  - `docs/reference/`
-- Rewrote the codebase visual map as renderer-safe plain-text diagrams instead
-  of Mermaid so it works in minimal markdown viewers.
-- Updated repo and script indexes to point at the new doc layout.
+  - `scripts/research/analysis/phase_analysis.jl`
+  - `scripts/research/analysis/verification.jl`
+  - `scripts/research/propagation/propagation_reach.jl`
+  - `scripts/research/propagation/propagation_z_resolved.jl`
+  - `scripts/research/propagation/matched_quadratic_100m.jl`
+  - `scripts/research/benchmarks/benchmark_threading.jl`
+  - `scripts/research/benchmarks/benchmark_optimization.jl`
+- Turned two heavyweight standalone scripts into explicit entrypoints instead of
+  include-time script bodies:
+  - `scripts/research/analysis/verification.jl`
+  - `scripts/workflows/run_benchmarks.jl`
+- Removed the remaining live duplicate of the canonical five-run suite from
+  `scripts/research/analysis/verification.jl` by deriving its VERIF-02 config
+  table from `canonical_raman_run_specs()`.
+- Tightened canonical run metadata slightly by exposing `fiber_preset` directly
+  in `scripts/lib/canonical_runs.jl` so downstream consumers do not need to
+  reverse-engineer preset identity from names or physical coefficients.
+- Added one shared artifact-summary adapter in `scripts/lib/run_artifacts.jl`
+  so maintained report/inspection workflows consume canonical `_result.jld2`
+  payloads through the same field mapping and suppression-quality logic.
+- Added a shared sweep-aggregate row adapter in `scripts/lib/run_artifacts.jl`
+  so maintained reports interpret aligned L x P aggregate grids in one place.
+- Rewired maintained artifact readers onto that adapter where safe:
+  - `scripts/workflows/inspect_run.jl`
+  - `scripts/workflows/generate_presentation_figures.jl`
+  - `scripts/workflows/generate_sweep_reports.jl`
+  - `scripts/workflows/run_sweep.jl`
+- Added fast regression coverage for:
+  - the shared average→peak-power conversion helper
+  - the canonical five-run registry contract
+  - the shared canonical artifact-summary adapter
+  - the shared sweep-aggregate row adapter
 
 ## Duplication And Ambiguity Audit
 
 ### Resolved now
 
-- Exact single-mode reconstruction had multiple local implementations:
-  - authoritative shared builder in `scripts/lib/common.jl:360-416`
-  - validation-local rebuild in `scripts/validation/validate_results.jl:117-141`
-  - visualization-local rebuild in `scripts/lib/visualization.jl:1656-1668`
-  - simple-profile reconstruction in
-    `scripts/research/simple_profile/simple_profile_stdimages.jl:48-61`
-- This now has one obvious authority:
-  `scripts/lib/common.jl::setup_raman_problem_exact`.
+- The maintained five-run canonical Raman suite no longer has two competing
+  live definitions.
+  Before:
+  - `scripts/lib/raman_optimization.jl:803-906`
+  - `scripts/workflows/run_comparison.jl:57-155`
+  - `scripts/research/analysis/verification.jl` local `PRODUCTION_CONFIGS`
+  Now:
+  - shared authority in `scripts/lib/canonical_runs.jl`
+  - maintained runners and VERIF-02 consume that registry instead of
+    open-coding it
 
-### High-value active ambiguity still present
+- Average-power → peak-power conversion no longer has multiple maintained
+  formulas with conflicting semantics.
+  Before:
+  - correct sech²-factor path in `scripts/lib/common.jl:338-341`
+  - local wrappers in `scripts/workflows/run_sweep.jl:129-136`,
+    `scripts/workflows/run_comparison.jl:193-195`,
+    `scripts/workflows/generate_presentation_figures.jl:72-75`
+  - inconsistent no-factor diagnostics in `scripts/lib/common.jl:138` and
+    `scripts/lib/common.jl:547`
+  Now:
+  - shared authority in `scripts/lib/common.jl::peak_power_from_average_power`
 
-- Result writing and canonical manifest I/O now have one authority for
-  maintained Raman workflows: `src/io/results.jl`.
-- The remaining ambiguity is now narrower:
-  what subset of research outputs should also be normalized onto this
-  interface versus remain explicitly study-local.
+### Still active ambiguity
 
-- Same-directory include chains still exist in maintained research scripts and
-  remain easy to misread because they hide whether a dependency is local,
-  shared-library, or transitively pulled in:
-  - `scripts/research/analysis/phase_analysis.jl:40-42`
-  - `scripts/research/analysis/verification.jl:36-37`
-  - `scripts/research/propagation/propagation_reach.jl:49-51`
-  - `scripts/research/propagation/matched_quadratic_100m.jl:33-36`
-- These are the next include-boundary candidates if another pass is warranted.
+- Maintained sweep/report workflows now share per-run artifact mapping and the
+  main sweep-aggregate grid-to-row mapping. Remaining report-layer duplication
+  is mostly formatting and legacy multistart summary handling.
 
-- Optimization entrypoints are conceptually similar but still separate:
-  - canonical SMF runner in `scripts/lib/raman_optimization.jl:553-760`
-  - multivariable runner in
-    `scripts/research/multivar/multivar_optimization.jl:897-979`
-  - MMF baseline runner in
-    `scripts/research/mmf/mmf_raman_optimization.jl:500-600`
-- Shared helpers now cover regularizers and objective metadata, but run-level
-  orchestration, diagnostics assembly, and persistence remain partly bespoke.
+- Same-directory include chains still exist in maintained research code and can
+  still obscure whether a dependency is study-local or shared:
+  - trust-region helpers that intentionally compose locally:
+    `scripts/research/trust_region/*.jl`
+  - deeper phase-study chains such as `scripts/research/phases/phase31/*.jl`
+  - recovery/MMF orchestration that still mixes local and shared research code
+    by design
 
-- Manifest writing remains split between canonical shared helpers and
-  study-local implementations:
-  - shared canonical helpers in `src/io/results.jl`
-  - custom Phase 31 manifest in
-    `scripts/research/phases/phase31/run.jl:287-321`
-- This is not automatically wrong, but it still forces a choice about whether a
-  manifest is public infrastructure or local study provenance.
-
-- Standard-image regeneration still has multiple rebuild paths:
-  - canonical generic regen in
-    `scripts/workflows/regenerate_standard_images.jl:82-115`
+- Regeneration/reconstruction helpers remain split by schema family:
+  - canonical generic regeneration in
+    `scripts/workflows/regenerate_standard_images.jl`
   - long-fiber schema bridge in
-    `scripts/research/longfiber/longfiber_regenerate_standard_images.jl:43-87`
-- The long-fiber split is justified by schema and scientific-method
-  constraints, but the adapter boundary is still implicit rather than explicit.
+    `scripts/research/longfiber/longfiber_regenerate_standard_images.jl`
+  - simple-profile artifact bridge in
+    `scripts/research/simple_profile/simple_profile_stdimages.jl`
+  This remains justified for now, but the adapter boundary is still implicit.
 
-### Justified separations to keep
-
-- Long-fiber setup should remain separate:
-  `scripts/research/longfiber/longfiber_setup.jl`
-  exists specifically to bypass auto-sizing and preserve research-controlled
-  grids.
-- MMF setup should remain separate:
-  `scripts/research/mmf/mmf_setup.jl`
-  owns GRIN/MMF-specific fiber construction and window heuristics, not a mere
-  variant of SMF setup.
+- Research-local power helpers still exist in multiple files. They were not
+  normalized in this pass because the active requirement was to fix the
+  maintained/canonical surface first.
 
 ## Prioritized Refactor Plan
 
 ### Now
 
-- keep exact and auto-sized single-mode setup centralized in `common.jl`
-- use `setup_raman_problem_exact` for saved-grid reconstruction paths
-- avoid adding new ad hoc exact-grid rebuild helpers elsewhere
+- keep `scripts/lib/common.jl` as the authority for single-mode setup and
+  shared power conversion
+- keep `scripts/lib/canonical_runs.jl` as the authority for the maintained
+  five-run canonical suite
+- avoid adding new maintained copies of either concept
 
 ### Next
 
-- decide which research manifests should adopt shared manifest helpers
+- consider whether legacy multistart aggregate handling should get the same
+  adapter treatment as per-run and sweep-grid artifacts
 - clean up the next maintained same-directory include chains in research
-  analysis / propagation code
-- consider a small shared "run reconstruction from saved metadata" helper if
-  more validation/report tooling appears
+  analysis / propagation scripts
+- decide which research manifests deserve promotion and which should remain
+  explicit local provenance
 
 ### Later
 
-- promote the stable single-mode setup interface into `src/` once its public
-  shape is settled
-- unify repeated run-orchestration pieces only after repeated active use across
-  canonical and research workflows clearly justifies it
-- introduce explicit schema adapters for regeneration/report tools instead of
-  growing more format-detection branches inline
+- promote stable single-mode setup interfaces into `src/` once the public
+  contract is settled
+- revisit standard-image regeneration as explicit schema adapters around a
+  shared core if more maintained families appear
+- normalize driver boilerplate only where multiple active maintained users make
+  the abstraction worth carrying
 
 ## Risks Deferred
 
 - No solver, adjoint, or cost-function numerics were changed.
-- No long-fiber or MMF behavior was changed.
-- Research-local JLD2 schemas remain intentionally heterogeneous.
-- The biggest remaining maintainability risks are:
-  - deciding which research schemas deserve promotion versus explicit local
-    isolation
-  - deciding which research include webs deserve cleanup versus intentional
-    locality
-  - adding an automated link/path checker if doc moves become more frequent
+- No long-fiber or MMF setup behavior was changed.
+- No research-local power helper was force-normalized just for symmetry.
+- Maintained report-generation still has some direct payload-shape knowledge.
+- Historical planning-history docs still contain older power-conversion text
+  that should not be treated as the maintained authority.
+- `scripts/research/analysis/verification.jl` is now an explicit entrypoint,
+  but it still remains a fairly thick research harness rather than a thin
+  orchestration wrapper over smaller helpers.
 
 ## Tests Run
 
 - `julia -t auto --project=. test/tier_fast.jl`
-- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/workflows/run_comparison.jl"); include("scripts/canonical/generate_reports.jl"); include("scripts/research/simple_profile/simple_profile_driver.jl"); println("include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/lib/raman_optimization.jl"); include("scripts/workflows/run_comparison.jl"); include("scripts/workflows/run_sweep.jl"); include("scripts/workflows/generate_presentation_figures.jl"); println("include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/research/analysis/physics_insight.jl"); include("scripts/research/analysis/phase_analysis.jl"); include("scripts/research/propagation/propagation_reach.jl"); include("scripts/research/propagation/propagation_z_resolved.jl"); include("scripts/research/propagation/matched_quadratic_100m.jl"); include("scripts/research/benchmarks/benchmark_threading.jl"); include("scripts/research/benchmarks/benchmark_optimization.jl"); println("research include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/workflows/run_benchmarks.jl"); include("scripts/research/analysis/verification.jl"); println("entrypoint include smoke ok")'`

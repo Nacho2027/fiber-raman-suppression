@@ -24,8 +24,8 @@ using MultiModeNoise
 using Optim
 using Tullio
 
-include("common.jl")
-include("raman_optimization.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "raman_optimization.jl"))
 
 if abspath(PROGRAM_FILE) == @__FILE__
 

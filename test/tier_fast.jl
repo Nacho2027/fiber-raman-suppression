@@ -24,10 +24,14 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # visible in the including scope (matches test/core/test_determinism.jl pattern).
 using MultiModeNoise
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "canonical_runs.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "experiment_spec.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "manifest_io.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
+include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
+include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
 
 @testset "Phase 16 — fast tier" begin
 
@@ -144,6 +148,27 @@ include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
         @test any(band_r)
     end
 
+    @testset "Average-to-peak power conversion" begin
+        P_cont = 0.20
+        fwhm = 185e-15
+        rep_rate = 80.5e6
+
+        P_peak_sech = peak_power_from_average_power(P_cont, fwhm, rep_rate)
+        P_peak_gauss = peak_power_from_average_power(P_cont, fwhm, rep_rate;
+            pulse_shape="gaussian")
+        @test P_peak_sech ≈ 0.881374 * P_cont / (fwhm * rep_rate)
+        @test P_peak_gauss ≈ 0.939437 * P_cont / (fwhm * rep_rate)
+
+        summary = print_fiber_summary(
+            gamma = 1.1e-3,
+            betas = [-2.17e-26, 1.2e-40],
+            P_cont = P_cont,
+            pulse_fwhm = fwhm,
+            pulse_rep_rate = rep_rate,
+        )
+        @test summary.P_peak ≈ P_peak_sech
+    end
+
     @testset "Exact single-mode setup preserves requested grid" begin
         exact_kwargs = (
             λ0 = 1550e-9,
@@ -181,6 +206,29 @@ include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
         @test fiber_exact["γ"] == fiber_auto["γ"]
         @test thr_auto == thr_exact
         @test any(band_auto) && any(band_exact)
+    end
+
+    @testset "Canonical run registry" begin
+        specs = canonical_raman_run_specs()
+        ids = [spec.id for spec in specs]
+
+        @test length(specs) == 5
+        @test ids == [
+            :smf28_L1m_P005W,
+            :smf28_L2m_P030W,
+            :hnlf_L1m_P005W,
+            :hnlf_L2m_P005W,
+            :smf28_L5m_P015W,
+        ]
+        @test [spec.fiber_preset for spec in specs] == [
+            :SMF28, :SMF28, :HNLF, :HNLF, :SMF28,
+        ]
+        @test specs[1].kwargs.fiber_name == "SMF-28"
+        @test specs[3].kwargs.fiber_name == "HNLF"
+        @test specs[4].kwargs.max_iter == 100
+        @test specs[5].kwargs.P_cont == 0.15
+        @test canonical_run_output_dir("tmpfiber", "L1m_P1W"; create=false) ==
+              joinpath("results", "raman", "tmpfiber", "L1m_P1W")
     end
 
     @testset "Regularizer helper formulas" begin

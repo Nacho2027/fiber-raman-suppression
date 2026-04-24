@@ -1,13 +1,13 @@
 """
-Raman suppression via spectral phase optimization — canonical SMF entry point.
+Shared Raman suppression optimization library used by the maintained workflow
+surface.
 
-Runs adjoint-gradient + L-BFGS to find the input spectral phase that minimizes
-the fractional pulse energy in a Raman-shifted band after propagation through a
-single-mode fiber. Uses user-defined fiber parameters (γ, β₂, β₃, …), no
-pre-computed NPZ eigenmode files needed.
+This file provides `run_optimization`, cost/gradient helpers, result payload
+assembly, and plotting glue for single-mode spectral-phase optimization.
 
-# Run
-    julia --project=. -t auto scripts/lib/raman_optimization.jl
+When executed directly it still runs the historical five-run comparison suite,
+but the supported public single-run entry point is now
+`scripts/canonical/optimize_raman.jl`.
 
 # Inputs
 - Config constants at top of file (fiber preset, L, P, pulse FWHM, max_iter).
@@ -43,6 +43,7 @@ using JLD2
 using JSON3
 
 include("common.jl")
+include("canonical_runs.jl")
 include("manifest_io.jl")
 include("objective_surface.jl")
 include("regularizers.jl")
@@ -776,15 +777,15 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 10. Heavy-duty Raman runs (only when script is executed directly)
+# 10. Historical comparison-suite runs (only when script is executed directly)
 #
 # Five configurations spanning moderate to extreme Raman shifting:
 #   Run 1: SMF-28 baseline       (L=1m,  P=0.05W, N~2.3)
 #   Run 2: SMF-28 high power     (L=2m,  P=0.30W, N~5.6)
 #   Run 3: HNLF short fiber      (L=1m,  P=0.05W, N~6.9 from high gamma)
-#   Run 4: HNLF long fiber       (L=5m,  P=0.10W, N~9.8 heavy-duty)
-#   Run 5: SMF-28 long fiber     (L=10m, P=0.15W, warm-started from Run 2)
-# Chirp sensitivity analysis on the heaviest run (Run 4).
+#   Run 4: HNLF moderate fiber   (L=2m,  P=0.05W, strong Raman)
+#   Run 5: SMF-28 long fiber     (L=5m,  P=0.15W, cold start)
+# Chirp sensitivity analysis on the strongest maintained HNLF run (Run 4).
 # ─────────────────────────────────────────────────────────────────────────────
 
 using Interpolations
@@ -796,114 +797,45 @@ function main()
 @info "  Raman Phase Optimization — Heavy-Duty Runs"
 @info "═══════════════════════════════════════════"
 
+RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
+mkpath("results/images")  # ensure summary output directory exists
 # ── Output directories ──
 # Primary: results/raman/<fiber>/<params>/ (per-run detailed output)
 # Summary: results/images/ (flat directory for quick-access plots)
-RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
-function run_dir(fiber, params)
-    d = joinpath("results", "raman", fiber, params)
-    mkpath(d)
-    return d
+suite_results = Dict{Symbol,Any}()
+for spec in canonical_raman_run_specs()
+    dir = canonical_run_output_dir(spec.fiber_slug, spec.params_slug)
+    @info "\n▶ $(spec.label) → $dir"
+    suite_results[spec.id] = run_optimization(;
+        spec.kwargs...,
+        save_prefix=joinpath(dir, "opt"),
+    )
+
+    if spec.id == :smf28_L1m_P005W
+        cp(joinpath(dir, "opt.png"), "results/images/raman_opt_L1m_SMF28.png", force=true)
+    end
+    GC.gc()
 end
-mkpath("results/images")  # ensure summary output directory exists
 
-# ── SMF-28 parameters (canonical single-mode fiber at 1550nm) ──
-SMF28_GAMMA = 1.1e-3        # W⁻¹m⁻¹ (1.1 /W/km)
-SMF28_BETAS = [-2.17e-26, 1.2e-40]  # β₂ [s²/m], β₃ [s³/m]
-
-# ── HNLF parameters (Highly Nonlinear Fiber at 1550nm) ──
-HNLF_GAMMA = 10.0e-3       # W⁻¹m⁻¹ (10 /W/km)
-HNLF_BETAS = [-0.5e-26, 1.0e-40]  # near-zero dispersion
-
-# ─── Run 1: SMF-28 baseline (moderate Raman, N~2.3) ─────────────────────────
-dir1 = run_dir("smf28", "L1m_P005W")
-@info "\n▶ Run 1: SMF-28 baseline (L=1m, P=0.05W) → $dir1"
-result1, uω0_1, fiber_1, sim_1, band_mask_1, Δf_1 = run_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=50,
-    Nt=2^13, β_order=3, time_window=10.0,
-    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir1, "opt")
-)
-# Also save to results/images/ for quick access
-cp(joinpath(dir1, "opt.png"), "results/images/raman_opt_L1m_SMF28.png", force=true)
-φ_opt_1 = reshape(result1.minimizer, sim_1["Nt"], sim_1["M"])
-GC.gc()
-
-# ─── Run 2: SMF-28 high power (strong Raman, N~5.6) ─────────────────────────
-dir2 = run_dir("smf28", "L2m_P030W")
-@info "\n▶ Run 2: SMF-28 high power (L=2m, P=0.30W) → $dir2"
-result2, uω0_2, fiber_2, sim_2, band_mask_2, Δf_2 = run_optimization(
-    L_fiber=2.0, P_cont=0.30, max_iter=50, validate=false,
-    Nt=2^13, β_order=3, time_window=20.0,
-    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir2, "opt")
-)
-φ_opt_2 = reshape(result2.minimizer, sim_2["Nt"], sim_2["M"])
-GC.gc()
-
-# ─── Run 3: HNLF short fiber (very strong Raman at LOW power, N~6.9) ────────
-dir3 = run_dir("hnlf", "L1m_P005W")
-@info "\n▶ Run 3: HNLF (L=1m, P=0.05W) — strong Raman from high γ → $dir3"
-result3, uω0_3, fiber_3, sim_3, band_mask_3, Δf_3 = run_optimization(
-    L_fiber=1.0, P_cont=0.05, max_iter=80, validate=false,
-    Nt=2^14, β_order=3, time_window=15.0,
-    gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
-    fiber_name="HNLF",
-    save_prefix=joinpath(dir3, "opt")
-)
-φ_opt_3 = reshape(result3.minimizer, sim_3["Nt"], sim_3["M"])
-GC.gc()
-
-# ─── Run 4: HNLF moderate fiber (strong Raman, N~4.9) ───────────────────────
-# N~9.8 (L=5m, P=0.10W) causes NaN in the ODE solver — too stiff.
-# Reduce to L=2m, P=0.05W for a stable heavy-Raman regime.
-dir4 = run_dir("hnlf", "L2m_P005W")
-@info "\n▶ Run 4: HNLF (L=2m, P=0.05W) — heavy Raman → $dir4"
-result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = run_optimization(
-    L_fiber=2.0, P_cont=0.05, max_iter=100, validate=false,
-    Nt=2^14, β_order=3, time_window=30.0,
-    gamma_user=HNLF_GAMMA, betas_user=HNLF_BETAS,
-    fiber_name="HNLF",
-    save_prefix=joinpath(dir4, "opt")
-)
+result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = suite_results[:hnlf_L2m_P005W]
 φ_opt_4 = reshape(result4.minimizer, sim_4["Nt"], sim_4["M"])
-GC.gc()
 
-# ─── Run 5: SMF-28 LONG fiber (L=5m, cold start) ────────────────────────────
-# L=10m with warm-start from L=2m causes NaN (frequency grid mismatch).
-# Use L=5m cold start instead — still long enough for significant Raman.
-dir5 = run_dir("smf28", "L5m_P015W")
-@info "\n▶ Run 5: SMF-28 long fiber (L=5m, P=0.15W, cold start) → $dir5"
-result5, uω0_5, fiber_5, sim_5, band_mask_5, Δf_5 = run_optimization(
-    L_fiber=5.0, P_cont=0.15, max_iter=100, validate=false,
-    Nt=2^13, β_order=3, time_window=30.0,
-    gamma_user=SMF28_GAMMA, betas_user=SMF28_BETAS,
-    fiber_name="SMF-28",
-    save_prefix=joinpath(dir5, "opt")
-)
-φ_opt_5 = reshape(result5.minimizer, sim_5["Nt"], sim_5["M"])
-GC.gc()
-
-# ─── Chirp sensitivity on the heaviest run (Run 4: HNLF L=5m) ──────────────
-@info "\n▶ Chirp Sensitivity (Run 4: HNLF L=5m)"
+# ─── Chirp sensitivity on the strongest maintained HNLF run (Run 4: L=2m) ──
+@info "\n▶ Chirp Sensitivity (Run 4: HNLF L=2m)"
 gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
     φ_opt_4, uω0_4, fiber_4, sim_4, band_mask_4;
     gdd_range=range(-2e-2, 2e-2, length=101)
 )
 plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
-    save_prefix="results/images/chirp_sens_HNLF_L5m")
+    save_prefix="results/images/chirp_sens_HNLF_L2m")
 
 # Phase diagnostics are now generated per-run inside run_optimization
 
 @info "═══ All runs complete ═══"
 @info "Output directory structure:"
-@info "  results/raman/smf28/L1m_P005W/   — Run 1 (baseline)"
-@info "  results/raman/smf28/L2m_P030W/   — Run 2 (high power)"
-@info "  results/raman/hnlf/L1m_P005W/    — Run 3 (HNLF short)"
-@info "  results/raman/hnlf/L2m_P005W/    — Run 4 (HNLF heavy Raman)"
-@info "  results/raman/smf28/L5m_P015W/   — Run 5 (SMF long, cold start)"
+for spec in canonical_raman_run_specs()
+    @info "  $(joinpath("results", "raman", spec.fiber_slug, spec.params_slug))/   — $(spec.label)"
+end
 
 end # function main
 

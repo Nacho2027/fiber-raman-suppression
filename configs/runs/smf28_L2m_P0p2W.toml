@@ -1,0 +1,22 @@
+id = "smf28_L2m_P0p2W"
+description = "Default approved canonical single-mode SMF-28 run for lab usage."
+output_tag = "smf28_L2m_P0p2W"
+save_prefix_basename = "opt"
+
+[run]
+fiber_preset = "SMF28"
+fiber_name = "SMF-28"
+L_fiber = 2.0
+P_cont = 0.2
+max_iter = 30
+validate = false
+do_plots = true
+Nt = 8192
+time_window = 12.0
+beta_order = 3
+lambda_boundary = 1.0
+log_cost = true
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0

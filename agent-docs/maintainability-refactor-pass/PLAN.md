@@ -16,6 +16,10 @@
   - making workflow scripts include `../lib` explicitly
   - replacing order-sensitive `main` aliasing with named workflow entrypoints
   - moving hidden function-local includes to explicit top-level dependencies
+- make the canonical five-run suite definition live in one shared registry
+- make average→peak-power conversion use one obvious maintained helper
+- replace the highest-value same-directory research include chains with
+  explicit `../../lib` or neighboring research-path includes
 
 ## Next
 
@@ -26,6 +30,14 @@
   research analysis / propagation scripts
 - extract a small shared helper for "rebuild run from saved metadata" if more
   result-inspection tools appear
+- decide whether the maintained sweep/report layer should get a shared
+  canonical-run summary adapter instead of each workflow mapping payload fields
+  ad hoc
+- audit the remaining research-local average→peak-power helpers and only
+  promote them if more than one active maintained path actually needs them
+- decide whether heavyweight research scripts like
+  `scripts/research/analysis/verification.jl` should be converted from
+  include-time execution into explicit `*_main()` entrypoints
 
 ## Later
 
@@ -37,3 +49,5 @@
   maintained users, not one-off study scripts
 - do a deeper module/package pass only if the remaining include webs continue
   to cause order sensitivity or duplicated load logic
+- decide whether canonical run suites should eventually become package-visible
+  metadata or remain script-library infrastructure

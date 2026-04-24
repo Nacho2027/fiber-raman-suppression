@@ -1,0 +1,37 @@
+id = "smf28_hnlf_default"
+description = "Approved maintained sweep over SMF-28 and HNLF operating points."
+output_dir = "results/raman/sweeps"
+images_dir = "results/images"
+Nt_floor = 8192
+pulse_fwhm = 1.85e-13
+pulse_fwhm_fs = 185.0
+pulse_rep_rate = 8.05e7
+
+[[fiber]]
+fiber_preset = "SMF28"
+name = "SMF-28"
+slug = "smf28"
+lengths_m = [0.5, 1.0, 2.0, 5.0]
+powers_W = [0.05, 0.10, 0.20]
+max_iter = 60
+beta_order = 3
+
+[[fiber]]
+fiber_preset = "HNLF"
+name = "HNLF"
+slug = "hnlf"
+lengths_m = [0.5, 1.0, 2.0, 5.0]
+powers_W = [0.005, 0.010, 0.030]
+max_iter = 60
+beta_order = 3
+
+[multistart]
+enabled = true
+fiber_preset = "SMF28"
+fiber_name = "SMF-28"
+slug = "smf28"
+L_fiber = 2.0
+P_cont = 0.20
+max_iter = 60
+n_starts = 10
+beta_order = 3

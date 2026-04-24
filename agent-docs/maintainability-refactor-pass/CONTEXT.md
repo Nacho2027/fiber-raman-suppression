@@ -46,6 +46,32 @@ This pass therefore also targeted:
 - a narrow include-architecture cleanup for the worst active dependency-web
   cases
 
+The follow-on slice in this session targeted two smaller but still active
+maintainability leaks inside the maintained workflow surface:
+
+- the five-run canonical Raman comparison suite still existed in two live
+  copies:
+  - `scripts/lib/raman_optimization.jl`
+  - `scripts/workflows/run_comparison.jl`
+- average-power to peak-power conversion still had multiple maintained
+  implementations, and not all of them agreed:
+  - correct sech² factor path in `scripts/lib/common.jl::_auto_size_single_mode_grid`
+  - local wrappers in `scripts/workflows/run_sweep.jl`,
+    `scripts/workflows/run_comparison.jl`, and
+    `scripts/workflows/generate_presentation_figures.jl`
+  - inconsistent no-factor diagnostics in `scripts/lib/common.jl::print_fiber_summary`
+    and `setup_amplitude_problem`
+
+Those were both active enough to justify shared helpers because they affect the
+maintained canonical/workflow layer, not just one-off research code.
+
+After that, the next high-confidence maintainability seam was the remaining
+research scripts that still tried to include nonexistent or ambiguous sibling
+`common.jl` / `visualization.jl` files instead of naming the shared library
+boundary explicitly. That pattern mattered because it made these scripts look
+more local and reusable than they actually were, and some of them were only
+accidentally loadable.
+
 ## Deliberate Non-Goals
 
 - no changes to solver physics
@@ -53,3 +79,5 @@ This pass therefore also targeted:
 - no MMF setup unification
 - no broad module conversion of the `scripts/` tree
 - no attempt to flatten all research-local include webs in one pass
+- no attempt to normalize every research-local power helper or phase-study
+  registry

@@ -39,8 +39,8 @@ ENV["MPLBACKEND"] = "Agg"
 using PyPlot
 using JLD2
 
-include("common.jl")
-include("visualization.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Include guard + constants (PZ_ prefix per D-15)

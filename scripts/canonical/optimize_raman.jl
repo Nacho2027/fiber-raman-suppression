@@ -1,5 +1,5 @@
-include(joinpath(@__DIR__, "..", "lib", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "workflows", "optimize_raman.jl"))
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+    canonical_optimize_main(ARGS)
 end

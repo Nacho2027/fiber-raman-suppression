@@ -6,6 +6,13 @@ Use this workflow when the task is to generate or refresh a maintained sweep on
 the burst VM. The sweep is not a laptop workflow and should not be treated as a
 casual extension of `make optimize`.
 
+The maintained default sweep config is `smf28_hnlf_default`. List approved
+sweep ids with:
+
+```bash
+julia --project=. -t auto scripts/canonical/run_sweep.jl --list
+```
+
 Mac and `claude-code-host` are assumed to be live-synced by Syncthing. Burst is
 not. Stage code to burst explicitly and pull results back explicitly.
 
@@ -54,7 +61,7 @@ rsync -az --delete \
       -e "gcloud compute ssh --zone=us-east5-a --project=riveralab --" \
       fiber-raman-burst:~/fiber-raman-suppression/
 burst-ssh "cd fiber-raman-suppression && \
-           ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl'"
+           ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl smf28_hnlf_default'"
 ```
 
 Under the hood the wrapper runs your command inside tmux session
@@ -69,7 +76,7 @@ three options:
 1. **Wait for the lock** (good if the other job is close to done):
    ```bash
    WAIT_TIMEOUT_SEC=3600 burst-ssh "cd fiber-raman-suppression && \
-       ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl'"
+       ~/bin/burst-run-heavy B-sweep 'julia -t auto --project=. scripts/canonical/run_sweep.jl smf28_hnlf_default'"
    ```
 
 2. **Spawn an ephemeral second VM** (good if you can't wait, and for
@@ -77,7 +84,7 @@ three options:
    multi-config sweep without disturbing the primary VM). Run this from
    `claude-code-host`, NOT from inside the burst VM:
    ```bash
-   ~/bin/burst-spawn-temp B-sweep2 'julia -t auto --project=. scripts/canonical/run_sweep.jl'
+   ~/bin/burst-spawn-temp B-sweep2 'julia -t auto --project=. scripts/canonical/run_sweep.jl smf28_hnlf_default'
    ```
    The spawner creates a fresh VM from a machine image of
    `fiber-raman-burst`, runs your job, and destroys the VM on exit (the

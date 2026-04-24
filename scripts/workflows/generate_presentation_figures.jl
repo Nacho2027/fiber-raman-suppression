@@ -27,6 +27,7 @@ try using Revise catch end
 using Printf, JLD2, FFTW, LinearAlgebra
 
 include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
 include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
 
 const OUT_DIR = joinpath("results", "images", "presentation")
@@ -44,24 +45,22 @@ function load_all_sweep_points()
         for d in sort(readdir(dir))
             jld2 = joinpath(dir, d, "opt_result.jld2")
             isfile(jld2) || continue
-            data = load(jld2)
-            J_after = data["J_after"]
-            J_dB = 10 * log10(max(J_after, 1e-30))
+            summary = canonical_run_summary(jld2)
             push!(points, (
                 fiber = fiber_label,
                 fiber_key = fiber_key,
-                L = data["L_m"],
-                P = data["P_cont_W"],
-                J_before = data["J_before"],
-                J_after = J_after,
-                J_before_dB = 10 * log10(max(data["J_before"], 1e-30)),
-                J_after_dB = J_dB,
-                delta_dB = J_dB - 10 * log10(max(data["J_before"], 1e-30)),
-                converged = data["converged"],
-                iterations = data["iterations"],
-                Nt = data["Nt"],
-                gamma = data["gamma"],
-                bc_in = data["bc_input_frac"],
+                L = summary.L_m,
+                P = summary.P_cont_W,
+                J_before = summary.J_before,
+                J_after = summary.J_after,
+                J_before_dB = summary.J_before_dB,
+                J_after_dB = summary.J_after_dB,
+                delta_dB = summary.delta_J_dB,
+                converged = summary.converged,
+                iterations = summary.iterations,
+                Nt = summary.Nt,
+                gamma = summary.gamma,
+                bc_in = summary.bc_input_frac,
             ))
         end
     end
@@ -70,7 +69,7 @@ end
 
 # Compute soliton number
 function N_sol(gamma, P_cont, beta2; fwhm=185e-15, rep_rate=80.5e6)
-    P_peak = 0.881374 * P_cont / (fwhm * rep_rate)
+    P_peak = peak_power_from_average_power(P_cont, fwhm, rep_rate)
     T0 = fwhm / 1.763
     return sqrt(gamma * P_peak * T0^2 / abs(beta2))
 end

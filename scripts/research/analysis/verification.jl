@@ -33,8 +33,8 @@ using Printf
 using Dates
 using MultiModeNoise
 
-include("common.jl")
-include("raman_optimization.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "raman_optimization.jl"))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -46,9 +46,25 @@ const VERIF_NT = 2^14
 # Report output directory — parallel to results/raman/ for archival
 const VERIF_OUTPUT_DIR = joinpath(@__DIR__, "..", "..", "..", "results", "raman", "validation")
 
-# Collect results for the markdown report.
-# Each entry: (name, passed, skipped, evidence)
-results = NamedTuple{(:name, :passed, :skipped, :evidence), Tuple{String, Bool, Bool, String}}[]
+"""
+    verification_production_configs()
+
+Return the canonical five-run comparison suite in the smaller field shape used
+by VERIF-02. This keeps the verification harness aligned with the maintained
+comparison runners without forcing it to depend on optimizer-local knobs.
+"""
+function verification_production_configs()
+    return [
+        (
+            preset_sym = spec.fiber_preset,
+            L_fiber = spec.kwargs.L_fiber,
+            P_cont = spec.kwargs.P_cont,
+            time_window = spec.kwargs.time_window,
+            description = spec.label,
+        )
+        for spec in canonical_raman_run_specs()
+    ]
+end
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VERIF-01: Fundamental soliton N=1 shape preserved after one soliton period
@@ -63,14 +79,15 @@ results = NamedTuple{(:name, :passed, :skipped, :evidence), Tuple{String, Bool, 
 # The 2% choice is tight enough to catch physics bugs but forgiving of numerical
 # dispersion at Nt=2^14 with Tsit5 reltol=1e-8.
 
-# Wrap all testsets in a try/catch so the report is written even if tests fail.
-# Julia's @testset throws TestSetException on failure at the end of each top-level
-# testset block. Without a catch, the first failing testset aborts the script and
-# the report writer at the bottom never executes. [Rule 1 auto-fix]
-_all_tests_passed = true
+function verification_main()
+    results = NamedTuple{(:name, :passed, :skipped, :evidence), Tuple{String, Bool, Bool, String}}[]
 
-try
-@testset "VERIF-01: Fundamental soliton N=1 shape preserved (<2% max deviation)" begin
+    # Wrap all testsets in a try/catch so the report is written even if tests fail.
+    # Julia's @testset throws TestSetException on failure at the end of each top-level
+    # testset block. Without a catch, the first failing testset aborts the script and
+    # the report writer at the bottom never executes. [Rule 1 auto-fix]
+    try
+    @testset "VERIF-01: Fundamental soliton N=1 shape preserved (<2% max deviation)" begin
     # Fiber parameters for soliton condition (anomalous dispersion, no Raman)
     beta2 = -2.6e-26      # s²/m  (anomalous dispersion for soliton)
     gamma_val = 0.0013     # W⁻¹m⁻¹
@@ -146,12 +163,11 @@ try
             "max_dev=%.6f < 0.02, Nt=2^14, z_sol=%.4f m, P_peak=%.2f W, core_points=%d",
             max_dev, z_soliton, P_peak, sum(center_mask)
         )
-    ))
-end
-catch e
-    global _all_tests_passed = false
-    @warn "VERIF-01 testset threw: $e"
-end
+        ))
+    end
+    catch e
+        @warn "VERIF-01 testset threw: $e"
+    end
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VERIF-02: Photon number conservation across all 5 production configs
@@ -198,23 +214,14 @@ function compute_photon_number(uomega, sim)
     return sum(abs2.(uomega) ./ abs_omega) * Delta_t
 end
 
-# Production run configurations — exact match to raman_optimization.jl runs 1-5.
-# Columns: (preset_sym, L_fiber, P_cont, time_window, description)
-const PRODUCTION_CONFIGS = [
-    (:SMF28, 1.0, 0.05, 10.0, "Run 1: SMF-28 baseline"),
-    (:SMF28, 2.0, 0.30, 20.0, "Run 2: SMF-28 high power"),
-    (:HNLF,  1.0, 0.05, 15.0, "Run 3: HNLF short fiber"),
-    (:HNLF,  2.0, 0.05, 30.0, "Run 4: HNLF moderate fiber"),
-    (:SMF28, 5.0, 0.15, 30.0, "Run 5: SMF-28 long fiber"),
-]
-
-try
-@testset "VERIF-02: Photon number conservation (<1% drift)" begin
-    for (preset_sym, L_fiber, P_cont, tw, desc) in PRODUCTION_CONFIGS
-        @testset "$desc" begin
+    try
+    @testset "VERIF-02: Photon number conservation (<1% drift)" begin
+    for cfg in verification_production_configs()
+        @testset "$(cfg.description)" begin
             uomega0, fiber, sim, _, _, _ = setup_raman_problem(
-                Nt=VERIF_NT, L_fiber=L_fiber, P_cont=P_cont, time_window=tw,
-                β_order=3, fiber_preset=preset_sym
+                Nt=VERIF_NT, L_fiber=cfg.L_fiber, P_cont=cfg.P_cont,
+                time_window=cfg.time_window, β_order=3,
+                fiber_preset=cfg.preset_sym
             )
             # deepcopy required — solve_disp_mmf expects fiber["zsave"] to be set,
             # and we must not mutate the dict returned by setup_raman_problem (TDD RED 11)
@@ -230,12 +237,12 @@ try
 
             @info @sprintf(
                 "VERIF-02 [%s]: N_ph_in=%.6e, N_ph_out=%.6e, drift=%.6f%% (threshold 1%%)",
-                desc, N_ph_in, N_ph_out, drift * 100
+                cfg.description, N_ph_in, N_ph_out, drift * 100
             )
             @test drift < 0.01  # <1% per VERIF-02 requirement
 
             push!(results, (
-                name    = "VERIF-02: Photon number ($desc)",
+                name    = "VERIF-02: Photon number ($(cfg.description))",
                 passed  = drift < 0.01,
                 skipped = false,
                 evidence = @sprintf(
@@ -245,11 +252,10 @@ try
             ))
         end
     end
-end
-catch e
-    global _all_tests_passed = false
-    @warn "VERIF-02 testset threw: $e"
-end
+    end
+    catch e
+        @warn "VERIF-02 testset threw: $e"
+    end
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VERIF-03: Adjoint gradient Taylor remainder at production grid
@@ -267,8 +273,8 @@ end
 # NOTE: Use cost_and_gradient directly (not optimize_spectral_phase). The
 # gradient is w.r.t. linear J, not dB-scaled J. (Pitfall 4 from RESEARCH.md)
 
-try
-@testset "VERIF-03: Taylor remainder slope ~2 (adjoint O(eps^2) correct)" begin
+    try
+    @testset "VERIF-03: Taylor remainder slope ~2 (adjoint O(eps^2) correct)" begin
     # SMF28 preset has 2 betas (β₂, β₃), requiring β_order=3 per Phase 04 decision.
     # L_fiber=0.1m (short): at Nt=2^14, short fibers are essential for a clean slope-2
     # Taylor remainder test. Longer fibers (L=0.5m+) have stronger nonlinearity that
@@ -319,20 +325,19 @@ try
     good_slopes = count(s -> 1.4 <= s <= 2.6, slopes)
     @test good_slopes >= 2
 
-    push!(results, (
-        name    = "VERIF-03: Taylor remainder",
-        passed  = good_slopes >= 2,
-        skipped = false,
-        evidence = @sprintf(
-            "slopes=[%s], %d/3 in [1.4,2.6], epsilons=[1e0,1e-1,1e-2,1e-3]",
-            join([@sprintf("%.2f", s) for s in slopes], ","), good_slopes
-        )
-    ))
-end
-catch e
-    global _all_tests_passed = false
-    @warn "VERIF-03 testset threw: $e"
-end
+        push!(results, (
+            name    = "VERIF-03: Taylor remainder",
+            passed  = good_slopes >= 2,
+            skipped = false,
+            evidence = @sprintf(
+                "slopes=[%s], %d/3 in [1.4,2.6], epsilons=[1e0,1e-1,1e-2,1e-3]",
+                join([@sprintf("%.2f", s) for s in slopes], ","), good_slopes
+            )
+        ))
+    end
+    catch e
+        @warn "VERIF-03 testset threw: $e"
+    end
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VERIF-04: spectral_band_cost matches direct E_band/E_total integration
@@ -344,8 +349,8 @@ end
 # The tolerance is machine precision (atol=1e-12) since both paths use the same
 # floating-point arithmetic — any deviation would signal a logic error.
 
-try
-@testset "VERIF-04: spectral_band_cost matches direct E_band/E_total integration" begin
+    try
+    @testset "VERIF-04: spectral_band_cost matches direct E_band/E_total integration" begin
     # Use the default SMF-28 preset at production grid size.
     # SMF28 has both β₂ and β₃, so β_order=3 is required (betas_user length ≤ β_order-1).
     uomega0, fiber, sim, band_mask, _, _ = setup_raman_problem(
@@ -378,20 +383,19 @@ try
 
     @test J_func ≈ J_direct atol=1e-12
 
-    push!(results, (
-        name    = "VERIF-04: Cost cross-check (machine precision)",
-        passed  = diff < 1e-12,
-        skipped = false,
-        evidence = @sprintf(
-            "J_func=%.10e, J_direct=%.10e, |diff|=%.2e < 1e-12, Nt=2^14, fiber=SMF-28",
-            J_func, J_direct, diff
-        )
-    ))
-end
-catch e
-    global _all_tests_passed = false
-    @warn "VERIF-04 testset threw: $e"
-end
+        push!(results, (
+            name    = "VERIF-04: Cost cross-check (machine precision)",
+            passed  = diff < 1e-12,
+            skipped = false,
+            evidence = @sprintf(
+                "J_func=%.10e, J_direct=%.10e, |diff|=%.2e < 1e-12, Nt=2^14, fiber=SMF-28",
+                J_func, J_direct, diff
+            )
+        ))
+    end
+    catch e
+        @warn "VERIF-04 testset threw: $e"
+    end
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Report writer
@@ -462,13 +466,19 @@ end
 # Main execution
 # ═══════════════════════════════════════════════════════════════════════════════
 
-n_passed  = count(r -> r.passed && !r.skipped, results)
-n_failed  = count(r -> !r.passed && !r.skipped, results)
-n_skipped = count(r -> r.skipped, results)
+    n_passed  = count(r -> r.passed && !r.skipped, results)
+    n_failed  = count(r -> !r.passed && !r.skipped, results)
+    n_skipped = count(r -> r.skipped, results)
 
-@info @sprintf(
-    "Verification complete: %d passed, %d failed, %d skipped",
-    n_passed, n_failed, n_skipped
-)
+    @info @sprintf(
+        "Verification complete: %d passed, %d failed, %d skipped",
+        n_passed, n_failed, n_skipped
+    )
 
-write_verification_report(results, VERIF_OUTPUT_DIR)
+    report_path = write_verification_report(results, VERIF_OUTPUT_DIR)
+    return (results = results, report_path = report_path)
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    verification_main()
+end

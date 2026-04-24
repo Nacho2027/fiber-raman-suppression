@@ -30,10 +30,10 @@ using Statistics
 
 using MultiModeNoise
 
-include("common.jl")
-include("longfiber_setup.jl")
-include("visualization.jl")
-include("standard_images.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "longfiber", "longfiber_setup.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "standard_images.jl"))
 
 const MQ_ROOT = abspath(joinpath(@__DIR__, ".."))
 const MQ_MAIN_CHECKOUT = abspath(joinpath(MQ_ROOT, "..", "fiber-raman-suppression"))

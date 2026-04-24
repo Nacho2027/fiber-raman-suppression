@@ -33,6 +33,7 @@ using Logging
 
 # Include shared infrastructure
 include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
 include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
 ensure_deterministic_environment()
 
@@ -49,17 +50,6 @@ const SR_SWEEP_DIR = joinpath("results", "raman", "sweeps")
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
-    suppression_quality(J_lin) -> String
-
-Classify Raman suppression quality from linear-scale cost J.
-"""
-function suppression_quality(J_lin)
-    isnan(J_lin) && return "CRASHED"
-    J_dB = MultiModeNoise.lin_to_dB(J_lin)
-    J_dB < -40 ? "EXCELLENT" : J_dB < -30 ? "GOOD" : J_dB < -20 ? "ACCEPTABLE" : "POOR"
-end
-
-"""
     generate_point_report(jld2_path, out_dir)
 
 Load a per-point JLD2 and generate report_card.png + report.md in out_dir.
@@ -68,6 +58,7 @@ function generate_point_report(jld2_path, out_dir)
     @info "Processing $jld2_path"
 
     data = load(jld2_path)
+    summary = canonical_run_summary(jld2_path)
 
     # Generate report card figure
     png_path = joinpath(out_dir, "report_card.png")
@@ -80,40 +71,38 @@ function generate_point_report(jld2_path, out_dir)
 
     # Generate report.md
     md_path = joinpath(out_dir, "report.md")
-    write_point_markdown(data, md_path)
+    write_point_markdown(summary, md_path)
 
     return true
 end
 
 """
-    write_point_markdown(data, path)
+    write_point_markdown(summary, path)
 
 Write a human-readable markdown report for a single sweep point.
 """
-function write_point_markdown(data, path)
-    fname    = data["fiber_name"]
-    L_m      = data["L_m"]
-    P_W      = data["P_cont_W"]
-    J_bef    = data["J_before"]
-    J_aft    = data["J_after"]
-    conv     = data["converged"]
-    iters    = data["iterations"]
-    Nt       = data["Nt"]
-    tw_ps    = data["time_window_ps"]
-
-    J_bef_dB = MultiModeNoise.lin_to_dB(J_bef)
-    J_aft_dB = MultiModeNoise.lin_to_dB(J_aft)
-    delta_dB = J_aft_dB - J_bef_dB
-    quality  = suppression_quality(J_aft)
-
-    grad_norm = haskey(data, "grad_norm") ? data["grad_norm"] : NaN
-    E_cons    = haskey(data, "E_conservation") ? data["E_conservation"] : NaN
-    bc_in     = haskey(data, "bc_input_frac") ? data["bc_input_frac"] : NaN
-    bc_out    = haskey(data, "bc_output_frac") ? data["bc_output_frac"] : NaN
-    wall_s    = haskey(data, "wall_time_s") ? data["wall_time_s"] : NaN
-    gamma     = haskey(data, "gamma") ? data["gamma"] : NaN
-    betas     = haskey(data, "betas") ? data["betas"] : Float64[]
-    fwhm_fs   = haskey(data, "fwhm_fs") ? data["fwhm_fs"] : NaN
+function write_point_markdown(summary, path)
+    fname    = summary.fiber_name
+    L_m      = summary.L_m
+    P_W      = summary.P_cont_W
+    J_bef    = summary.J_before
+    J_aft    = summary.J_after
+    conv     = summary.converged
+    iters    = summary.iterations
+    Nt       = summary.Nt
+    tw_ps    = summary.time_window_ps
+    J_bef_dB = summary.J_before_dB
+    J_aft_dB = summary.J_after_dB
+    delta_dB = summary.delta_J_dB
+    quality  = summary.quality
+    grad_norm = summary.grad_norm
+    E_cons    = summary.E_conservation
+    bc_in     = summary.bc_input_frac
+    bc_out    = summary.bc_output_frac
+    wall_s    = summary.wall_time_s
+    gamma     = summary.gamma
+    betas     = summary.betas
+    fwhm_fs   = summary.fwhm_fs
 
     md = """
 ---
@@ -195,32 +184,7 @@ function generate_fiber_summary(fiber_label, agg_path, fiber_dir)
     agg = load(agg_path)
     L_vals = agg["L_vals"]
     P_vals = agg["P_vals"]
-    J_grid = agg["J_after_grid"]
-    conv_grid = agg["converged_grid"]
-    drift_grid = agg["drift_pct_grid"]
-    N_grid = agg["N_sol_grid"]
-    Nt_grid = agg["Nt_grid"]
-    tw_grid = agg["time_window_grid"]
-
-    # Collect all points into a sortable list
-    points = []
-    for (i, L) in enumerate(L_vals), (j, P) in enumerate(P_vals)
-        J_lin = J_grid[i, j]
-        J_dB = isnan(J_lin) ? NaN : MultiModeNoise.lin_to_dB(J_lin)
-        push!(points, (
-            L = L, P = P,
-            J_dB = J_dB,
-            quality = suppression_quality(J_lin),
-            converged = conv_grid[i, j],
-            drift = drift_grid[i, j],
-            N_sol = N_grid[i, j],
-            Nt = Nt_grid[i, j],
-            tw = tw_grid[i, j],
-        ))
-    end
-
-    # Sort by J_dB (best suppression first; NaN at end)
-    sort!(points, by=p -> isnan(p.J_dB) ? Inf : p.J_dB)
+    points = sort_sweep_points_by_suppression!(sweep_aggregate_points(agg))
 
     n_total = length(points)
     n_valid = count(p -> !isnan(p.J_dB), points)

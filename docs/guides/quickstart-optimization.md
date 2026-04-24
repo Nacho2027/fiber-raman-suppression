@@ -3,7 +3,8 @@
 [← docs index](../README.md) · [project README](../../README.md)
 
 This is the maintained path for running a single Raman-suppression optimization
-from a clean clone. It is the right place to start if you need one verified
+from a clean clone. It uses the default approved run config
+`smf28_L2m_P0p2W` and is the right place to start if you need one verified
 result before moving on to sweeps, comparisons, or code changes.
 
 ## Prerequisite
@@ -31,7 +32,17 @@ stop and debug before going further — something is broken in your install.
 make optimize
 ```
 
-Under the hood this runs `julia --project -t auto scripts/canonical/optimize_raman.jl`.
+Under the hood this runs the supported wrapper:
+
+```bash
+julia --project -t auto scripts/canonical/optimize_raman.jl
+```
+
+To see the approved run ids:
+
+```bash
+julia --project -t auto scripts/canonical/optimize_raman.jl --list
+```
 You will see L-BFGS iterations printed every few seconds. Expected output:
 
 - ~30 L-BFGS iterations.
@@ -46,9 +57,10 @@ that's normal. Subsequent runs start within a few seconds.
 Results land under `results/raman/<run_id>/`:
 
 ```
-results/raman/smf28_L2.0m_P0.2W_<timestamp>/
-├── _result.jld2                    # binary payload (phi_opt, uω0, uωf, history)
-├── _result.json                    # scalar metadata sidecar (grep-able)
+results/raman/smf28_L2m_P0p2W_<timestamp>/
+├── opt_result.jld2                 # binary payload (phi_opt, uω0, uωf, history)
+├── opt_result.json                 # scalar metadata sidecar (grep-able)
+├── run_config.toml                 # approved config copied into the run bundle
 ├── {tag}_phase_profile.png         # 6-panel before/after (mandatory standard image)
 ├── {tag}_evolution.png             # spectral-evolution waterfall (mandatory)
 ├── {tag}_phase_diagnostic.png      # wrapped/unwrapped/group-delay triplet (mandatory)
@@ -81,14 +93,14 @@ guide documents that workflow in the report-generation section:
 Quick scalar peek:
 
 ```bash
-jq '{J_final_dB, n_iter, converged}' results/raman/smf28_*/_result.json
+jq '{J_final_dB, n_iter, converged}' results/raman/smf28_*/opt_result.json
 ```
 
 Or in Julia:
 
 ```julia
 using MultiModeNoise: load_run
-loaded = load_run("results/raman/smf28_L2.0m_P0.2W_<timestamp>/_result.jld2")
+loaded = load_run("results/raman/smf28_L2m_P0p2W_<timestamp>/opt_result.jld2")
 @show loaded.metadata["J_final_dB"]
 @show loaded.metadata["n_iter"]
 ```
@@ -107,12 +119,28 @@ Open `spectral.png`:
 For the full plot anatomy tour see
 [interpreting-plots.md](./interpreting-plots.md).
 
+## Step 5 — Inspect or export the saved run
+
+Quick textual inspection:
+
+```bash
+julia --project=. scripts/canonical/inspect_run.jl results/raman/smf28_L2m_P0p2W_<timestamp>/
+```
+
+Experiment-facing export bundle:
+
+```bash
+julia --project=. scripts/canonical/export_run.jl results/raman/smf28_L2m_P0p2W_<timestamp>/
+```
+
 ## Next references
 
 - Want to understand *why* the optimizer works?
   → [cost-function-physics.md](../architecture/cost-function-physics.md).
 - Want to run a parameter sweep?
   → [quickstart-sweep.md](./quickstart-sweep.md).
+- Want to know what is supported vs still experimental?
+  → [supported-workflows.md](./supported-workflows.md).
 - Want to extend to a new fiber?
   → [adding-a-fiber-preset.md](./adding-a-fiber-preset.md).
 - Want the field-by-field JLD2+JSON reference?
@@ -133,5 +161,5 @@ For the full plot anatomy tour see
   Every entry-point script does this; interactive REPL usage does not.
 - **`jq: command not found`:**
   `jq` is not a project dependency; install it via your package manager
-  (`brew install jq`, `apt install jq`, …) or read the `_result.json` file
+  (`brew install jq`, `apt install jq`, …) or read the `opt_result.json` file
   directly.

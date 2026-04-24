@@ -9,18 +9,17 @@ JLD2 + JSON pair, and aggregates into `sweep_results.jld2` + heatmap PNGs.
     julia --project=. -t auto scripts/canonical/run_sweep.jl
 
 # Inputs
-- Grid definition near the top of file (L_values, P_values, fiber presets,
-  Nt floor, max_iter).
-- `scripts/lib/common.jl` fiber presets.
+- Approved sweep config from `configs/sweeps/*.toml`.
+- `scripts/lib/common.jl` fiber presets and setup helpers.
 
 # Outputs
-- `results/raman/sweeps/<fiber>/<L>_<P>/_result.jld2` — per-point payload.
-- `results/raman/sweeps/<fiber>/<L>_<P>/_result.json` — per-point sidecar.
+- `results/raman/sweeps/<fiber>/<L>_<P>/opt_result.jld2` — per-point payload.
+- `results/raman/sweeps/<fiber>/<L>_<P>/opt_result.json` — per-point sidecar.
 - `results/raman/sweeps/sweep_results.jld2` — aggregated summary table.
 - `results/raman/sweeps/<fiber>_heatmap.png` — J_final heatmap.
 
 # Runtime
-~2–3 hours for the full 24-point grid (12 SMF-28 + 12 HNLF) on the burst VM
+~2–3 hours for the default approved sweep on the burst VM
 (22 cores). Much longer on `claude-code-host` — burst VM strongly recommended.
 
 # Docs
@@ -36,7 +35,9 @@ using Logging
 
 # Include shared infrastructure (include guards prevent double-loading)
 include(joinpath(@__DIR__, "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "lib", "canonical_runs.jl"))
 include(joinpath(@__DIR__, "..", "lib", "raman_optimization.jl"))
+include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
 include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
 ensure_deterministic_environment()
 
@@ -48,30 +49,7 @@ using Optim
 # Section 1: Constants (SW_ prefix avoids Julia const redefinition in REPL)
 # ─────────────────────────────────────────────────────────────────────────────
 
-const SW_RUN_TAG       = Dates.format(now(), "yyyymmdd_HHMMss")
-const SW_SECH_FACTOR   = 0.881374          # sech² peak-power factor
-const SW_PULSE_FWHM    = 185e-15           # s (185 fs pulse FWHM)
-const SW_PULSE_FWHM_FS = 185.0             # fs (for compute_soliton_number)
-const SW_PULSE_REP_RATE = 80.5e6           # Hz (80.5 MHz rep rate)
-const SW_SWEEP_DIR     = joinpath("results", "raman", "sweeps")
-const SW_IMAGES_DIR    = joinpath("results", "images")
-const SW_NT_FLOOR      = 2^13                     # minimum Nt for optimization quality
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 2: Fiber grid definitions (SMF-28 4×4=16 pts, HNLF 4×4=16 pts)
-# ─────────────────────────────────────────────────────────────────────────────
-
-# SMF-28: 4 lengths × 4 powers = 16 points
-const SW_SMF28_L     = [0.5, 1.0, 2.0, 5.0]           # m
-const SW_SMF28_P     = [0.05, 0.10, 0.20]              # W (average continuous power) — P=0.30 dropped: 3+ hours per point at Nt=8192
-const SW_SMF28_GAMMA = 1.1e-3                           # W⁻¹m⁻¹
-const SW_SMF28_BETAS = [-2.17e-26, 1.2e-40]            # β₂ [s²/m], β₃ [s³/m]
-
-# HNLF: 4 lengths × 4 powers = 16 points
-const SW_HNLF_L      = [0.5, 1.0, 2.0, 5.0]           # m
-const SW_HNLF_P      = [0.005, 0.010, 0.030]           # W — P=0.050 dropped: extreme nonlinearity at Nt=8192
-const SW_HNLF_GAMMA  = 10.0e-3                          # W⁻¹m⁻¹
-const SW_HNLF_BETAS  = [-0.5e-26, 1.0e-40]             # β₂ [s²/m], β₃ [s³/m]
+const SW_RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 3: Helper functions
@@ -125,16 +103,6 @@ function compute_photon_drift(result, uω0, fiber, sim)
     return abs(N_out / N_in - 1.0) * 100.0   # percent drift
 end
 
-"""
-    compute_peak_power(P_cont) -> Float64
-
-Convert average continuous power [W] to sech² pulse peak power [W].
-Formula: P_peak = SW_SECH_FACTOR × P_cont / (SW_PULSE_FWHM × SW_PULSE_REP_RATE)
-"""
-function compute_peak_power(P_cont)
-    return SW_SECH_FACTOR * P_cont / (SW_PULSE_FWHM * SW_PULSE_REP_RATE)
-end
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 4: run_fiber_sweep — main sweep loop per fiber type
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,40 +125,41 @@ Vector of NamedTuples with fields:
   L_m, P_cont_W, J_after, converged, iterations, window_limited,
   photon_drift_pct, N_sol, time_window_ps, Nt, grad_norm, result_file
 """
-function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
+function run_fiber_sweep(fiber_spec, sweep_spec)
     sweep_results = []
-    n_total = length(L_vals) * length(P_vals)
+    n_total = length(fiber_spec.lengths_m) * length(fiber_spec.powers_W)
     point_idx = 0
 
-    for L in L_vals
-        for P_cont in P_vals
+    for L in fiber_spec.lengths_m
+        for P_cont in fiber_spec.powers_W
             point_idx += 1
-            P_peak = compute_peak_power(P_cont)
+            P_peak = peak_power_from_average_power(
+                P_cont, sweep_spec.pulse_fwhm, sweep_spec.pulse_rep_rate)
 
             # Compute phi_NL to decide safety factor
-            phi_NL = fiber_gamma * P_peak * L
+            phi_NL = fiber_spec.gamma * P_peak * L
             safety = phi_NL > 20.0 ? 3.0 : 2.0
 
             # SPM-corrected time window
             time_window = recommended_time_window(L;
-                beta2=abs(fiber_betas[1]),
-                gamma=fiber_gamma,
+                beta2=abs(fiber_spec.betas[1]),
+                gamma=fiber_spec.gamma,
                 P_peak=P_peak,
                 safety_factor=safety)
-            Nt = max(nt_for_window(time_window), SW_NT_FLOOR)
+            Nt = max(nt_for_window(time_window), sweep_spec.Nt_floor)
 
             # Soliton number (does NOT depend on L — Pitfall 1)
-            N_sol = compute_soliton_number(fiber_gamma, P_peak, SW_PULSE_FWHM_FS, fiber_betas[1])
+            N_sol = compute_soliton_number(
+                fiber_spec.gamma, P_peak, sweep_spec.pulse_fwhm_fs, fiber_spec.betas[1])
 
             # Per-point directory: results/raman/sweeps/<fiber>/<Lxm_PxW>/
-            fiber_dir = lowercase(replace(fiber_label, "-" => ""))
-            dir_path = joinpath(SW_SWEEP_DIR, fiber_dir,
+            dir_path = joinpath(canonical_sweep_output_dir(sweep_spec), fiber_spec.slug,
                                 @sprintf("L%gm_P%gW", L, P_cont))
             mkpath(dir_path)
             save_prefix = joinpath(dir_path, "opt")
 
             @info @sprintf("[%d/%d] %s L=%.1fm P=%.3fW (N=%.1f, φ_NL=%.1f, tw=%dps, Nt=%d)",
-                point_idx, n_total, fiber_label, L, P_cont, N_sol, phi_NL, time_window, Nt)
+                point_idx, n_total, fiber_spec.name, L, P_cont, N_sol, phi_NL, time_window, Nt)
 
             try
                 result, uω0, fiber_out, sim, band_mask, _ = run_optimization(
@@ -198,14 +167,14 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
                     P_cont         = P_cont,
                     Nt             = Nt,
                     time_window    = Float64(time_window),
-                    max_iter       = 60,
+                    max_iter       = fiber_spec.max_iter,
                     validate       = false,
                     do_plots       = false,
-                    fiber_name     = fiber_label,
-                    gamma_user     = fiber_gamma,
-                    betas_user     = fiber_betas,
+                    fiber_name     = fiber_spec.name,
+                    gamma_user     = fiber_spec.gamma,
+                    betas_user     = fiber_spec.betas,
                     save_prefix    = save_prefix,
-                    β_order        = 3,
+                    β_order        = fiber_spec.β_order,
                 )
 
                 # D-01: post-run photon number drift check
@@ -214,14 +183,14 @@ function run_fiber_sweep(fiber_label, fiber_gamma, fiber_betas, L_vals, P_vals)
 
                 converged  = Optim.converged(result)
                 iterations = Optim.iterations(result)
-                # J_after in linear scale from the saved JLD2 (run_optimization always
-                # stores linear J regardless of log_cost setting)
-                jld2_data  = load(save_prefix * "_result.jld2")
-                J_after    = jld2_data["J_after"]
-                grad_norm  = jld2_data["grad_norm"]
+                # Read back the persisted canonical payload so sweep summaries are
+                # derived from the same saved artifact other workflows consume.
+                saved_run = canonical_run_summary(save_prefix * "_result.jld2")
+                J_after   = saved_run.J_after
+                grad_norm = saved_run.grad_norm
 
                 J_dB = MultiModeNoise.lin_to_dB(J_after)
-                quality = J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
+                quality = suppression_quality_label(J_after)
                 @info @sprintf("    → J_after=%.1f dB [%s], converged=%s, drift=%.1f%%, wlim=%s",
                     J_dB, quality, converged, drift_pct, window_limited)
 
@@ -278,7 +247,7 @@ to results/raman/sweeps/sweep_results_<fiber_label>.jld2.
 Matrices are indexed [i_L, j_P] where i_L is the L-axis index and j_P is
 the P-axis index, matching the heatmap coordinate convention.
 """
-function save_sweep_aggregate(sweep_results, fiber_label)
+function save_sweep_aggregate(sweep_results, fiber_label; output_dir::AbstractString)
     L_vals = sort(unique([r.L_m for r in sweep_results]))
     P_vals = sort(unique([r.P_cont_W for r in sweep_results]))
     nL, nP = length(L_vals), length(P_vals)
@@ -303,8 +272,8 @@ function save_sweep_aggregate(sweep_results, fiber_label)
         Nt_grid[i, j]             = r.Nt
     end
 
-    mkpath(SW_SWEEP_DIR)
-    out_path = joinpath(SW_SWEEP_DIR,
+    mkpath(output_dir)
+    out_path = joinpath(output_dir,
         "sweep_results_$(lowercase(replace(fiber_label, "-" => ""))).jld2")
     jldsave(out_path;
         fiber_label        = fiber_label,
@@ -347,18 +316,24 @@ Aggregate saved to results/raman/sweeps/multistart_L2m_P030W.jld2.
 Vector of NamedTuples with fields:
   start_idx, sigma, J_final, converged, iterations, result_file
 """
-function run_multistart(; n_starts::Int=10, max_iter::Int=60)
-    L_fiber  = 2.0
-    P_cont   = 0.20  # was 0.30 — too slow at Nt=8192; P=0.20 still has N≈2.6 (nontrivial)
-    P_peak   = compute_peak_power(P_cont)
+function run_multistart(sweep_spec)
+    multistart_spec = sweep_spec.multistart
+    multistart_spec.enabled || return NamedTuple[]
+
+    n_starts = multistart_spec.n_starts
+    max_iter = multistart_spec.max_iter
+    L_fiber  = multistart_spec.L_fiber
+    P_cont   = multistart_spec.P_cont
+    P_peak   = peak_power_from_average_power(
+        P_cont, sweep_spec.pulse_fwhm, sweep_spec.pulse_rep_rate)
 
     # SPM-corrected time window for this config (phi_NL ~ 39 → safety_factor=3)
     time_window = recommended_time_window(L_fiber;
-        beta2       = abs(SW_SMF28_BETAS[1]),
-        gamma       = SW_SMF28_GAMMA,
+        beta2       = abs(multistart_spec.betas[1]),
+        gamma       = multistart_spec.gamma,
         P_peak      = P_peak,
         safety_factor = 3.0)
-    Nt = max(nt_for_window(time_window), SW_NT_FLOOR)
+    Nt = max(nt_for_window(time_window), sweep_spec.Nt_floor)
 
     @info @sprintf("Multi-start config: SMF-28 L=%.1fm P=%.2fW, tw=%dps, Nt=%d",
         L_fiber, P_cont, time_window, Nt)
@@ -391,7 +366,8 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=60)
     ms_results = []
     for i in 1:n_starts
         sigma_i = sigma_labels[i]
-        dir_path = joinpath(SW_SWEEP_DIR, "multistart", @sprintf("start_%02d", i))
+        dir_path = joinpath(canonical_sweep_output_dir(sweep_spec), "multistart",
+            @sprintf("start_%02d", i))
         mkpath(dir_path)
         save_prefix = joinpath(dir_path, "opt")
 
@@ -407,19 +383,18 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=60)
                 max_iter    = max_iter,
                 validate    = false,
                 do_plots    = false,
-                fiber_name  = "SMF-28",
-                gamma_user  = SW_SMF28_GAMMA,
-                betas_user  = SW_SMF28_BETAS,
+                fiber_name  = multistart_spec.fiber_name,
+                gamma_user  = multistart_spec.gamma,
+                betas_user  = multistart_spec.betas,
                 save_prefix = save_prefix,
-                β_order     = 3,
+                β_order     = multistart_spec.β_order,
                 φ0          = phi0_list[i],
             )
 
             converged  = Optim.converged(result)
             iterations = Optim.iterations(result)
-            # Read linear J from JLD2 (always linear regardless of log_cost)
-            jld2_data  = load(save_prefix * "_result.jld2")
-            J_final    = jld2_data["J_after"]
+            saved_run = canonical_run_summary(save_prefix * "_result.jld2")
+            J_final   = saved_run.J_after
 
             @info @sprintf("    → J_final=%.1f dB, converged=%s, iters=%d",
                 MultiModeNoise.lin_to_dB(J_final), converged, iterations)
@@ -449,9 +424,9 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=60)
     end
 
     # Save aggregate
-    agg_path = joinpath(SW_SWEEP_DIR, "multistart_L2m_P030W.jld2")
+    agg_path = joinpath(canonical_sweep_output_dir(sweep_spec), "multistart_L2m_P030W.jld2")
     jldsave(agg_path;
-        fiber_name    = "SMF-28",
+        fiber_name    = multistart_spec.fiber_name,
         L_m           = L_fiber,
         P_cont_W      = P_cont,
         run_tag       = SW_RUN_TAG,
@@ -467,91 +442,35 @@ function run_multistart(; n_starts::Int=10, max_iter::Int=60)
     return ms_results
 end
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Section 7: Main entry point (guard prevents execution when included)
-# ─────────────────────────────────────────────────────────────────────────────
-
-if abspath(PROGRAM_FILE) == @__FILE__
-
-    using LinearAlgebra: norm
-    using Dates
+function _print_sweep_summary(label, results)
+    n_total = length(results)
+    n_conv  = count(r -> r.converged, results)
+    n_wlim  = count(r -> r.window_limited, results)
+    valid   = filter(r -> !isnan(r.J_after), results)
+    n_exc   = count(r -> suppression_quality_label(r.J_after) == "excellent", valid)
+    n_good  = count(r -> suppression_quality_label(r.J_after) in ("excellent", "good"), valid)
+    n_poor  = count(r -> suppression_quality_label(r.J_after) == "poor", valid)
+    best_dB = isempty(valid) ? NaN : minimum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
+    worst_dB= isempty(valid) ? NaN : maximum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
 
     @info @sprintf("""
-    ╔═══════════════════════════════════════════════════════╗
-    ║  Phase 7: Parameter Sweep                            ║
-    ║  Run tag: %s                                ║
-    ╚═══════════════════════════════════════════════════════╝""",
-        SW_RUN_TAG)
+    ┌─── %s (%d points) ────────────────────────────┐
+    │  Converged:    %2d/%2d (formal gradient criterion)   │
+    │  Suppression:  %2d/%2d ≤ -30 dB  (%d excellent)      │
+    │  Poor (>-20dB): %2d/%2d                              │
+    │  Window-limited: %2d/%2d                             │
+    │  Best: %.1f dB   Worst: %.1f dB                     │
+    └───────────────────────────────────────────────────┘""",
+        label, n_total,
+        n_conv, n_total,
+        n_good, n_total, n_exc,
+        n_poor, n_total,
+        n_wlim, n_total,
+        best_dB, worst_dB)
+end
 
-    mkpath(SW_SWEEP_DIR)
-    mkpath(SW_IMAGES_DIR)
-
-    # ── 1. SMF-28 sweep (5×4 = 20 points) ──────────────────────────────────
-    @info "=== SMF-28 Sweep ($(length(SW_SMF28_L) * length(SW_SMF28_P)) points) ==="
-    smf28_results = run_fiber_sweep("SMF-28", SW_SMF28_GAMMA, SW_SMF28_BETAS,
-                                     SW_SMF28_L, SW_SMF28_P)
-    save_sweep_aggregate(smf28_results, "SMF-28")
-
-    # ── 2. HNLF sweep (4×4 = 16 points) ────────────────────────────────────
-    @info "=== HNLF Sweep ($(length(SW_HNLF_L) * length(SW_HNLF_P)) points) ==="
-    hnlf_results = run_fiber_sweep("HNLF", SW_HNLF_GAMMA, SW_HNLF_BETAS,
-                                    SW_HNLF_L, SW_HNLF_P)
-    save_sweep_aggregate(hnlf_results, "HNLF")
-
-    # ── 3. Multi-start analysis (10 starts) ─────────────────────────────────
-    @info "=== Multi-Start Analysis (10 starts, SMF-28 L=2m P=0.30W) ==="
-    ms_results = run_multistart()
-
-    # ── 4. Visualization ────────────────────────────────────────────────────
-    @info "=== Generating Heatmaps and Histogram ==="
-
-    plot_sweep_heatmap(smf28_results, "SMF-28";
-        save_path=joinpath(SW_IMAGES_DIR, "sweep_heatmap_smf28.png"))
-
-    plot_sweep_heatmap(hnlf_results, "HNLF";
-        save_path=joinpath(SW_IMAGES_DIR, "sweep_heatmap_hnlf.png"))
-
-    plot_multistart_histogram(ms_results;
-        save_path=joinpath(SW_IMAGES_DIR, "multistart_histogram.png"))
-
-    PyPlot.close("all")
-
-    # ── 5. Summary log ──────────────────────────────────────────────────────
-
-    # Helper: classify suppression quality from J_after (linear scale)
-    function _suppression_quality(J_lin)
-        isnan(J_lin) && return "crashed"
-        J_dB = MultiModeNoise.lin_to_dB(J_lin)
-        J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
-    end
-
-    for (label, results) in [("SMF-28", smf28_results), ("HNLF", hnlf_results)]
-        n_total = length(results)
-        n_conv  = count(r -> r.converged, results)
-        n_wlim  = count(r -> r.window_limited, results)
-        valid   = filter(r -> !isnan(r.J_after), results)
-        n_exc   = count(r -> _suppression_quality(r.J_after) == "excellent", valid)
-        n_good  = count(r -> _suppression_quality(r.J_after) in ("excellent", "good"), valid)
-        n_poor  = count(r -> _suppression_quality(r.J_after) == "poor", valid)
-        best_dB = isempty(valid) ? NaN : minimum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
-        worst_dB= isempty(valid) ? NaN : maximum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
-
-        @info @sprintf("""
-        ┌─── %s (%d points) ────────────────────────────┐
-        │  Converged:    %2d/%2d (formal gradient criterion)   │
-        │  Suppression:  %2d/%2d ≤ -30 dB  (%d excellent)      │
-        │  Poor (>-20dB): %2d/%2d                              │
-        │  Window-limited: %2d/%2d                             │
-        │  Best: %.1f dB   Worst: %.1f dB                     │
-        └───────────────────────────────────────────────────┘""",
-            label, n_total,
-            n_conv, n_total,
-            n_good, n_total, n_exc,
-            n_poor, n_total,
-            n_wlim, n_total,
-            best_dB, worst_dB)
-    end
-
+function _print_multistart_summary(ms_results)
+    isempty(ms_results) && return nothing
     n_ms_converged = count(r -> r.converged, ms_results)
     ms_valid = filter(r -> !isnan(r.J_final), ms_results)
     ms_good  = count(r -> MultiModeNoise.lin_to_dB(r.J_final) < -30, ms_valid)
@@ -562,5 +481,76 @@ if abspath(PROGRAM_FILE) == @__FILE__
         length(ms_results),
         n_ms_converged, length(ms_results),
         ms_good, length(ms_valid))
+    return nothing
+end
 
-end # abspath(PROGRAM_FILE) == @__FILE__
+function _print_approved_sweep_configs()
+    println("Approved sweep configs:")
+    for id in approved_sweep_config_ids()
+        spec = load_canonical_sweep_config(id)
+        println("  ", spec.id, "  —  ", spec.description)
+    end
+end
+
+function run_sweep_main(args=ARGS)
+    if length(args) > 1
+        error("usage: scripts/canonical/run_sweep.jl [sweep-config-id-or-path | --list]")
+    end
+
+    if !isempty(args) && args[1] == "--list"
+        _print_approved_sweep_configs()
+        return nothing
+    end
+
+    config_spec = isempty(args) ? DEFAULT_CANONICAL_SWEEP_ID : args[1]
+    sweep_spec = load_canonical_sweep_config(config_spec)
+    sweep_dir = canonical_sweep_output_dir(sweep_spec)
+    images_dir = canonical_sweep_images_dir(sweep_spec)
+    cp(sweep_spec.config_path, joinpath(sweep_dir, "sweep_config.toml"); force=true)
+
+    @info @sprintf("""
+    ╔═══════════════════════════════════════════════════════╗
+    ║  Phase 7: Parameter Sweep                            ║
+    ║  Run tag: %s                                ║
+    ╚═══════════════════════════════════════════════════════╝""",
+        SW_RUN_TAG)
+    @info "Sweep config loaded" config=sweep_spec.id config_path=sweep_spec.config_path
+
+    per_fiber_results = Dict{String,Any}()
+    for fiber_spec in sweep_spec.fibers
+        n_points = length(fiber_spec.lengths_m) * length(fiber_spec.powers_W)
+        @info "=== $(fiber_spec.name) Sweep ($(n_points) points) ==="
+        results = run_fiber_sweep(fiber_spec, sweep_spec)
+        save_sweep_aggregate(results, fiber_spec.name; output_dir=sweep_dir)
+        per_fiber_results[fiber_spec.name] = results
+    end
+
+    ms_results = run_multistart(sweep_spec)
+
+    @info "=== Generating Heatmaps and Histogram ==="
+    for fiber_spec in sweep_spec.fibers
+        results = per_fiber_results[fiber_spec.name]
+        plot_sweep_heatmap(results, fiber_spec.name;
+            save_path=joinpath(images_dir, "sweep_heatmap_$(fiber_spec.slug).png"))
+    end
+    if !isempty(ms_results)
+        plot_multistart_histogram(ms_results;
+            save_path=joinpath(images_dir, "multistart_histogram.png"))
+    end
+    PyPlot.close("all")
+
+    for fiber_spec in sweep_spec.fibers
+        _print_sweep_summary(fiber_spec.name, per_fiber_results[fiber_spec.name])
+    end
+    _print_multistart_summary(ms_results)
+
+    return (
+        sweep_spec = sweep_spec,
+        per_fiber_results = per_fiber_results,
+        multistart_results = ms_results,
+    )
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    run_sweep_main(ARGS)
+end

@@ -34,8 +34,8 @@ using PyPlot
 using JLD2
 using JSON3
 
-include("common.jl")
-include("visualization.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
 
 if !(@isdefined _PHYSICS_INSIGHT_JL_LOADED)
 const _PHYSICS_INSIGHT_JL_LOADED = true

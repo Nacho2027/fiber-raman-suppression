@@ -7,11 +7,18 @@ point readers toward first.
 
 ## Canonical entry points
 
-- `optimize_raman.jl` — run the canonical single-mode Raman optimization
-- `run_sweep.jl` — run the supported `(L, P)` sweep workflow
+- `optimize_raman.jl` — run one approved canonical single-mode Raman optimization
+- `run_experiment.jl` — run one front-layer experiment config (single-mode phase-only slice currently implemented)
+- `run_sweep.jl` — run one approved sweep workflow
+- `inspect_run.jl` — inspect one saved run bundle
+- `export_run.jl` — export one saved run as an experiment-facing handoff bundle
 - `generate_reports.jl` — regenerate sweep reports and presentation figures
 - `regenerate_standard_images.jl` — backfill the mandatory standard image set
 - `validate_results.jl` — run result-validation checks
+
+Approved run and sweep definitions live in `configs/runs/*.toml` and
+`configs/sweeps/*.toml`. Use `--list` on `optimize_raman.jl` or `run_sweep.jl`
+to see the maintained ids.
 
 ## Implementation note
 

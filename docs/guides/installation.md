@@ -59,7 +59,7 @@ cd fiber-raman-suppression
 make install
 
 # Then, on the burst VM (fiber-raman-burst) for heavy runs:
-julia -t auto --project=. scripts/canonical/run_sweep.jl
+julia -t auto --project=. scripts/canonical/run_sweep.jl smf28_hnlf_default
 ```
 
 `claude-code-host` is small (4 vCPU, 16 GB); use it for editing and `make

@@ -37,9 +37,9 @@ using PyPlot
 using JLD2
 using Interpolations
 
-include("common.jl")
-include("visualization.jl")
-include("physics_insight.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "common.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "visualization.jl"))
+include(joinpath(@__DIR__, "physics_insight.jl"))
 
 if !(@isdefined _PHASE_ANALYSIS_JL_LOADED)
 const _PHASE_ANALYSIS_JL_LOADED = true

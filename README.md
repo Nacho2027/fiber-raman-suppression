@@ -9,6 +9,7 @@ nonlinear fiber propagation.
   scattering in optical fibers.
 - Canonical single-run and sweep workflows for the maintained SMF-28 and HNLF
   studies.
+- Approved config files for the narrow supported lab-facing surface.
 - Shared result I/O, plotting, and report-generation utilities used by the lab
   workflow.
 - Research scripts, status notes, and synthesis documents that capture what the
@@ -40,6 +41,7 @@ If you need the supporting docs, start with:
 | Install dependencies and verify the environment | [docs/guides/installation.md](docs/guides/installation.md) |
 | Run the canonical optimization | [docs/guides/quickstart-optimization.md](docs/guides/quickstart-optimization.md) |
 | Run a parameter sweep on the burst VM | [docs/guides/quickstart-sweep.md](docs/guides/quickstart-sweep.md) |
+| See what is actually supported vs still experimental | [docs/guides/supported-workflows.md](docs/guides/supported-workflows.md) |
 | Understand repo boundaries before editing code | [docs/architecture/repo-navigation.md](docs/architecture/repo-navigation.md) |
 | Understand saved result files | [docs/architecture/output-format.md](docs/architecture/output-format.md) |
 | Interpret standard plots and sweep heatmaps | [docs/guides/interpreting-plots.md](docs/guides/interpreting-plots.md) |
@@ -51,6 +53,7 @@ If you need the supporting docs, start with:
 
 ```text
 src/         Julia package code and reusable infrastructure
+configs/     Approved run and sweep specs for the supported workflow surface
 scripts/     Canonical entry points, maintained workflows, shared script libs,
              research drivers, and operational helpers
 docs/        Human-facing documentation, architecture notes, status, and synthesis
@@ -64,6 +67,9 @@ The maintained command-line entry points are under
 new code should live, read
 [docs/architecture/repo-navigation.md](docs/architecture/repo-navigation.md)
 before editing.
+
+The supported-vs-experimental boundary is documented in
+[docs/guides/supported-workflows.md](docs/guides/supported-workflows.md).
 
 ## Environment and compute expectations
 

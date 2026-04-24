@@ -1,0 +1,22 @@
+id = "hnlf_L0p5m_P0p01W"
+description = "Approved HNLF reference run for quick comparison against the SMF-28 default."
+output_tag = "hnlf_L0p5m_P0p01W"
+save_prefix_basename = "opt"
+
+[run]
+fiber_preset = "HNLF"
+fiber_name = "HNLF"
+L_fiber = 0.5
+P_cont = 0.01
+max_iter = 40
+validate = false
+do_plots = true
+Nt = 8192
+time_window = 10.0
+beta_order = 3
+lambda_boundary = 1.0
+log_cost = true
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0

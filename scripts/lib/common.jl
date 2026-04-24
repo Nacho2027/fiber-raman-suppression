@@ -5,6 +5,7 @@ Common utilities shared across fiber optimization scripts.
 Shared functions (single source of truth):
 - `FIBER_PRESETS` — named single-mode fiber parameter presets
 - `get_fiber_preset` — look up a fiber preset by name
+- `peak_power_from_average_power` — convert average power to pulse peak power
 - `print_fiber_summary` — compute and display characteristic lengths and soliton number
 - `recommended_time_window` — safe time window from dispersive walk-off
 - `spectral_band_cost` — fractional spectral energy in a frequency band
@@ -77,6 +78,11 @@ const FIBER_PRESETS = Dict(
     ),
 )
 
+const _PEAK_POWER_FACTORS = Dict(
+    "sech_sq" => 0.881374,
+    "gaussian" => 0.939437,
+)
+
 """
     get_fiber_preset(name::Symbol) -> NamedTuple
 
@@ -111,7 +117,30 @@ function _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
 end
 
 """
-    print_fiber_summary(; gamma, betas, P_cont, pulse_fwhm, pulse_rep_rate)
+    peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
+                                  pulse_shape="sech_sq") -> Float64
+
+Convert average power to pulse peak power using the same pulse-shape factors as
+`MultiModeNoise.get_initial_state`.
+
+- `sech_sq`: `0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)`
+- `gaussian`: `0.939437 * P_cont / (pulse_fwhm * pulse_rep_rate)`
+"""
+function peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
+                                       pulse_shape::AbstractString="sech_sq")
+    @assert P_cont > 0 "P_cont must be positive"
+    @assert pulse_fwhm > 0 "pulse_fwhm must be positive"
+    @assert pulse_rep_rate > 0 "pulse_rep_rate must be positive"
+
+    factor = get(_PEAK_POWER_FACTORS, pulse_shape, nothing)
+    factor === nothing && throw(ArgumentError(
+        "unsupported pulse_shape `$pulse_shape` for average→peak power conversion"))
+    return factor * P_cont / (pulse_fwhm * pulse_rep_rate)
+end
+
+"""
+    print_fiber_summary(; gamma, betas, P_cont, pulse_fwhm, pulse_rep_rate,
+                          pulse_shape="sech_sq")
 
 Compute and print characteristic nonlinear fiber parameters for diagnostics.
 
@@ -122,11 +151,12 @@ All arguments are in SI units. Printed quantities:
 - Raman walk-off time τ_R = |β₂| · L · Δω_Raman (for L = L_D)
 
 where T₀ = FWHM / (2·acosh(√2)) for sech² pulses and
-P_peak = P_cont / (FWHM · rep_rate).
+`P_peak` is derived from `P_cont` using [`peak_power_from_average_power`](@ref).
 
 Returns a NamedTuple: (N_sol, L_D, L_NL, τ_R, P_peak, T0).
 """
-function print_fiber_summary(; gamma, betas, P_cont, pulse_fwhm, pulse_rep_rate)
+function print_fiber_summary(; gamma, betas, P_cont, pulse_fwhm, pulse_rep_rate,
+                             pulse_shape::AbstractString="sech_sq")
     @assert gamma > 0 "gamma must be positive"
     @assert length(betas) >= 1 "need at least β₂"
     @assert P_cont > 0 "P_cont must be positive"
@@ -135,7 +165,8 @@ function print_fiber_summary(; gamma, betas, P_cont, pulse_fwhm, pulse_rep_rate)
 
     β2 = betas[1]
     T0 = pulse_fwhm / (2 * acosh(sqrt(2)))
-    P_peak = P_cont / (pulse_fwhm * pulse_rep_rate)
+    P_peak = peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
+        pulse_shape=pulse_shape)
 
     L_D = T0^2 / abs(β2)
     L_NL = 1.0 / (gamma * P_peak)
@@ -333,10 +364,10 @@ function _validate_single_mode_setup(;
 end
 
 function _auto_size_single_mode_grid(Nt, time_window, L_fiber, P_cont,
-                                     pulse_fwhm, pulse_rep_rate,
+                                     pulse_fwhm, pulse_rep_rate, pulse_shape,
                                      gamma_user, betas_user)
-    # sech² peak power: P_peak = 0.881374 * P_cont / (fwhm_s * rep_rate)
-    P_peak = 0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)
+    P_peak = peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
+        pulse_shape=pulse_shape)
     tw_rec = recommended_time_window(L_fiber;
         beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=P_peak)
     if time_window < tw_rec
@@ -384,7 +415,7 @@ function _setup_single_mode_problem(;
     if auto_size
         Nt, time_window, tw_rec = _auto_size_single_mode_grid(
             Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
-            gamma_user, betas_user,
+            pulse_shape, gamma_user, betas_user,
         )
     end
 
@@ -544,7 +575,8 @@ function setup_amplitude_problem(;
     # Soliton order for diagnostics
     β2 = setup.betas_user[1]
     T0 = pulse_fwhm / (2 * acosh(sqrt(2)))
-    P_peak = P_cont / (pulse_fwhm * pulse_rep_rate)
+    P_peak = peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
+        pulse_shape=pulse_shape)
     N_sol = sqrt(setup.gamma_user * P_peak * T0^2 / abs(β2))
 
     @debug "Setup (amplitude)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] N_soliton=round(N_sol, digits=2) raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] time_window=setup.sim["Δt"]*setup.sim["Nt"] tw_recommended=setup.tw_rec fiber_preset=fiber_preset

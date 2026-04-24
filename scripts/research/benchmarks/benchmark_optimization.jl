@@ -24,7 +24,7 @@ using Optim
 
 # Include the base optimization script for shared functions
 # (raman_optimization.jl includes common.jl and visualization.jl)
-include("raman_optimization.jl")
+include(joinpath(@__DIR__, "..", "..", "lib", "raman_optimization.jl"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Grid Size Benchmarking
