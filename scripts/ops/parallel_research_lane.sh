@@ -82,7 +82,7 @@ git worktree add --force --detach "\$RUN_DIR" origin/main
 rm -rf "\$RUN_DIR/results"
 ln -s "\$HOME/fiber-raman-suppression/results" "\$RUN_DIR/results"
 cd "\$RUN_DIR"
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
+julia --project=. -e "using Pkg; Pkg.instantiate()"
 eval $q_cmd
 EOF
 }
