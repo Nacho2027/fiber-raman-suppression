@@ -116,6 +116,15 @@ Date: 2026-04-23
   Now:
   - both use explicit `joinpath(@__DIR__, ...)` for local library dependencies
 
+- Stale MMF `src/mmf_cost.jl` include paths no longer point at non-existent
+  intermediate `src/` directories.
+  Before:
+  - `scripts/research/mmf/mmf_smoke_test.jl` resolved to
+    `scripts/research/src/mmf_cost.jl`
+  - `test/phases/test_phase16_mmf.jl` resolved to `test/src/mmf_cost.jl`
+  Now:
+  - both resolve to repository-root `src/mmf_cost.jl`
+
 ### Still active ambiguity
 
 - Maintained sweep/report workflows now share per-run artifact mapping, the main
@@ -191,3 +200,5 @@ Date: 2026-04-23
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/workflows/run_benchmarks.jl"); include("scripts/research/analysis/verification.jl"); println("entrypoint include smoke ok")'`
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/research/analysis/phase_ablation.jl"); include("scripts/research/analysis/physics_completion.jl"); println("research analysis include smoke ok")'`
 - `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/lib/raman_optimization.jl"); include("scripts/lib/amplitude_optimization.jl"); println("core optimization include smoke ok")'`
+- `julia -t auto --project=. -e 'using MultiModeNoise; include("scripts/research/mmf/mmf_smoke_test.jl"); println("mmf smoke entrypoint include ok")'`
+- `julia -t auto --project=. -e 'p = normpath(joinpath(pwd(), "test", "phases", "..", "..", "src", "mmf_cost.jl")); @assert isfile(p) p; include(p); println("phase mmf cost include path ok")'`

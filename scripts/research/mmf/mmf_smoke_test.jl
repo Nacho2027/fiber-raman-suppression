@@ -21,7 +21,7 @@ using LinearAlgebra
 using MultiModeNoise
 
 include(joinpath(@__DIR__, "mmf_setup.jl"))
-include(joinpath(@__DIR__, "..", "src", "mmf_cost.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "src", "mmf_cost.jl"))
 include(joinpath(@__DIR__, "mmf_raman_optimization.jl"))
 
 function smoke()
