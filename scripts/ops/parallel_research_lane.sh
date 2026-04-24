@@ -82,8 +82,26 @@ git worktree add --force --detach "\$RUN_DIR" origin/main
 rm -rf "\$RUN_DIR/results"
 ln -s "\$HOME/fiber-raman-suppression/results" "\$RUN_DIR/results"
 cd "\$RUN_DIR"
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
 eval $q_cmd
 EOF
+}
+
+ephemeral_pull_paths() {
+    case "$lane" in
+        longfiber)
+            echo "results/burst-logs results/raman/phase16 results/images"
+            ;;
+        multivar|multiparameter)
+            echo "results/burst-logs results/raman/multivar results/validation"
+            ;;
+        mmf|multimode)
+            echo "results/burst-logs results/raman/mmf results/raman/phase36 results/images"
+            ;;
+        *)
+            echo "results/burst-logs"
+            ;;
+    esac
 }
 
 if [[ "${PARALLEL_ALLOW_DIRTY:-0}" != "1" ]]; then
@@ -124,10 +142,15 @@ if [[ "$target" == "permanent" ]]; then
     set -e
 else
     set +e
+    pull_paths="$(ephemeral_pull_paths)"
     if [[ -n "$machine_type" ]]; then
+        BURST_PULL_PATHS="$pull_paths" \
+        BURST_LOCAL_REPO="$project_dir" \
         BURST_MACHINE_TYPE="$machine_type" \
             ~/bin/burst-spawn-temp "$tag" "$bootstrap_cmd" 2>&1 | tee -a "$log_file"
     else
+        BURST_PULL_PATHS="$pull_paths" \
+        BURST_LOCAL_REPO="$project_dir" \
         ~/bin/burst-spawn-temp "$tag" "$bootstrap_cmd" 2>&1 | tee -a "$log_file"
     fi
     rc=${PIPESTATUS[0]}
