@@ -122,6 +122,41 @@ loaded_via_json = load_run("results/raman/my_run.json")
 See [quickstart-optimization.md](../guides/quickstart-optimization.md#step-3--inspect-the-results)
 for a concrete load example against a real run.
 
+## Experimental handoff export
+
+`scripts/canonical/export_run.jl` converts a saved result into an
+experiment-facing handoff directory. The default phase-only bundle contains:
+
+- `phase_profile.csv` with simulation-grid frequency, wavelength, wrapped
+  phase, unwrapped phase, and group delay.
+- `metadata.json` with source artifact, scalar run summary, sidecar metadata,
+  and export file names.
+- `roundtrip_validation.json` with reload checks for row counts and export
+  bounds.
+- `README.md` with the human-readable handoff summary.
+- `source_run_config.toml` when the source run directory contains it.
+
+When the source artifact contains `amp_opt`, the exporter also writes
+`amplitude_profile.csv`. This file is intentionally device-agnostic. It records
+both the simulated dimensionless amplitude multiplier and a conservative
+loss-only hardware column:
+
+```text
+index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,amplitude_multiplier,normalized_transmission_loss_only
+```
+
+The loss-only column is computed by dividing the simulated multiplier by its
+maximum value. This guarantees transmission values in `[0, 1]`, records the
+required global attenuation factor in `metadata.json`, and avoids pretending
+that a loss-only shaper can realize relative gain. Lab hardware software should
+use this as a calibrated starting contract, not as a vendor-specific pixel file.
+
+The exporter supports both canonical `save_run` pairs
+(`<prefix>.jld2` + `<prefix>.json`) and the current multivar research pair
+(`<prefix>_result.jld2` + `<prefix>_slm.json`) so reproduced
+amplitude-on-phase artifacts can be handed off without rewriting historical
+results.
+
 ## Schema versioning
 
 - `schema_version` is checked on load. A mismatch prints a warning but the

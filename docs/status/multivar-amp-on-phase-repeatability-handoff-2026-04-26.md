@@ -114,3 +114,20 @@ Recommended sequencing:
    flow.
 5. Continue to defer broad joint phase+amplitude optimization unless a new
    numerical or physical hypothesis justifies it.
+
+## 2026-04-26 Export Follow-Up
+
+The first amplitude-aware neutral export contract now exists in
+`scripts/canonical/export_run.jl`. For artifacts with `amp_opt`, it writes
+`amplitude_profile.csv`, records the `loss_only_normalized_to_max` hardware
+policy in `metadata.json`, and writes `roundtrip_validation.json`.
+
+The repeated artifact
+`results/raman/multivar/amp_on_phase_20260426T1915Z_repeat2/amp_on_phase_result.jld2`
+was exported to `/tmp/fiber_amp_export_check` as a verification run. The
+round-trip report was complete over `8192` phase rows and `8192` amplitude rows,
+with normalized transmission bounded by `[0.833266977342, 1.0]`.
+
+This closes the first export-contract gap, but not the full lab-hardware gap:
+the remaining work is calibration against the actual shaper pixel grid,
+measured transfer function, and lab-specific clipping/attenuation policy.

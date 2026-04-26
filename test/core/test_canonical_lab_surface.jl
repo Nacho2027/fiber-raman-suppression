@@ -1,4 +1,5 @@
 using JSON3
+using JLD2
 
 include(joinpath(_ROOT, "scripts", "lib", "run_artifacts.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "inspect_run.jl"))
@@ -180,4 +181,55 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
     rendered_with_export = sprint(io -> render_run_summary(summary_with_export; io=io))
     @test occursin("Export handoff complete: true", rendered_with_export)
     @test occursin("phase_profile.csv", rendered_with_export)
+
+    amp_run_dir = joinpath(tmp, "amp_run")
+    mkpath(amp_run_dir)
+    amp_payload = (;
+        payload...,
+        amp_opt = reshape([0.9, 1.0, 1.1, 1.0, 0.95, 1.0, 1.05, 1.0], 8, 1),
+    )
+    amp_artifact = joinpath(amp_run_dir, "amp_result.jld2")
+    MultiModeNoise.save_run(amp_artifact, amp_payload)
+
+    amp_export_dir = joinpath(amp_run_dir, "export_handoff")
+    amp_exported = export_run_bundle(amp_run_dir, amp_export_dir)
+    @test isfile(amp_exported.amplitude_csv)
+    @test isfile(amp_exported.roundtrip_json)
+
+    amp_metadata = JSON3.read(read(amp_exported.metadata_json, String))
+    @test amp_metadata.amplitude.present == true
+    @test String(amp_metadata.amplitude.csv) == "amplitude_profile.csv"
+    @test String(amp_metadata.amplitude.hardware_policy) == "loss_only_normalized_to_max"
+    @test amp_metadata.amplitude.min_multiplier ≈ 0.9
+    @test amp_metadata.amplitude.max_multiplier ≈ 1.1
+
+    amp_csv_lines = readlines(amp_exported.amplitude_csv)
+    @test startswith(first(amp_csv_lines), "index,frequency_offset_THz")
+    @test occursin("amplitude_multiplier", first(amp_csv_lines))
+    @test occursin("normalized_transmission_loss_only", first(amp_csv_lines))
+    @test length(amp_csv_lines) == 9
+
+    roundtrip = JSON3.read(read(amp_exported.roundtrip_json, String))
+    @test roundtrip.complete == true
+    @test roundtrip.phase_rows == 8
+    @test roundtrip.amplitude_rows == 8
+    @test roundtrip.normalized_transmission_max <= 1.0
+
+    research_amp_dir = joinpath(tmp, "amp_research")
+    mkpath(research_amp_dir)
+    research_artifact = joinpath(research_amp_dir, "amp_research_result.jld2")
+    JLD2.jldsave(research_artifact; amp_payload...)
+    write(
+        joinpath(research_amp_dir, "amp_research_slm.json"),
+        JSON3.write(Dict(
+            "schema_version" => "multivar_slm_v1",
+            "outputs" => Dict(
+                "phase" => Dict("storage_key" => "phi_opt"),
+                "amplitude" => Dict("storage_key" => "amp_opt"),
+            ),
+        )),
+    )
+    research_exported = export_run_bundle(research_artifact, joinpath(research_amp_dir, "export_handoff"))
+    @test isfile(research_exported.amplitude_csv)
+    @test JSON3.read(read(research_exported.roundtrip_json, String)).complete == true
 end
