@@ -1,0 +1,14 @@
+id = "smf28_power_micro_sweep"
+description = "Tiny front-layer sweep over SMF-28 input power for validation and dry-run planning."
+maturity = "supported"
+base_experiment = "research_engine_smoke"
+output_root = "results/raman/sweeps/front_layer"
+output_tag = "smf28_power_micro_sweep"
+
+[sweep]
+parameter = "problem.P_cont"
+values = [0.001, 0.002, 0.003]
+
+[execution]
+mode = "dry_run"
+require_validate_all = true

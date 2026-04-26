@@ -44,6 +44,7 @@ Configurable experiment:
 ```bash
 julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run research_engine_poc
 julia --project=. -t auto scripts/canonical/run_experiment.jl research_engine_poc
+julia --project=. -t auto scripts/canonical/run_experiment.jl --latest research_engine_poc
 ```
 
 Inspect a saved run:

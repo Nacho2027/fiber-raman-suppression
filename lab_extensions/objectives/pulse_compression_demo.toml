@@ -1,0 +1,12 @@
+kind = "pulse_compression_demo"
+regime = "single_mode"
+backend = "lab_extension"
+description = "Demo non-Raman objective contract for pulse-compression research extension planning."
+maturity = "research"
+execution = "planning_only"
+source = "lab_extensions/objectives/pulse_compression_demo.jl"
+function = "pulse_compression_cost"
+gradient = "pulse_compression_gradient"
+validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
+supported_variables = [["phase"]]
+allowed_regularizers = ["gdd", "boundary"]

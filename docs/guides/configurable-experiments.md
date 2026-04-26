@@ -3,7 +3,13 @@
 [<- docs index](../README.md) · [project README](../../README.md)
 
 This guide is the lab-user entry point for the configurable front layer. It is
-for changing common research choices without editing optimizer internals.
+for changing common fiber-optic optimization choices without editing optimizer
+internals.
+
+Raman suppression is the first implemented research family in this interface,
+not the intended ceiling. The same front-layer contracts should eventually
+support other fiber-optic optimization questions once their objectives,
+variables, validation checks, and outputs are implemented in code.
 
 Use this path when you want to change:
 
@@ -20,6 +26,9 @@ The front layer is intentionally thin. Config files select from approved
 contracts; Julia code still owns the physics, gradients, objective formulas,
 solver behavior, and artifact validation.
 
+For new research objectives rather than safe built-ins, see
+[research-extensions.md](./research-extensions.md).
+
 ## 1. List Available Experiments
 
 ```bash
@@ -34,7 +43,33 @@ Start with these configs:
   handoff export enabled.
 - `research_engine_peak_smoke`: experimental phase-only run for objective
   dispatch checks.
+- `grin50_mmf_phase_sum_poc`: experimental GRIN-50 multimode planning surface;
+  dry-run/validation only on local machines.
+- `smf28_longfiber_phase_poc`: experimental long-fiber planning surface;
+  dry-run/validation only on local machines.
 - `smf28_phase_amplitude_energy_poc`: experimental multivariable run.
+
+To see the whole front-layer support boundary in one command:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --capabilities
+```
+
+To check every approved experiment config without launching optimization:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-all
+```
+
+For parameter-space questions, use the front-layer sweep command. It expands a
+base experiment across a list of values, validates every generated case, and
+prints the plan without launching optimization:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --list
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run smf28_power_micro_sweep
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --validate-all
+```
 
 ## 2. Inspect Objective Contracts
 
@@ -42,13 +77,29 @@ Start with these configs:
 julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
 ```
 
-Current single-mode objectives:
+Current single-mode objectives are Raman-focused because that is the first
+implemented objective family:
 
 - `raman_band`: supported integrated Raman-band leakage objective.
 - `raman_peak`: experimental peak-bin Raman leakage objective.
 
+Current long-fiber objectives:
+
+- `raman_band`: experimental phase-only planning contract.
+
+Current multimode objectives:
+
+- `mmf_sum`: experimental mode-summed Raman leakage planning contract.
+- `mmf_fundamental`: experimental fundamental-mode diagnostic contract.
+- `mmf_worst_mode`: experimental worst-mode diagnostic contract.
+
 Do not add new objective names only by editing TOML. Add the objective formula
-and gradient in code, register the contract, then expose it to config.
+and gradient in code, register the contract, then expose it to config. That is
+the intended path for non-Raman fiber-optic objectives too.
+
+Research extension contracts under `lab_extensions/objectives/` are listed by
+the same command. They are visible planning contracts, not automatically
+executable objectives.
 
 ## 3. Dry-Run Before Compute
 
@@ -68,10 +119,33 @@ The dry-run should answer:
 
 If validation fails here, fix the config before launching compute.
 
+For heavier configs, print a provider-neutral compute plan:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --compute-plan smf28_longfiber_phase_poc
+```
+
+This does not launch anything. It explains the portable path first: use any
+sufficiently provisioned workstation, cluster node, or cloud VM, sync/clone the
+repo, instantiate Julia, dry-run the config there, then run the relevant
+workflow. Rivera Lab burst helper commands are shown only as optional examples
+for people who already have that environment configured.
+
 ## 4. Edit Safe Knobs
 
 Make a copy of a nearby config in `configs/experiments/`, then edit only the
 knobs that are part of the current support boundary.
+
+For a clean starting point, copy a template from
+`configs/experiments/templates/`:
+
+- `single_mode_phase_template.toml`: supported local phase-only optimization.
+- `multimode_phase_planning_template.toml`: experimental MMF dry-run and
+  compute-plan surface.
+
+Templates are not approved runnable configs while they remain under the
+`templates/` subdirectory. Copy one level up, give it a real `id` and
+`output_tag`, then run `--dry-run` and `--validate-all`.
 
 Safe first knobs:
 
@@ -88,10 +162,20 @@ Safe first knobs:
 - `artifacts.export_phase_handoff`
 - `export.enabled`
 
+Safe first sweep parameters:
+
+- `problem.L_fiber`
+- `problem.P_cont`
+- `problem.Nt`
+- `problem.time_window`
+- `solver.max_iter`
+- `objective.kind`
+
 Keep these constraints in mind:
 
 - `single_mode` plus `["phase"]` is the supported path.
 - Multivariable controls are experimental.
+- `long_fiber` configs are experimental and marked `burst_required`.
 - `raman_peak` is experimental and phase-only.
 - Export handoff is phase-only.
 - Neutral handoff is not a vendor-specific SLM loading file.
@@ -114,6 +198,24 @@ For neutral handoff checks:
 julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_export_smoke
 ```
 
+For long-fiber planning, dry-run only on local machines:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run smf28_longfiber_phase_poc
+```
+
+For multimode planning, dry-run only on local machines:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run grin50_mmf_phase_sum_poc
+```
+
+Long-fiber execution remains burst territory and should use the dedicated
+long-fiber workflow until the front layer has a generic execution contract.
+Multimode execution follows the same rule for now and should use the dedicated
+MMF baseline workflow. The repo does not require Google Cloud; use whatever
+local, cluster, or cloud machine satisfies the run's memory/time needs.
+
 The command prints a completion summary with:
 
 - output directory
@@ -128,6 +230,12 @@ Use the output directory printed by the run command:
 
 ```bash
 julia --project=. scripts/canonical/inspect_run.jl results/raman/<run_id>/
+```
+
+Or inspect the latest completed run for a config:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --latest research_engine_poc
 ```
 
 Inspection reports:

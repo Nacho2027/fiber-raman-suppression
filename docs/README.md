@@ -13,10 +13,11 @@ order:
 
 1. [guides/installation.md](./guides/installation.md)
 2. [guides/configurable-experiments.md](./guides/configurable-experiments.md)
-3. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
-4. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
-5. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
-6. [architecture/output-format.md](./architecture/output-format.md)
+3. [guides/research-extensions.md](./guides/research-extensions.md)
+4. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
+5. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
+6. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
+7. [architecture/output-format.md](./architecture/output-format.md)
 
 If you are resuming work after time away, the synthesis and status sections are
 usually more useful than the onboarding sequence.
@@ -27,6 +28,7 @@ usually more useful than the onboarding sequence.
 |-----|------------|
 | [guides/installation.md](./guides/installation.md) | Environment setup and troubleshooting on laptops and project VMs. |
 | [guides/configurable-experiments.md](./guides/configurable-experiments.md) | Running and modifying the configurable experiment front layer without editing optimizer internals. |
+| [guides/research-extensions.md](./guides/research-extensions.md) | Adding new research objective contracts without reducing the system to a closed menu. |
 | [guides/quickstart-optimization.md](./guides/quickstart-optimization.md) | Running the maintained single-optimization workflow and checking the output. |
 | [guides/quickstart-sweep.md](./guides/quickstart-sweep.md) | Running a sweep on `fiber-raman-burst` and pulling results back correctly. |
 | [guides/supported-workflows.md](./guides/supported-workflows.md) | The explicit boundary between the supported lab-facing surface and still-experimental research workflows. |
@@ -41,6 +43,7 @@ usually more useful than the onboarding sequence.
 | [architecture/repo-navigation.md](./architecture/repo-navigation.md) | Deciding where code should live and which layer is authoritative. |
 | [architecture/codebase-visual-map.md](./architecture/codebase-visual-map.md) | Visual companion to the repo navigation guide. |
 | [architecture/configurable-front-layer.md](./architecture/configurable-front-layer.md) | Proposal for a thin configurable research-engine front layer above the current workflows. |
+| [architecture/research-engine-ux.md](./architecture/research-engine-ux.md) | UX architecture for CLI, notebooks, sweeps, extensions, and campaign summaries over one backend. |
 | [architecture/output-format.md](./architecture/output-format.md) | Understanding saved JLD2 and JSON run artifacts. |
 | [architecture/cost-convention.md](./architecture/cost-convention.md) | Cost-sign and dB-reporting conventions. |
 | [architecture/cost-function-physics.md](./architecture/cost-function-physics.md) | Physics rationale and the adjoint/cost-function framing used here. |

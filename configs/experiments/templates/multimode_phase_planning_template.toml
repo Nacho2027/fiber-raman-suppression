@@ -1,0 +1,72 @@
+# Template: experimental multimode planning config.
+#
+# This is not a local front-layer execution path yet. Use it to validate a
+# proposed MMF regime and print a compute plan, then run the dedicated MMF
+# workflow on suitable compute.
+
+id = "my_grin50_mmf_phase_plan"
+description = "GRIN-50 multimode shared-phase Raman planning run."
+maturity = "experimental"
+output_root = "results/raman/mmf"
+output_tag = "my_grin50_mmf_phase_plan"
+save_prefix_basename = "opt"
+
+[problem]
+regime = "multimode"
+preset = "GRIN_50"
+L_fiber = 2.0
+P_cont = 0.5
+beta_order = 2
+Nt = 4096
+time_window = 12.0
+grid_policy = "auto_if_undersized"
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0
+
+[controls]
+variables = ["phase"]
+parameterization = "shared_across_modes"
+initialization = "zero"
+
+[objective]
+kind = "mmf_sum"          # diagnostics also registered: mmf_fundamental, mmf_worst_mode
+log_cost = true
+
+[[objective.regularizer]]
+name = "gdd"
+lambda = "auto"
+
+[[objective.regularizer]]
+name = "boundary"
+lambda = 1.0
+
+[solver]
+kind = "lbfgs"
+max_iter = 8
+validate_gradient = false
+store_trace = true
+
+[artifacts]
+bundle = "mmf_planning"
+save_payload = true
+save_sidecar = true
+update_manifest = false
+write_trust_report = false
+write_standard_images = true
+export_phase_handoff = false
+
+[verification]
+mode = "burst_required"
+block_on_failed_checks = true
+gradient_check = false
+taylor_check = false
+exact_grid_replay = false
+artifact_validation = true
+
+[export]
+enabled = false
+profile = "neutral_csv_v1"
+include_unwrapped_phase = true
+include_group_delay = true

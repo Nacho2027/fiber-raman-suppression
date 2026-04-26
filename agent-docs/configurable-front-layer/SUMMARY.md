@@ -7,6 +7,11 @@ Added both:
 - a human-facing architecture proposal and TOML schema sketch
 - the first working implementation slice of the front layer
 
+Scope clarification: the front layer should be treated as infrastructure for
+general fiber-optic optimization research. Raman suppression is the first
+implemented objective family and the current validation target, not the final
+scope of the system.
+
 ## Main recommendation
 
 Do not build a plugin-heavy framework. Add one explicit orchestration layer
@@ -40,6 +45,8 @@ with five stable contracts:
 - `scripts/lib/objective_registry.jl`
   - defines the code-owned objective allowlist, supported variable tuples,
     backend mapping, and allowed regularizers
+  - discovers metadata-only lab objective extension contracts from
+    `lab_extensions/objectives/*.toml`
 - `scripts/lib/experiment_runner.jl`
   - maps validated specs onto the existing `run_optimization(...)` and
     `run_multivar_optimization(...)` paths
@@ -48,11 +55,26 @@ with five stable contracts:
   - renders the shared run-completion summary used by the CLI
 - `scripts/workflows/run_experiment.jl`
   - supports `--list`
+  - supports `--capabilities`
   - supports `--objectives`
+  - supports `--validate-all`
   - supports `--dry-run`
+  - supports `--compute-plan`
+  - supports `--latest`
   - runs one validated experiment config
   - prints output directory, artifact path, artifact-validation status, and
     standard-image status after a completed run
+- `scripts/lib/experiment_sweep.jl`
+  - loads front-layer sweep configs from `configs/experiment_sweeps/*.toml`
+  - expands one safe parameter path across multiple values
+  - validates every generated experiment case through the normal front-layer
+    contract
+- `scripts/workflows/run_experiment_sweep.jl`
+  - supports `--list`
+  - supports `--dry-run`
+  - supports `--validate-all`
+  - supports explicit `--execute` for locally supported cases and writes
+    `SWEEP_SUMMARY.md`
 - `configs/experiments/README.md`
   - documents the safe researcher-facing knobs and current support boundary
 - `docs/guides/configurable-experiments.md`
@@ -64,6 +86,39 @@ with five stable contracts:
   - provides a tiny phase-only smoke run for neutral CSV handoff verification
 - `configs/experiments/research_engine_peak_smoke.toml`
   - provides a tiny phase-only smoke run for experimental objective dispatch
+- `configs/experiments/grin50_mmf_phase_sum_poc.toml`
+  - provides an experimental GRIN-50 multimode dry-run/planning surface with
+    shared spectral phase, mode-summed Raman leakage, and
+    `verification.mode = "burst_required"`
+- `configs/experiments/templates/single_mode_phase_template.toml`
+  - provides a copy/edit starting point for supported local single-mode
+    phase-only runs
+- `configs/experiments/templates/multimode_phase_planning_template.toml`
+  - provides a copy/edit starting point for experimental MMF planning configs
+- `configs/experiment_sweeps/smf28_power_micro_sweep.toml`
+  - provides a tiny front-layer sweep over `problem.P_cont` for validation and
+    dry-run planning
+- `agent-docs/configurable-front-layer/PLAN.md`
+  - records the roadmap from safe configurable runs toward novel research use:
+    sweep execution, campaign summaries, heavy-regime promotion, authoring
+    guides, and scientific acceptance gates
+- `lab_extensions/objectives/pulse_compression_demo.toml`
+  - demonstrates a non-Raman, planning-only objective extension contract
+- `docs/guides/research-extensions.md`
+  - documents the UX principle: safe defaults plus open extension contracts,
+    not a closed objective menu
+- `docs/architecture/research-engine-ux.md`
+  - records the broader UX architecture: one backend with config, CLI,
+    notebooks, sweeps/campaigns, extensions, and results index front doors
+- `python/fiber_research_engine/`
+  - provides a notebook-friendly Python wrapper that delegates to maintained
+    Julia CLI commands instead of duplicating science logic
+- `notebooks/templates/experiment_explorer.ipynb`
+  - provides a Jupyter starting point for capability discovery, objective
+    listing, config validation, experiment dry-runs, and sweep dry-runs
+- `configs/experiments/smf28_longfiber_phase_poc.toml`
+  - provides an experimental long-fiber dry-run/planning surface with
+    `verification.mode = "burst_required"`
 - `scripts/canonical/run_experiment.jl`
   - thin public wrapper
 - `scripts/workflows/optimize_raman.jl`
@@ -75,6 +130,17 @@ with five stable contracts:
   bundle choice config-driven.
 - Keep the actual physics, control math, objective formulas, and solver
   implementations code-defined.
+- Treat Raman objectives as the first family of code-defined objective
+  contracts. Add future fiber-optic objectives the same way: implement, test,
+  register, then expose in config.
+- Treat lab extension contracts as visible research surfaces. They are not
+  executable until promoted with implementation, tests, validation, and output
+  semantics.
+- Keep one validated backend. CLI, notebooks, sweeps, future GUIs, and lab
+  scripts should call the same contracts rather than reimplementing science
+  logic.
+- Treat notebooks as orchestration and visualization surfaces. They should call
+  the front-layer backend, not own objective formulas or solver dispatch.
 - Promote regimes gradually: supported single-mode first, then experimental
   multivar/long-fiber, then multimode after the baseline stabilizes.
 - Treat the current export path as analysis-grade handoff. Do not add
@@ -113,6 +179,9 @@ and experimentally:
 - dry-run output reports the objective backend, e.g. `backend=raman_optimization`
 - `--objectives` prints the registered objective contracts, supported variable
   tuples, backend, maturity, and allowed regularizers
+- `--objectives` also prints research extension objective contracts from
+  `lab_extensions/objectives/`, including execution status such as
+  `planning_only`
 - experimental `raman_peak` objective dispatch is exposed as a phase-only smoke
   surface without changing the supported default `raman_band` path
 - phase-only export requests now call the canonical handoff exporter and attach
@@ -122,6 +191,38 @@ and experimentally:
 - saved-run inspection reports copied `run_config.toml` and default
   `export_handoff/` completeness so lab users can check provenance and handoff
   status from one command
+- latest-run discovery resolves the newest completed output directory for a
+  config id and renders the saved-run inspection summary without requiring the
+  user to manually find the timestamped result folder
+- provider-neutral compute planning prints local/manual/cluster/cloud guidance
+  without launching anything; Rivera Lab burst helper commands are clearly
+  labeled optional and project-specific
+- `--capabilities` prints the available regimes, variables, objectives,
+  parameterizations, solver choices, artifact bundles, and export profiles in
+  one place
+- `--validate-all` validates every approved front-layer experiment config
+  without launching optimization, making it suitable as a pre-compute lab
+  sanity check
+- `run_experiment_sweep.jl --dry-run` expands a base experiment across a safe
+  parameter list and validates every generated case without launching compute
+- `run_experiment_sweep.jl --validate-all` validates every approved front-layer
+  sweep config
+- `run_experiment_sweep.jl --execute` runs locally supported expanded cases
+  deliberately and records complete/failed/skipped rows in a Markdown summary
+- `long_fiber`
+- variables `[:phase]`
+- objective `raman_band`
+- solver `lbfgs`
+- validation/dry-run only on local machines; execution is explicitly blocked
+  with a message pointing users to the dedicated burst long-fiber workflow
+- `multimode`
+- variables `[:phase]`
+- parameterization `shared_across_modes`
+- objectives `mmf_sum`, `mmf_fundamental`, and `mmf_worst_mode`
+- solver `lbfgs`
+- artifact bundle `mmf_planning`
+- validation/dry-run only on local machines; execution is explicitly blocked
+  with a message pointing users to the dedicated multimode baseline workflow
 
 The loader already supports the richer config shape, but unsupported variable /
 objective / solver combinations fail validation clearly instead of silently
@@ -138,8 +239,8 @@ falling through.
 - `julia --project=. -e 'include("scripts/workflows/optimize_raman.jl"); canonical_optimize_main(["--list"])'`
   succeeded
 - `TEST_TIER=fast julia --project=. test/runtests.jl`
-  passed after the inspection/docs slice (`95/95`; canonical lab-facing surface
-  `69/69`, experiment front layer `108/108`)
+  passed after the sweep/planning slice (`95/95`; canonical lab-facing surface
+  `103/103`, experiment front layer `206/206`)
 - red-first regression was added for multivar export/handoff validation; it
   failed before implementation and passed after adding the guard
 - red-first regression was added for dry-run plan visibility; it failed before
@@ -166,6 +267,41 @@ falling through.
 - red-first regression was added for saved-run inspection of copied config and
   default `export_handoff/` status; it failed before adding those fields to
   `inspect_run_summary(...)` and passed after implementation
+- red-first regression was added for latest-run discovery; it failed before
+  adding `experiment_run_directories(...)`, `latest_experiment_output_dir(...)`,
+  and `run_experiment.jl --latest`, then passed after implementation
+- red-first regression was added for experimental long-fiber front-layer
+  validation; it failed before adding the config, objective contract, capability
+  profile, dry-run rendering, and local-execution guard, then passed after
+  implementation
+- red-first regression was added for provider-neutral compute planning; it
+  failed before `render_experiment_compute_plan(...)` and
+  `run_experiment.jl --compute-plan`, then passed after implementation
+- red-first regression was added for capability discovery and multimode
+  planning; it failed before adding `render_experiment_capabilities(...)`, the
+  MMF objective contracts, the `grin50_mmf_phase_sum_poc` config, compute-plan
+  text, and execution/export guards, then passed after implementation
+- red-first regression was added for whole-config validation; it failed before
+  adding `validate_all_experiment_configs(...)`,
+  `render_experiment_validation_report(...)`, and
+  `run_experiment.jl --validate-all`, then passed after implementation
+- red-first regression was added for front-layer sweep expansion; it failed
+  before adding `experiment_sweep.jl`, `smf28_power_micro_sweep.toml`, and
+  `run_experiment_sweep.jl`, then passed after implementation
+- red-first regression was added for research objective extension discovery; it
+  failed before adding extension-contract loading and the
+  `pulse_compression_demo` planning contract, then passed after implementation
+- review pass fixed direct execution of planning-only long-fiber/MMF configs so
+  it exits nonzero instead of returning success after a warning
+- command verification passed for `--capabilities`, `--objectives`,
+  `--validate-all`, `--compute-plan`, sweep `--validate-all`, and sweep
+  `--dry-run`
+- real smoke sweep execution passed:
+  `julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute smf28_power_micro_sweep`
+  completed three local-safe cases and wrote
+  `results/raman/sweeps/front_layer/smf28_power_micro_sweep_20260426_2123863/SWEEP_SUMMARY.md`
+- representative sweep images were visually inspected: case 001 phase profile,
+  case 003 optimized evolution, and case 003 phase diagnostic
 
 ## Review Findings
 

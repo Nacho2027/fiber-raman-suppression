@@ -7,8 +7,12 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl path/to/experiment.toml
     julia --project=. -t auto scripts/canonical/run_experiment.jl smf28_L2m_P0p2W
     julia --project=. -t auto scripts/canonical/run_experiment.jl --list
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --capabilities
     julia --project=. -t auto scripts/canonical/run_experiment.jl --objectives
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-all
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --latest [spec]
 
 The current implementation is intentionally narrow:
 
@@ -23,6 +27,7 @@ using Logging
 
 include(joinpath(@__DIR__, "..", "lib", "experiment_runner.jl"))
 include(joinpath(@__DIR__, "export_run.jl"))
+include(joinpath(@__DIR__, "inspect_run.jl"))
 ensure_deterministic_environment()
 
 function _print_available_experiment_configs()
@@ -57,10 +62,24 @@ function run_experiment_main(args=ARGS)
         return nothing
     end
 
+    if args[1] == "--capabilities"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --capabilities")
+        render_experiment_capabilities()
+        return nothing
+    end
+
     if args[1] == "--objectives"
         length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --objectives")
         render_objective_registry()
         return nothing
+    end
+
+    if args[1] == "--validate-all"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-all")
+        report = validate_all_experiment_configs()
+        render_experiment_validation_report(report)
+        report.complete || error("one or more experiment configs failed validation")
+        return report
     end
 
     if args[1] == "--dry-run"
@@ -71,20 +90,46 @@ function run_experiment_main(args=ARGS)
         return spec
     end
 
+    if args[1] == "--compute-plan"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --compute-plan [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        println(render_experiment_compute_plan(spec))
+        return spec
+    end
+
+    if args[1] == "--latest"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --latest [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        validate_experiment_spec(spec)
+        latest_dir = try
+            latest_experiment_output_dir(spec)
+        catch err
+            err isa ArgumentError || rethrow()
+            println(stderr, "No completed runs found for $(spec.id) under $(spec.output_root).")
+            println(stderr, "Run it first with: julia -t auto --project=. scripts/canonical/run_experiment.jl ",
+                isempty(args[2:end]) ? DEFAULT_EXPERIMENT_SPEC : args[2])
+            return nothing
+        end
+        println("Latest run for $(spec.id): ", latest_dir)
+        summary = inspect_run_summary(latest_dir)
+        render_run_summary(summary)
+        return summary
+    end
+
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --objectives | --dry-run [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
-    result = run_supported_experiment(spec)
-
-    if spec.export_plan.enabled || spec.artifacts.export_phase_handoff
-        export_dir = joinpath(result.output_dir, "export_handoff")
-        exported = export_run_bundle(result.artifact_path, export_dir)
-        @info "Exported front-layer handoff bundle" output_dir=exported.output_dir
-        completed = (; result..., exported=exported)
-        render_experiment_completion_summary(completed)
-        return completed
+    mode = experiment_execution_mode(spec)
+    if mode in (:long_fiber_phase, :multimode_phase)
+        regime_label = mode == :long_fiber_phase ? "Long-fiber" : "Multimode"
+        workflow_label = mode == :long_fiber_phase ? "burst long-fiber" : "multimode baseline"
+        error(
+            "$(regime_label) front-layer configs are validation/dry-run only on this machine. " *
+            "Inspect the plan with `julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(args[1])`, " *
+            "then stage execution through the dedicated $(workflow_label) workflow.")
     end
+    result = run_supported_experiment(spec)
 
     render_experiment_completion_summary(result)
     return result

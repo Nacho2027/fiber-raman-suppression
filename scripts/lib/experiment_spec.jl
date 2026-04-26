@@ -61,6 +61,8 @@ end
 
 approved_experiment_config_ids() = _approved_experiment_ids(EXPERIMENT_CONFIG_DIR)
 
+registered_experiment_regimes() = (:single_mode, :long_fiber, :multimode)
+
 function resolve_experiment_config_path(spec::AbstractString)
     if isfile(spec)
         return abspath(spec)
@@ -288,17 +290,49 @@ function experiment_capability_profile(regime::Symbol)
             export_profiles = Tuple(registered_export_profiles()),
         )
     end
+    if regime == :long_fiber
+        return (
+            variables = ((:phase,),),
+            objectives = registered_objective_kinds(regime),
+            solvers = (:lbfgs,),
+            parameterizations = (:full_grid,),
+            initializations = (:zero,),
+            grid_policies = (:exact, :auto_if_undersized),
+            artifact_bundles = (:standard,),
+            export_profiles = Tuple(registered_export_profiles()),
+        )
+    end
+    if regime == :multimode
+        return (
+            variables = ((:phase,),),
+            objectives = registered_objective_kinds(regime),
+            solvers = (:lbfgs,),
+            parameterizations = (:shared_across_modes,),
+            initializations = (:zero,),
+            grid_policies = (:auto_if_undersized, :exact),
+            artifact_bundles = (:mmf_planning,),
+            export_profiles = Tuple(registered_export_profiles()),
+        )
+    end
     throw(ArgumentError("unknown experiment regime :$regime"))
 end
 
 function experiment_execution_mode(spec)
-    spec.problem.regime == :single_mode || throw(ArgumentError(
-        "no execution mode implemented for regime `$(spec.problem.regime)`"))
-
-    if spec.controls.variables == (:phase,)
-        return :phase_only
+    if spec.problem.regime == :single_mode
+        if spec.controls.variables == (:phase,)
+            return :phase_only
+        end
+        return :multivar
+    elseif spec.problem.regime == :long_fiber
+        spec.controls.variables == (:phase,) || throw(ArgumentError(
+            "long_fiber currently supports phase-only controls"))
+        return :long_fiber_phase
+    elseif spec.problem.regime == :multimode
+        spec.controls.variables == (:phase,) || throw(ArgumentError(
+            "multimode currently supports phase-only controls"))
+        return :multimode_phase
     end
-    return :multivar
+    throw(ArgumentError("no execution mode implemented for regime `$(spec.problem.regime)`"))
 end
 
 experiment_export_requested(spec) =
@@ -367,6 +401,41 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "multivar front-layer execution does not yet support phase/SLM export handoff"))
         end
+    elseif mode == :long_fiber_phase
+        spec.maturity == "experimental" || throw(ArgumentError(
+            "long_fiber front-layer configs must be marked experimental"))
+        spec.verification.mode == :burst_required || throw(ArgumentError(
+            "long_fiber front-layer configs must use verification.mode=\"burst_required\""))
+        if experiment_export_requested(spec)
+            throw(ArgumentError(
+                "long_fiber front-layer execution does not yet support phase export handoff"))
+        end
+        if !(spec.artifacts.bundle == :standard &&
+             spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
+             spec.artifacts.update_manifest && spec.artifacts.write_trust_report &&
+             spec.artifacts.write_standard_images)
+            throw(ArgumentError(
+                "long_fiber execution currently requires the full standard artifact bundle"))
+        end
+    elseif mode == :multimode_phase
+        spec.maturity == "experimental" || throw(ArgumentError(
+            "multimode front-layer configs must be marked experimental"))
+        spec.verification.mode == :burst_required || throw(ArgumentError(
+            "multimode front-layer configs must use verification.mode=\"burst_required\""))
+        if experiment_export_requested(spec)
+            throw(ArgumentError(
+                "multimode front-layer execution does not yet support phase export handoff"))
+        end
+        if !(spec.artifacts.bundle == :mmf_planning &&
+             spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
+             spec.artifacts.write_standard_images)
+            throw(ArgumentError(
+                "multimode planning currently requires the mmf_planning artifact bundle with standard images"))
+        end
+        if spec.artifacts.update_manifest || spec.artifacts.write_trust_report
+            throw(ArgumentError(
+                "multimode front-layer planning does not yet support manifest updates or trust-report writing"))
+        end
     end
 
     return caps
@@ -382,6 +451,8 @@ function experiment_plan_lines(spec)
     mode = experiment_execution_mode(spec)
     export_supported = mode == :phase_only
     export_requested = experiment_export_requested(spec)
+    burst_required = spec.verification.mode == :burst_required ||
+        spec.problem.regime in (:long_fiber, :multimode)
     objective_contract = experiment_objective_contract(spec)
     export_contract = export_profile_contract(spec.export_plan.profile)
 
@@ -391,7 +462,7 @@ function experiment_plan_lines(spec)
         "Maturity: $(spec.maturity)",
         "Schema: $(spec.schema)",
         "Config path: $(spec.config_path)",
-        "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested)",
+        "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested) burst_required=$(burst_required)",
         "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W Nt=$(spec.problem.Nt) tw=$(spec.problem.time_window)ps grid=$(spec.problem.grid_policy)",
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
@@ -402,5 +473,153 @@ function experiment_plan_lines(spec)
 end
 
 render_experiment_plan(spec) = join(experiment_plan_lines(spec), "\n")
+
+function render_experiment_capabilities(; io::IO=stdout)
+    println(io, "Experiment capabilities:")
+    for regime in registered_experiment_regimes()
+        caps = experiment_capability_profile(regime)
+        println(io, "  regime=", regime)
+        println(io, "    variables=", _objective_tuple_summary(caps.variables))
+        println(io, "    objectives=", join(string.(caps.objectives), ", "))
+        println(io, "    solvers=", join(string.(caps.solvers), ", "))
+        println(io, "    parameterizations=", join(string.(caps.parameterizations), ", "))
+        println(io, "    initializations=", join(string.(caps.initializations), ", "))
+        println(io, "    grid_policies=", join(string.(caps.grid_policies), ", "))
+        println(io, "    artifact_bundles=", join(string.(caps.artifact_bundles), ", "))
+        println(io, "    export_profiles=", join(string.(caps.export_profiles), ", "))
+    end
+    println(io)
+    println(io, "Execution notes:")
+    println(io, "  single_mode phase-only is the supported local execution path.")
+    println(io, "  single_mode multivariable controls are experimental.")
+    println(io, "  long_fiber and multimode are planning/dry-run surfaces until their dedicated workflows are promoted.")
+    println(io, "  Configs select from these contracts; new physics still belongs in code first.")
+    return nothing
+end
+
+function validate_all_experiment_configs(; ids=approved_experiment_config_ids())
+    reports = []
+    for id in ids
+        try
+            spec = load_experiment_spec(id)
+            validate_experiment_spec(spec)
+            push!(reports, (
+                id = id,
+                ok = true,
+                spec_id = spec.id,
+                regime = spec.problem.regime,
+                mode = experiment_execution_mode(spec),
+                maturity = spec.maturity,
+                config_path = spec.config_path,
+                error = "",
+            ))
+        catch err
+            push!(reports, (
+                id = id,
+                ok = false,
+                spec_id = id,
+                regime = :unknown,
+                mode = :unknown,
+                maturity = "unknown",
+                config_path = "",
+                error = sprint(showerror, err),
+            ))
+        end
+    end
+
+    passed = count(report -> report.ok, reports)
+    failed = length(reports) - passed
+    return (
+        complete = failed == 0,
+        total = length(reports),
+        passed = passed,
+        failed = failed,
+        reports = Tuple(reports),
+    )
+end
+
+function render_experiment_validation_report(report; io::IO=stdout)
+    println(io, "Experiment config validation: complete=$(report.complete) passed=$(report.passed) failed=$(report.failed) total=$(report.total)")
+    for item in report.reports
+        if item.ok
+            println(io,
+                "  [ok] ",
+                item.id,
+                "  spec_id=", item.spec_id,
+                "  regime=", item.regime,
+                "  mode=", item.mode,
+                "  maturity=", item.maturity)
+        else
+            println(io, "  [fail] ", item.id, "  ", item.error)
+        end
+    end
+    return nothing
+end
+
+function experiment_cli_spec_hint(spec)
+    return spec.schema == :experiment_v1 ? basename(splitext(spec.config_path)[1]) : spec.id
+end
+
+function experiment_compute_plan_lines(spec)
+    validate_experiment_spec(spec)
+
+    mode = experiment_execution_mode(spec)
+    spec_hint = experiment_cli_spec_hint(spec)
+    dry_run_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(spec_hint)"
+    local_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl $(spec_hint)"
+
+    lines = String[
+        "Compute plan: $(spec.id)",
+        "Regime: $(spec.problem.regime)",
+        "Execution mode: $(mode)",
+        "No command in this plan is launched automatically.",
+        "Inspect first:",
+        "  $(dry_run_cmd)",
+    ]
+
+    if mode == :long_fiber_phase
+        append!(lines, [
+            "Provider-neutral path:",
+            "  1. Use any sufficiently provisioned machine or cluster node.",
+            "  2. Sync or clone this repository and instantiate the Julia project.",
+            "  3. Run the dry-run command above on that machine to confirm the config.",
+            "  4. Use the dedicated long-fiber workflow until front-layer burst execution is promoted:",
+            "     julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl",
+            "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
+            "Local laptop/default VM guidance:",
+            "  Long-fiber execution is intentionally blocked by the front layer because this config is marked burst_required.",
+            "Optional Rivera Lab burst helper:",
+            "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
+            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy F-longfiber 'julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl'\"",
+        ])
+    elseif mode == :multimode_phase
+        append!(lines, [
+            "Provider-neutral path:",
+            "  1. Use any sufficiently provisioned machine or cluster node.",
+            "  2. Sync or clone this repository and instantiate the Julia project.",
+            "  3. Run the dry-run command above on that machine to confirm the config.",
+            "  4. Use the dedicated MMF baseline workflow until front-layer MMF execution is promoted:",
+            "     julia -t auto --project=. scripts/research/mmf/baseline.jl",
+            "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
+            "Local laptop/default VM guidance:",
+            "  Multimode execution is intentionally blocked by the front layer because this config is marked burst_required.",
+            "Optional Rivera Lab burst helper:",
+            "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
+            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy M-mmf 'julia -t auto --project=. scripts/research/mmf/baseline.jl'\"",
+        ])
+    else
+        append!(lines, [
+            "Local command:",
+            "  $(local_cmd)",
+            "Provider-neutral path:",
+            "  This config is allowed to run through the front-layer CLI on any machine with the Julia environment installed.",
+            "  For larger parameter choices, run the same command on your own workstation, cluster, or cloud VM.",
+        ])
+    end
+
+    return lines
+end
+
+render_experiment_compute_plan(spec) = join(experiment_compute_plan_lines(spec), "\n")
 
 end # include guard

@@ -40,6 +40,33 @@ function experiment_save_prefix(spec;
     return joinpath(dir, spec.save_prefix_basename)
 end
 
+function experiment_run_directories(spec; require_artifact::Bool=true)
+    isdir(spec.output_root) || return String[]
+    prefix = string(spec.output_tag, "_")
+    dirs = String[]
+    for entry in readdir(spec.output_root; join=true)
+        isdir(entry) || continue
+        startswith(basename(entry), prefix) || continue
+        if require_artifact
+            try
+                resolve_run_artifact_path(entry)
+            catch
+                continue
+            end
+        end
+        push!(dirs, entry)
+    end
+    sort!(dirs; by=basename)
+    return dirs
+end
+
+function latest_experiment_output_dir(spec; require_artifact::Bool=true)
+    dirs = experiment_run_directories(spec; require_artifact=require_artifact)
+    isempty(dirs) && throw(ArgumentError(
+        "no completed runs found for experiment `$(spec.id)` under `$(spec.output_root)`"))
+    return last(dirs)
+end
+
 function copy_experiment_config_to_output(spec, output_dir; filename::AbstractString="run_config.toml")
     target = joinpath(output_dir, filename)
     cp(spec.config_path, target; force=true)
@@ -318,12 +345,19 @@ end
 function run_supported_experiment(spec;
                                   timestamp::AbstractString=Dates.format(now(UTC), "yyyymmdd_HHMMss"))
     validate_experiment_spec(spec)
+    mode = experiment_execution_mode(spec)
+    if mode == :long_fiber_phase
+        throw(ArgumentError(
+            "long_fiber front-layer configs are validation/dry-run only for now; stage and run long-fiber jobs on burst through the dedicated long-fiber workflow"))
+    elseif mode == :multimode_phase
+        throw(ArgumentError(
+            "multimode front-layer configs are validation/dry-run only for now; stage and run MMF jobs through the dedicated multimode baseline workflow"))
+    end
 
     save_prefix = experiment_save_prefix(spec; timestamp=timestamp)
     output_dir = dirname(save_prefix)
     config_copy = copy_experiment_config_to_output(spec, output_dir)
     kwargs = supported_experiment_run_kwargs(spec)
-    mode = experiment_execution_mode(spec)
 
     @info "Front-layer experiment run" id=spec.id maturity=spec.maturity regime=spec.problem.regime output_dir=output_dir
     if mode == :phase_only

@@ -1,0 +1,72 @@
+# Template: supported single-mode phase-only optimization.
+#
+# Copy this file into `configs/experiments/<new_id>.toml`, then edit the
+# marked knobs. Keep new physics definitions in code first; config should only
+# select from registered contracts.
+
+id = "my_single_mode_phase_run"
+description = "Single-mode phase-only Raman suppression run."
+maturity = "supported"
+output_root = "results/raman"
+output_tag = "my_single_mode_phase_run"
+save_prefix_basename = "opt"
+
+[problem]
+regime = "single_mode"
+preset = "SMF28"          # safe knob: choose a registered fiber preset
+L_fiber = 2.0             # safe knob: meters
+P_cont = 0.2              # safe knob: watts
+beta_order = 3
+Nt = 8192                 # safe knob: grid size
+time_window = 12.0        # safe knob: ps
+grid_policy = "auto_if_undersized"
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0
+
+[controls]
+variables = ["phase"]     # supported local execution path
+parameterization = "full_grid"
+initialization = "zero"
+
+[objective]
+kind = "raman_band"       # safe knob: use `--objectives` before changing
+log_cost = true
+
+[[objective.regularizer]]
+name = "gdd"
+lambda = "auto"
+
+[[objective.regularizer]]
+name = "boundary"
+lambda = 1.0              # safe knob
+
+[solver]
+kind = "lbfgs"
+max_iter = 30             # safe knob
+validate_gradient = false # safe knob; slower when true
+store_trace = true
+
+[artifacts]
+bundle = "standard"
+save_payload = true
+save_sidecar = true
+update_manifest = true
+write_trust_report = true
+write_standard_images = true
+export_phase_handoff = false
+
+[verification]
+mode = "standard"
+block_on_failed_checks = true
+gradient_check = false
+taylor_check = false
+exact_grid_replay = false
+artifact_validation = true
+
+[export]
+enabled = false
+profile = "neutral_csv_v1"
+include_unwrapped_phase = true
+include_group_delay = true
