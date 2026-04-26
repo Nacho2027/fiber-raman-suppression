@@ -69,6 +69,19 @@ precision. The amplitude profile used 8192 bins, with min `0.908455`, max
 energy (`E_opt = E_ref`). Standard images for both phase-only and
 amplitude-on-phase cases were visually inspected.
 
+The 2026-04-26 amplitude-bound sweep then filled in two additional bounds:
+
+- `δ = 0.05`: `J_after = -43.01 dB`, improvement `2.22 dB`, A range
+  `[0.950, 1.050]`; useful but below the `3 dB` closure threshold
+- `δ = 0.15`: `J_after = -45.94 dB`, improvement `5.15 dB`, A range
+  `[0.855, 1.149]`
+- `δ = 0.20`: `J_after = -46.82 dB`, improvement `6.02 dB`, A range
+  `[0.805, 1.199]`
+
+Interpretation: the amplitude-on-fixed-phase gain grows smoothly with allowed
+amplitude freedom. Very small ±5% shaping is scientifically real but likely too
+small to promote as a headline. ±10-20% shaping is the current useful range.
+
 Interpretation: broad joint phase+amplitude remains experimental/negative, but
 fixed-phase amplitude refinement is now a reproducible candidate. It still is
 not hardware-ready because there is no amplitude-aware lab export contract,
@@ -94,13 +107,20 @@ Do **not** treat it as:
 
 The open follow-up work is now:
 
-1. amplitude-aware export schema and round-trip validation fixture
-2. hardware-constrained handling of relative amplitude values above unity
-3. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point
-4. only after those pass, consider a two-stage workflow that exposes
+1. rerun the full variable-combination ablation in
+   `scripts/research/multivar/multivar_variable_ablation.jl`
+2. amplitude-aware export schema and round-trip validation fixture
+3. hardware-constrained handling of relative amplitude values above unity
+4. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point
+5. only after those pass, consider a two-stage workflow that exposes
    amplitude-on-phase as an optional refinement rather than a default
-5. defer broad joint phase+amplitude tuning until a new physical or numerical
+6. defer broad joint phase+amplitude tuning until a new physical or numerical
    hypothesis justifies it
+
+Terminology note: the active `δ` jobs are amplitude-bound ablations, not the
+full combinatorial multivar ablation. The full ablation should explicitly cover
+single blocks and combinations of phase, amplitude, and scalar energy, including
+fixed-phase staged cases.
 
 ## Artifact caveat
 

@@ -153,6 +153,23 @@ Update, 2026-04-26:
 - The fixed-phase amplitude refinement is the active high-value sublane:
   the first pass improved the phase-only result by `3.55 dB`, and two repeat /
   bound-sensitivity ephemerals are now running.
+- The active `δ=0.05` and `δ=0.15` jobs are amplitude-bound ablations only.
+  They do not replace the full variable-combination ablation in
+  `scripts/research/multivar/multivar_variable_ablation.jl`.
+- The bound sweep returned a monotone result: `δ=0.05` improved by `2.22 dB`,
+  `δ=0.10` by `3.55 dB`, `δ=0.15` by `5.15 dB`, and `δ=0.20` by `6.02 dB`.
+  Treat ±10-20% amplitude freedom as the useful current range.
+- The full multivar ablation remains incomplete until phase, amplitude, scalar
+  energy, and staged combinations are rerun and summarized cleanly.
+
+### Mode Coefficients
+
+- Advisor-facing mode-coefficient work belongs to the MMF lane, not SMF
+  multivar.
+- Use `scripts/research/mmf/mmf_mode_coeff_gradient_check.jl` as the required
+  preflight before large `{φ, c_m}` optimization.
+- Do not spend heavy science compute on mode coefficients until MMF window
+  validation returns clean `boundary_ok=true` results.
 
 ### Long-fiber
 
