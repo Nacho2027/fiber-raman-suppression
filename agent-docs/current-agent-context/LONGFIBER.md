@@ -41,8 +41,21 @@ The key existing headline result is the 100 m Phase 16 run:
   - `J_opt@100m = -54.77 dB`
   - `J_warm@2m(L=100 m) = -51.50 dB`
   - `converged = false`
+- 2026-04-26 rerun `L-100m1`
+  - `J_opt@100m = -55.92 dB`
+  - `LF100_MAX_ITER = 25`
+  - `converged = false`
+  - final gradient norm `7.22e-01`
+  - standard images generated under
+    `results/raman/phase16/standard_images_F_100m_opt/`
 
 That combination is important: the result is scientifically useful, but it should not be oversold as a tightly converged production benchmark.
+
+Visual inspection note for the 2026-04-26 rerun: the spectral suppression is
+real and the standard images are complete, but the optimized phase/group-delay
+diagnostic is very rough and the temporal output is split into strong subpulses.
+Treat this as a high-value exploratory physics result, not a lab-ready phase
+profile.
 
 ## What is not yet trustworthy
 
