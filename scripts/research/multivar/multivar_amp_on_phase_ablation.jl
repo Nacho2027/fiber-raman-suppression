@@ -29,10 +29,12 @@ const MV_AMP_PHASE_AMP_ITER = parse(Int, get(ENV, "MV_AMP_PHASE_AMP_ITER", "60")
 const MV_AMP_PHASE_THRESHOLD_DB = parse(Float64, get(ENV, "MV_AMP_PHASE_THRESHOLD_DB", "3.0"))
 const MV_AMP_PHASE_DELTA_BOUND = parse(Float64, get(ENV, "MV_AMP_PHASE_DELTA_BOUND", "0.10"))
 const MV_AMP_PHASE_LAMBDA_ENERGY = parse(Float64, get(ENV, "MV_AMP_PHASE_LAMBDA_ENERGY", "1.0"))
+const MV_AMP_PHASE_L_FIBER = parse(Float64, get(ENV, "MV_AMP_PHASE_L_FIBER", "2.0"))
+const MV_AMP_PHASE_P_CONT = parse(Float64, get(ENV, "MV_AMP_PHASE_P_CONT", "0.30"))
 
 const MV_AMP_PHASE_KW = (
-    L_fiber = 2.0,
-    P_cont = 0.30,
+    L_fiber = MV_AMP_PHASE_L_FIBER,
+    P_cont = MV_AMP_PHASE_P_CONT,
     Nt = 2^13,
     time_window = 20.0,
     β_order = 3,
@@ -59,7 +61,7 @@ function _write_summary(; phase_dB, phase_iterations, amp_dB, improvement_dB, ou
         println(io, "# Amplitude-On-Phase Closure Ablation")
         println(io)
         println(io, "- Tag: `$MV_AMP_PHASE_TAG`")
-        println(io, "- Canonical point: SMF-28, L=$(MV_AMP_PHASE_KW.L_fiber)m, P=$(MV_AMP_PHASE_KW.P_cont)W")
+        println(io, "- Point: SMF-28, L=$(MV_AMP_PHASE_KW.L_fiber)m, P=$(MV_AMP_PHASE_KW.P_cont)W")
         println(io, "- Amplitude bound: δ=$(MV_AMP_PHASE_DELTA_BOUND), λ_energy=$(MV_AMP_PHASE_LAMBDA_ENERGY)")
         println(io, "- Question: can amplitude-only shaping on top of fixed phase-only optimum improve by at least $(MV_AMP_PHASE_THRESHOLD_DB) dB?")
         println(io)
@@ -85,7 +87,7 @@ function _write_summary(; phase_dB, phase_iterations, amp_dB, improvement_dB, ou
 end
 
 @info "═══════════════════════════════════════════════════════════════"
-@info "  Amplitude-on-phase ablation — SMF-28 L=2m P=0.30W"
+@info "  Amplitude-on-phase ablation — SMF-28 L=$(MV_AMP_PHASE_KW.L_fiber)m P=$(MV_AMP_PHASE_KW.P_cont)W"
 @info "═══════════════════════════════════════════════════════════════"
 @info "output directory: $MV_AMP_PHASE_OUT"
 
