@@ -135,8 +135,14 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         result = index_results_csv(
             "results/raman",
             kind="run",
+            config_id="smf28_phase_smoke",
+            regime="single_mode",
+            objective="raman_band",
+            solver="lbfgs",
             fiber="SMF-28",
             complete_images=True,
+            lab_ready=True,
+            export_ready=True,
             contains="power",
             repo_root=Path("/tmp/repo"),
         )
@@ -147,12 +153,43 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertIn("--csv", called_args)
         self.assertIn("--kind", called_args)
         self.assertIn("run", called_args)
+        self.assertIn("--config-id", called_args)
+        self.assertIn("smf28_phase_smoke", called_args)
+        self.assertIn("--regime", called_args)
+        self.assertIn("single_mode", called_args)
+        self.assertIn("--objective", called_args)
+        self.assertIn("raman_band", called_args)
+        self.assertIn("--solver", called_args)
+        self.assertIn("lbfgs", called_args)
         self.assertIn("--fiber", called_args)
         self.assertIn("SMF-28", called_args)
         self.assertIn("--complete-images", called_args)
+        self.assertIn("--lab-ready", called_args)
+        self.assertIn("--export-ready", called_args)
         self.assertIn("--contains", called_args)
         self.assertIn("power", called_args)
         self.assertEqual(called_args[-1], "results/raman")
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_index_results_supports_comparison_ranking(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Results Comparison\n"
+        run_mock.return_value.stderr = ""
+
+        result = index_results(
+            "results/raman",
+            compare=True,
+            lab_ready=True,
+            top=3,
+            repo_root=Path("/tmp/repo"),
+        )
+
+        self.assertIn("# Results Comparison", result.stdout)
+        called_args = run_mock.call_args.args[0]
+        self.assertIn("--compare", called_args)
+        self.assertIn("--lab-ready", called_args)
+        self.assertIn("--top", called_args)
+        self.assertIn("3", called_args)
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_failed_command_raises_when_check_enabled(self, run_mock):

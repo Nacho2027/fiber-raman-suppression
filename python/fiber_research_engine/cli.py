@@ -125,26 +125,50 @@ def dry_run_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandRes
 
 def index_results(
     *roots: str,
+    compare: bool = False,
     csv: bool = False,
     kind: str | None = None,
+    config_id: str | None = None,
+    regime: str | None = None,
+    objective: str | None = None,
+    solver: str | None = None,
     fiber: str | None = None,
     complete_images: bool = False,
+    lab_ready: bool = False,
+    export_ready: bool = False,
     contains: str | None = None,
+    top: int | None = None,
     **kwargs,
 ) -> CommandResult:
     """Render the shared Julia results/campaign index for notebooks."""
 
     args: list[str] = []
+    if compare:
+        args.append("--compare")
     if csv:
         args.append("--csv")
     if kind is not None:
         args.extend(("--kind", kind))
+    if config_id is not None:
+        args.extend(("--config-id", config_id))
+    if regime is not None:
+        args.extend(("--regime", regime))
+    if objective is not None:
+        args.extend(("--objective", objective))
+    if solver is not None:
+        args.extend(("--solver", solver))
     if fiber is not None:
         args.extend(("--fiber", fiber))
     if complete_images:
         args.append("--complete-images")
+    if lab_ready:
+        args.append("--lab-ready")
+    if export_ready:
+        args.append("--export-ready")
     if contains is not None:
         args.extend(("--contains", contains))
+    if top is not None:
+        args.extend(("--top", str(top)))
     args.extend(roots)
     return run_julia_cli(INDEX_RESULTS, *args, **kwargs)
 

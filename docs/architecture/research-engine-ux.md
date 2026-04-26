@@ -180,8 +180,9 @@ Current surface:
 ```bash
 julia -t auto --project=. scripts/canonical/index_results.jl
 julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer
-julia -t auto --project=. scripts/canonical/index_results.jl --kind run --fiber SMF-28 --complete-images results/raman
-julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --contains power results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --kind run --regime single_mode --objective raman_band --fiber SMF-28 --complete-images results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --config-id smf28_phase_smoke --contains power results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 5 --lab-ready results/raman
 ```
 
 Notebook users should call the same command through:
@@ -190,13 +191,23 @@ Notebook users should call the same command through:
 from fiber_research_engine import index_results, index_results_csv
 
 print(index_results("results/raman/sweeps/front_layer").stdout)
-print(index_results_csv("results/raman", kind="run", fiber="SMF-28").stdout)
+print(index_results_csv(
+    "results/raman",
+    kind="run",
+    regime="single_mode",
+    objective="raman_band",
+    fiber="SMF-28",
+).stdout)
+print(index_results("results/raman", compare=True, lab_ready=True, top=5).stdout)
 ```
 
 This is deliberately read-only. It scans existing run artifacts and sweep
-summaries, then renders a compact Markdown or CSV table. It does not decide
-whether a result is scientifically accepted; it makes the evidence easier to
-find.
+summaries, then renders a compact Markdown or CSV table with config id, regime,
+objective, variables, solver, timestamp, trust report, run config, artifact
+path, headline metrics, and standard-image status where available. It does not
+decide whether a result is scientifically accepted; it makes the evidence
+easier to find. The comparison view ranks runs by mechanical readiness and then
+objective value, so professors can quickly find candidates for deeper review.
 
 Pain points addressed:
 
@@ -262,9 +273,9 @@ Design every new feature against this checklist:
 
 ## Near-Term Priorities
 
-1. Add richer saved-artifact metadata to the run/campaign index: config id,
-   objective kind, variables, regime, user/date, trust-report path.
-2. Add cross-sweep comparison views over completed campaign summaries.
+1. Add cross-sweep comparison views over completed campaign summaries.
+2. Add trust-status/date filters once saved artifacts expose those fields
+   consistently.
 3. Add optional refinement planning to the notebook wrapper without making it
    a default lab workflow.
 4. Add promotion guides for objective and variable extensions.

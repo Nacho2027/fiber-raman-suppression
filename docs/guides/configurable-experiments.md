@@ -265,15 +265,20 @@ folders:
 ```bash
 julia -t auto --project=. scripts/canonical/index_results.jl
 julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer
-julia -t auto --project=. scripts/canonical/index_results.jl --kind run --fiber SMF-28 --complete-images results/raman
-julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --contains power results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --kind run --regime single_mode --objective raman_band --fiber SMF-28 --complete-images results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --config-id smf28_phase_smoke --contains power results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 5 --lab-ready results/raman
 ```
 
 The index is read-only. It reports discovered run artifacts and sweep summaries
-with headline metrics and standard-image completeness when those fields are
-available. Use it as a meeting/re-entry map, then inspect the underlying run
-folder before making scientific claims. CSV output is intended for notebook,
-pandas, spreadsheet, and meeting-table workflows.
+with metadata from `run_config.toml` and `opt_result.json` when available:
+config id, regime, objective, variables, solver, timestamp, trust report path,
+run config path, headline metrics, and standard-image completeness. Use it as
+a meeting/re-entry map, then inspect the underlying run folder before making
+scientific claims. CSV output is intended for notebook, pandas, spreadsheet,
+and meeting-table workflows. `--compare` ranks runs by mechanical lab readiness
+and then objective value; it is a triage view, not a scientific acceptance
+decision.
 
 The inspection command is a checklist aid, not a substitute for reading the
 trust report or visually checking the standard images.

@@ -224,7 +224,13 @@ and experimentally:
 - `index_results.jl` scans one or more result roots and reports discovered run
   artifacts and sweep summaries with headline metrics and standard-image
   completeness where available; it can render Markdown or CSV and filter by
-  kind, fiber, complete images, and substring match
+  kind, config id, regime, objective, fiber, complete images, and substring
+  match
+- result-index rows now include ledger metadata when available: config id,
+  regime, objective kind, variables, solver kind, timestamp, trust report path,
+  run config path, and artifact path
+- result-index comparison mode ranks run artifacts by mechanical lab readiness
+  and then objective value for meeting-sized shortlists
 - `long_fiber`
 - variables `[:phase]`
 - objective `raman_band`
@@ -339,17 +345,23 @@ falling through.
   adding `results_index.jl` and passed after the scanner/renderer was wired
   into the canonical lab-facing surface tests
 - `PYTHONPATH=python python3 -m unittest discover -s test/python` passed
-  (`9/9`) after adding the notebook wrapper for the shared results index and
-  CSV/filter options
-- `julia --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer`
+  (`10/10`) after adding the notebook wrapper for the shared results index,
+  CSV/filter options, and comparison mode
+- `julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer`
   rendered the sweep/run index read-only and confirmed small powers display as
   `0.001`, `0.002`, and `0.003 W` instead of rounding to zero
-- `julia --project=. scripts/canonical/index_results.jl --csv --kind run --fiber SMF-28 --complete-images --contains power results/raman/sweeps/front_layer`
+- `julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --fiber SMF-28 --complete-images --contains power results/raman/sweeps/front_layer`
   rendered CSV for the three complete SMF-28 front-layer sweep runs
-- `TEST_TIER=fast julia --project=. test/runtests.jl` passed after the
-  results-index filter/CSV slice: repository structure `19/19`, canonical
-  lab-facing surface `118/118`, experiment front layer `210/210`, Phase 16
-  fast `95/95`
+- `julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --regime single_mode --objective raman_band --fiber SMF-28 --complete-images --contains power results/raman/sweeps/front_layer`
+  rendered enriched ledger CSV with config id, regime, objective, variables,
+  solver, timestamp, trust report, run config, and artifact paths
+- `julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 2 --kind run --config-id smf28_phase_smoke --regime single_mode --objective raman_band --fiber SMF-28 --lab-ready results/raman/sweeps/front_layer`
+  rendered a ranked comparison table for the top two mechanically lab-ready
+  front-layer sweep runs
+- `TEST_TIER=fast julia -t auto --project=. test/runtests.jl` passed after the
+  results-index ledger/comparison slice: repository structure `19/19`,
+  canonical lab-facing surface `138/138`, experiment front layer `210/210`,
+  Phase 16 fast `95/95`
 
 ## Review Findings
 

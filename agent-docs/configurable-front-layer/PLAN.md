@@ -137,14 +137,19 @@ Current slice:
   `SWEEP_SUMMARY.md` files from one or more roots and renders Markdown or CSV
 - `fiber_research_engine.index_results(...)` exposes the same index to
   notebooks without duplicating scan logic
-- filters are available for kind, fiber, complete standard images, and a simple
-  id/fiber/path substring match
+- ledger metadata is populated from `run_config.toml`, `opt_result.json`, and
+  local trust-report files where available
+- filters are available for kind, config id, regime, objective, fiber,
+  complete standard images, and a simple substring match
+- `--compare` ranks run artifacts by mechanical lab readiness and then
+  suppression objective, with `--top` for meeting-sized shortlists
 
 Next promotion:
 
-- add config id, objective, variable set, regime, and user/date fields where
-  the saved artifact schema exposes them
-- add filters for objective, variable set, regime, date, and trust status
+- add date-range and trust-status filters once those fields are consistently
+  normalized
+- add cross-sweep comparison views for completed campaigns rather than only
+  per-run ranking
 
 ### 5. Heavy Regime Promotion
 

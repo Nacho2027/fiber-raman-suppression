@@ -71,8 +71,25 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
 
     artifact = joinpath(run_dir, "opt_result.jld2")
     MultiModeNoise.save_run(artifact, payload)
+    sidecar_path = joinpath(run_dir, "opt_result.json")
+    sidecar_text = read(sidecar_path, String)
+    write(sidecar_path, replace(sidecar_text, "{" => "{\"timestamp_utc\":\"2026-04-26T22:00:00Z\",", count=1))
     write(joinpath(run_dir, "opt_trust.md"), "# trust\n")
-    write(joinpath(run_dir, "run_config.toml"), "id = \"smf28_L2m_P0p2W\"\n")
+    write(joinpath(run_dir, "run_config.toml"), """
+id = "smf28_L2m_P0p2W"
+
+[problem]
+regime = "single_mode"
+
+[controls]
+variables = ["phase"]
+
+[objective]
+kind = "raman_band"
+
+[solver]
+kind = "lbfgs"
+""")
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
         write(joinpath(run_dir, "opt" * suffix), "")
     end
@@ -105,6 +122,16 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     run_row = only(filter(row -> row.kind == :run, index.rows))
     @test run_row.J_after_dB ≈ MultiModeNoise.lin_to_dB(payload.J_after)
     @test run_row.standard_images_complete
+    @test run_row.config_id == "smf28_L2m_P0p2W"
+    @test run_row.regime == "single_mode"
+    @test run_row.objective_kind == "raman_band"
+    @test run_row.variables == "phase"
+    @test run_row.solver_kind == "lbfgs"
+    @test occursin("T", run_row.timestamp_utc)
+    @test basename(run_row.trust_report_path) == "opt_trust.md"
+    @test run_row.trust_report_present
+    @test run_row.lab_ready
+    @test run_row.readiness == "ready"
     rendered_index = render_results_index(index)
     @test occursin("# Results Index", rendered_index)
     @test occursin("SMF-28", rendered_index)
@@ -114,9 +141,22 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     @test only(run_only_index.rows).kind == :run
     @test filter_results_index(index; kind=:sweep).total == 1
     @test filter_results_index(index; contains="demo").total == 1
+    @test filter_results_index(index; config_id="smf28_L2m_P0p2W").total == 1
+    @test filter_results_index(index; objective="raman_band", regime="single_mode").total == 1
+    @test filter_results_index(index; solver="lbfgs", lab_ready=true).total == 1
+    @test filter_results_index(index; export_ready=true).total == 0
+    comparison = compare_results_index(index)
+    @test comparison.total == 1
+    @test only(comparison.rows).lab_ready
+    rendered_comparison = render_results_comparison(comparison)
+    @test occursin("# Results Comparison", rendered_comparison)
+    @test occursin("| 1 | true | ready | smf28_L2m_P0p2W | raman_band | phase |", rendered_comparison)
+    comparison_csv = render_results_comparison_csv(comparison)
+    @test startswith(comparison_csv, "rank,lab_ready,readiness,config_id,objective_kind")
     csv_index = render_results_index_csv(run_only_index)
-    @test startswith(csv_index, "kind,id,fiber,L_m,P_cont_W")
-    @test occursin("run,run,SMF-28", csv_index)
+    @test startswith(csv_index, "kind,id,config_id,regime,objective_kind,variables,solver_kind,timestamp_utc")
+    @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,", csv_index)
+    @test occursin(",SMF-28,2.0,0.2,-20.0,-40.0,-20.0,GOOD,true,12,true,true,false,true,ready,", csv_index)
     @test !occursin("demo_sweep", csv_index)
 
     @test suppression_quality_label(NaN) == "crashed"
