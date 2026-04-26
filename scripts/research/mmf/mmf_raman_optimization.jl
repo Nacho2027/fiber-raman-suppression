@@ -527,7 +527,8 @@ function run_mmf_baseline(;
     band_mask = setup.band_mask
 
     # Reference J at φ=0 (unoptimized)
-    φ0 = zeros(Float64, Nt)
+    Nt_setup = size(uω0, 1)
+    φ0 = zeros(Float64, Nt_setup)
     trust_ref = mmf_trust_metrics(φ0, setup)
     J_ref = trust_ref.cost_report.sum_lin
     J_ref_dB = trust_ref.cost_report.sum_dB

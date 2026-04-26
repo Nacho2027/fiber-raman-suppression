@@ -128,14 +128,42 @@ tmux capture-pane -pt research-parallel-<campaign-id>:longfiber
 2. Decide whether `{φ, c_m}` is worth a deep pass.
 3. Only then run deeper MMF exploration.
 
+Update, 2026-04-26:
+
+- The Phase 36 MMF run produced large apparent suppression in the threshold and
+  aggressive regimes, but the trust label was `invalid-window` with edge
+  contamination. Treat those gains as unresolved, not as publishable physics.
+- The next MMF step is now `scripts/research/mmf/mmf_window_validation.jl`.
+  It reruns only threshold/aggressive GRIN-50 cases with deliberately larger
+  temporal windows and writes standard plots plus
+  `results/raman/phase36_window_validation/mmf_window_validation_summary.md`.
+- Do not launch joint `{φ, c_m}` or broad fiber-type exploration until this
+  window-validation pass decides whether the apparent MMF headroom is real.
+
 ### Multivar
 
 1. Test whether amplitude-on-top-of-phase is real.
 2. Test the two-stage path.
 3. Only then widen the regime map.
 
+Update, 2026-04-26:
+
+- The generic joint phase+amplitude L-BFGS route remains a negative/weak result
+  at the canonical point.
+- The fixed-phase amplitude refinement is the active high-value sublane:
+  the first pass improved the phase-only result by `3.55 dB`, and two repeat /
+  bound-sensitivity ephemerals are now running.
+
 ### Long-fiber
 
 1. Harden the 100 m claim.
 2. Run continuation to 200 m.
 3. Only then spend time on more production-ready workflow polishing.
+
+Update, 2026-04-26:
+
+- A fresh 100 m long-fiber run is active on an ephemeral VM with
+  `LF100_MODE=fresh LF100_MAX_ITER=25`.
+- Keep the interpretation narrow until this run returns: supported claim is
+  still 50-100 m single-mode exploratory physics, not a production-ready
+  long-fiber platform.
