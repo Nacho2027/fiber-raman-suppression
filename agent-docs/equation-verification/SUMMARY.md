@@ -22,7 +22,7 @@ products.
 | Multivar energy gradient | analytic scalar-energy chain rule | covered by multivar gradient smoke tests | keep using |
 | Multivar boundary-amplitude gradient | analytic quotient-rule derivative | fixed in this pass; regression test added against central FD | rerun on burst before trusting new full-combo ablation results |
 | MMF shared-phase gradient | analytic adjoint chain rule summed over modes | covered by `test/phases/test_phase16_mmf.jl` FD checks | keep using |
-| MMF mode-coordinate block | intentionally **not analytic** | central finite difference over `2(M-1)` packed variables; local preflight passed exactly | keep FD default unless a future analytic derivation passes preflight |
+| MMF mode-coordinate block | intentionally **not analytic** | central finite difference over `2(M-1)` packed variables; local and clean burst preflights passed exactly | keep FD default unless a future analytic derivation passes preflight |
 | HVP / Hessian paths | finite-difference HVP, not analytic second adjoint | covered by symmetry and Taylor tests | describe as FD Hessian diagnostics, not analytic Hessian |
 
 ## Findings
@@ -40,16 +40,24 @@ differenced. This is scientifically acceptable for current mode-launch studies
 because the block is small (`2(M-1)`, ten variables for `M=6`) and the previous
 hand-derived complex chain failed preflight.
 
+Clean burst confirmation:
+
+- `M-modefd2`, generated 2026-04-26 20:47:37 UTC, `GRIN_50`, `L=0.200 m`,
+  `P=0.050 W`, `Nt=1024`, `time_window=8.0 ps`
+- max relative error `0.000e+00`
+- verdict `PASS`
+
+Local non-propagation algebra check for the repaired multivar
+boundary-amplitude quotient derivative matched central finite differences with
+max relative error `6.492e-08`.
+
 ## Required Before Calling The Active Runs Final
 
 - Rerun `scripts/dev/smoke/test_multivar_gradients.jl` on burst with the new
   boundary-amplitude regression.
 - Rerun or confirm `test/phases/test_phase16_mmf.jl` for MMF shared-phase
   gradient health.
-- Confirm the clean remote MMF mode-coordinate preflight generated after the
-  finite-difference patch.
 - Treat any multivar result produced before this fix with `λ_boundary > 0` and
   amplitude enabled as potentially affected. The amplitude-on-fixed-phase
   trend is still useful evidence, but final tables should be regenerated after
   this fix if boundary regularization was active.
-
