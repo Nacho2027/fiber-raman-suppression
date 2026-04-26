@@ -86,11 +86,23 @@ Interpretation: the amplitude-on-fixed-phase gain grows smoothly with allowed
 amplitude freedom. Very small ±5% shaping is scientifically real but likely too
 small to promote as a headline. ±10-20% shaping is the current useful range.
 
+A four-point local neighborhood check around `L = 2 m`, `P = 0.30 W` then
+showed that all nearby points improved, but not all crossed the `3 dB`
+decision threshold:
+
+- `L = 1.8 m`, `P = 0.30 W`: `3.17 dB` improvement
+- `L = 2.2 m`, `P = 0.30 W`: `5.42 dB` improvement
+- `L = 2.0 m`, `P = 0.27 W`: `2.30 dB` improvement
+- `L = 2.0 m`, `P = 0.33 W`: `5.78 dB` improvement
+
 Interpretation: broad joint phase+amplitude remains experimental/negative, but
-fixed-phase amplitude refinement is now a reproducible candidate. It still is
-not hardware-ready because there is no amplitude-aware lab export contract,
-hardware-grid interpolation policy, clipping/transmission policy, or round-trip
-validation fixture.
+fixed-phase amplitude refinement is now a reproducible and locally useful
+candidate. Its margin is operating-point dependent, so it should be exposed as
+an optional second-stage workflow rather than as a default lab optimizer. The
+repo now has a neutral amplitude-aware export contract and round-trip
+validation, but hardware readiness still needs a real shaper pixel grid,
+calibration/transfer-function data, and lab-specific clipping or attenuation
+policy.
 
 ## Practical rule for future agents
 
@@ -114,12 +126,11 @@ The open follow-up work is now:
 1. rerun the full variable-combination ablation in
    `scripts/research/multivar/multivar_variable_ablation.jl` after the
    2026-04-26 boundary-amplitude gradient fix
-2. amplitude-aware export schema and round-trip validation fixture
-3. hardware-constrained handling of relative amplitude values above unity
-4. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point
-5. only after those pass, consider a two-stage workflow that exposes
+2. implement a maintained two-stage workflow that exposes
    amplitude-on-phase as an optional refinement rather than a default
-6. defer broad joint phase+amplitude tuning until a new physical or numerical
+3. add hardware-constrained handling of relative amplitude values above unity
+   once a real shaper model or measured transfer function is available
+4. defer broad joint phase+amplitude tuning until a new physical or numerical
    hypothesis justifies it
 
 Terminology note: the active `δ` jobs are amplitude-bound ablations, not the
@@ -144,5 +155,7 @@ not as evidence that the code never supported standard image generation.
   `docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md`
 - Repeatability and handoff review:
   `docs/status/multivar-amp-on-phase-repeatability-handoff-2026-04-26.md`
+- Local robustness review:
+  `docs/status/multivar-amp-on-phase-robustness-2026-04-26.md`
 - Historical build/status summary:
   `docs/planning-history/phases/16-multivar-optimizer/16-01-SUMMARY.md`

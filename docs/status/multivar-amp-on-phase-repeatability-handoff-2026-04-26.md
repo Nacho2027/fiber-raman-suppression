@@ -131,3 +131,14 @@ with normalized transmission bounded by `[0.833266977342, 1.0]`.
 This closes the first export-contract gap, but not the full lab-hardware gap:
 the remaining work is calibration against the actual shaper pixel grid,
 measured transfer function, and lab-specific clipping/attenuation policy.
+
+## 2026-04-26 Robustness Follow-Up
+
+A four-point local neighborhood check is documented in
+`docs/status/multivar-amp-on-phase-robustness-2026-04-26.md`. All four nearby
+points improved with amplitude-on-fixed-phase, but one lower-power point
+improved by only `2.30 dB`, below the prior `3 dB` decision threshold.
+
+Updated conclusion: amplitude-on-phase is reproducible and locally useful, but
+its margin is operating-point dependent. It should become an optional
+second-stage experimental workflow, not a default lab-ready optimizer.
