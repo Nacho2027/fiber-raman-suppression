@@ -207,6 +207,40 @@ function _write_summary(rows)
     return md_path
 end
 
+function _failure_row(label, variables, err)
+    return (
+        label = String(label) * "__FAILED",
+        variables = join(String.(variables), "+"),
+        J_before_dB = Inf,
+        J_after_dB = Inf,
+        ΔJ_dB = Inf,
+        vs_phase_dB = Inf,
+        iterations = 0,
+        wall_time_s = 0.0,
+        alpha = NaN,
+        A_min = NaN,
+        A_max = NaN,
+        error = sprint(showerror, err),
+    )
+end
+
+function _run_case_record!(rows, args...; kwargs...)
+    label = String(kwargs[:label])
+    variables = kwargs[:variables]
+    try
+        row = _run_case(; kwargs...)
+        push!(rows, row)
+        _write_summary(rows)
+        return row
+    catch err
+        @error "multivar ablation case failed" label exception = (err, catch_backtrace())
+        row = _failure_row(label, variables, err)
+        push!(rows, row)
+        _write_summary(rows)
+        return row
+    end
+end
+
 @info "═══════════════════════════════════════════════════════════════"
 @info "  Multivar Variable Ablation — SMF-28 L=2m P=0.30W"
 @info "═══════════════════════════════════════════════════════════════"
@@ -261,9 +295,9 @@ rows = Any[
         A_max = 1.0,
     ),
 ]
+_write_summary(rows)
 
-append!(rows, [
-    _run_case(
+_run_case_record!(rows,
         label = "amp_unshaped",
         variables = (:amplitude,),
         uω0_case = uω0,
@@ -275,8 +309,8 @@ append!(rows, [
         fixed_phase = φ_zero,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "energy_unshaped",
         variables = (:energy,),
         uω0_case = uω0,
@@ -288,8 +322,8 @@ append!(rows, [
         fixed_phase = φ_zero,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_ENERGY_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "amp_energy_unshaped",
         variables = (:amplitude, :energy),
         uω0_case = uω0,
@@ -301,8 +335,8 @@ append!(rows, [
         fixed_phase = φ_zero,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "amp_on_phase",
         variables = (:amplitude,),
         uω0_case = uω0_phase,
@@ -314,8 +348,8 @@ append!(rows, [
         fixed_phase = φ_phase,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "energy_on_phase",
         variables = (:energy,),
         uω0_case = uω0_phase,
@@ -327,8 +361,8 @@ append!(rows, [
         fixed_phase = φ_phase,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_ENERGY_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "amp_energy_on_phase",
         variables = (:amplitude, :energy),
         uω0_case = uω0_phase,
@@ -340,8 +374,8 @@ append!(rows, [
         fixed_phase = φ_phase,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "phase_energy_cold",
         variables = (:phase, :energy),
         uω0_case = uω0,
@@ -353,8 +387,8 @@ append!(rows, [
         fixed_phase = φ_zero,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
-    ),
-    _run_case(
+    )
+_run_case_record!(rows,
         label = "phase_amp_energy_warm",
         variables = (:phase, :amplitude, :energy),
         uω0_case = uω0,
@@ -369,8 +403,7 @@ append!(rows, [
         φ0 = φ_phase,
         A0 = ones(size(φ_phase)),
         E0 = E_ref,
-    ),
-])
+    )
 
 summary_path = _write_summary(rows)
 @info "wrote variable ablation summary: $summary_path"
