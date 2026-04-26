@@ -264,3 +264,39 @@ MV_AMP_PHASE_AMP_ITER=60 julia -t auto --project=. scripts/research/multivar/mul
 - Since amplitude-on-fixed-phase beat phase-only by `3.55 dB`, do not close the
   multivar lane entirely. Close/defer broad joint optimization, and advance only
   the fixed-phase amplitude candidate through validation.
+
+### 2026-04-26 19:30 UTC
+
+- Relaunched the focused amplitude-on-fixed-phase ablation as
+  `V-ampphase-repeat2` after one pre-compute machine-image availability
+  failure.
+- `V-ampphase-repeat2` completed with `rc=0`, copied results back, released the
+  heavy lock, and destroyed the ephemeral VM.
+- Output directory:
+  `results/raman/multivar/amp_on_phase_20260426T1915Z_repeat2/`.
+- Numerical conclusion reproduced the 2026-04-24 result:
+  - phase-only reference physics objective: `-40.79 dB`
+  - amplitude-only on fixed phase physics objective: `-44.34 dB`
+  - improvement over phase-only: `-3.55 dB`
+  - amplitude range: `[0.908, 1.090]`
+  - verdict: PASS
+- Amplitude profile details:
+  - `8192` bins
+  - min `0.908455`, max `1.090233`
+  - mean `0.999560`, standard deviation `0.006874`
+  - `E_opt = E_ref = 103.522487676`
+- Visual inspection completed for both full standard image sets:
+  - `phase_only_reference_phase_profile.png`
+  - `phase_only_reference_phase_diagnostic.png`
+  - `phase_only_reference_evolution.png`
+  - `phase_only_reference_evolution_unshaped.png`
+  - `amp_on_phase_phase_profile.png`
+  - `amp_on_phase_phase_diagnostic.png`
+  - `amp_on_phase_evolution.png`
+  - `amp_on_phase_evolution_unshaped.png`
+- Interpretation: fixed-phase amplitude shaping is reproducible enough to keep
+  as a serious research candidate, but it is not lab-default or hardware-ready
+  until the repo has an amplitude-aware export schema, hardware-grid
+  interpolation policy, clipping/transmission policy, and round-trip validation.
+- Human-facing repeatability and handoff note written at
+  `docs/status/multivar-amp-on-phase-repeatability-handoff-2026-04-26.md`.

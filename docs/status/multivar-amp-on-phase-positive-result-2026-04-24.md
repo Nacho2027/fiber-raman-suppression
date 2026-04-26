@@ -70,3 +70,15 @@ Before lab rollout, validate amplitude-on-phase with:
    gain is not a single-point artifact.
 4. A notebook/API design that exposes this as an optional second-stage
    refinement, not as the default optimizer.
+
+## 2026-04-26 Follow-Up
+
+The deterministic repeat `V-ampphase-repeat2` reproduced the positive result:
+phase-only remained `-40.79 dB`, amplitude-on-fixed-phase remained `-44.34 dB`,
+and the improvement remained `3.55 dB` with amplitude range `[0.908, 1.090]`.
+
+The repeat and hardware handoff review are documented in
+`docs/status/multivar-amp-on-phase-repeatability-handoff-2026-04-26.md`.
+The updated conclusion is: reproducible enough to keep as a serious research
+candidate, but not lab-default until an amplitude-aware hardware export contract
+and validation path exist.

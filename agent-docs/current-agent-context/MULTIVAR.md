@@ -63,9 +63,17 @@ fixed phase-only optimum:
 - improvement: `3.55 dB`
 - amplitude range: `[0.908, 1.090]`
 
+A 2026-04-26 deterministic repeat reproduced those values to the displayed
+precision. The amplitude profile used 8192 bins, with min `0.908455`, max
+`1.090233`, mean `0.999560`, standard deviation `0.006874`, and unchanged stored
+energy (`E_opt = E_ref`). Standard images for both phase-only and
+amplitude-on-phase cases were visually inspected.
+
 Interpretation: broad joint phase+amplitude remains experimental/negative, but
-fixed-phase amplitude refinement is now a promising candidate that deserves
-repeatability and hardware-export validation.
+fixed-phase amplitude refinement is now a reproducible candidate. It still is
+not hardware-ready because there is no amplitude-aware lab export contract,
+hardware-grid interpolation policy, clipping/transmission policy, or round-trip
+validation fixture.
 
 ## Practical rule for future agents
 
@@ -86,8 +94,8 @@ Do **not** treat it as:
 
 The open follow-up work is now:
 
-1. deterministic repeatability rerun of amplitude-on-fixed-phase
-2. hardware-constrained export review for the bounded amplitude profile
+1. amplitude-aware export schema and round-trip validation fixture
+2. hardware-constrained handling of relative amplitude values above unity
 3. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point
 4. only after those pass, consider a two-stage workflow that exposes
    amplitude-on-phase as an optional refinement rather than a default
@@ -109,5 +117,7 @@ not as evidence that the code never supported standard image generation.
   `docs/status/multivar-canonical-negative-result-2026-04-24.md`
 - Positive amplitude-on-phase ablation:
   `docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md`
+- Repeatability and handoff review:
+  `docs/status/multivar-amp-on-phase-repeatability-handoff-2026-04-26.md`
 - Historical build/status summary:
   `docs/planning-history/phases/16-multivar-optimizer/16-01-SUMMARY.md`
