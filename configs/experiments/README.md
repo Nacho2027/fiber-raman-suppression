@@ -4,6 +4,9 @@ This directory is the thin researcher-facing front layer. The goal is to make
 common run changes explicit in TOML, while keeping the physics and optimizer
 implementations in Julia code.
 
+For the full lab-user workflow, see
+[`docs/guides/configurable-experiments.md`](../../docs/guides/configurable-experiments.md).
+
 ## Inspect Before Running
 
 List available experiment configs:

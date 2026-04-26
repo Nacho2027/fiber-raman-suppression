@@ -76,7 +76,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
 
     summary = inspect_run_summary(run_dir)
     @test summary.artifact == artifact
+    @test summary.run_config == joinpath(run_dir, "run_config.toml")
     @test summary.standard_images.complete
+    @test !summary.export_handoff.complete
     @test summary.converged
     @test length(summary.trust_reports) == 1
     @test summary.quality == suppression_quality_label(payload.J_after; uppercase=true)
@@ -146,9 +148,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
 
     rendered = sprint(io -> render_run_summary(summary; io=io))
     @test occursin("Standard image set complete: true", rendered)
+    @test occursin("Run config:", rendered)
+    @test occursin("Export handoff complete: false", rendered)
     @test occursin("SMF-28", rendered)
 
-    export_dir = joinpath(tmp, "export")
+    export_dir = joinpath(run_dir, "export_handoff")
     exported = export_run_bundle(run_dir, export_dir)
     @test isfile(exported.phase_csv)
     @test isfile(exported.metadata_json)
@@ -166,4 +170,14 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
 
     export_readme = read(exported.readme, String)
     @test occursin("Experimental Handoff Bundle", export_readme)
+
+    summary_with_export = inspect_run_summary(run_dir)
+    @test summary_with_export.export_handoff.complete
+    @test summary_with_export.export_handoff.phase_csv == exported.phase_csv
+    @test summary_with_export.export_handoff.metadata_json == exported.metadata_json
+    @test summary_with_export.export_handoff.source_config == joinpath(export_dir, "source_run_config.toml")
+
+    rendered_with_export = sprint(io -> render_run_summary(summary_with_export; io=io))
+    @test occursin("Export handoff complete: true", rendered_with_export)
+    @test occursin("phase_profile.csv", rendered_with_export)
 end

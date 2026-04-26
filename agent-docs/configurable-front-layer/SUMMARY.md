@@ -55,6 +55,9 @@ with five stable contracts:
     standard-image status after a completed run
 - `configs/experiments/README.md`
   - documents the safe researcher-facing knobs and current support boundary
+- `docs/guides/configurable-experiments.md`
+  - gives lab users the operational workflow for listing configs, dry-running,
+    editing safe knobs, running, inspecting, and checking neutral handoff output
 - `configs/experiments/research_engine_smoke.toml`
   - provides a tiny phase-only smoke run for real CLI/artifact verification
 - `configs/experiments/research_engine_export_smoke.toml`
@@ -116,6 +119,9 @@ and experimentally:
   export validation to the returned run bundle
 - the supported export profile is `neutral_csv_v1`, an analysis-grade CSV/JSON
   handoff on the simulation axis rather than a vendor-specific SLM file
+- saved-run inspection reports copied `run_config.toml` and default
+  `export_handoff/` completeness so lab users can check provenance and handoff
+  status from one command
 
 The loader already supports the richer config shape, but unsupported variable /
 objective / solver combinations fail validation clearly instead of silently
@@ -132,7 +138,8 @@ falling through.
 - `julia --project=. -e 'include("scripts/workflows/optimize_raman.jl"); canonical_optimize_main(["--list"])'`
   succeeded
 - `TEST_TIER=fast julia --project=. test/runtests.jl`
-  passed (`95/95`)
+  passed after the inspection/docs slice (`95/95`; canonical lab-facing surface
+  `69/69`, experiment front layer `108/108`)
 - red-first regression was added for multivar export/handoff validation; it
   failed before implementation and passed after adding the guard
 - red-first regression was added for dry-run plan visibility; it failed before
@@ -156,6 +163,9 @@ falling through.
   prints the completion summary after running the default config
 - review pass preserved `artifact_validation` in the canonical optimize wrapper
   return bundle
+- red-first regression was added for saved-run inspection of copied config and
+  default `export_handoff/` status; it failed before adding those fields to
+  `inspect_run_summary(...)` and passed after implementation
 
 ## Review Findings
 

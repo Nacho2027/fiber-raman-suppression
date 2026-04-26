@@ -10,6 +10,7 @@ The maintained lab-facing surface is intentionally narrow:
 
 - approved **single-mode, phase-only** Raman optimization runs through
   `scripts/canonical/optimize_raman.jl`
+- configurable experiment runs through `scripts/canonical/run_experiment.jl`
 - approved sweeps through `scripts/canonical/run_sweep.jl`
 - saved-run inspection through `scripts/canonical/inspect_run.jl`
 - experiment-facing export bundles through `scripts/canonical/export_run.jl`
@@ -17,12 +18,14 @@ The maintained lab-facing surface is intentionally narrow:
 Approved run and sweep definitions live in:
 
 - `configs/runs/*.toml`
+- `configs/experiments/*.toml`
 - `configs/sweeps/*.toml`
 
 List them with:
 
 ```bash
 julia --project=. scripts/canonical/optimize_raman.jl --list
+julia --project=. scripts/canonical/run_experiment.jl --list
 julia --project=. scripts/canonical/run_sweep.jl --list
 ```
 
@@ -34,6 +37,13 @@ Single run:
 make optimize
 # or explicitly:
 julia --project=. -t auto scripts/canonical/optimize_raman.jl smf28_L2m_P0p2W
+```
+
+Configurable experiment:
+
+```bash
+julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run research_engine_poc
+julia --project=. -t auto scripts/canonical/run_experiment.jl research_engine_poc
 ```
 
 Inspect a saved run:
@@ -71,6 +81,11 @@ supported single-run surface, acceptance requires:
 
 The primary lab baseline is `smf28_L2m_P0p2W`. It must additionally report
 `converged=true` before being used as the reference baseline for lab handoff.
+
+For the configurable front layer, use
+[configurable-experiments.md](./configurable-experiments.md) as the operational
+guide. Its supported path is currently single-mode phase-only. Multivariable
+controls and `raman_peak` are explicitly experimental.
 
 The `hnlf_L0p5m_P0p01W` config is an approved comparison/reference run. Its
 trust report must still be `PASS`, but optimizer convergence is reported as a

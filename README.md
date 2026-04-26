@@ -31,6 +31,7 @@ tests, and produces the canonical SMF-28 optimization run.
 If you need the supporting docs, start with:
 
 - [docs/guides/installation.md](docs/guides/installation.md)
+- [docs/guides/configurable-experiments.md](docs/guides/configurable-experiments.md)
 - [docs/guides/quickstart-optimization.md](docs/guides/quickstart-optimization.md)
 - [docs/README.md](docs/README.md)
 
@@ -39,6 +40,7 @@ If you need the supporting docs, start with:
 | Task | Read |
 |------|------|
 | Install dependencies and verify the environment | [docs/guides/installation.md](docs/guides/installation.md) |
+| Run or modify a configurable experiment | [docs/guides/configurable-experiments.md](docs/guides/configurable-experiments.md) |
 | Run the canonical optimization | [docs/guides/quickstart-optimization.md](docs/guides/quickstart-optimization.md) |
 | Run a parameter sweep on the burst VM | [docs/guides/quickstart-sweep.md](docs/guides/quickstart-sweep.md) |
 | See what is actually supported vs still experimental | [docs/guides/supported-workflows.md](docs/guides/supported-workflows.md) |

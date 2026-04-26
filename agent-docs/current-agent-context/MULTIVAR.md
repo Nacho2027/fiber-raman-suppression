@@ -6,7 +6,9 @@ multi-parameter optimization path.
 ## Current status
 
 Multi-parameter optimization exists, but it is still an experimental research
-path rather than a converged production workflow.
+path rather than a converged production workflow. The current best-supported
+interpretation separates the broad joint optimizer from the narrower
+amplitude-on-fixed-phase candidate.
 
 The implementation can jointly optimize:
 
@@ -37,20 +39,33 @@ with a warning.
 - The saved multivar artifacts are included in
   `scripts/validation/validate_results.jl`.
 
-## What remains unresolved
+## Current evidence boundary
 
-The main unresolved issue is optimizer behavior in the joint search space, not
-missing infrastructure.
+The main issue is optimizer behavior and hardware readiness in the expanded
+control space, not missing infrastructure.
 
-At the canonical demo point (`SMF-28`, `L = 2 m`, `P = 0.30 W`), the recorded
-results were approximately:
+At the canonical demo point (`SMF-28`, `L = 2 m`, `P = 0.30 W`), the accepted
+2026-04-24 joint-optimizer run showed:
 
-- phase-only: `ΔJ ≈ -55 dB`
-- multivar cold start: `ΔJ ≈ -17 dB`
-- multivar warm start: `ΔJ ≈ -24 dB`
+- phase-only: `J_after = -40.8 dB`
+- joint phase+amplitude, cold start: `J_after = -18.3 dB`
+- joint phase+amplitude, warm start: `J_after = -31.2 dB`
 
-Interpretation: the joint path runs, but it has not yet matched or exceeded the
-canonical phase-only baseline at the reference configuration.
+Interpretation: the broad joint path runs, but it should not be promoted as a
+lab-facing optimizer because it underperforms phase-only at the reference
+configuration.
+
+A focused follow-up ablation then tested amplitude-only shaping on top of the
+fixed phase-only optimum:
+
+- phase-only reference: `J_after = -40.79 dB`
+- amplitude-on-fixed-phase: `J_after = -44.34 dB`
+- improvement: `3.55 dB`
+- amplitude range: `[0.908, 1.090]`
+
+Interpretation: broad joint phase+amplitude remains experimental/negative, but
+fixed-phase amplitude refinement is now a promising candidate that deserves
+repeatability and hardware-export validation.
 
 ## Practical rule for future agents
 
@@ -65,15 +80,19 @@ Do **not** treat it as:
 - the repository's canonical optimization workflow
 - a proven improvement over phase-only shaping
 - a finished general framework for adding arbitrary optimization variables
+- hardware-ready amplitude shaping
 
 ## Highest-value next steps
 
-The open follow-up work is consistently:
+The open follow-up work is now:
 
-1. amplitude-only warm start
-2. two-stage optimization with phase frozen first, then unfrozen
-3. better cross-block preconditioning or diagonal Hessian scaling
-4. extending later trust-region / second-order ideas to the joint problem
+1. deterministic repeatability rerun of amplitude-on-fixed-phase
+2. hardware-constrained export review for the bounded amplitude profile
+3. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point
+4. only after those pass, consider a two-stage workflow that exposes
+   amplitude-on-phase as an optional refinement rather than a default
+5. defer broad joint phase+amplitude tuning until a new physical or numerical
+   hypothesis justifies it
 
 ## Artifact caveat
 
@@ -86,7 +105,9 @@ not as evidence that the code never supported standard image generation.
 
 ## Pointers
 
+- Joint negative result:
+  `docs/status/multivar-canonical-negative-result-2026-04-24.md`
+- Positive amplitude-on-phase ablation:
+  `docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md`
 - Historical build/status summary:
   `docs/planning-history/phases/16-multivar-optimizer/16-01-SUMMARY.md`
-- Open convergence follow-up:
-  `docs/planning-history/phases/18-multivar-convergence-fix/CONTEXT.md`

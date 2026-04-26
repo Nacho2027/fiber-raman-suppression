@@ -12,10 +12,11 @@ If you are new to the repo but already know the research context, read in this
 order:
 
 1. [guides/installation.md](./guides/installation.md)
-2. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
-3. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
-4. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
-5. [architecture/output-format.md](./architecture/output-format.md)
+2. [guides/configurable-experiments.md](./guides/configurable-experiments.md)
+3. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
+4. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
+5. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
+6. [architecture/output-format.md](./architecture/output-format.md)
 
 If you are resuming work after time away, the synthesis and status sections are
 usually more useful than the onboarding sequence.
@@ -25,6 +26,7 @@ usually more useful than the onboarding sequence.
 | Doc | Use it for |
 |-----|------------|
 | [guides/installation.md](./guides/installation.md) | Environment setup and troubleshooting on laptops and project VMs. |
+| [guides/configurable-experiments.md](./guides/configurable-experiments.md) | Running and modifying the configurable experiment front layer without editing optimizer internals. |
 | [guides/quickstart-optimization.md](./guides/quickstart-optimization.md) | Running the maintained single-optimization workflow and checking the output. |
 | [guides/quickstart-sweep.md](./guides/quickstart-sweep.md) | Running a sweep on `fiber-raman-burst` and pulling results back correctly. |
 | [guides/supported-workflows.md](./guides/supported-workflows.md) | The explicit boundary between the supported lab-facing surface and still-experimental research workflows. |
