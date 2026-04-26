@@ -368,22 +368,43 @@ function cost_and_gradient_multivar(
         reg_breakdown["J_gdd"] = J_gdd
     end
 
-    # Boundary penalty on the shaped input pulse energy at FFT window edges
+    # Boundary penalty on the shaped input pulse energy at FFT window edges.
+    # Phase changes preserve total input energy, but amplitude changes do not;
+    # therefore amplitude needs the full quotient-rule derivative of
+    # edge_energy / total_energy. Global energy E only rescales u_shaped, so
+    # this edge fraction is invariant to E and contributes no E-gradient.
     if cfg.λ_boundary > 0
         J_b = 0.0
-        if haskey(off.ranges, :phase)
-            g_boundary = zeros(Nt, M)
-            J_b = add_boundary_phase_penalty!(g_boundary, u_shaped, cfg.λ_boundary)
-            g[off.ranges[:phase]] .+= vec(g_boundary)
-        else
-            ut0 = ifft(u_shaped, 1)
-            n_edge = max(1, Nt ÷ 20)
-            mask_edge = zeros(Nt, M)
-            mask_edge[1:n_edge, :] .= 1.0
-            mask_edge[end - n_edge + 1:end, :] .= 1.0
-            E_t_total = max(sum(abs2, ut0), eps())
-            edge_frac = sum(abs2.(ut0) .* mask_edge) / E_t_total
-            edge_frac > 1e-8 && (J_b = cfg.λ_boundary * edge_frac)
+        ut0 = ifft(u_shaped, 1)
+        n_edge = max(1, Nt ÷ 20)
+        mask_edge = zeros(Float64, Nt, M)
+        mask_edge[1:n_edge, :] .= 1.0
+        mask_edge[end - n_edge + 1:end, :] .= 1.0
+        E_t_total = max(sum(abs2, ut0), eps())
+        E_edges = sum(abs2.(ut0) .* mask_edge)
+        edge_frac = E_edges / E_t_total
+
+        if edge_frac > 1e-8
+            J_b = cfg.λ_boundary * edge_frac
+            coeff = 2.0 * cfg.λ_boundary / (Nt * E_t_total)
+            fft_edge = fft(mask_edge .* ut0, 1)
+
+            if haskey(off.ranges, :phase)
+                g_boundary_phase = coeff .* imag.(conj.(u_shaped) .* fft_edge)
+                g[off.ranges[:phase]] .+= vec(g_boundary_phase)
+            end
+
+            if haskey(off.ranges, :amplitude)
+                # d(edge_frac)/dA includes the total-energy denominator term.
+                # Since u_shaped = alpha * A * cis(phi) * u0 and A > 0:
+                #   du/dA = u_shaped / A.
+                g_boundary_A = coeff .* (
+                    real.(conj.(fft_edge) .* u_shaped ./ A) .-
+                    edge_frac .* abs2.(u_shaped) ./ A
+                )
+                g_boundary_A_out = dA_dξ === nothing ? g_boundary_A : (g_boundary_A .* dA_dξ)
+                g[off.ranges[:amplitude]] .+= vec(g_boundary_A_out)
+            end
         end
         if J_b > 0
             J_total += J_b

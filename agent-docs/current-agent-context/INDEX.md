@@ -22,6 +22,8 @@ Only the durable technical and operational findings belong in the new system as 
 - `PERFORMANCE.md` — static roofline/kernel conclusions from Phase 29 that still matter when reasoning about optimization runtime
 - `INFRASTRUCTURE.md` — current remote compute setup and what parts of the old setup notes remain operationally useful
 - `PLANNING-MIGRATION.md` — disposition of every remaining `.planning/` artifact migrated in this pass
+- `../equation-verification/SUMMARY.md` — current audit of analytic gradients,
+  finite-difference fallbacks, and equation-level verification gaps
 
 ## Scope rule
 

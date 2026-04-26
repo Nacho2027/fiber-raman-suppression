@@ -124,6 +124,21 @@ let
     ys = log10.(remainders)
     slope = (ys[end] - ys[1]) / (xs[end] - xs[1])
     @test 1.7 < slope < 2.3
+
+    off = mv_block_offsets(cfg, Nt, M)
+    amp_idx = first(off.ranges[:amplitude]) + idx_ω - 1
+    ε_amp = 1e-6
+    d_amp = zeros(length(x0))
+    d_amp[amp_idx] = 1.0
+    Jp_amp, _, _ = cost_and_gradient_multivar(
+        x0 .+ ε_amp .* d_amp,
+        uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+    Jm_amp, _, _ = cost_and_gradient_multivar(
+        x0 .- ε_amp .* d_amp,
+        uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+    fd_amp = (Jp_amp - Jm_amp) / (2ε_amp)
+    rel_amp = abs(fd_amp - g0[amp_idx]) / max(abs(fd_amp), abs(g0[amp_idx]), 1e-12)
+    @test rel_amp < 5e-2
 end
 @info "═══ Test 1b PASS ═══"
 

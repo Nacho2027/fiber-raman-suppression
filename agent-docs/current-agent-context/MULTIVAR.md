@@ -38,6 +38,10 @@ with a warning.
   gradient checks for the implemented variable blocks.
 - The saved multivar artifacts are included in
   `scripts/validation/validate_results.jl`.
+- 2026-04-26 equation audit fixed a missing amplitude derivative for the
+  temporal-boundary regularizer. Any amplitude-enabled run with
+  `λ_boundary > 0` that predates that fix should be regenerated before it is
+  used as a final quantitative table.
 
 ## Current evidence boundary
 
@@ -108,7 +112,8 @@ Do **not** treat it as:
 The open follow-up work is now:
 
 1. rerun the full variable-combination ablation in
-   `scripts/research/multivar/multivar_variable_ablation.jl`
+   `scripts/research/multivar/multivar_variable_ablation.jl` after the
+   2026-04-26 boundary-amplitude gradient fix
 2. amplitude-aware export schema and round-trip validation fixture
 3. hardware-constrained handling of relative amplitude values above unity
 4. small robustness check around the canonical `L = 2 m`, `P = 0.30 W` point

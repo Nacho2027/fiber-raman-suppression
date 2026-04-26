@@ -15,9 +15,9 @@ Total free params: Nt + 2·(M-1) (e.g. Nt + 10 for M=6).
 
 Gradient chain:
     uω0_shaped[ω, m] = pulse(ω) · c_m · exp(iφ(ω))
-  ⇒ ∂J/∂c_m     = Σ_ω conj(pulse(ω) · exp(iφ(ω))) · ∂J/∂uω0_shaped[ω, m]
-       (one complex scalar per mode)
   ⇒ ∂J/∂φ(ω)   = 2·Re(conj(λ₀(ω, m)) · i · uω0_shaped(ω, m)) summed over m  (already in `cost_and_gradient_mmf`)
+  ⇒ mode-coordinate block {r_m, α_m} is deliberately computed by central
+     finite differences over the small 2(M-1)-parameter block.
 
 Protected files: none modified; wraps `cost_and_gradient_mmf` from
 scripts/mmf_raman_optimization.jl.
@@ -131,11 +131,10 @@ Joint cost/gradient in terms of the packed parameter vector `x`. Here
 `uω0_pulse` is the pulse factor WITHOUT the mode weights — shape (Nt, 1) or
 (Nt,). Internally `uω0_base = uω0_pulse .* c_m'` is reconstructed per call.
 
-Gradient on the c_m side:
-    ∂J/∂conj(c_m) = Σ_ω conj(pulse(ω) · cis(φ(ω))) · 2·∂J/∂conj(uω0_shaped[ω, m])
-                  = Σ_ω conj(pulse(ω)) · conj(cis(φ)) · (2·λ₀_pulled_back[ω, m])
 The existing `cost_and_gradient_mmf` returns φ-gradient directly but NOT the
-c_m gradient. We call the forward+adjoint here directly and chain both.
+c_m gradient. The mode-coordinate block is intentionally central-FD rather
+than analytic because it is small and the previous hand-derived complex chain
+failed the dedicated preflight check.
 
 Keyword arguments:
 - `variant::Symbol = :sum`
@@ -159,6 +158,8 @@ function cost_and_gradient_joint(
     M  = size(uω0_pulse, 2)
     @assert M ≥ 1
     @assert length(x) == Nt + 2 * (M - 1)
+    @assert λ_gdd == 0.0 "joint MMF mode-coordinate FD currently supports λ_gdd=0 only"
+    @assert λ_boundary == 0.0 "joint MMF mode-coordinate FD currently supports λ_boundary=0 only"
 
     φ, c_m = _unpack_joint(x, Nt, M)
     # Build shaped input (broadcast c_m across columns)
