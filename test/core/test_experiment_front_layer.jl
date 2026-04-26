@@ -91,6 +91,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
             status = :complete,
             output_dir = "/tmp/case_001",
             artifact_path = "/tmp/case_001/opt_result.jld2",
+            artifact_status = "complete",
+            trust_report_status = "present",
+            standard_images_status = "complete",
             summary = (
                 J_before_dB = -20.0,
                 J_after_dB = -30.0,
@@ -107,13 +110,41 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
             output_dir = "",
             artifact_path = "",
             summary = nothing,
+            artifact_status = "incomplete",
+            trust_report_status = "",
+            standard_images_status = "",
             error = "boom",
         ),
     )
     sweep_summary_md = render_experiment_sweep_summary(sweep_spec, fake_sweep_results)
     @test occursin("# Experiment Sweep Summary: smf28_power_micro_sweep", sweep_summary_md)
-    @test occursin("| case_001 | 0.001 | complete | -20.00 | -30.00 | -10.00 | GOOD | true | 1 | /tmp/case_001/opt_result.jld2 |", sweep_summary_md)
-    @test occursin("| case_002 | 0.002 | failed |  |  |  |  |  |  | boom |", sweep_summary_md)
+    @test occursin("| Case | Value | Status | Artifact Status | Trust | Standard Images |", sweep_summary_md)
+    @test occursin("| case_001 | 0.001 | complete | complete | present | complete | -20.00 | -30.00 | -10.00 | GOOD | true | 1 | /tmp/case_001/opt_result.jld2 |", sweep_summary_md)
+    @test occursin("| case_002 | 0.002 | failed | incomplete |  |  |  |  |  |  |  |  | boom |", sweep_summary_md)
+    sweep_latest_root = mktempdir()
+    old_sweep_dir = joinpath(sweep_latest_root, "demo_20260101_000000")
+    new_sweep_dir = joinpath(sweep_latest_root, "demo_20260102_000000")
+    incomplete_sweep_dir = joinpath(sweep_latest_root, "demo_20260103_000000")
+    other_sweep_dir = joinpath(sweep_latest_root, "other_20260104_000000")
+    for dir in (old_sweep_dir, new_sweep_dir, incomplete_sweep_dir, other_sweep_dir)
+        mkpath(dir)
+    end
+    write(joinpath(old_sweep_dir, "SWEEP_SUMMARY.md"), "# old\n")
+    write(joinpath(new_sweep_dir, "SWEEP_SUMMARY.md"), "# new\n")
+    write(joinpath(other_sweep_dir, "SWEEP_SUMMARY.md"), "# other\n")
+    latest_sweep_spec = (;
+        sweep_spec...,
+        output_root = sweep_latest_root,
+        output_tag = "demo",
+    )
+    @test experiment_sweep_output_directories(latest_sweep_spec) == [old_sweep_dir, new_sweep_dir]
+    @test latest_experiment_sweep_output_dir(latest_sweep_spec) == new_sweep_dir
+    empty_latest_sweep_spec = (;
+        sweep_spec...,
+        output_root = mktempdir(),
+        output_tag = "missing",
+    )
+    @test_throws ArgumentError latest_experiment_sweep_output_dir(empty_latest_sweep_spec)
     caps = validate_experiment_spec(spec)
     @test (:phase,) in caps.variables
 

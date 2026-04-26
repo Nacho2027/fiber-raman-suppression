@@ -34,8 +34,16 @@ Execute a sweep only when every expanded case is local-safe and supported:
 julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute smf28_power_micro_sweep
 ```
 
+Inspect the latest completed sweep output:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
+```
+
 Execution writes a timestamped sweep directory under `output_root`, copies the
-sweep config, and writes `SWEEP_SUMMARY.md`.
+sweep config, and writes `SWEEP_SUMMARY.md`. The summary table includes case
+status, artifact validation status, trust-report status, standard-image status,
+headline objective metrics, convergence, iterations, and artifact/error path.
 
 The current sweep layer supports these parameter paths:
 

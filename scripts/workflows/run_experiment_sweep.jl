@@ -6,6 +6,7 @@ Usage:
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --validate-all
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run [sweep]
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute [sweep]
+    julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest [sweep]
 
 This command defaults to planning. Execution is explicit and currently limited
 to locally supported front-layer experiment modes.
@@ -20,6 +21,28 @@ include(joinpath(@__DIR__, "..", "lib", "experiment_runner.jl"))
 function _sweep_case_execution_allowed(case)
     mode = experiment_execution_mode(case.spec)
     return mode in (:phase_only, :multivar)
+end
+
+function _sweep_case_artifact_status(run_bundle)
+    if !hasproperty(run_bundle, :artifact_validation)
+        return (
+            artifact_status = "not_run",
+            trust_report_status = "unknown",
+            standard_images_status = "unknown",
+        )
+    end
+
+    report = run_bundle.artifact_validation
+    trust_status = if run_bundle.spec.artifacts.write_trust_report
+        isfile(report.trust_report_path) ? "present" : "missing"
+    else
+        "not_required"
+    end
+    return (
+        artifact_status = report.complete ? "complete" : "incomplete",
+        trust_report_status = trust_status,
+        standard_images_status = report.standard_images.complete ? "complete" : "incomplete",
+    )
 end
 
 function execute_experiment_sweep(sweep_spec;
@@ -46,13 +69,15 @@ function execute_experiment_sweep(sweep_spec;
         try
             run_bundle = run_supported_experiment(case.spec; timestamp=timestamp)
             summary = canonical_run_summary(run_bundle.artifact_path)
-            push!(results, (
+            artifact_status = _sweep_case_artifact_status(run_bundle)
+            push!(results, (;
                 label = case.label,
                 value = case.value,
                 status = :complete,
                 output_dir = run_bundle.output_dir,
                 artifact_path = run_bundle.artifact_path,
                 summary = summary,
+                artifact_status...,
             ))
         catch err
             push!(results, (
@@ -128,8 +153,32 @@ function run_experiment_sweep_main(args=ARGS)
         return result
     end
 
+    if args[1] == "--latest"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment_sweep.jl --latest [sweep]")
+        spec_name = _load_or_default_sweep(args[2:end])
+        sweep_spec = load_experiment_sweep_spec(spec_name)
+        latest_dir = try
+            latest_experiment_sweep_output_dir(sweep_spec)
+        catch err
+            err isa ArgumentError || rethrow()
+            println(stderr, "No completed sweeps found for $(sweep_spec.id) under $(sweep_spec.output_root).")
+            println(stderr, "Run it first with: julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute ", spec_name)
+            return nothing
+        end
+        summary_path = joinpath(latest_dir, "SWEEP_SUMMARY.md")
+        println("Latest sweep for $(sweep_spec.id): ", latest_dir)
+        println("Summary: ", summary_path)
+        println()
+        print(read(summary_path, String))
+        return (
+            sweep_spec = sweep_spec,
+            output_dir = latest_dir,
+            summary_path = summary_path,
+        )
+    end
+
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment_sweep.jl [sweep | --dry-run [sweep] | --execute [sweep] | --list | --validate-all]")
+        "usage: scripts/canonical/run_experiment_sweep.jl [sweep | --dry-run [sweep] | --execute [sweep] | --latest [sweep] | --list | --validate-all]")
     sweep_spec = load_experiment_sweep_spec(args[1])
     println(render_experiment_sweep_plan(sweep_spec))
     return sweep_spec

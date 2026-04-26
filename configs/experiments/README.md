@@ -126,6 +126,7 @@ For parameter sweeps over a base experiment, use
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run smf28_power_micro_sweep
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
 ```
 
 ## Knobs Researchers Can Change First

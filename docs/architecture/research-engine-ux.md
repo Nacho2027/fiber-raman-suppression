@@ -169,11 +169,34 @@ Best for professors and group-level decision making.
 
 UX target:
 
-- search by fiber, objective, variable set, date, user, regime, sweep id
+- scan by fiber, objective, variable set, date, user, regime, sweep id
 - compare objective before/after and improvement
 - inspect trust status and warnings
 - open standard images and artifacts
 - export compact tables for meetings or papers
+
+Current surface:
+
+```bash
+julia -t auto --project=. scripts/canonical/index_results.jl
+julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --kind run --fiber SMF-28 --complete-images results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --contains power results/raman/sweeps/front_layer
+```
+
+Notebook users should call the same command through:
+
+```python
+from fiber_research_engine import index_results, index_results_csv
+
+print(index_results("results/raman/sweeps/front_layer").stdout)
+print(index_results_csv("results/raman", kind="run", fiber="SMF-28").stdout)
+```
+
+This is deliberately read-only. It scans existing run artifacts and sweep
+summaries, then renders a compact Markdown or CSV table. It does not decide
+whether a result is scientifically accepted; it makes the evidence easier to
+find.
 
 Pain points addressed:
 
@@ -239,12 +262,14 @@ Design every new feature against this checklist:
 
 ## Near-Term Priorities
 
-1. Add supported sweep execution for local-safe cases only.
-2. Add Markdown/CSV campaign summaries for sweeps.
+1. Add richer saved-artifact metadata to the run/campaign index: config id,
+   objective kind, variables, regime, user/date, trust-report path.
+2. Add cross-sweep comparison views over completed campaign summaries.
 3. Add optional refinement planning to the notebook wrapper without making it
    a default lab workflow.
-4. Add a searchable run/campaign index.
-5. Add promotion guides for objective and variable extensions.
+4. Add promotion guides for objective and variable extensions.
+5. Promote one heavy regime into front-layer execution after the current
+   dedicated workflow remains stable.
 
 ## Decision
 

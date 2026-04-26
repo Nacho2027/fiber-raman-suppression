@@ -63,10 +63,12 @@ Minimum scope:
 - support safe parameters first: `problem.L_fiber`, `problem.P_cont`,
   `problem.Nt`, `problem.time_window`, `solver.max_iter`, `objective.kind`
 
-Next promotion:
+Current slice:
 
-- add richer sweep result inspection and latest-sweep discovery
-- inspect latest sweep output without manually finding folders
+- latest-sweep discovery is available through `run_experiment_sweep.jl --latest`
+- completed sweeps write `SWEEP_SUMMARY.md`
+- the shared results index can scan sweep summaries without manually finding
+  timestamped folders
 
 ### 2. Notebook Surface
 
@@ -106,15 +108,18 @@ Current slice:
 
 - `run_experiment_sweep.jl --execute` writes `SWEEP_SUMMARY.md` with status,
   objective metrics, convergence, iterations, and artifact/error path per case
+- summaries include artifact validation, trust-report, and standard-image status
+  columns
+- `run_experiment_sweep.jl --latest` prints the latest completed sweep summary
+  without requiring users to find timestamped folders manually
 
 Next promotion:
 
-- add trust-report and standard-image status columns
-- add latest-sweep discovery and comparison views
+- add cross-sweep comparison views and sortable campaign indexes
 
 ### 4. Results Index
 
-Status: planned.
+Status: started.
 
 Purpose: make outputs searchable and comparable across users, configs, sweeps,
 and research campaigns.
@@ -125,6 +130,21 @@ Minimum scope:
   artifact paths, trust status, and headline metrics
 - let CLI and notebook surfaces query the same index
 - avoid forcing professors to inspect folders manually
+
+Current slice:
+
+- `scripts/canonical/index_results.jl` scans run artifacts and
+  `SWEEP_SUMMARY.md` files from one or more roots and renders Markdown or CSV
+- `fiber_research_engine.index_results(...)` exposes the same index to
+  notebooks without duplicating scan logic
+- filters are available for kind, fiber, complete standard images, and a simple
+  id/fiber/path substring match
+
+Next promotion:
+
+- add config id, objective, variable set, regime, and user/date fields where
+  the saved artifact schema exposes them
+- add filters for objective, variable set, regime, date, and trust status
 
 ### 5. Heavy Regime Promotion
 

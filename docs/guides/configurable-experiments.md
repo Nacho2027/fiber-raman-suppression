@@ -69,6 +69,7 @@ prints the plan without launching optimization:
 julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --list
 julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run smf28_power_micro_sweep
 julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --validate-all
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
 ```
 
 ## 2. Inspect Objective Contracts
@@ -247,6 +248,32 @@ Inspection reports:
 - trust report path
 - standard image completeness
 - neutral handoff completeness when present
+
+For front-layer sweeps, inspect the latest completed sweep summary:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
+```
+
+The sweep summary reports each case's execution status, artifact status,
+trust-report status, standard-image status, headline objective metrics, and
+artifact/error path.
+
+To scan completed runs and sweep summaries without manually opening timestamped
+folders:
+
+```bash
+julia -t auto --project=. scripts/canonical/index_results.jl
+julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer
+julia -t auto --project=. scripts/canonical/index_results.jl --kind run --fiber SMF-28 --complete-images results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --contains power results/raman/sweeps/front_layer
+```
+
+The index is read-only. It reports discovered run artifacts and sweep summaries
+with headline metrics and standard-image completeness when those fields are
+available. Use it as a meeting/re-entry map, then inspect the underlying run
+folder before making scientific claims. CSV output is intended for notebook,
+pandas, spreadsheet, and meeting-table workflows.
 
 The inspection command is a checklist aid, not a substitute for reading the
 trust report or visually checking the standard images.

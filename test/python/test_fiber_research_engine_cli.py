@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fiber_research_engine.cli import (
+    INDEX_RESULTS,
     REFINE_AMP_ON_PHASE,
     RUN_EXPERIMENT,
     RUN_EXPERIMENT_SWEEP,
@@ -10,6 +11,8 @@ from fiber_research_engine.cli import (
     dry_run_amp_on_phase_refinement,
     dry_run_experiment,
     dry_run_sweep,
+    index_results,
+    index_results_csv,
     julia_cli_args,
     refine_amp_on_phase,
     run_julia_cli,
@@ -107,6 +110,49 @@ class FiberResearchEngineCliTests(unittest.TestCase):
 
         self.assertIn("Experiment capabilities", result.stdout)
         self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--capabilities"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_index_results_delegates_to_shared_julia_index(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Results Index\n"
+        run_mock.return_value.stderr = ""
+
+        result = index_results("results/raman/sweeps/front_layer", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("# Results Index", result.stdout)
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(
+            called_args[-2:],
+            (INDEX_RESULTS, "results/raman/sweeps/front_layer"),
+        )
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_index_results_supports_filters_and_csv(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "kind,id\n"
+        run_mock.return_value.stderr = ""
+
+        result = index_results_csv(
+            "results/raman",
+            kind="run",
+            fiber="SMF-28",
+            complete_images=True,
+            contains="power",
+            repo_root=Path("/tmp/repo"),
+        )
+
+        self.assertEqual(result.stdout, "kind,id\n")
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], INDEX_RESULTS)
+        self.assertIn("--csv", called_args)
+        self.assertIn("--kind", called_args)
+        self.assertIn("run", called_args)
+        self.assertIn("--fiber", called_args)
+        self.assertIn("SMF-28", called_args)
+        self.assertIn("--complete-images", called_args)
+        self.assertIn("--contains", called_args)
+        self.assertIn("power", called_args)
+        self.assertEqual(called_args[-1], "results/raman")
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_failed_command_raises_when_check_enabled(self, run_mock):

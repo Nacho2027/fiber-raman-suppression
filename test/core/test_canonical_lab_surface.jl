@@ -2,6 +2,7 @@ using JSON3
 using JLD2
 
 include(joinpath(_ROOT, "scripts", "lib", "run_artifacts.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "results_index.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "inspect_run.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
@@ -91,6 +92,32 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     @test direct_summary.result_file == artifact
     @test direct_summary.delta_J_dB ≈ payload.delta_J_dB
     @test direct_summary.quality == suppression_quality_label(payload.J_after; uppercase=true)
+
+    sweep_dir = joinpath(tmp, "sweep")
+    mkpath(sweep_dir)
+    sweep_summary_path = joinpath(sweep_dir, "SWEEP_SUMMARY.md")
+    write(sweep_summary_path, "# Experiment Sweep Summary: demo_sweep\n\n| Case | Value | Status |\n|---|---:|---|\n| case_001 | 0.2 | complete |\n")
+
+    index = build_results_index([tmp])
+    @test index.total == 2
+    @test any(row -> row.kind == :run && row.path == artifact, index.rows)
+    @test any(row -> row.kind == :sweep && row.path == sweep_summary_path, index.rows)
+    run_row = only(filter(row -> row.kind == :run, index.rows))
+    @test run_row.J_after_dB ≈ MultiModeNoise.lin_to_dB(payload.J_after)
+    @test run_row.standard_images_complete
+    rendered_index = render_results_index(index)
+    @test occursin("# Results Index", rendered_index)
+    @test occursin("SMF-28", rendered_index)
+    @test occursin("demo_sweep", rendered_index)
+    run_only_index = filter_results_index(index; kind=:run, fiber="SMF-28", complete_images=true)
+    @test run_only_index.total == 1
+    @test only(run_only_index.rows).kind == :run
+    @test filter_results_index(index; kind=:sweep).total == 1
+    @test filter_results_index(index; contains="demo").total == 1
+    csv_index = render_results_index_csv(run_only_index)
+    @test startswith(csv_index, "kind,id,fiber,L_m,P_cont_W")
+    @test occursin("run,run,SMF-28", csv_index)
+    @test !occursin("demo_sweep", csv_index)
 
     @test suppression_quality_label(NaN) == "crashed"
     @test suppression_quality_label(1e-5) == "excellent"

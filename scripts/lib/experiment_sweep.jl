@@ -149,6 +149,29 @@ function experiment_sweep_output_dir(sweep_spec;
     return dir
 end
 
+function experiment_sweep_output_directories(sweep_spec; require_summary::Bool=true)
+    isdir(sweep_spec.output_root) || return String[]
+    prefix = string(sweep_spec.output_tag, "_")
+    dirs = String[]
+    for entry in readdir(sweep_spec.output_root; join=true)
+        isdir(entry) || continue
+        startswith(basename(entry), prefix) || continue
+        if require_summary && !isfile(joinpath(entry, "SWEEP_SUMMARY.md"))
+            continue
+        end
+        push!(dirs, entry)
+    end
+    sort!(dirs; by=basename)
+    return dirs
+end
+
+function latest_experiment_sweep_output_dir(sweep_spec; require_summary::Bool=true)
+    dirs = experiment_sweep_output_directories(sweep_spec; require_summary=require_summary)
+    isempty(dirs) && throw(ArgumentError(
+        "no completed sweep outputs found for sweep `$(sweep_spec.id)` under `$(sweep_spec.output_root)`"))
+    return last(dirs)
+end
+
 function render_experiment_sweep_plan(sweep_spec; io::Union{Nothing,IO}=nothing)
     expanded = expand_experiment_sweep(sweep_spec)
     lines = String[
@@ -248,6 +271,10 @@ function _sweep_summary_field(result, field::Symbol)
     return hasproperty(result.summary, field) ? getproperty(result.summary, field) : ""
 end
 
+function _sweep_result_field(result, field::Symbol)
+    return hasproperty(result, field) ? getproperty(result, field) : ""
+end
+
 function render_experiment_sweep_summary(sweep_spec, results)
     lines = String[
         "# Experiment Sweep Summary: $(sweep_spec.id)",
@@ -258,8 +285,8 @@ function render_experiment_sweep_summary(sweep_spec, results)
         "- Parameter: `$(sweep_spec.sweep.parameter)`",
         "- Cases: `$(length(results))`",
         "",
-        "| Case | Value | Status | J_before [dB] | J_after [dB] | ΔJ [dB] | Quality | Converged | Iterations | Artifact / Error |",
-        "|---|---:|---|---:|---:|---:|---|---|---:|---|",
+        "| Case | Value | Status | Artifact Status | Trust | Standard Images | J_before [dB] | J_after [dB] | ΔJ [dB] | Quality | Converged | Iterations | Artifact / Error |",
+        "|---|---:|---|---|---|---|---:|---:|---:|---|---|---:|---|",
     ]
 
     for result in results
@@ -271,6 +298,9 @@ function render_experiment_sweep_summary(sweep_spec, results)
             result.label,
             _sweep_cell(result.value),
             status,
+            _sweep_cell(_sweep_result_field(result, :artifact_status)),
+            _sweep_cell(_sweep_result_field(result, :trust_report_status)),
+            _sweep_cell(_sweep_result_field(result, :standard_images_status)),
             _sweep_metric_cell(_sweep_summary_field(result, :J_before_dB)),
             _sweep_metric_cell(_sweep_summary_field(result, :J_after_dB)),
             _sweep_metric_cell(_sweep_summary_field(result, :delta_J_dB)),

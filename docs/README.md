@@ -22,6 +22,12 @@ order:
 If you are resuming work after time away, the synthesis and status sections are
 usually more useful than the onboarding sequence.
 
+For quick run/campaign discovery after experiments have completed:
+
+```bash
+julia -t auto --project=. scripts/canonical/index_results.jl
+```
+
 ## Guides
 
 | Doc | Use it for |

@@ -16,6 +16,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_EXPERIMENT = "scripts/canonical/run_experiment.jl"
 RUN_EXPERIMENT_SWEEP = "scripts/canonical/run_experiment_sweep.jl"
+INDEX_RESULTS = "scripts/canonical/index_results.jl"
 REFINE_AMP_ON_PHASE = "scripts/canonical/refine_amp_on_phase.jl"
 
 
@@ -120,6 +121,38 @@ def validate_all_sweeps(**kwargs) -> CommandResult:
 
 def dry_run_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandResult:
     return run_julia_cli(RUN_EXPERIMENT_SWEEP, "--dry-run", spec, **kwargs)
+
+
+def index_results(
+    *roots: str,
+    csv: bool = False,
+    kind: str | None = None,
+    fiber: str | None = None,
+    complete_images: bool = False,
+    contains: str | None = None,
+    **kwargs,
+) -> CommandResult:
+    """Render the shared Julia results/campaign index for notebooks."""
+
+    args: list[str] = []
+    if csv:
+        args.append("--csv")
+    if kind is not None:
+        args.extend(("--kind", kind))
+    if fiber is not None:
+        args.extend(("--fiber", fiber))
+    if complete_images:
+        args.append("--complete-images")
+    if contains is not None:
+        args.extend(("--contains", contains))
+    args.extend(roots)
+    return run_julia_cli(INDEX_RESULTS, *args, **kwargs)
+
+
+def index_results_csv(*roots: str, **kwargs) -> CommandResult:
+    """Render the shared results index as CSV for pandas/Excel workflows."""
+
+    return index_results(*roots, csv=True, **kwargs)
 
 
 def _amp_on_phase_refinement_args(

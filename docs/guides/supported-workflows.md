@@ -63,6 +63,7 @@ Sweep:
 
 ```bash
 julia --project=. -t auto scripts/canonical/run_sweep.jl smf28_hnlf_default
+julia --project=. -t auto scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
 ```
 
 ## Minimum Lab-Ready Gate

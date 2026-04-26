@@ -75,6 +75,13 @@ with five stable contracts:
   - supports `--validate-all`
   - supports explicit `--execute` for locally supported cases and writes
     `SWEEP_SUMMARY.md`
+- `scripts/lib/results_index.jl`
+  - scans completed run artifacts and sweep summaries and renders a compact
+    Markdown results index
+- `scripts/workflows/index_results.jl`
+  - exposes the read-only run/campaign index as a maintained CLI workflow
+- `scripts/canonical/index_results.jl`
+  - provides the public canonical wrapper for results indexing
 - `configs/experiments/README.md`
   - documents the safe researcher-facing knobs and current support boundary
 - `docs/guides/configurable-experiments.md`
@@ -112,7 +119,8 @@ with five stable contracts:
     notebooks, sweeps/campaigns, extensions, and results index front doors
 - `python/fiber_research_engine/`
   - provides a notebook-friendly Python wrapper that delegates to maintained
-    Julia CLI commands instead of duplicating science logic
+    Julia CLI commands instead of duplicating science logic, including the
+    read-only results index
 - `notebooks/templates/experiment_explorer.ipynb`
   - provides a Jupyter starting point for capability discovery, objective
     listing, config validation, experiment dry-runs, and sweep dry-runs
@@ -209,6 +217,14 @@ and experimentally:
   sweep config
 - `run_experiment_sweep.jl --execute` runs locally supported expanded cases
   deliberately and records complete/failed/skipped rows in a Markdown summary
+- sweep summaries now include artifact-validation, trust-report, and
+  standard-image status columns per case
+- `run_experiment_sweep.jl --latest` resolves and prints the newest completed
+  sweep summary without requiring manual timestamp-folder inspection
+- `index_results.jl` scans one or more result roots and reports discovered run
+  artifacts and sweep summaries with headline metrics and standard-image
+  completeness where available; it can render Markdown or CSV and filter by
+  kind, fiber, complete images, and substring match
 - `long_fiber`
 - variables `[:phase]`
 - objective `raman_band`
@@ -239,8 +255,8 @@ falling through.
 - `julia --project=. -e 'include("scripts/workflows/optimize_raman.jl"); canonical_optimize_main(["--list"])'`
   succeeded
 - `TEST_TIER=fast julia --project=. test/runtests.jl`
-  passed after the sweep/planning slice (`95/95`; canonical lab-facing surface
-  `103/103`, experiment front layer `206/206`)
+  passed after the sweep-inspection slice (`95/95`; canonical lab-facing
+  surface `111/111`, experiment front layer `210/210`)
 - red-first regression was added for multivar export/handoff validation; it
   failed before implementation and passed after adding the guard
 - red-first regression was added for dry-run plan visibility; it failed before
@@ -302,6 +318,38 @@ falling through.
   `results/raman/sweeps/front_layer/smf28_power_micro_sweep_20260426_2123863/SWEEP_SUMMARY.md`
 - representative sweep images were visually inspected: case 001 phase profile,
   case 003 optimized evolution, and case 003 phase diagnostic
+- red-first regression was added for latest-sweep discovery and richer sweep
+  status columns; it failed before adding
+  `experiment_sweep_output_directories(...)`,
+  `latest_experiment_sweep_output_dir(...)`, artifact/trust/image columns, and
+  `run_experiment_sweep.jl --latest`, then passed after implementation
+- real smoke sweep execution was repeated after the status-column change:
+  `julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute smf28_power_micro_sweep`
+  completed three local-safe cases and wrote
+  `results/raman/sweeps/front_layer/smf28_power_micro_sweep_20260426_2251288/SWEEP_SUMMARY.md`
+  with `artifact=complete`, `trust=present`, and
+  `standard_images=complete` for all cases
+- `julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep`
+  printed the latest sweep summary from
+  `results/raman/sweeps/front_layer/smf28_power_micro_sweep_20260426_2251288`
+- representative images for the repeated sweep were visually inspected: case
+  001 phase profile, case 003 optimized evolution, and case 003 phase
+  diagnostic
+- red-first regression was added for the results index; it failed before
+  adding `results_index.jl` and passed after the scanner/renderer was wired
+  into the canonical lab-facing surface tests
+- `PYTHONPATH=python python3 -m unittest discover -s test/python` passed
+  (`9/9`) after adding the notebook wrapper for the shared results index and
+  CSV/filter options
+- `julia --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer`
+  rendered the sweep/run index read-only and confirmed small powers display as
+  `0.001`, `0.002`, and `0.003 W` instead of rounding to zero
+- `julia --project=. scripts/canonical/index_results.jl --csv --kind run --fiber SMF-28 --complete-images --contains power results/raman/sweeps/front_layer`
+  rendered CSV for the three complete SMF-28 front-layer sweep runs
+- `TEST_TIER=fast julia --project=. test/runtests.jl` passed after the
+  results-index filter/CSV slice: repository structure `19/19`, canonical
+  lab-facing surface `118/118`, experiment front layer `210/210`, Phase 16
+  fast `95/95`
 
 ## Review Findings
 
