@@ -268,6 +268,7 @@ julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweep
 julia -t auto --project=. scripts/canonical/index_results.jl --kind run --regime single_mode --objective raman_band --fiber SMF-28 --complete-images results/raman
 julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --config-id smf28_phase_smoke --contains power results/raman/sweeps/front_layer
 julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 5 --lab-ready results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --compare-sweeps --top 5 results/raman/sweeps/front_layer
 ```
 
 The index is read-only. It reports discovered run artifacts and sweep summaries
@@ -278,7 +279,9 @@ a meeting/re-entry map, then inspect the underlying run folder before making
 scientific claims. CSV output is intended for notebook, pandas, spreadsheet,
 and meeting-table workflows. `--compare` ranks runs by mechanical lab readiness
 and then objective value; it is a triage view, not a scientific acceptance
-decision.
+decision. `--compare-sweeps` summarizes completed sweep summaries by cases,
+failure count, best case, best achieved objective, and median achieved
+objective.
 
 The inspection command is a checklist aid, not a substitute for reading the
 trust report or visually checking the standard images.

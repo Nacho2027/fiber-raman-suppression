@@ -113,7 +113,15 @@ kind = "lbfgs"
     sweep_dir = joinpath(tmp, "sweep")
     mkpath(sweep_dir)
     sweep_summary_path = joinpath(sweep_dir, "SWEEP_SUMMARY.md")
-    write(sweep_summary_path, "# Experiment Sweep Summary: demo_sweep\n\n| Case | Value | Status |\n|---|---:|---|\n| case_001 | 0.2 | complete |\n")
+    write(sweep_summary_path, """
+# Experiment Sweep Summary: demo_sweep
+
+| Case | Value | Status | J_before [dB] | J_after [dB] | ΔJ [dB] | Quality | Converged | Iterations | Artifact / Error |
+|---|---:|---|---:|---:|---:|---|---|---:|---|
+| case_001 | 0.1 | complete | -20.0 | -42.0 | -22.0 | EXCELLENT | true | 4 | case_001/opt_result.jld2 |
+| case_002 | 0.2 | failed |  |  |  | ERROR | false | 0 | failed |
+| case_003 | 0.3 | complete | -19.0 | -35.0 | -16.0 | GOOD | true | 5 | case_003/opt_result.jld2 |
+""")
 
     index = build_results_index([tmp])
     @test index.total == 2
@@ -153,6 +161,21 @@ kind = "lbfgs"
     @test occursin("| 1 | true | ready | smf28_L2m_P0p2W | raman_band | phase |", rendered_comparison)
     comparison_csv = render_results_comparison_csv(comparison)
     @test startswith(comparison_csv, "rank,lab_ready,readiness,config_id,objective_kind")
+    sweep_comparison = compare_sweep_summaries(index)
+    @test sweep_comparison.total == 1
+    sweep_row = only(sweep_comparison.rows)
+    @test sweep_row.id == "demo_sweep"
+    @test sweep_row.cases == 3
+    @test sweep_row.complete == 2
+    @test sweep_row.failed == 1
+    @test sweep_row.best_case == "case_001"
+    @test sweep_row.best_J_after_dB == -42.0
+    @test sweep_row.median_J_after_dB == -38.5
+    rendered_sweep_comparison = render_sweep_comparison(sweep_comparison)
+    @test occursin("# Sweep Comparison", rendered_sweep_comparison)
+    @test occursin("demo_sweep", rendered_sweep_comparison)
+    sweep_comparison_csv = render_sweep_comparison_csv(sweep_comparison)
+    @test startswith(sweep_comparison_csv, "rank,id,cases,complete,failed,skipped")
     csv_index = render_results_index_csv(run_only_index)
     @test startswith(csv_index, "kind,id,config_id,regime,objective_kind,variables,solver_kind,timestamp_utc")
     @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,", csv_index)

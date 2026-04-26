@@ -152,6 +152,106 @@ function _sweep_summary_title(path::AbstractString)
     return basename(dirname(path))
 end
 
+function _markdown_cells(line::AbstractString)
+    text = strip(line)
+    startswith(text, "|") || return String[]
+    endswith(text, "|") && (text = text[1:prevind(text, lastindex(text))])
+    startswith(text, "|") && (text = text[nextind(text, firstindex(text)):end])
+    return strip.(split(text, "|"))
+end
+
+function _safe_parse_float(text)
+    value = strip(String(text))
+    isempty(value) && return NaN
+    try
+        return parse(Float64, value)
+    catch
+        return NaN
+    end
+end
+
+function _median_float(values)
+    clean = sort([Float64(value) for value in values if isfinite(Float64(value))])
+    isempty(clean) && return NaN
+    n = length(clean)
+    mid = div(n + 1, 2)
+    return isodd(n) ? clean[mid] : (clean[mid] + clean[mid + 1]) / 2
+end
+
+function _sweep_summary_metrics(path::AbstractString)
+    header = String[]
+    rows = Vector{Vector{String}}()
+    try
+        lines = collect(eachline(path))
+        for (idx, line) in enumerate(lines)
+            cells = _markdown_cells(line)
+            if "Case" in cells && "Status" in cells
+                header = cells
+                for rowline in lines[(idx + 2):end]
+                    row = _markdown_cells(rowline)
+                    isempty(row) && break
+                    length(row) == length(header) || continue
+                    push!(rows, row)
+                end
+                break
+            end
+        end
+    catch err
+        return (
+            id = _sweep_summary_title(path),
+            cases = 0,
+            complete = 0,
+            failed = 0,
+            skipped = 0,
+            best_case = "",
+            best_J_after_dB = NaN,
+            median_J_after_dB = NaN,
+            path = abspath(path),
+            error = sprint(showerror, err),
+        )
+    end
+
+    isempty(header) && return (
+        id = _sweep_summary_title(path),
+        cases = 0,
+        complete = 0,
+        failed = 0,
+        skipped = 0,
+        best_case = "",
+        best_J_after_dB = NaN,
+        median_J_after_dB = NaN,
+        path = abspath(path),
+        error = "no sweep table found",
+    )
+
+    case_idx = findfirst(==("Case"), header)
+    status_idx = findfirst(==("Status"), header)
+    j_after_idx = findfirst(==("J_after [dB]"), header)
+
+    statuses = lowercase.([row[status_idx] for row in rows])
+    j_values = isnothing(j_after_idx) ? Float64[] : [_safe_parse_float(row[j_after_idx]) for row in rows]
+    valid_pairs = [
+        (case = row[case_idx], J_after_dB = _safe_parse_float(row[j_after_idx]))
+        for row in rows
+        if !isnothing(j_after_idx) && isfinite(_safe_parse_float(row[j_after_idx]))
+    ]
+    sort!(valid_pairs; by = row -> row.J_after_dB)
+    best = isempty(valid_pairs) ? (case = "", J_after_dB = NaN) : first(valid_pairs)
+
+    return (
+        id = _sweep_summary_title(path),
+        cases = length(rows),
+        complete = count(==("complete"), statuses),
+        failed = count(==("failed"), statuses),
+        skipped = count(==("skipped"), statuses),
+        best_case = best.case,
+        best_J_after_dB = best.J_after_dB,
+        median_J_after_dB = _median_float(j_values),
+        path = abspath(path),
+        error = "",
+    )
+end
+
 function _safe_run_index_row(path::AbstractString)
     try
         summary = canonical_run_summary(path)
@@ -539,6 +639,228 @@ function render_results_comparison_csv(comparison; io::Union{Nothing,IO}=nothing
         :trust_report_present,
         :export_handoff_complete,
         :path,
+    )
+    lines = [join(string.(columns), ",")]
+    for (rank, row) in enumerate(comparison.rows)
+        push!(lines, join((_csv_cell(col == :rank ? rank : getproperty(row, col)) for col in columns), ","))
+    end
+    rendered = join(lines, "\n")
+    isnothing(io) || println(io, rendered)
+    return rendered
+end
+
+function _markdown_table_cells(line::AbstractString)
+    stripped = strip(line)
+    startswith(stripped, "|") || return String[]
+    endswith(stripped, "|") || return String[]
+    cells = split(stripped[2:end-1], "|")
+    return [strip(cell) for cell in cells]
+end
+
+function _is_markdown_separator(cells)
+    !isempty(cells) && all(cell -> occursin(r"^:?-+:?$", replace(cell, " " => "")), cells)
+end
+
+function _parse_float_cell(cell::AbstractString)
+    text = strip(cell)
+    isempty(text) && return NaN
+    try
+        return parse(Float64, text)
+    catch
+        return NaN
+    end
+end
+
+function _median_float(values)
+    clean = sort([Float64(v) for v in values if isfinite(Float64(v))])
+    isempty(clean) && return NaN
+    mid = length(clean) ÷ 2 + 1
+    isodd(length(clean)) && return clean[mid]
+    return (clean[mid - 1] + clean[mid]) / 2
+end
+
+function _sweep_summary_cases(path::AbstractString)
+    rows = NamedTuple[]
+    header = String[]
+    for line in eachline(path)
+        cells = _markdown_table_cells(line)
+        isempty(cells) && continue
+        if isempty(header)
+            header = lowercase.(cells)
+            continue
+        end
+        _is_markdown_separator(cells) && continue
+        length(cells) == length(header) || continue
+        data = Dict(header[i] => cells[i] for i in eachindex(header))
+        case = get(data, "case", "")
+        status = lowercase(get(data, "status", ""))
+        j_after_key = findfirst(h -> occursin("j_after", h), header)
+        j_after = j_after_key === nothing ? NaN : _parse_float_cell(cells[j_after_key])
+        quality = get(data, "quality", "")
+        converged = lowercase(get(data, "converged", ""))
+        artifact_key = findfirst(h -> occursin("artifact", h), header)
+        artifact = artifact_key === nothing ? "" : cells[artifact_key]
+        push!(rows, (
+            case = case,
+            status = status,
+            J_after_dB = j_after,
+            quality = quality,
+            converged = converged,
+            artifact = artifact,
+        ))
+    end
+    return rows
+end
+
+function _sweep_summary_comparison_row(row)
+    cases = _sweep_summary_cases(row.path)
+    complete = count(case -> case.status == "complete", cases)
+    failed = count(case -> case.status == "failed", cases)
+    skipped = count(case -> case.status == "skipped", cases)
+    valid = [case for case in cases if isfinite(case.J_after_dB)]
+    best = isempty(valid) ? nothing : first(sort(valid; by = case -> case.J_after_dB))
+    return (
+        id = row.id,
+        cases = length(cases),
+        complete = complete,
+        failed = failed,
+        skipped = skipped,
+        best_case = best === nothing ? "" : best.case,
+        best_J_after_dB = best === nothing ? NaN : best.J_after_dB,
+        median_J_after_dB = _median_float([case.J_after_dB for case in valid]),
+        path = row.path,
+    )
+end
+
+function compare_sweep_summaries(index; top::Union{Nothing,Int}=nothing)
+    rows = [_sweep_summary_comparison_row(row) for row in index.rows if row.kind == :sweep]
+    sort!(rows; by = row -> (
+        row.failed,
+        -row.complete,
+        isnan(row.best_J_after_dB) ? Inf : row.best_J_after_dB,
+        row.id,
+    ))
+    if !isnothing(top) && top >= 0
+        rows = rows[1:min(top, length(rows))]
+    end
+    return (
+        roots = index.roots,
+        total = length(rows),
+        rows = Tuple(rows),
+    )
+end
+
+function render_sweep_comparison(comparison; io::Union{Nothing,IO}=nothing)
+    lines = String[
+        "# Sweep Comparison",
+        "",
+        "- Roots: `$(join(comparison.roots, "`, `"))`",
+        "- Sweeps: `$(comparison.total)`",
+        "",
+        "| Rank | Sweep | Cases | Complete | Failed | Skipped | Best Case | Best J_after [dB] | Median J_after [dB] | Path |",
+        "|---:|---|---:|---:|---:|---:|---|---:|---:|---|",
+    ]
+    for (rank, row) in enumerate(comparison.rows)
+        push!(lines, string(
+            "| ", rank,
+            " | ", row.id,
+            " | ", row.cases,
+            " | ", row.complete,
+            " | ", row.failed,
+            " | ", row.skipped,
+            " | ", row.best_case,
+            " | ", _index_float_cell(row.best_J_after_dB),
+            " | ", _index_float_cell(row.median_J_after_dB),
+            " | ", row.path,
+            " |"))
+    end
+    rendered = join(lines, "\n")
+    isnothing(io) || println(io, rendered)
+    return rendered
+end
+
+function render_sweep_comparison_csv(comparison; io::Union{Nothing,IO}=nothing)
+    columns = (
+        :rank,
+        :id,
+        :cases,
+        :complete,
+        :failed,
+        :skipped,
+        :best_case,
+        :best_J_after_dB,
+        :median_J_after_dB,
+        :path,
+    )
+    lines = [join(string.(columns), ",")]
+    for (rank, row) in enumerate(comparison.rows)
+        push!(lines, join((_csv_cell(col == :rank ? rank : getproperty(row, col)) for col in columns), ","))
+    end
+    rendered = join(lines, "\n")
+    isnothing(io) || println(io, rendered)
+    return rendered
+end
+
+function compare_sweep_summaries(index; top::Union{Nothing,Int}=nothing)
+    rows = [_sweep_summary_metrics(row.path) for row in index.rows if row.kind == :sweep]
+    sort!(rows; by = row -> (
+        isnan(row.best_J_after_dB) ? Inf : row.best_J_after_dB,
+        row.failed,
+        row.skipped,
+        row.id,
+    ))
+    if !isnothing(top) && top >= 0
+        rows = rows[1:min(top, length(rows))]
+    end
+    return (
+        roots = index.roots,
+        total = length(rows),
+        rows = Tuple(rows),
+    )
+end
+
+function render_sweep_comparison(comparison; io::Union{Nothing,IO}=nothing)
+    lines = String[
+        "# Sweep Comparison",
+        "",
+        "- Roots: `$(join(comparison.roots, "`, `"))`",
+        "- Sweeps: `$(comparison.total)`",
+        "",
+        "| Rank | Sweep | Cases | Complete | Failed | Skipped | Best Case | Best J_after [dB] | Median J_after [dB] | Path |",
+        "|---:|---|---:|---:|---:|---:|---|---:|---:|---|",
+    ]
+    for (rank, row) in enumerate(comparison.rows)
+        push!(lines, string(
+            "| ", rank,
+            " | ", row.id,
+            " | ", row.cases,
+            " | ", row.complete,
+            " | ", row.failed,
+            " | ", row.skipped,
+            " | ", row.best_case,
+            " | ", _index_float_cell(row.best_J_after_dB),
+            " | ", _index_float_cell(row.median_J_after_dB),
+            " | ", isempty(row.error) ? row.path : row.error,
+            " |"))
+    end
+    rendered = join(lines, "\n")
+    isnothing(io) || println(io, rendered)
+    return rendered
+end
+
+function render_sweep_comparison_csv(comparison; io::Union{Nothing,IO}=nothing)
+    columns = (
+        :rank,
+        :id,
+        :cases,
+        :complete,
+        :failed,
+        :skipped,
+        :best_case,
+        :best_J_after_dB,
+        :median_J_after_dB,
+        :path,
+        :error,
     )
     lines = [join(string.(columns), ",")]
     for (rank, row) in enumerate(comparison.rows)

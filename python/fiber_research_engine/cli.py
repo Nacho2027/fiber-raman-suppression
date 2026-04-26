@@ -126,6 +126,7 @@ def dry_run_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandRes
 def index_results(
     *roots: str,
     compare: bool = False,
+    compare_sweeps: bool = False,
     csv: bool = False,
     kind: str | None = None,
     config_id: str | None = None,
@@ -145,6 +146,8 @@ def index_results(
     args: list[str] = []
     if compare:
         args.append("--compare")
+    if compare_sweeps:
+        args.append("--compare-sweeps")
     if csv:
         args.append("--csv")
     if kind is not None:

@@ -231,6 +231,9 @@ and experimentally:
   run config path, and artifact path
 - result-index comparison mode ranks run artifacts by mechanical lab readiness
   and then objective value for meeting-sized shortlists
+- sweep-comparison mode parses completed `SWEEP_SUMMARY.md` tables and ranks
+  campaigns by best achieved case while keeping case counts and failure counts
+  visible
 - `long_fiber`
 - variables `[:phase]`
 - objective `raman_band`
@@ -345,8 +348,8 @@ falling through.
   adding `results_index.jl` and passed after the scanner/renderer was wired
   into the canonical lab-facing surface tests
 - `PYTHONPATH=python python3 -m unittest discover -s test/python` passed
-  (`10/10`) after adding the notebook wrapper for the shared results index,
-  CSV/filter options, and comparison mode
+  (`11/11`) after adding the notebook wrapper for the shared results index,
+  CSV/filter options, run comparison mode, and sweep comparison mode
 - `julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweeps/front_layer`
   rendered the sweep/run index read-only and confirmed small powers display as
   `0.001`, `0.002`, and `0.003 W` instead of rounding to zero
@@ -358,9 +361,13 @@ falling through.
 - `julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 2 --kind run --config-id smf28_phase_smoke --regime single_mode --objective raman_band --fiber SMF-28 --lab-ready results/raman/sweeps/front_layer`
   rendered a ranked comparison table for the top two mechanically lab-ready
   front-layer sweep runs
+- `julia -t auto --project=. scripts/canonical/index_results.jl --compare-sweeps --top 5 results/raman/sweeps/front_layer`
+  rendered a sweep comparison table from completed front-layer sweep summaries,
+  including case counts, failures, best case, best objective, and median
+  objective
 - `TEST_TIER=fast julia -t auto --project=. test/runtests.jl` passed after the
   results-index ledger/comparison slice: repository structure `19/19`,
-  canonical lab-facing surface `138/138`, experiment front layer `210/210`,
+  canonical lab-facing surface `149/149`, experiment front layer `210/210`,
   Phase 16 fast `95/95`
 
 ## Review Findings

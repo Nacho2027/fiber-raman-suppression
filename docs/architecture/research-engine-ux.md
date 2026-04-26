@@ -183,6 +183,7 @@ julia -t auto --project=. scripts/canonical/index_results.jl results/raman/sweep
 julia -t auto --project=. scripts/canonical/index_results.jl --kind run --regime single_mode --objective raman_band --fiber SMF-28 --complete-images results/raman
 julia -t auto --project=. scripts/canonical/index_results.jl --csv --kind run --config-id smf28_phase_smoke --contains power results/raman/sweeps/front_layer
 julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 5 --lab-ready results/raman
+julia -t auto --project=. scripts/canonical/index_results.jl --compare-sweeps --top 5 results/raman/sweeps/front_layer
 ```
 
 Notebook users should call the same command through:
@@ -199,6 +200,7 @@ print(index_results_csv(
     fiber="SMF-28",
 ).stdout)
 print(index_results("results/raman", compare=True, lab_ready=True, top=5).stdout)
+print(index_results("results/raman/sweeps/front_layer", compare_sweeps=True, top=5).stdout)
 ```
 
 This is deliberately read-only. It scans existing run artifacts and sweep
@@ -208,6 +210,8 @@ path, headline metrics, and standard-image status where available. It does not
 decide whether a result is scientifically accepted; it makes the evidence
 easier to find. The comparison view ranks runs by mechanical readiness and then
 objective value, so professors can quickly find candidates for deeper review.
+The sweep comparison view ranks completed campaign summaries by best achieved
+case while keeping case counts and failures visible.
 
 Pain points addressed:
 
@@ -273,12 +277,11 @@ Design every new feature against this checklist:
 
 ## Near-Term Priorities
 
-1. Add cross-sweep comparison views over completed campaign summaries.
-2. Add trust-status/date filters once saved artifacts expose those fields
+1. Add trust-status/date filters once saved artifacts expose those fields
    consistently.
-3. Add optional refinement planning to the notebook wrapper without making it
+2. Add optional refinement planning to the notebook wrapper without making it
    a default lab workflow.
-4. Add promotion guides for objective and variable extensions.
+3. Add promotion guides for objective and variable extensions.
 5. Promote one heavy regime into front-layer execution after the current
    dedicated workflow remains stable.
 

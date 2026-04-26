@@ -192,6 +192,27 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertIn("3", called_args)
 
     @patch("fiber_research_engine.cli.subprocess.run")
+    def test_index_results_supports_sweep_comparison(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Sweep Comparison\n"
+        run_mock.return_value.stderr = ""
+
+        result = index_results(
+            "results/raman/sweeps/front_layer",
+            compare_sweeps=True,
+            csv=True,
+            top=2,
+            repo_root=Path("/tmp/repo"),
+        )
+
+        self.assertIn("# Sweep Comparison", result.stdout)
+        called_args = run_mock.call_args.args[0]
+        self.assertIn("--compare-sweeps", called_args)
+        self.assertIn("--csv", called_args)
+        self.assertIn("--top", called_args)
+        self.assertIn("2", called_args)
+
+    @patch("fiber_research_engine.cli.subprocess.run")
     def test_failed_command_raises_when_check_enabled(self, run_mock):
         run_mock.return_value.returncode = 2
         run_mock.return_value.stdout = ""

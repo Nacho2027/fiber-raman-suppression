@@ -143,13 +143,15 @@ Current slice:
   complete standard images, and a simple substring match
 - `--compare` ranks run artifacts by mechanical lab readiness and then
   suppression objective, with `--top` for meeting-sized shortlists
+- `--compare-sweeps` summarizes completed sweep summaries by case counts,
+  failures, best case, best achieved objective, and median achieved objective
 
 Next promotion:
 
 - add date-range and trust-status filters once those fields are consistently
   normalized
-- add cross-sweep comparison views for completed campaigns rather than only
-  per-run ranking
+- add richer sweep parsing once sweep summaries carry explicit machine-readable
+  JSON/CSV sidecars instead of Markdown-only tables
 
 ### 5. Heavy Regime Promotion
 

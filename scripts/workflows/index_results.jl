@@ -6,6 +6,7 @@ Usage:
 
 Options:
     --compare             Rank run artifacts by lab readiness, then suppression.
+    --compare-sweeps      Rank sweep summaries by best completed case.
     --csv                 Render CSV instead of Markdown.
     --kind run|sweep      Keep only run artifacts or sweep summaries.
     --config-id ID        Keep only rows from a front-layer config id.
@@ -17,7 +18,7 @@ Options:
     --lab-ready           Keep only mechanically lab-ready runs.
     --export-ready        Keep only runs with a complete neutral export handoff.
     --contains TEXT       Keep only rows whose id/fiber/path contains TEXT.
-    --top N               Keep only the first N ranked rows with --compare.
+    --top N               Keep only the first N ranked rows with --compare/--compare-sweeps.
 """
 
 include(joinpath(@__DIR__, "..", "lib", "results_index.jl"))
@@ -29,6 +30,7 @@ Usage:
 
 Options:
     --compare             Rank run artifacts by lab readiness, then suppression.
+    --compare-sweeps      Rank sweep summaries by best completed case.
     --csv                 Render CSV instead of Markdown.
     --kind run|sweep      Keep only run artifacts or sweep summaries.
     --config-id ID        Keep only rows from a front-layer config id.
@@ -40,7 +42,7 @@ Options:
     --lab-ready           Keep only mechanically lab-ready runs.
     --export-ready        Keep only runs with a complete neutral export handoff.
     --contains TEXT       Keep only rows whose id/fiber/path contains TEXT.
-    --top N               Keep only the first N ranked rows with --compare.
+    --top N               Keep only the first N ranked rows with --compare/--compare-sweeps.
     --help                Show this message.
 """
 end
@@ -48,6 +50,7 @@ end
 function parse_index_results_args(args)
     roots = String[]
     compare = false
+    compare_sweeps = false
     csv = false
     kind = nothing
     config_id = nothing
@@ -68,6 +71,7 @@ function parse_index_results_args(args)
             return (
                 roots = String[],
                 compare = false,
+                compare_sweeps = false,
                 csv = false,
                 kind = nothing,
                 config_id = nothing,
@@ -84,6 +88,8 @@ function parse_index_results_args(args)
             )
         elseif arg == "--compare"
             compare = true
+        elseif arg == "--compare-sweeps"
+            compare_sweeps = true
         elseif arg == "--csv"
             csv = true
         elseif arg == "--complete-images"
@@ -139,6 +145,7 @@ function parse_index_results_args(args)
     return (
         roots = roots,
         compare = compare,
+        compare_sweeps = compare_sweeps,
         csv = csv,
         kind = kind,
         config_id = config_id,
@@ -175,7 +182,9 @@ function index_results_main(args=ARGS)
         export_ready=parsed.export_ready,
         contains=parsed.contains,
     )
-    if parsed.compare
+    if parsed.compare && parsed.compare_sweeps
+        error("Use only one of --compare or --compare-sweeps")
+    elseif parsed.compare
         comparison = compare_results_index(
             index;
             lab_ready_only=parsed.lab_ready,
@@ -183,6 +192,11 @@ function index_results_main(args=ARGS)
             top=parsed.top,
         )
         rendered = parsed.csv ? render_results_comparison_csv(comparison) : render_results_comparison(comparison)
+        println(rendered)
+        return comparison
+    elseif parsed.compare_sweeps
+        comparison = compare_sweep_summaries(index; top=parsed.top)
+        rendered = parsed.csv ? render_sweep_comparison_csv(comparison) : render_sweep_comparison(comparison)
         println(rendered)
         return comparison
     end
