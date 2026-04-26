@@ -79,3 +79,14 @@ usable and honest:
 4. report the achieved improvement per run instead of promising a fixed gain
 5. defer hardware-specific calibration until a real shaper pixel grid and
    measured transfer function are available
+
+## 2026-04-26 Workflow Follow-Up
+
+The first maintained wrapper for this path is
+`scripts/canonical/refine_amp_on_phase.jl`. It exposes dry-run planning,
+parameterized `L`/`P`, amplitude bounds, iteration caps, and optional export
+through the existing amplitude-aware handoff bundle.
+
+This wrapper is intentionally documented as experimental and optional. It does
+not change the default lab workflow, which remains phase-only optimization plus
+inspection and export.

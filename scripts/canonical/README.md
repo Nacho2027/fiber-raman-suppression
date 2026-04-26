@@ -12,6 +12,7 @@ point readers toward first.
 - `run_sweep.jl` — run one approved sweep workflow
 - `inspect_run.jl` — inspect one saved run bundle
 - `export_run.jl` — export one saved run as an experiment-facing handoff bundle
+- `refine_amp_on_phase.jl` — optional experimental second-stage amplitude-on-phase refinement
 - `generate_reports.jl` — regenerate sweep reports and presentation figures
 - `regenerate_standard_images.jl` — backfill the mandatory standard image set
 - `validate_results.jl` — run result-validation checks

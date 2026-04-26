@@ -4,6 +4,7 @@ using JLD2
 include(joinpath(_ROOT, "scripts", "lib", "run_artifacts.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "inspect_run.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
+include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
 
 @testset "Canonical lab-facing surface" begin
     @test "smf28_L2m_P0p2W" in approved_run_config_ids()
@@ -232,4 +233,39 @@ include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
     research_exported = export_run_bundle(research_artifact, joinpath(research_amp_dir, "export_handoff"))
     @test isfile(research_exported.amplitude_csv)
     @test JSON3.read(read(research_exported.roundtrip_json, String)).complete == true
+
+    refine_opts = parse_refine_amp_on_phase_args([
+        "--dry-run",
+        "--export",
+        "--tag", "lab_smoke",
+        "--L", "2.2",
+        "--P", "0.33",
+        "--phase-iter", "7",
+        "--amp-iter", "8",
+        "--delta-bound", "0.15",
+        "--threshold-db", "2.5",
+    ])
+    @test refine_opts.dry_run
+    @test refine_opts.export
+    @test refine_opts.tag == "lab_smoke"
+    @test refine_opts.L == 2.2
+    @test refine_opts.P == 0.33
+    @test refine_opts.phase_iter == 7
+    @test refine_opts.amp_iter == 8
+    @test refine_opts.delta_bound == 0.15
+    @test refine_opts.threshold_db == 2.5
+
+    refine_plan = refine_amp_on_phase_plan(refine_opts)
+    @test refine_plan.output_dir == joinpath("results", "raman", "multivar", "amp_on_phase_lab_smoke")
+    @test endswith(refine_plan.artifact, joinpath("amp_on_phase_lab_smoke", "amp_on_phase_result.jld2"))
+    @test refine_plan.export_requested
+    @test occursin("multivar_amp_on_phase_ablation.jl", refine_plan.command)
+
+    rendered_refine = sprint(io -> render_refine_amp_on_phase_plan(refine_plan; io=io))
+    @test occursin("experimental optional workflow", rendered_refine)
+    @test occursin("Required closeout", rendered_refine)
+
+    wrapper_refine = read(joinpath(_ROOT, "scripts", "canonical", "refine_amp_on_phase.jl"), String)
+    @test occursin("workflows\", \"refine_amp_on_phase.jl", wrapper_refine)
+    @test occursin("refine_amp_on_phase_main(ARGS)", wrapper_refine)
 end
