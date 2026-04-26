@@ -18,9 +18,14 @@ Keep this separate from the single-mode multivar path:
 ## Current Status
 
 - The code for joint shared phase plus mode coefficients exists.
-- The code uses a custom complex gradient for packed mode amplitudes/phases.
-- That gradient should be treated as unproven until a finite-difference
-  preflight passes.
+- The original custom complex gradient for packed mode amplitudes/phases failed
+  finite-difference preflight with order-one relative errors.
+- The current implementation therefore uses an adjoint gradient for the large
+  shared-phase block and central finite differences for the small
+  `2(M-1)`-parameter mode-coefficient block.
+- This is slower per optimizer iteration, but it is the correct conservative
+  choice for advisor-facing mode-launch studies until an analytic
+  mode-coefficient gradient is re-derived.
 - The current MMF physics result is still blocked by window validation; do not
   interpret mode-coefficient optimization scientifically until MMF
   `boundary_ok=true` is established.

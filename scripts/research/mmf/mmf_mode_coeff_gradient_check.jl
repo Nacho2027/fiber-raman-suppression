@@ -83,12 +83,12 @@ function run_mmf_mode_coeff_gradient_check()
         xp = copy(x); xm = copy(x)
         xp[idx] += eps_fd
         xm[idx] -= eps_fd
-        Jp, _ = cost_and_gradient_joint(
+        Jp = _joint_forward_cost(
             xp, uω0_pulse, setup.fiber, setup.sim, setup.band_mask;
             variant = :sum,
             log_cost = false,
         )
-        Jm, _ = cost_and_gradient_joint(
+        Jm = _joint_forward_cost(
             xm, uω0_pulse, setup.fiber, setup.sim, setup.band_mask;
             variant = :sum,
             log_cost = false,

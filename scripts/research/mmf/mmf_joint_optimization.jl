@@ -91,6 +91,39 @@ end
 # Joint cost + gradient
 # ─────────────────────────────────────────────────────────────────────────────
 
+function _joint_forward_cost(
+    x::AbstractVector{<:Real},
+    uω0_pulse::AbstractMatrix,
+    fiber::Dict,
+    sim::Dict,
+    band_mask::AbstractVector{Bool};
+    variant::Symbol = :sum,
+    log_cost::Bool = true,
+)
+    Nt = size(uω0_pulse, 1)
+    M  = size(uω0_pulse, 2)
+    φ, c_m = _unpack_joint(x, Nt, M)
+    phase_factor = cis.(φ)
+    uω0_base = uω0_pulse .* reshape(c_m, 1, M)
+    uω0_shaped = uω0_base .* phase_factor
+
+    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    ũω = sol["ode_sol"]
+    L = fiber["L"]
+    uωf = cis.(fiber["Dω"] .* L) .* ũω(L)
+
+    J, _ = if variant === :sum
+        mmf_cost_sum(uωf, band_mask)
+    elseif variant === :fundamental
+        mmf_cost_fundamental(uωf, band_mask)
+    elseif variant === :worst_mode
+        mmf_cost_worst_mode(uωf, band_mask)
+    else
+        throw(ArgumentError("unknown variant :$variant"))
+    end
+    return log_cost ? 10.0 * log10(max(J, 1e-15)) : J
+end
+
 """
     cost_and_gradient_joint(x, uω0_pulse, fiber, sim, band_mask; kwargs...)
 
@@ -120,6 +153,7 @@ function cost_and_gradient_joint(
     log_cost::Bool = true,
     λ_gdd::Real = 0.0,
     λ_boundary::Real = 0.0,
+    mode_fd_eps::Real = 1e-5,
 )
     Nt = size(uω0_pulse, 1)
     M  = size(uω0_pulse, 2)
@@ -158,68 +192,39 @@ function cost_and_gradient_joint(
     ∂J_∂φ_expanded = 2.0 .* real.(conj.(λ0) .* (1im .* uω0_shaped))  # (Nt, M)
     ∂J_∂φ          = vec(sum(∂J_∂φ_expanded, dims = 2))              # (Nt,)
 
-    # c_m gradient (complex, one per mode)
-    # ∂J/∂conj(c_m) = Σ_ω conj(pulse(ω)) · conj(phase_factor(ω)) · ∂J/∂conj(uω0_shaped[ω, m])
-    # where ∂J/∂conj(uω0_shaped[ω, m]) corresponds to the same chain rule as λ₀:
-    #   ∂J/∂uω0_shaped[ω, m] = conj(λ₀[ω, m]) · i  (real part doubled in the adjoint terminal convention)
-    # Practically, use the already-computed (λ₀ * i) but apply it in the uω0_base space:
-    #   ∂J_∂c_m  = Σ_ω conj(uω0_pulse[ω, 1]) · conj(phase_factor[ω]) · [2 · conj(λ₀[ω, m]) · i · c_m gauge]
-    # Simpler form by re-doing the chain on the c_m slot directly:
-    #   uω0_shaped[ω, m] = uω0_pulse[ω, 1] · c_m · phase_factor[ω]
-    # so ∂uω0_shaped[ω, m] / ∂c_m = uω0_pulse[ω, 1] · phase_factor[ω]
-    # The gradient of J w.r.t. c_m (complex) via Wirtinger calc:
-    #   ∂J/∂c_m = Σ_ω conj(∂uω0_shaped/∂c_m)(ω) · (some_factor)
-    # equivalently we can reuse ∂J_∂φ_expanded[ω, m] / c_m  as a shortcut since
-    #   d(cis(φ)·c_m) / dc_m · dφ = 0, so direct chain:
-    #   ∂J/∂c_m_real = Σ_ω 2·Re(conj(λ₀[ω, m]) · i · uω0_pulse[ω, 1] · phase_factor[ω]) / |c_m_real_part|   (if we varied r_m only)
-    # Easier: compute the COMPLEX gradient ∂J/∂conj(c_m) and then chain to (r_m, α_m) below.
-    ∂J_∂conj_cm = Vector{ComplexF64}(undef, M)
-    for m in 1:M
-        acc = ComplexF64(0.0, 0.0)
-        for t in 1:Nt
-            # Same chain rule as φ but we pull out c_m:
-            #   ∂J/∂conj(c_m) = Σ_ω conj(uω0_pulse[ω,1]) · conj(phase_factor[ω]) · conj(λ₀[ω,m]) · i
-            acc += conj(uω0_pulse[t, 1]) * conj(phase_factor[t]) * conj(λ0[t, m]) * 1im
-        end
-        ∂J_∂conj_cm[m] = 2 * acc   # factor-of-2 from the real-part convention
-    end
-
-    # Reduce to the (r_m, α_m) parametrization, m=2..M, and also handle the
-    # constraint c_1 = sqrt(1 - Σ_{m>1} r_m²):
-    # Let r_m, α_m be the free params for m ≥ 2, and r_1² = 1 - Σ r_m².
-    # d(|c_1|)/d(r_m) = -r_m / r_1  (if r_1 > 0)
-    # d(c_1)/d(r_m)  = -r_m / r_1  (c_1 is real positive)
-    # So ∂J/∂r_m = 2·Re[(c_m/|c_m|) · ∂J/∂conj(c_m)]   (direct part from c_m)
-    #             + 2·Re[ (-r_m / r_1) · ∂J/∂conj(c_1) ]  (constraint part)
-    # ∂J/∂α_m = 2·Re[ (i · c_m) · ∂J/∂conj(c_m) ]        (c_1 is real → no α_1 term)
-
-    r1 = real(c_m[1])
-    inv_r1 = r1 > 1e-12 ? 1 / r1 : 0.0
-
+    # Mode-coefficient gradients: use central finite differences for the small
+    # packed mode block. The custom complex adjoint chain for {r_m, α_m} is easy
+    # to get wrong; this block has only 2(M-1) parameters, so FD is a defensible
+    # preflight-safe default for advisor-facing mode-launch studies.
     grad_r_alpha = zeros(Float64, 2 * (M - 1))
-    for m in 2:M
-        r = abs(c_m[m])
-        α = angle(c_m[m])
-        direction_cm = cis(α)          # c_m / |c_m|
-
-        dJ_dr = 2 * real(direction_cm * ∂J_∂conj_cm[m])
-        dJ_dr += 2 * real((-r * inv_r1) * ∂J_∂conj_cm[1])   # constraint coupling
-
-        dJ_dα = 2 * real((1im * r * direction_cm) * ∂J_∂conj_cm[m])
-
-        grad_r_alpha[2 * (m - 2) + 1] = dJ_dr
-        grad_r_alpha[2 * (m - 2) + 2] = dJ_dα
+    for (j, idx) in enumerate((Nt + 1):(Nt + 2 * (M - 1)))
+        xp = copy(x)
+        xm = copy(x)
+        xp[idx] += mode_fd_eps
+        xm[idx] -= mode_fd_eps
+        Jp = _joint_forward_cost(
+            xp, uω0_pulse, fiber, sim, band_mask;
+            variant = variant,
+            log_cost = log_cost,
+        )
+        Jm = _joint_forward_cost(
+            xm, uω0_pulse, fiber, sim, band_mask;
+            variant = variant,
+            log_cost = log_cost,
+        )
+        grad_r_alpha[j] = (Jp - Jm) / (2mode_fd_eps)
     end
 
     # Combine into packed gradient
     grad_x = vcat(∂J_∂φ, grad_r_alpha)
 
-    # Log-scaling
+    # Log-scaling for the adjoint phase block. The mode-coefficient block was
+    # already finite-differenced on the returned scalar surface above.
     if log_cost
         J_clamped   = max(J, 1e-15)
         J_phys      = 10.0 * log10(J_clamped)
         scale       = 10.0 / (J_clamped * log(10.0))
-        grad_x    .*= scale
+        grad_x[1:Nt] .*= scale
         # (GDD/boundary penalties left for future expansion; baseline doesn't use here)
     else
         J_phys = J
