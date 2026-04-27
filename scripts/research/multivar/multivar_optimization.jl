@@ -613,6 +613,8 @@ function optimize_spectral_multivariable(
     iters_done = Ref(0)
     progress_every = parse(Int, get(ENV, "MV_PROGRESS_EVERY", "5"))
     eval_progress_every = parse(Int, get(ENV, "MV_EVAL_PROGRESS_EVERY", "10"))
+    f_calls_limit = parse(Int, get(ENV, "MV_OPT_F_CALLS_LIMIT", "0"))
+    time_limit_s = parse(Float64, get(ENV, "MV_OPT_TIME_LIMIT_S", "NaN"))
     evals_done = Ref(0)
     function callback(state)
         # Under Fminbox, `state` is the trace Vector{OptimizationState}; under
@@ -677,6 +679,8 @@ function optimize_spectral_multivariable(
     opts = Optim.Options(
         iterations = max_iter,
         f_abstol   = log_cost ? 0.01 : 1e-10,
+        f_calls_limit = f_calls_limit,
+        time_limit = time_limit_s,
         callback   = callback,
         store_trace= store_trace,
         extended_trace = false,
@@ -686,6 +690,7 @@ function optimize_spectral_multivariable(
         optimize(fg_closure, lower_y, upper_y, y0, Fminbox(method_lbfgs),
                  Optim.Options(iterations=max_iter, outer_iterations=max_iter,
                                f_abstol=log_cost ? 0.01 : 1e-10,
+                               f_calls_limit=f_calls_limit, time_limit=time_limit_s,
                                callback=callback, store_trace=store_trace))
     else
         optimize(fg_closure, y0, method_lbfgs, opts)
