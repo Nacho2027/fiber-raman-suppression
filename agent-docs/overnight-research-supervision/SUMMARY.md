@@ -464,3 +464,19 @@ single monolithic fragile run.
   JSON, `variable_ablation_summary.md`, and standard images for the case and
   phase reference. The incomplete `phase_energy_cold` directory intentionally
   has only phase-reference artifacts.
+
+## 2026-04-27 14:31 UTC Supervisor Check
+
+- GCE inventory is clean for the research lanes: `fiber-raman-burst` is
+  `TERMINATED`, and no `fiber-raman-temp-*` C3 ephemerals are running.
+- Local process check found no active Julia, `burst-spawn-temp`,
+  `burst-run-heavy`, `rsync`, VM-create, or `parallel_research_lane` jobs.
+- Closed two stale local multivar tmux sessions,
+  `overnight-multivar-energy-retry` and `overnight-multivar-seq5`, after
+  verifying both were sitting at shell prompts from completed jobs.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  was not modified. The optional Codex watchdog cron also remains installed.
+- No relaunch was needed. MMF remains closed as the documented reduced
+  threshold `invalid-window` caveat, long-fiber 200 m artifacts and standard
+  images are present, and the accepted multivar result directories each have
+  the expected case/phase standard images.
