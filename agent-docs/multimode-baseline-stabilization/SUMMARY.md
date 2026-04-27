@@ -96,7 +96,9 @@
 |---|---|---|---|---|---|
 | E1 | local focused regression | no propagation; synthetic centered `ut`, `uω=ifft(ut)` | passed | `fft(uω)` recovers centered pulse; raw edge `2.25e-35`; `ifft(uω)` is not the time field | diagnostic fix covered |
 | E2 | burst `M-mmffix` | `GRIN_50`, `L=2 m`, `P=0.20 W`, `Nt=4096`, `TW=96 ps`, `max_iter=4`, `λ_boundary=0` | `J_sum -17.96 -> -45.07 dB`, `Δ=27.12 dB` | `max_edge=5.02e-02`, input `4.92e-02`, output `5.02e-02`, `boundary_ok=false`; phase diagnostics show extreme noisy group delay/GDD | not accepted; real temporal-edge artifact remains |
-| E3 | burst `M-mmfbnd` constrained attempt | same threshold case, `λ_boundary=0.05`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | did not start Julia output | permanent burst VM entered `STOPPING` immediately after wrapper acquired lock on two launch attempts | infrastructure-blocked follow-up |
+| E3 | burst `M-mmfbnd` constrained attempt on permanent VM | same threshold case, `λ_boundary=0.05`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | did not start Julia output | permanent burst VM entered `STOPPING` immediately after wrapper acquired lock on two launch attempts | superseded by ephemeral rerun |
+| E4 | ephemeral `M-mmfbnd` boundary-constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=0`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | `J_sum -17.96 -> -45.04 dB`, `Δ=27.09 dB` | `max_edge=2.74e-07`, input `2.74e-07`, output `2.64e-07`, `boundary_ok=true`; per-mode plot shows suppression across launched modes | window artifact no longer explains the gain, but phase still visually aggressive |
+| E5 | ephemeral `M-mmfgdd` boundary+GDD constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=1e-4`, `SAVE_DIR=results/raman/phase36_window_validation_gdd` | raw Raman `J_sum -17.96 -> -49.69 dB`, `Δ=31.73 dB`; penalized objective ended at `-29.53 dB` | `max_edge=2.07e-11`, input `2.07e-11`, output `1.98e-11`, `boundary_ok=true`; `J_fund=-49.65 dB`, `J_worst=-45.35 dB` | accepted as current MMF candidate; needs robustness, not window rescue |
 
 ### Visual Inspection
 
@@ -117,26 +119,63 @@ acceptance: group delay reaches tens of ps with noisy GDD, the spectral output
 mostly reproduces a shaped input spectrum, and raw edge diagnostics show about
 5% energy in temporal edges.
 
+Inspected boundary-constrained images under
+`results/raman/phase36_window_validation_boundary/`:
+
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_profile.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_diagnostic.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution_unshaped.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_total_spectrum.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_per_mode_spectrum.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_phase.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_convergence.png`
+
+The plots render and the raw temporal-edge metric is clean. The per-mode
+spectrum shows suppression in the launched modes, not only in the summed
+objective. The remaining concern is phase realism: the group delay/GDD are much
+less pathological than E2 but still visibly aggressive.
+
+Inspected boundary+GDD-constrained images under
+`results/raman/phase36_window_validation_gdd/`:
+
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_profile.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_diagnostic.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution_unshaped.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_total_spectrum.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_per_mode_spectrum.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_phase.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt4096_tw96_convergence.png`
+
+The standard image set is present and renders. The optimized temporal pulse is
+contained well inside the 96 ps window, and raw edge fractions are near
+machine-clean levels. The phase is no longer the original tens-of-ps
+window-filling object; the diagnostic shows roughly sub-ps to 1.2 ps group-delay
+structure with oscillatory GDD. This is still an engineered phase candidate, so
+do not overclaim experimental generality until seed/window/regularization and
+launch-coefficient sensitivity are checked.
+
 ### Current Decision
 
-Do not accept the MMF threshold result as physical Raman suppression. The prior
-`edge_frac≈1` diagnosis was partly a diagnostic bug, but the corrected trust
-metric still fails by about 50x against the `1e-3` edge threshold.
+MMF status: **accepted as a current physical candidate, not an invalid-window
+result**.
 
-MMF status: **needs reformulated/constrained objective or larger/healthier
-compute for constrained reruns**, not accepted physics.
+The unregularized E2 optimum is still rejected, but the same threshold regime
+survived both the raw-edge boundary penalty and a GDD penalty. E5 is the best
+current candidate: `GRIN_50`, `L=2 m`, `P=0.20 W`, `Nt=4096`, `TW=96 ps`,
+`λ_boundary=0.05`, `λ_gdd=1e-4`, with `J_sum -17.96 -> -49.69 dB`,
+`Δ=31.73 dB`, `boundary_ok=true`, and standard images visually inspected.
 
-Recommended next step when burst is stable:
+Remaining scientific todos before treating this as robust or publication-grade:
 
-```bash
-MMF_VALIDATION_SAVE_DIR=results/raman/phase36_window_validation_boundary \
-MMF_VALIDATION_CASES=threshold \
-MMF_VALIDATION_MAX_ITER=4 \
-MMF_VALIDATION_THRESHOLD_TW=96 \
-MMF_VALIDATION_THRESHOLD_NT=4096 \
-MMF_VALIDATION_LAMBDA_BOUNDARY=0.05 \
-julia -t auto --project=. scripts/research/mmf/mmf_window_validation.jl
-```
-
-If that still fails, move to a reduced/smoothed phase basis or explicit
-trust-constrained objective before mode-coefficient optimization.
+- Repeat E5 at least once with a different seed or slightly different optimizer
+  budget to check whether the basin is stable.
+- Run a small time-window/Nt ladder around the E5 settings, for example
+  `TW=72/96/128 ps` with `Nt=4096/8192` as quota allows.
+- Reopen the mode-coefficient follow-up now that window trust passes: test
+  launch coefficient sensitivity and verify that suppression is not an artifact
+  of the default LP01-heavy launch.
+- Add a first-class validation/report script for `:fundamental` and
+  `:worst_mode` objective variants, although E5's diagnostic report already
+  shows strong `J_fund` and `J_worst` at the `:sum` optimum.
