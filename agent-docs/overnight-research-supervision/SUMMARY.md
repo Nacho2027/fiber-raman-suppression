@@ -556,3 +556,27 @@ single monolithic fragile run.
   drops about 68% of the stored spectral range.
 - Deterministic watchdog cron remains installed at the 15 minute cadence and
   was not modified.
+
+## 2026-04-27 18:35 UTC Supervisor Check
+
+- Active quota mix remains controlled: `fiber-raman-burst` is `TERMINATED`,
+  the 200 m long-fiber continuation is running on one `c3-highcpu-8`
+  ephemeral, and MMF boundary follow-up `M-mmfbnd` is running on one
+  `c3-highcpu-22` ephemeral. No multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active on commit `8b14314`. The
+  run remains non-final and has checkpointed through `ckpt_iter_0547.jld2`;
+  latest logged optimizer value is still near `f=-53.44522 dB` at step 6. Keep
+  the existing caveat that the resume grid drops about 68% of the stored
+  spectral range.
+- MMF boundary follow-up `M-mmfbnd` is alive and CPU-active on commit
+  `e2ba301` with `MMF_VALIDATION_SAVE_DIR=results/raman/phase36_window_validation_boundary`,
+  threshold-only `Nt=4096`, `tw=96 ps`, `MMF_VALIDATION_MAX_ITER=4`, and
+  `MMF_VALIDATION_LAMBDA_BOUNDARY=0.05`. The clean worktree contains
+  `scripts/research/mmf/mmf_window_validation.jl`; the active remote log
+  `M-mmfbnd_20260427T182906Z.log` has reached MMF setup with no failure yet.
+  Treat this as a boundary-diagnostic follow-up to the invalid-window MMF
+  caveat, not accepted MMF science until artifacts and standard images are
+  synced and inspected.
+- Multivar remains closed with the previously documented accepted/caveat
+  outputs. The 15 minute deterministic watchdog cron remains installed and was
+  not modified.
