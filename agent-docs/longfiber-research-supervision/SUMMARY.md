@@ -64,6 +64,10 @@ continuation ladder toward 200 m is trustworthy.
   iteration 5, but Julia remained CPU-active (`~112%`) and the remote tmux
   session was alive. No final artifacts yet; latest preserved checkpoint is
   still `ckpt_iter_0005.jld2`.
+- Added local watcher at `2026-04-27T06:51Z`: tmux window
+  `overnight-longfiber-hc8:codex-watch` polls every 10 minutes, appends to
+  `results/burst-logs/overnight/20260427/longfiber-codex-watch.log`, and
+  safety-copies the 200 m checkpoint directory plus remote run log locally.
 - Do not launch another long-fiber ephemeral while this VM is active. Respect
   C3 quota so multivar can keep one `c3-highcpu-8`.
 
