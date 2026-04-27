@@ -39,17 +39,35 @@
   `results/burst-logs/M-mmfthr4_20260427T070623Z.log`.
 - `2026-04-27T07:10Z`: `M-mmfthr4` entered threshold setup normally with
   `max_iter=4`, `Nt=8192`, `tw=96 ps`; memory about `16.2 GB RSS`.
+- `2026-04-27T07:31Z`: `M-mmfthr4` reached evaluation 1 at `-17.371 dB`;
+  memory about `39.6 GB RSS`.
+- `2026-04-27T07:45Z` and `2026-04-27T08:00Z`: the old local
+  `overnight-mmf` supervisor retried the original high-risk `M-mmfwin3`
+  command. The remote heavy lock rejected those attempts while `M-mmfthr4` was
+  active. The local retry tmux session was then killed to prevent unsafe
+  relaunch after recovery completion.
+- `2026-04-27T07:31Z` onward: new SSH probes began timing out after connect,
+  while the original `M-mmfthr4` launcher stayed attached and serial output
+  showed no clean completion or new OOM message.
+- `2026-04-27T08:19Z`: treated `M-mmfthr4` as a memory-failed/uninspectable run,
+  reset `fiber-raman-burst`, and verified SSH/memory recovery.
+- `2026-04-27T08:20Z`: relaunched threshold-only at smaller grid:
+  `M-mmfthr4096`, launcher log
+  `results/burst-logs/overnight/20260427/mmf-window-threshold4096.log`, remote
+  log `results/burst-logs/M-mmfthr4096_20260427T082013Z.log`, command
+  `MMF_VALIDATION_CASES=threshold MMF_VALIDATION_MAX_ITER=4 MMF_VALIDATION_THRESHOLD_TW=96 MMF_VALIDATION_THRESHOLD_NT=4096 julia -t auto --project=. scripts/research/mmf/mmf_window_validation.jl`.
 
 ## Current Interpretation
 
-- Threshold validation at `max_iter=8` was alive but crossed into imminent
-  memory failure before producing outputs. The active recovery path is
-  threshold-only at `max_iter=4`.
-- Memory pressure is the main risk. The threshold case nearly saturated the
-  `c3-highcpu-22` memory budget, so the queued aggressive case (`Nt=16384`,
-  `tw=160 ps`) should not be run in the same configuration on this VM.
-- Do not launch another permanent-burst heavy job while `M-mmfwin3` holds the
-  heavy lock.
+- Threshold validation at `Nt=8192` crossed into memory failure twice: once
+  near evaluation 6 and again as an uninspectable host after evaluation 1 in the
+  lower-iteration recovery run. The active recovery path is threshold-only at
+  `Nt=4096`, `tw=96 ps`, `max_iter=4`.
+- Memory pressure is the main risk. Neither the queued aggressive case
+  (`Nt=16384`, `tw=160 ps`) nor another `Nt=8192` threshold run should be
+  attempted on this VM without reducing memory footprint.
+- Do not launch another permanent-burst heavy job while `M-mmfthr4096` holds
+  the heavy lock.
 - Do not interpret the transient `-41 dB` evaluation as science until the
   script writes `mmf_window_validation_summary.md`, JLD2 artifacts, and the
   required standard image set.
@@ -59,10 +77,12 @@
 - If the process exits cleanly, inspect
   `results/raman/phase36_window_validation/mmf_window_validation_summary.md`
   and verify standard image sets before deciding next steps.
-- If `M-mmfthr4` OOMs or is killed before writing outputs, relaunch threshold
-  with a smaller memory footprint, for example `MMF_VALIDATION_THRESHOLD_NT=4096`
-  while keeping `MMF_VALIDATION_THRESHOLD_TW=96` if the science goal remains
-  window validation.
+- If `M-mmfthr4096` completes, verify summary, JLD2, and standard images, then
+  decide whether this lower-resolution result is enough to close the window
+  artifact question or whether a larger-memory VM is required.
+- If `M-mmfthr4096` also OOMs or becomes uninspectable, stop trying this window
+  validation on `c3-highcpu-22` and record that the current MMF validation
+  requires either a larger-memory machine or a lower-memory implementation.
 - If threshold completes but aggressive OOMs, preserve threshold outputs and
   relaunch aggressive separately with a lower-memory configuration rather than
   rerunning threshold.
