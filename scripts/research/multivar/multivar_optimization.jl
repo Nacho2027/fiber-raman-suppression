@@ -611,14 +611,16 @@ function optimize_spectral_multivariable(
     t_start = time()
     last_diag = Ref{Any}(nothing)
     iters_done = Ref(0)
+    progress_every = parse(Int, get(ENV, "MV_PROGRESS_EVERY", "5"))
     function callback(state)
         # Under Fminbox, `state` is the trace Vector{OptimizationState}; under
         # plain LBFGS it is a single OptimizationState. Handle both.
         s = state isa AbstractVector ? last(state) : state
         iters_done[] = s.iteration
         bd = last_diag[]
-        if bd !== nothing
-            @debug @sprintf("  [%3d/%d] J=%.4e  J_ram=%.4e  α=%.3f  A∈[%.3f,%.3f]",
+        if bd !== nothing && progress_every > 0 &&
+           (s.iteration == 1 || s.iteration % progress_every == 0 || s.iteration == max_iter)
+            @info @sprintf("multivar progress [%3d/%d] J=%.4e  J_ram=%.4e  α=%.3f  A∈[%.3f,%.3f]",
                 s.iteration, max_iter, s.value,
                 get(bd, :J_raman, NaN), get(bd, :alpha, NaN),
                 get(bd, :A_extrema, (NaN, NaN))[1], get(bd, :A_extrema, (NaN, NaN))[2])
