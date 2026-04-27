@@ -508,3 +508,29 @@ single monolithic fragile run.
 - Final inventory after cleanup: `fiber-raman-burst` is `TERMINATED`, no
   `fiber-raman-temp-*` ephemerals are running, and no overnight tmux supervisor
   sessions or burst helper processes remain active.
+
+## 2026-04-27 17:35 UTC Supervisor Check
+
+- Active quota mix is within limits: permanent `fiber-raman-burst` is running
+  for MMF recovery, and the only `c3-highcpu-8` ephemeral is
+  `fiber-raman-temp-l-200resume1-20260427t165232z` for the 200 m long-fiber
+  continuation. No multivar ephemeral is running.
+- MMF recovery `M-mmffix` is alive on permanent burst with
+  `MMF_VALIDATION_CASES=threshold`, `MMF_VALIDATION_MAX_ITER=4`,
+  `MMF_VALIDATION_THRESHOLD_TW=96`, and `MMF_VALIDATION_THRESHOLD_NT=4096`.
+  The remote log `M-mmffix_20260427T171823Z.log` reached optimizer iteration
+  2; no intervention was needed.
+- Long-fiber continuation `L-200resume1` is alive on commit `6240464`, which is
+  newer than the multivar log-energy fix. It resumed from
+  `ckpt_iter_0381.jld2` with `f=-52.97751 dB` and improved to
+  `f=-53.18840 dB` by optimizer step 2. The run emitted the expected
+  interpolation caveat that the `Nt=65536`, `tw=320 ps` resume grid drops much
+  of the previous spectral range; keep this caveat when interpreting final
+  artifacts.
+- Follow-up multivar robustness `V-ampd015rob` completed with `rc=0`, synced
+  results, and destroyed its VM. All four nearby `δ=0.15` amplitude-on-phase
+  points passed the 3 dB threshold, with gains vs phase-only from `8.41 dB` to
+  `10.84 dB`; each directory has JLD2, SLM JSON, summary markdown, and the
+  phase/case standard image sets. Representative weakest/best image sets were
+  visually inspected and were not blank or corrupt; diagnostics remain rough
+  but interpretable.
