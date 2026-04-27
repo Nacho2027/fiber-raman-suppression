@@ -580,3 +580,23 @@ single monolithic fragile run.
 - Multivar remains closed with the previously documented accepted/caveat
   outputs. The 15 minute deterministic watchdog cron remains installed and was
   not modified.
+
+## 2026-04-27 19:02 UTC Supervisor Check
+
+- Active C3 quota remains within limits: `C3_CPUS usage=30 limit=50`.
+  `fiber-raman-burst` is `TERMINATED`, long-fiber `L-200resume1` is running on
+  one `c3-highcpu-8`, and MMF boundary follow-up `M-mmfbnd` is running on one
+  `c3-highcpu-22`. No multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active on commit `8b14314`. It
+  has checkpointed through `ckpt_iter_0611.jld2`; latest logged optimizer value
+  is `f=-53.44516 dB` at step 7. The prior resume-grid caveat still applies:
+  about 68% of the stored spectral range is dropped by the `Nt=65536`,
+  `tw=320 ps` continuation grid.
+- MMF boundary follow-up `M-mmfbnd` is alive and CPU-active on commit
+  `8b14314` with `MMF_VALIDATION_LAMBDA_BOUNDARY=0.05`. The run has progressed
+  through objective evaluation 19, with the latest logged boundary-penalized
+  objective `J=-31.92284 dB`; no artifacts are synced yet because the remote
+  job is still running.
+- Multivar remains closed. The deterministic watchdog cron is still installed
+  at the 15 minute cadence and is reporting `multivar sequence already closed
+  by accepted results/caveats; not restarting`.
