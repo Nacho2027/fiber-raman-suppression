@@ -289,6 +289,61 @@ single monolithic fragile run.
   `fiber-raman-temp-v-mvphampe5-20260427t092141z`. Remote clean worktree is
   `e1ae5e7`; the run is currently in Julia precompile.
 
+## 2026-04-27 09:40 UTC Multivar Supervisor Note
+
+- `phase_amp_energy_warm` completed and synced cleanly. Required artifacts are
+  present: JLD2, SLM JSON, summary markdown, and all four standard images for
+  both the phase-only reference and the case.
+- Scientific status: accepted negative result. The warm full
+  phase+amplitude+energy run reached `J_after = -31.04 dB`, which is
+  `+9.75 dB` worse than phase-only. The standard images render correctly; the
+  phase diagnostics show a high-curvature phase/GDD profile, consistent with
+  the worse scalar objective.
+- Seq5 launched the final planned case, `amp_energy_unshaped`, as
+  `V-mvampeun5` on
+  `fiber-raman-temp-v-mvampeun5-20260427t093636z`. It is the only active
+  multivar ephemeral.
+
+## 2026-04-27 10:40 UTC Multivar Supervisor Note
+
+- The uncapped `amp_energy_unshaped` attempt (`V-mvampeun5`) reached iteration
+  15/50, then spent more than 400 objective evaluations with essentially
+  unchanged objective near `6.8343e-01`. It was stopped as a line-search
+  pathology and is not accepted because no `amp_energy_unshaped_*` case
+  artifacts were written.
+- Stopping `V-mvampeun5` exposed an interrupted-run sync bug in
+  `~/bin/burst-spawn-temp` (`remote_archive: unbound variable`). The VM was
+  destroyed, so the interrupted attempt could not be manually recovered. The
+  helper was hardened locally by renaming and guarding result archive paths in
+  `sync_results`; `bash -n ~/bin/burst-spawn-temp` passes.
+- Pushed commit `e617e05` adding `MV_OPT_F_CALLS_LIMIT` and
+  `MV_OPT_TIME_LIMIT_S` to the multivar optimizer. Launched one capped retry,
+  `V-mvampeun6`, with `MV_OPT_F_CALLS_LIMIT=220` and
+  `MV_OPT_TIME_LIMIT_S=1800` under tag
+  `overnight_amp_energy_unshaped_retry1_20260427`.
+- `V-mvampeun6` confirmed that Optim's function-call cap does not interrupt
+  this long line-search path early enough to write case artifacts. It was
+  stopped after reproducing the same plateau and synced only phase-only
+  artifacts.
+- Launched final artifact-producing retry `V-mvampeun7` with
+  `MV_ABLATION_MV_ITER=15` under tag
+  `overnight_amp_energy_unshaped_retry2_20260427`, targeting the last useful
+  optimizer state before the previously observed line-search pathology.
+
+## 2026-04-27 11:50 UTC Multivar Supervisor Note
+
+- `V-mvampeun7` also exited with launcher `rc=0` but wrote only the
+  phase-only reference; no `amp_energy_unshaped_result.jld2`, SLM JSON, or
+  standard images were produced. The heavy log ends during the multivar case
+  after early eval/progress messages, with no explicit Julia exception.
+- Status: `amp_energy_unshaped` remains scientifically incomplete and should
+  not be accepted. Given the earlier uncapped plateau and two retries that
+  failed to emit case artifacts, treat this as a low-priority optimizer/lane
+  failure for now rather than spending more overnight VMs.
+- No multivar ephemerals remain running after `V-mvampeun7`; the multivar
+  overnight sequence is complete except for the explicitly incomplete
+  `phase_energy_cold` and `amp_energy_unshaped` lanes.
+
 ## 2026-04-27 09:07 UTC MMF Recovery Result
 
 - Reduced MMF threshold recovery `M-mmfthr4096` completed on permanent
@@ -331,3 +386,81 @@ single monolithic fragile run.
   watchdog recognizes any `overnight-multivar-seq*` supervisor, including the
   active `overnight-multivar-seq5`. This prevents an older seq4 relaunch after
   the active multivar VM exits.
+
+## 2026-04-27 10:03 UTC Supervisor Check
+
+- Active quota mix is below the intended maximum: permanent
+  `fiber-raman-burst` is terminated and the only running C3 ephemeral is
+  `fiber-raman-temp-v-mvampeun5-20260427t093636z` for multivar.
+- Syncthing still reports both configured peers disconnected as of
+  `2026-04-27T10:03Z`; local execution and GCE result recovery are unaffected,
+  but Mac-side result visibility may lag.
+- Long-fiber 200 m completed its 15-iteration fresh run and was finalized by
+  recovery job `L-200rec1` after the original launcher hit a local
+  `burst-spawn-temp` quoting error. The recovery job exited `rc=0`, synced
+  `200m_overngt_opt_full_result.jld2`, checkpoints through
+  `ckpt_iter_0381_final.jld2`, and all four standard images under
+  `results/raman/phase16/standard_images_F_200m_overngt_opt/`.
+- Visual inspection of the 200 m standard image set found no blank or corrupt
+  plots. Scientific caveat: the result is non-converged (`J=-52.98 dB`,
+  gradient norm `9.55e-01`) and the phase/group-delay diagnostics are very
+  rough, so treat it as exploratory 200 m evidence rather than a validated
+  long-fiber workflow result.
+- Stopped stale local tmux session `overnight-longfiber-hc8`; it was only
+  polling the destroyed original long-fiber VM after successful recovery.
+- Multivar `amp_energy_unshaped` is alive on clean commit `cc4458d`, which
+  contains the `4d426df` log-energy fix. Remote Julia is CPU-active, the
+  phase-only reference artifacts are written, and the case is emitting
+  progress/evaluation logs; no intervention was needed.
+- MMF remains closed as the reduced threshold `invalid-window` caveat from
+  `M-mmfthr4096`; no relaunch was performed.
+
+## 2026-04-27 11:45 UTC Supervisor Check
+
+- Active quota mix ended below the intended maximum: permanent
+  `fiber-raman-burst` is terminated and no `c3-highcpu-8` ephemerals are
+  running after the multivar retry completed.
+- Stopped `V-mvampeun7` (`overnight_amp_energy_unshaped_retry2_20260427`)
+  after it reproduced the `amp_energy_unshaped` line-search pathology: one
+  accepted step, then repeated objective evaluations at essentially unchanged
+  `J≈7.0126e-01` with only phase-only artifacts written. The helper synced
+  partial artifacts and destroyed the VM cleanly.
+- Relaunched the same final planned multivar case as `V-mvampeun8` with
+  `MV_ABLATION_MV_ITER=1` under tag
+  `overnight_amp_energy_unshaped_retry3_20260427`, intentionally capturing the
+  last useful accepted state before the pathological second line search. The
+  launcher exited `rc=0` and synced results.
+- Local completion check passed for
+  `results/raman/multivar/variable_ablation_overnight_amp_energy_unshaped_retry3_20260427/`:
+  `amp_energy_unshaped_result.jld2`, `amp_energy_unshaped_slm.json`,
+  `variable_ablation_summary.md`, and all four standard images for both the
+  phase reference and the case are present.
+- Visual inspection of the phase reference and one-step case standard images
+  found no blank or corrupt plots. Scientific status: accepted negative/caveat
+  result, not a useful optimizer outcome. The one-step unshaped
+  amplitude+energy case reached `J_after=-1.54 dB`, only `-0.04 dB` better
+  than unshaped and `+39.25 dB` worse than phase-only.
+
+## 2026-04-27 12:00 UTC Multivar Final Status
+
+- No multivar ephemeral VMs are running. The final VM inventory returned
+  `no ephemeral burst VMs found`, so there is no quota leak or orphan to clean
+  up.
+- Accepted positive multivar results: `amp_on_phase` (`J_after=-46.91 dB`,
+  `vs_phase=-6.12 dB`), `energy_on_phase` retry
+  (`J_after=-44.89 dB`, `vs_phase=-4.10 dB`), and
+  `amp_energy_on_phase` (`J_after=-43.99 dB`, `vs_phase=-3.19 dB`).
+- Accepted negative multivar results: `phase_amp_energy_warm`
+  (`J_after=-31.04 dB`, `vs_phase=+9.75 dB`) and
+  `amp_energy_unshaped` retry3 (`J_after=-1.54 dB`,
+  `vs_phase=+39.25 dB`). `amp_energy_unshaped` is scientifically closed as a
+  negative/caveat result because the artifact-producing one-step retry captures
+  the last useful accepted state before the repeated line-search pathology.
+- Incomplete/not accepted: `phase_energy_cold` remains a pathological
+  cold-start optimizer case. It produced only the phase-only reference and was
+  manually stopped after remaining CPU-active for roughly two hours with no
+  multivar artifacts or progress callback.
+- Standard image/artifact status: all accepted results have local JLD2, SLM
+  JSON, `variable_ablation_summary.md`, and standard images for the case and
+  phase reference. The incomplete `phase_energy_cold` directory intentionally
+  has only phase-reference artifacts.
