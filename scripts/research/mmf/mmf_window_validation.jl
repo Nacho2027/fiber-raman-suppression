@@ -32,7 +32,8 @@ include(joinpath(@__DIR__, "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "src", "mmf_cost.jl"))
 include(joinpath(@__DIR__, "mmf_raman_optimization.jl"))
 
-const SAVE_DIR = joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase36_window_validation")
+const SAVE_DIR = get(ENV, "MMF_VALIDATION_SAVE_DIR",
+    joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase36_window_validation"))
 const DEFAULT_SEED = 42
 
 function _env_int(name::AbstractString, default::Int)
@@ -95,11 +96,17 @@ function _record_failure(cfg, err)
         Nt_used = cfg.Nt,
         time_window_used_ps = cfg.time_window,
         time_window_recommended_ps = NaN,
+        λ_gdd = cfg.λ_gdd,
+        λ_boundary = cfg.λ_boundary,
         J_ref_dB = NaN,
         J_opt_dB = NaN,
         improvement_dB = NaN,
         edge_fraction = NaN,
+        input_edge_fraction = NaN,
+        output_edge_fraction = NaN,
         boundary_ok = false,
+        input_boundary_ok = false,
+        output_boundary_ok = false,
         error = sprint(showerror, err),
     )
 end
@@ -114,11 +121,17 @@ function _record_success(cfg, run)
         Nt_used = run.setup.sim["Nt"],
         time_window_used_ps = run.setup.sim["time_window"],
         time_window_recommended_ps = run.setup.window_recommendation.time_window_ps,
+        λ_gdd = cfg.λ_gdd,
+        λ_boundary = cfg.λ_boundary,
         J_ref_dB = run.J_ref_dB,
         J_opt_dB = run.J_final_lin_dB,
         improvement_dB = run.improvement_dB,
         edge_fraction = run.trust_opt.boundary_edge_fraction,
+        input_edge_fraction = run.trust_opt.input_boundary_edge_fraction,
+        output_edge_fraction = run.trust_opt.output_boundary_edge_fraction,
         boundary_ok = run.trust_opt.boundary_ok,
+        input_boundary_ok = run.trust_opt.input_boundary_ok,
+        output_boundary_ok = run.trust_opt.output_boundary_ok,
         error = "",
     )
 end
@@ -136,14 +149,15 @@ function _write_summary(rows)
         println(io)
         println(io, "Purpose: decide whether the Phase 36 threshold/aggressive MMF gains survive larger temporal windows.")
         println(io)
-        println(io, "| Config | Status | Quality | L [m] | P [W] | Nt | TW used [ps] | TW rec [ps] | J_ref [dB] | J_opt [dB] | Delta [dB] | Edge frac | Boundary ok |")
-        println(io, "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
+        println(io, "| Config | Status | Quality | L [m] | P [W] | Nt | TW used [ps] | TW rec [ps] | lambda_gdd | lambda_boundary | J_ref [dB] | J_opt [dB] | Delta [dB] | Max edge frac | Input edge | Output edge | Boundary ok |")
+        println(io, "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
         for r in rows
             println(io, @sprintf(
-                "| %s | %s | %s | %.1f | %.2f | %d | %.1f | %.1f | %.2f | %.2f | %.2f | %.2e | %s |",
+                "| %s | %s | %s | %.1f | %.2f | %d | %.1f | %.1f | %.2e | %.2e | %.2f | %.2f | %.2f | %.2e | %.2e | %.2e | %s |",
                 r.config_name, r.status, r.quality, r.L_fiber, r.P_cont,
                 r.Nt_used, r.time_window_used_ps, r.time_window_recommended_ps,
-                r.J_ref_dB, r.J_opt_dB, r.improvement_dB, r.edge_fraction,
+                r.λ_gdd, r.λ_boundary, r.J_ref_dB, r.J_opt_dB, r.improvement_dB, r.edge_fraction,
+                r.input_edge_fraction, r.output_edge_fraction,
                 string(r.boundary_ok),
             ))
         end
@@ -167,16 +181,21 @@ end
 function run_mmf_window_validation()
     mkpath(SAVE_DIR)
     max_iter = _env_int("MMF_VALIDATION_MAX_ITER", 6)
+    λ_gdd = _env_float("MMF_VALIDATION_LAMBDA_GDD", 0.0)
+    λ_boundary = _env_float("MMF_VALIDATION_LAMBDA_BOUNDARY", 0.0)
     rows = NamedTuple[]
     @info "MMF window validation"
     @info @sprintf("Threads: %d", Threads.nthreads())
-    @info @sprintf("max_iter=%d save_dir=%s", max_iter, SAVE_DIR)
+    @info @sprintf("max_iter=%d lambda_gdd=%.3e lambda_boundary=%.3e save_dir=%s",
+        max_iter, λ_gdd, λ_boundary, SAVE_DIR)
 
     for cfg in _selected_cases()
+        cfg = merge(cfg, (λ_gdd = λ_gdd, λ_boundary = λ_boundary))
         @info "="^72
         @info @sprintf(
-            "Validation case %s: L=%.2fm P=%.3fW Nt=%d tw=%.1fps",
+            "Validation case %s: L=%.2fm P=%.3fW Nt=%d tw=%.1fps lambda_gdd=%.3e lambda_boundary=%.3e",
             cfg.name, cfg.L_fiber, cfg.P_cont, cfg.Nt, cfg.time_window,
+            cfg.λ_gdd, cfg.λ_boundary,
         )
         @info "="^72
         try
@@ -192,6 +211,8 @@ function run_mmf_window_validation()
                 time_window = cfg.time_window,
                 max_iter = max_iter,
                 variant = :sum,
+                λ_gdd = cfg.λ_gdd,
+                λ_boundary = cfg.λ_boundary,
                 seed = DEFAULT_SEED,
                 save_dir = SAVE_DIR,
                 tag = tag,

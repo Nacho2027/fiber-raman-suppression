@@ -89,6 +89,17 @@ function mmf_forward_output(
 end
 
 """
+    mmf_output_time_field(uωf) -> Matrix{ComplexF64}
+
+Recover the time-domain output field from the repository's frequency-domain
+MMF field convention. `get_initial_state` stores `uω = ifft(ut)`, and the
+forward solver records saved time-domain fields with `fft(uω, 1)`.
+"""
+function mmf_output_time_field(uωf::AbstractMatrix)
+    return fft(uωf, 1)
+end
+
+"""
     mmf_trust_metrics(φ, setup; boundary_threshold=1e-3, τ=50.0) -> NamedTuple
 
 Forward-only trust summary for a multimode phase profile. This is used for run
@@ -102,14 +113,27 @@ function mmf_trust_metrics(
 )
     prop = mmf_forward_output(φ, setup.uω0, setup.fiber, setup.sim)
     cost_report = mmf_cost_report(prop.uωf, setup.band_mask; τ = τ)
-    ut_out = ifft(prop.uωf, 1)
-    boundary_ok, boundary_edge_fraction = check_boundary_conditions(
-        ut_out, setup.sim; threshold = boundary_threshold
+    # Project convention is `uω = ifft(ut)` and `ut = fft(uω)`. Measure
+    # optimization trust on the raw output field; the legacy attenuator-recovery
+    # check can amplify harmless edge roundoff into false boundary failures.
+    ut_in = mmf_output_time_field(prop.uω0_shaped)
+    ut_out = mmf_output_time_field(prop.uωf)
+    input_boundary_ok, input_boundary_edge_fraction = check_raw_temporal_edges(
+        ut_in; threshold = boundary_threshold
     )
+    output_boundary_ok, output_boundary_edge_fraction = check_raw_temporal_edges(
+        ut_out; threshold = boundary_threshold
+    )
+    boundary_ok = input_boundary_ok && output_boundary_ok
+    boundary_edge_fraction = max(input_boundary_edge_fraction, output_boundary_edge_fraction)
     return (
         cost_report = cost_report,
         boundary_ok = boundary_ok,
         boundary_edge_fraction = boundary_edge_fraction,
+        input_boundary_ok = input_boundary_ok,
+        input_boundary_edge_fraction = input_boundary_edge_fraction,
+        output_boundary_ok = output_boundary_ok,
+        output_boundary_edge_fraction = output_boundary_edge_fraction,
         boundary_threshold = Float64(boundary_threshold),
         uωf = prop.uωf,
     )
@@ -367,6 +391,8 @@ function plot_mmf_result(
     title_suffix::String = "",
     variant::Symbol = :sum,
     log_cost::Bool = true,
+    λ_gdd::Real = 0.0,
+    λ_boundary::Real = 0.0,
 )
     uω0_base = setup.uω0
     fiber    = setup.fiber
@@ -375,8 +401,8 @@ function plot_mmf_result(
     objective_spec = mmf_cost_surface_spec(
         variant = variant,
         log_cost = log_cost,
-        λ_gdd = 0.0,
-        λ_boundary = 0.0,
+        λ_gdd = λ_gdd,
+        λ_boundary = λ_boundary,
     )
     Δf       = setup.Δf
     rth      = setup.raman_threshold
@@ -507,6 +533,8 @@ function run_mmf_baseline(;
     max_iter::Int = 30,
     variant::Symbol = :sum,
     log_cost::Bool = true,
+    λ_gdd::Real = 0.0,
+    λ_boundary::Real = 0.0,
     seed::Int = 42,
     save_dir::String = joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase16"),
     tag::String = "",
@@ -535,8 +563,8 @@ function run_mmf_baseline(;
     objective_spec = mmf_cost_surface_spec(
         variant = variant,
         log_cost = log_cost,
-        λ_gdd = 0.0,
-        λ_boundary = 0.0,
+        λ_gdd = λ_gdd,
+        λ_boundary = λ_boundary,
     )
     @info @sprintf("Reference (φ=0): J_lin = %.4e (%.2f dB)", J_ref, J_ref_dB)
     @info "MMF objective surface: $(objective_spec.scalar_surface)"
@@ -549,6 +577,8 @@ function run_mmf_baseline(;
         max_iter = max_iter,
         variant = variant,
         log_cost = log_cost,
+        λ_gdd = λ_gdd,
+        λ_boundary = λ_boundary,
         seed = seed,
     )
     wall_time = time() - t0
@@ -576,6 +606,8 @@ function run_mmf_baseline(;
         title_suffix = @sprintf("[%s, L=%gm, P=%gW]", String(preset), L_fiber, P_cont),
         variant = variant,
         log_cost = log_cost,
+        λ_gdd = λ_gdd,
+        λ_boundary = λ_boundary,
     )
 
     # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────

@@ -93,6 +93,26 @@ end
     @test length(report.per_mode_lin) == 1
 end
 
+@testset "Phase 16 — MMF trust uses raw output time field" begin
+    Nt = 2^7
+    M = 2
+    ut_centered = zeros(ComplexF64, Nt, M)
+    ut_centered[Nt ÷ 2, 1] = 1.0 + 0im
+    ut_centered[Nt ÷ 2 + 1, 2] = 0.5 + 0im
+    uω = ifft(ut_centered, 1)
+
+    ut_recovered = mmf_output_time_field(uω)
+    @test maximum(abs.(ut_recovered .- ut_centered)) < 1e-12
+
+    ok_raw, frac_raw = check_raw_temporal_edges(ut_recovered; threshold = 1e-6)
+    @test ok_raw
+    @test frac_raw < 1e-30
+
+    # The old MMF trust path used `ifft(uω, 1)`, which is not the time-domain
+    # field under this repository's `uω = ifft(ut)` convention.
+    @test maximum(abs.(ifft(uω, 1) .- ut_centered)) > 0.1
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Testset 3: finite-difference gradient check at M=6
 # ─────────────────────────────────────────────────────────────────────────────
