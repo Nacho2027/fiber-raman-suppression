@@ -21,6 +21,10 @@ has_tmux() {
     tmux has-session -t "$1" >/dev/null 2>&1
 }
 
+active_local_mmf_launcher() {
+    ps -eo cmd | grep -E 'parallel_research_lane\.sh --lane mmf|burst-run-heavy M-mmf' | grep -v grep >/dev/null 2>&1
+}
+
 active_instance_names() {
     gcloud compute instances list \
         --project="$PROJECT" \
@@ -113,6 +117,10 @@ launch_longfiber_if_missing() {
 
 launch_mmf_if_missing() {
     if has_tmux overnight-mmf; then
+        return 0
+    fi
+    if active_local_mmf_launcher; then
+        log "MMF launcher already active; not restarting"
         return 0
     fi
     if [[ -f results/raman/phase36_window_validation/mmf_window_validation_summary.md ]]; then

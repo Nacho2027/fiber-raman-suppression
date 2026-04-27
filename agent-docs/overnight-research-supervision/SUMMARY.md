@@ -91,6 +91,36 @@ single monolithic fragile run.
 - `V-mvampoph4` launched `amp_on_phase` at approximately 06:29 UTC and is the
   only active multivar VM. At approximately 06:32 UTC it was still in
   dependency precompile (`116/142` packages).
+- `V-mvampoph4` completed with `rc=0` and synced results. Local completion
+  check passed: `amp_on_phase_result.jld2`, `amp_on_phase_slm.json`,
+  `variable_ablation_summary.md`, and the phase/case standard image sets are
+  present under
+  `results/raman/multivar/variable_ablation_overnight_amp_on_phase_20260427/`.
+  Result: `amp_on_phase` reached `J_after=-46.91 dB`, beating the phase-only
+  reference by `-6.12 dB`.
+- Relaunched the failed energy case as `V-mvengoph5` with
+  `MV_ABLATION_TAG=overnight_energy_on_phase_retry1_20260427` and launcher log
+  `results/burst-logs/overnight/20260427/multivar-energy_on_phase-retry1.log`.
+  This is the only active multivar launch at the time of relaunch.
+- `V-mvengoph5` passed SSH, acquired the heavy lock, and is running from clean
+  worktree `e441f8e`. Verified the remote worktree has the log-energy
+  coordinate (`E = exp(...)`) before optimization starts. At approximately
+  06:45 UTC it was still in package precompile.
+- `V-mvengoph5` completed with `rc=0` and synced results. Local completion
+  check passed under
+  `results/raman/multivar/variable_ablation_overnight_energy_on_phase_retry1_20260427/`:
+  `energy_on_phase_result.jld2`, `energy_on_phase_slm.json`,
+  `variable_ablation_summary.md`, and both phase/case standard image sets are
+  present. Result: `energy_on_phase` reached `J_after=-44.89 dB`, beating the
+  phase-only reference by `-4.10 dB`.
+- Restarted the remaining sequence as `overnight-multivar-seq5`, beginning
+  with `amp_energy_on_phase` and leaving already-completed `energy_on_phase`
+  and `amp_on_phase` out of the sequence.
+- `V-mvampeoph5` completed `amp_energy_on_phase` with `rc=0` and synced
+  results. Local completion check passed under
+  `results/raman/multivar/variable_ablation_overnight_amp_energy_on_phase_20260427/`.
+  Result: `J_after=-43.99 dB`, beating phase-only by `-3.19 dB` but not
+  matching amplitude-only's `-6.12 dB` gain.
 
 ## 2026-04-27 06:36 UTC Supervisor Check
 
@@ -131,3 +161,85 @@ single monolithic fragile run.
 - The wrapper uses a 25 minute timeout so the 30 minute cron cadence cannot
   accumulate overlapping Codex agents. If an older check is still active, the
   next check skips due to the lock.
+
+## 2026-04-27 07:04 UTC Supervisor Check
+
+- Active quota mix remains within plan: permanent `fiber-raman-burst` plus
+  exactly two `c3-highcpu-8` ephemerals,
+  `fiber-raman-temp-l-200mhc8-20260427t060246z` and
+  `fiber-raman-temp-v-mvampeoph5-20260427t065658z`.
+- Deterministic watchdog cron is still installed at 15 minute cadence and was
+  not modified.
+- Syncthing health check showed both configured peers disconnected at
+  `2026-04-27T07:00Z`; this does not block remote execution, but Mac-side
+  result visibility may lag until a peer reconnects.
+- MMF `M-mmfwin3` is alive on permanent burst. Remote log reached the
+  threshold case, iteration 6, with Julia still running.
+- Long-fiber `L-200mhc8` is alive on the 200 m ephemeral. Remote log reached
+  optimizer iteration 7 with `f=-5.290096e+01`; checkpoints have been written
+  through `ckpt_iter_0094.jld2`.
+- Multivar advanced to `overnight-multivar-seq5`, launching
+  `amp_energy_on_phase` as `V-mvampeoph5`. The VM is running from commit
+  `b68e6f3`, which contains the `4d426df` log-energy fix. The run passed
+  package precompile, created
+  `V-mvampeoph5_20260427T065748Z.log`, and started the phase-only reference.
+- No failure, patch, or relaunch was needed during this check.
+
+## 2026-04-27 07:34 UTC Supervisor Check
+
+- Active quota mix remains within plan: permanent `fiber-raman-burst` plus
+  exactly two `c3-highcpu-8` ephemerals,
+  `fiber-raman-temp-l-200mhc8-20260427t060246z` and
+  `fiber-raman-temp-v-mvpheng5-20260427t071137z`.
+- Deterministic watchdog cron remains installed at 15 minute cadence and was
+  not modified.
+- Syncthing still reports both configured peers disconnected as of the local
+  check at `2026-04-27T07:30Z`; remote runs are unaffected, but Mac-side result
+  visibility may lag.
+- `amp_energy_on_phase` completed and synced before this check. The result
+  files and standard images are present under
+  `results/raman/multivar/variable_ablation_overnight_amp_energy_on_phase_20260427/`.
+  Visual inspection of the four `amp_energy_on_phase` standard images found no
+  blank/corrupt plots; keep the usual caveat that the phase/group-delay
+  diagnostic is rough rather than lab-ready.
+- Multivar `phase_energy_cold` launched as `V-mvpheng5` at approximately
+  07:11 UTC and is running from commit `b68e6f3`. Verified the remote
+  `multivar_optimization.jl` contains the log-energy coordinate
+  (`E = exp(...)`), so the known negative-energy line-search bug is not present.
+  The run has completed its phase-only reference and is in the multivar case.
+- Long-fiber `L-200mhc8` is alive on the 200 m ephemeral. Remote log reached
+  optimizer iteration 10 with `f=-5.291271e+01`; checkpoints exist through
+  `ckpt_iter_0100.jld2`. No intervention needed.
+- MMF `M-mmfwin3` ended with launcher `rc=0`, but the remote log stops during
+  the threshold case and no `phase36_window_validation` artifacts were present
+  on permanent burst. The deterministic watchdog correctly noticed the missing
+  summary and restarted MMF, but the full `M-mmfwin3` relaunch is currently
+  blocked by a live threshold-only recovery job `M-mmfthr4` holding the burst
+  heavy lock. `M-mmfthr4` is consuming CPU and memory, so it was left running.
+- No source patch, commit, or relaunch was performed during this check.
+
+## 2026-04-27 08:05 UTC Supervisor Check
+
+- Active quota mix remains within plan: permanent `fiber-raman-burst` plus
+  exactly two `c3-highcpu-8` ephemerals,
+  `fiber-raman-temp-l-200mhc8-20260427t060246z` and
+  `fiber-raman-temp-v-mvpheng5-20260427t071137z`.
+- Deterministic watchdog cron remains installed at 15 minute cadence and was
+  not removed. Syncthing still reports both configured peers disconnected as of
+  `2026-04-27T08:00Z`.
+- Long-fiber `L-200mhc8` is alive on the 200 m ephemeral. The remote log has
+  reached optimizer iteration 12 with `f=-5.297767e+01`; checkpoints synced
+  locally through `ckpt_iter_0181.jld2`.
+- Multivar `phase_energy_cold` is alive on
+  `fiber-raman-temp-v-mvpheng5-20260427t071137z`. The clean worktree is
+  `b68e6f3`, which includes the log-energy fix; the phase-only reference and
+  standard images were written, and the multivar case is running.
+- MMF remains the only operational concern. Permanent-burst SSH inspection
+  timed out during banner exchange, while local `M-mmfthr4` threshold recovery
+  and the watchdog-started `M-mmfwin3` launcher were both still attached. No
+  `phase36_window_validation` artifacts are local yet.
+- Patched `scripts/ops/overnight_research_watchdog.sh` so it detects active
+  local MMF launchers (`parallel_research_lane.sh --lane mmf` or
+  `burst-run-heavy M-mmf*`) before starting another full `overnight-mmf`
+  supervisor. This prevents repeated full-MMF relaunch attempts while the
+  threshold-only recovery is still active.
