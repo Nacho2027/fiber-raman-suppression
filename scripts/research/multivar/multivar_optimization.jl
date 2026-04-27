@@ -612,6 +612,8 @@ function optimize_spectral_multivariable(
     last_diag = Ref{Any}(nothing)
     iters_done = Ref(0)
     progress_every = parse(Int, get(ENV, "MV_PROGRESS_EVERY", "5"))
+    eval_progress_every = parse(Int, get(ENV, "MV_EVAL_PROGRESS_EVERY", "10"))
+    evals_done = Ref(0)
     function callback(state)
         # Under Fminbox, `state` is the trace Vector{OptimizationState}; under
         # plain LBFGS it is a single OptimizationState. Handle both.
@@ -651,6 +653,12 @@ function optimize_spectral_multivariable(
         x = y ./ scale
         J, g_x, diag = cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
         last_diag[] = diag
+        evals_done[] += 1
+        if eval_progress_every > 0 && evals_done[] % eval_progress_every == 0
+            @info @sprintf("multivar eval [%4d] J=%.4e  J_ram=%.4e  α=%.3f  A∈[%.3f,%.3f]",
+                evals_done[], J, get(diag, :J_raman, NaN), get(diag, :alpha, NaN),
+                get(diag, :A_extrema, (NaN, NaN))[1], get(diag, :A_extrema, (NaN, NaN))[2])
+        end
         if G !== nothing
             G .= g_x ./ scale      # dJ/dy = (1/s)·dJ/dx
         end
