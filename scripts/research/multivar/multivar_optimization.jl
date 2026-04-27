@@ -53,7 +53,7 @@ const MV_LEGAL_VARS = (:phase, :amplitude, :energy, :mode_coeffs)
 const MV_DEFAULT_DELTA_AMP = 0.10     # box half-width for A(ω)
 const MV_DEFAULT_EPS_FD_PHASE  = 1e-5
 const MV_DEFAULT_EPS_FD_AMP    = 1e-6
-const MV_DEFAULT_EPS_FD_ENERGY = 1e-8  # fraction of E_ref
+const MV_DEFAULT_EPS_FD_ENERGY = 1e-6  # log-energy coordinate step
 
 """
     MVConfig
@@ -204,7 +204,9 @@ function mv_unpack(x::AbstractVector{<:Real}, cfg::MVConfig, Nt::Int, M::Int, E_
     off = mv_block_offsets(cfg, Nt, M)
     φ = haskey(off.ranges, :phase)     ? reshape(copy(@view x[off.ranges[:phase]]),     Nt, M) : zeros(Nt, M)
     A = haskey(off.ranges, :amplitude) ? reshape(copy(@view x[off.ranges[:amplitude]]), Nt, M) : ones(Nt, M)
-    E = haskey(off.ranges, :energy)    ? x[first(off.ranges[:energy])]                         : Float64(E_ref)
+    # The scalar energy search coordinate is η = log(E), so line-search probes
+    # remain positive without box constraints.
+    E = haskey(off.ranges, :energy)    ? exp(x[first(off.ranges[:energy])])                    : Float64(E_ref)
     return (φ=φ, A=A, E=E, offsets=off)
 end
 
@@ -224,7 +226,8 @@ function mv_pack(φ, A, E, cfg::MVConfig, Nt::Int, M::Int)
         x[off.ranges[:amplitude]] .= vec(A)
     end
     if haskey(off.ranges, :energy)
-        x[first(off.ranges[:energy])] = Float64(E)
+        @assert isfinite(E) && E > 0 "energy must be finite positive to pack, got $E"
+        x[first(off.ranges[:energy])] = log(Float64(E))
     end
     return x
 end
@@ -246,7 +249,7 @@ Forward-adjoint pipeline with multi-variable gradient assembly.
   6. Assemble gradient blocks:
        ∂J/∂φ(ω) = 2 Σ_m Re[ conj(λ₀) · i · u_shaped ]
        ∂J/∂A(ω) = 2 Σ_m Re[ conj(λ₀) · (u_shaped / A) ]
-       ∂J/∂E    = (1/E) Σ_{ω,m} Re[ conj(λ₀) · u_shaped ]
+       ∂J/∂η    = Σ_{ω,m} Re[ conj(λ₀) · u_shaped ], with η = log(E)
   7. Apply regularization + log-scale if configured.
 
 Returns `(J_total, g, diagnostics::Dict)` where `g` has the same layout as `x`.
@@ -336,9 +339,10 @@ function cost_and_gradient_multivar(
         g[off.ranges[:amplitude]] .= vec(g_out)
     end
 
-    #   Energy gradient: (1/E) Σ Re[ conj(λ₀) · u_shaped ]
+    #   Energy uses η = log(E). The raw derivative is
+    #   ∂J/∂E = (1/E) Σ Re[ conj(λ₀) · u_shaped ], hence ∂J/∂η is the sum.
     if haskey(off.ranges, :energy)
-        g[first(off.ranges[:energy])] = real(sum(conj(λ0) .* u_shaped)) / E
+        g[first(off.ranges[:energy])] = real(sum(conj(λ0) .* u_shaped))
     end
 
     # POSTCONDITIONS on physics
@@ -422,12 +426,17 @@ function cost_and_gradient_multivar(
 
         # Energy-preservation penalty (soft): matches amplitude_cost semantics
         if cfg.λ_energy > 0
-            E_shaped = (α^2) * sum((A .^ 2) .* uω0_abs2)
+            S_A = sum((A .^ 2) .* uω0_abs2)
+            E_shaped = (α^2) * S_A
             ratio = E_shaped / E_original
             J_E_pen = cfg.λ_energy * (ratio - 1.0)^2
             # ∂(ratio)/∂A = 2·α²·A·|uω0|² / E_original
             g_E_pen = @. 2.0 * cfg.λ_energy * (ratio - 1.0) * (2.0 * α^2 * A * uω0_abs2) / E_original
             g_A_reg .+= g_E_pen
+            if haskey(off.ranges, :energy)
+                # ratio is proportional to E, so d(ratio)/dη = ratio.
+                g[first(off.ranges[:energy])] += 2.0 * cfg.λ_energy * (ratio - 1.0) * ratio
+            end
             J_total += J_E_pen
             reg_breakdown["J_energy"] = J_E_pen
         end
@@ -567,7 +576,7 @@ function optimize_spectral_multivariable(
         amp_param = amp_param,
         s_φ = 1.0,
         s_A = s_A_val,
-        s_E = :energy in vars ? (1.0 / max(E_ref, eps())) : 1.0,
+        s_E = 1.0,
         log_cost = log_cost,
         λ_gdd = λ_gdd,
         λ_boundary = λ_boundary,
@@ -1101,7 +1110,7 @@ function mv_validate_gradient(
     for var in cfg.variables
         ε = var === :phase    ? MV_DEFAULT_EPS_FD_PHASE  :
             var === :amplitude ? MV_DEFAULT_EPS_FD_AMP    :
-            var === :energy   ? MV_DEFAULT_EPS_FD_ENERGY * E_ref :
+            var === :energy   ? MV_DEFAULT_EPS_FD_ENERGY :
                                 1e-6
         rng = off.ranges[var]
         # pick indices
