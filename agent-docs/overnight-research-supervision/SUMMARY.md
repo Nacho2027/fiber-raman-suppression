@@ -243,3 +243,91 @@ single monolithic fragile run.
   `burst-run-heavy M-mmf*`) before starting another full `overnight-mmf`
   supervisor. This prevents repeated full-MMF relaunch attempts while the
   threshold-only recovery is still active.
+
+## 2026-04-27 08:25 UTC Multivar Supervisor Note
+
+- Multivar-only supervision remained within quota discipline: one active
+  multivar ephemeral,
+  `fiber-raman-temp-v-mvpheng5-20260427t071137z`, while the long-fiber
+  ephemeral continued separately.
+- `phase_energy_cold` is still running rather than failed. The remote Julia
+  process has been CPU-active for roughly 66 minutes, with RSS around 4.1 GB
+  and no runaway memory. The heavy log has not grown since the case entered
+  `phase_energy_cold`, which is expected to be much harder than the prior
+  on-phase amplitude/energy cases because it is a cold-start 8193-variable
+  phase+log-energy L-BFGS solve.
+- Existing artifacts for the run are only the shared phase-only reference:
+  JLD2/JSON/trust report plus the four standard phase-only images. No
+  `phase_energy_cold_*` result files or standard images exist yet, so this
+  case is not scientifically complete.
+- Decision: do not kill or relaunch yet. Let the active run continue under
+  10-20 minute polling unless it stops consuming CPU, fails, exhausts memory,
+  or blocks the sequence for an unreasonable additional interval.
+- Follow-up operational fix: pushed commit `07a53a6`
+  (`Log multivar optimizer progress`) so future clean-worktree multivar runs
+  emit INFO-level progress every five optimizer iterations by default. This
+  does not affect the already-running `V-mvpheng5` process.
+
+## 2026-04-27 09:25 UTC Multivar Supervisor Note
+
+- `phase_energy_cold` was stopped intentionally after roughly two hours of
+  CPU-active runtime with no first optimizer callback, no log growth after
+  entering the case, and no `phase_energy_cold_*` artifacts. Treat this attempt
+  as an incomplete/pathological cold-start optimizer result, not as accepted
+  science.
+- The helper synced the partial results and destroyed the VM cleanly. The only
+  valid artifacts under
+  `results/raman/multivar/variable_ablation_overnight_phase_energy_cold_20260427/`
+  are the phase-only reference JLD2/JSON/trust report and four phase-only
+  standard images.
+- Pushed two instrumentation commits for future runs:
+  `07a53a6` adds INFO-level optimizer iteration progress, and `e1ae5e7` adds
+  INFO-level objective-evaluation progress so long line searches are visible
+  before the first callback.
+- Seq5 continued with exactly one multivar ephemeral:
+  `phase_amp_energy_warm` as `V-mvphampe5` on
+  `fiber-raman-temp-v-mvphampe5-20260427t092141z`. Remote clean worktree is
+  `e1ae5e7`; the run is currently in Julia precompile.
+
+## 2026-04-27 09:07 UTC MMF Recovery Result
+
+- Reduced MMF threshold recovery `M-mmfthr4096` completed on permanent
+  `fiber-raman-burst` with launcher `rc=0`. The remote log
+  `M-mmfthr4096_20260427T082013Z.log` was pulled back locally together with
+  `results/raman/phase36_window_validation/`.
+- Local completion check passed for the reduced `Nt=4096`, `tw=96 ps`
+  threshold run: `mmf_window_validation_summary.md`, the four standard images
+  (`phase_profile`, `evolution`, `phase_diagnostic`,
+  `evolution_unshaped`), and the baseline convergence/spectrum plots are
+  present.
+- Visual inspection of the four standard images found no blank or corrupt
+  plots. The optimized spectrum overlays the input and reports strong Raman
+  suppression, but the phase/group-delay diagnostic is extremely rough and the
+  run summary marks the case `quality=invalid-window`, `boundary_ok=false`,
+  `edge=1.00e+00`.
+- Result: `J_ref=-17.96 dB`, `J_opt=-45.07 dB`, nominal improvement
+  `27.12 dB`. Treat this as evidence that the current Phase 36 threshold MMF
+  gain remains a numerical-window artifact at this enlarged window, not as an
+  accepted MMF science result.
+
+## 2026-04-27 09:32 UTC Supervisor Check
+
+- Active quota mix is within plan: exactly two `c3-highcpu-8` ephemerals are
+  running, `fiber-raman-temp-l-200mhc8-20260427t060246z` for long-fiber and
+  `fiber-raman-temp-v-mvphampe5-20260427t092141z` for multivar. The permanent
+  `fiber-raman-burst` VM is terminated after the reduced MMF recovery.
+- Long-fiber `L-200mhc8` is alive and CPU-active. The 200 m run reached
+  optimizer iteration 14 of 15 with `f=-52.97757 dB` and checkpointed through
+  `ckpt_iter_0310.jld2`; no intervention was needed.
+- Multivar `phase_amp_energy_warm` is alive on clean worktree `e1ae5e7`, which
+  includes the log-energy fix and progress instrumentation. The phase-only
+  reference completed and standard images were written; the multivar case is
+  still running.
+- MMF is not relaunched because
+  `results/raman/phase36_window_validation/mmf_window_validation_summary.md`
+  exists and the reduced threshold recovery result is already accepted only as
+  an `invalid-window` caveat.
+- Patched `scripts/ops/overnight_research_watchdog.sh` so the deterministic
+  watchdog recognizes any `overnight-multivar-seq*` supervisor, including the
+  active `overnight-multivar-seq5`. This prevents an older seq4 relaunch after
+  the active multivar VM exits.

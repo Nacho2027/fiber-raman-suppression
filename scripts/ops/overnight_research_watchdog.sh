@@ -21,6 +21,10 @@ has_tmux() {
     tmux has-session -t "$1" >/dev/null 2>&1
 }
 
+active_multivar_supervisor() {
+    tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E '^overnight-multivar-seq' >/dev/null 2>&1
+}
+
 active_local_mmf_launcher() {
     ps -eo cmd | grep -E 'parallel_research_lane\.sh --lane mmf|burst-run-heavy M-mmf' | grep -v grep >/dev/null 2>&1
 }
@@ -53,7 +57,7 @@ raw_ssh_vm() {
 }
 
 launch_multivar_sequence() {
-    if has_tmux overnight-multivar-seq4 || vm_exists 'fiber-raman-temp-v-mv'; then
+    if active_multivar_supervisor || vm_exists 'fiber-raman-temp-v-mv'; then
         return 0
     fi
 
