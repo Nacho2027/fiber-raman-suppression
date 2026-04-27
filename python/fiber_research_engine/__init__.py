@@ -19,8 +19,13 @@ from .cli import (
     refine_amp_on_phase,
     run_experiment,
     run_julia_cli,
+    scaffold_objective,
+    scaffold_variable,
     validate_all_experiments,
     validate_all_sweeps,
+    validate_objective_extensions,
+    validate_variable_extensions,
+    variables,
 )
 
 __all__ = [
@@ -37,6 +42,11 @@ __all__ = [
     "refine_amp_on_phase",
     "run_experiment",
     "run_julia_cli",
+    "scaffold_objective",
+    "scaffold_variable",
     "validate_all_experiments",
     "validate_all_sweeps",
+    "validate_objective_extensions",
+    "validate_variable_extensions",
+    "variables",
 ]

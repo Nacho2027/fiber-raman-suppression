@@ -39,10 +39,44 @@ This lists both built-in executable objective contracts and research extension
 contracts from `lab_extensions/objectives/`. Extension contracts are
 discoverable planning surfaces until promoted with tests and a real backend.
 
+Validate research objective extension contracts:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
+```
+
+Start a new planning-only objective contract without editing deep internals:
+
+```bash
+julia -t auto --project=. scripts/canonical/scaffold_objective.jl my_objective \
+  --description "What this objective measures, including units and normalization."
+```
+
+The scaffold creates a TOML contract and Julia stub under
+`lab_extensions/objectives/`. It makes the idea visible to `--objectives` and
+`--validate-objectives`, but it does not make the objective executable until the
+physics, gradient strategy, artifact metrics, and tests have been promoted.
+
 List the regime/variable/objective/artifact capabilities in one place:
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --capabilities
+```
+
+List optimized variable/control contracts available to configs:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --variables
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-variables
+```
+
+Create a planning-only variable/control contract without making it executable:
+
+```bash
+julia -t auto --project=. scripts/canonical/scaffold_variable.jl my_variable \
+  --description "What this control changes and why." \
+  --units "physical units or normalization" \
+  --bounds "bounds or projection behavior"
 ```
 
 Validate every approved experiment config without launching compute:
@@ -164,6 +198,11 @@ If a combination is not supported, validation should fail before compute.
 - The only implemented solver in this front layer is `lbfgs`.
 - Objective names and allowed regularizers are code-defined in
   `scripts/lib/objective_registry.jl`; configs select from that registry.
+- New research objectives can be scaffolded under `lab_extensions/objectives/`
+  as planning-only contracts, then promoted after implementation and tests.
+- New research variables/controls can be scaffolded under
+  `lab_extensions/variables/` as planning-only contracts, then promoted after
+  units, bounds, artifact semantics, implementation, and tests are clear.
 - Export/SLM handoff is currently phase-only. Multivariable export requests are
   rejected during validation until the exporter can represent amplitude and
   energy controls explicitly.

@@ -7,6 +7,8 @@ from fiber_research_engine.cli import (
     REFINE_AMP_ON_PHASE,
     RUN_EXPERIMENT,
     RUN_EXPERIMENT_SWEEP,
+    SCAFFOLD_OBJECTIVE,
+    SCAFFOLD_VARIABLE,
     capabilities,
     dry_run_amp_on_phase_refinement,
     dry_run_experiment,
@@ -16,6 +18,11 @@ from fiber_research_engine.cli import (
     julia_cli_args,
     refine_amp_on_phase,
     run_julia_cli,
+    scaffold_objective,
+    scaffold_variable,
+    validate_objective_extensions,
+    validate_variable_extensions,
+    variables,
 )
 
 
@@ -110,6 +117,111 @@ class FiberResearchEngineCliTests(unittest.TestCase):
 
         self.assertIn("Experiment capabilities", result.stdout)
         self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--capabilities"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_validate_objective_extensions_uses_cli_checklist(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Objective extension validation\n"
+        run_mock.return_value.stderr = ""
+
+        result = validate_objective_extensions(repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Objective extension validation", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--validate-objectives"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_variables_uses_safe_cli_path(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Built-in optimization variable contracts\n"
+        run_mock.return_value.stderr = ""
+
+        result = variables(repo_root=Path("/tmp/repo"))
+
+        self.assertIn("variable contracts", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--variables"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_validate_variable_extensions_uses_cli_checklist(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Variable extension validation\n"
+        run_mock.return_value.stderr = ""
+
+        result = validate_variable_extensions(repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Variable extension validation", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--validate-variables"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_scaffold_objective_delegates_to_canonical_cli(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Objective extension scaffold created\n"
+        run_mock.return_value.stderr = ""
+
+        result = scaffold_objective(
+            "mode_coupling_demo",
+            regime="single_mode",
+            directory=Path("/tmp/objectives"),
+            description="Mode coupling research objective.",
+            variables=("phase", "amplitude"),
+            regularizers=("gdd", "boundary"),
+            force=True,
+            repo_root=Path("/tmp/repo"),
+        )
+
+        self.assertIn("scaffold", result.stdout)
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], SCAFFOLD_OBJECTIVE)
+        self.assertIn("mode_coupling_demo", called_args)
+        self.assertIn("--regime", called_args)
+        self.assertIn("single_mode", called_args)
+        self.assertIn("--dir", called_args)
+        self.assertIn("/tmp/objectives", called_args)
+        self.assertIn("--description", called_args)
+        self.assertIn("Mode coupling research objective.", called_args)
+        self.assertIn("--variables", called_args)
+        self.assertIn("phase,amplitude", called_args)
+        self.assertIn("--regularizers", called_args)
+        self.assertIn("gdd,boundary", called_args)
+        self.assertIn("--force", called_args)
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_scaffold_variable_delegates_to_canonical_cli(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Variable extension scaffold created\n"
+        run_mock.return_value.stderr = ""
+
+        result = scaffold_variable(
+            "gain_tilt_demo",
+            regime="single_mode",
+            directory=Path("/tmp/variables"),
+            description="Gain tilt research variable.",
+            units="dB",
+            bounds="box constrained",
+            parameterizations=("full_grid",),
+            objectives=("raman_band",),
+            force=True,
+            repo_root=Path("/tmp/repo"),
+        )
+
+        self.assertIn("scaffold", result.stdout)
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], SCAFFOLD_VARIABLE)
+        self.assertIn("gain_tilt_demo", called_args)
+        self.assertIn("--regime", called_args)
+        self.assertIn("single_mode", called_args)
+        self.assertIn("--dir", called_args)
+        self.assertIn("/tmp/variables", called_args)
+        self.assertIn("--description", called_args)
+        self.assertIn("Gain tilt research variable.", called_args)
+        self.assertIn("--units", called_args)
+        self.assertIn("dB", called_args)
+        self.assertIn("--bounds", called_args)
+        self.assertIn("box constrained", called_args)
+        self.assertIn("--parameterizations", called_args)
+        self.assertIn("full_grid", called_args)
+        self.assertIn("--objectives", called_args)
+        self.assertIn("raman_band", called_args)
+        self.assertIn("--force", called_args)
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_index_results_delegates_to_shared_julia_index(self, run_mock):

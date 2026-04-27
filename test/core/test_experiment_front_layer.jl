@@ -1,7 +1,11 @@
+using JSON3
+
 include(joinpath(_ROOT, "scripts", "lib", "experiment_spec.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_sweep.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
+include(joinpath(_ROOT, "scripts", "workflows", "scaffold_objective.jl"))
+include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
 
 @testset "Experiment front layer" begin
     @test "research_engine_poc" in approved_experiment_config_ids()
@@ -22,6 +26,34 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
     @test spec.objective.kind == :raman_band
     @test spec.solver.kind == :lbfgs
     @test spec.export_plan.profile == :neutral_csv_v1
+    @test :phase in registered_variable_kinds(:single_mode)
+    phase_variable_contract = variable_contract(:phase, :single_mode)
+    @test phase_variable_contract.kind == :phase
+    @test phase_variable_contract.backend == :spectral_phase
+    @test :full_grid in phase_variable_contract.parameterizations
+    @test :mode_weights_demo in registered_variable_extension_kinds(:multimode)
+    variable_extension_contract_demo = variable_extension_contract(:mode_weights_demo, :multimode)
+    @test variable_extension_contract_demo.execution == :planning_only
+    @test variable_extension_contract_demo.backend == :lab_extension
+    @test isfile(joinpath(_ROOT, variable_extension_contract_demo.source))
+    variable_listing = sprint(io -> render_variable_registry(; io=io))
+    @test occursin("Built-in optimization variable contracts", variable_listing)
+    @test occursin("Research extension variable contracts", variable_listing)
+    @test occursin("mode_weights_demo", variable_listing)
+    variable_extension_report = validate_variable_extension_contracts()
+    @test variable_extension_report.total >= 1
+    @test variable_extension_report.valid == variable_extension_report.total
+    @test variable_extension_report.promotable == 0
+    mode_weights_row = only(filter(row -> row.kind == :mode_weights_demo, variable_extension_report.rows))
+    @test mode_weights_row.valid
+    @test !mode_weights_row.promotable
+    @test "execution_planning_only" in mode_weights_row.blockers
+    rendered_variable_extension_report = sprint(io -> render_variable_extension_validation_report(variable_extension_report; io=io))
+    @test occursin("Variable extension validation", rendered_variable_extension_report)
+    @test occursin("mode_weights_demo", rendered_variable_extension_report)
+    cli_variable_extension_report = run_experiment_main(["--validate-variables"])
+    @test cli_variable_extension_report.total == variable_extension_report.total
+    @test cli_variable_extension_report.valid == variable_extension_report.valid
     @test :raman_band in registered_objective_kinds(:single_mode)
     band_contract = experiment_objective_contract(spec)
     @test band_contract.kind == :raman_band
@@ -52,6 +84,83 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
     @test occursin("Research extension objective contracts", extension_listing)
     @test occursin("pulse_compression_demo", extension_listing)
     @test occursin("execution=planning_only", extension_listing)
+    objective_extension_report = validate_objective_extension_contracts()
+    @test objective_extension_report.total >= 1
+    @test objective_extension_report.valid == objective_extension_report.total
+    @test objective_extension_report.promotable == 0
+    pulse_extension_row = only(filter(row -> row.kind == :pulse_compression_demo, objective_extension_report.rows))
+    @test pulse_extension_row.valid
+    @test !pulse_extension_row.promotable
+    @test "execution_planning_only" in pulse_extension_row.blockers
+    @test isempty(pulse_extension_row.errors)
+    rendered_objective_extension_report = sprint(io -> render_objective_extension_validation_report(objective_extension_report; io=io))
+    @test occursin("Objective extension validation", rendered_objective_extension_report)
+    @test occursin("pulse_compression_demo", rendered_objective_extension_report)
+    @test occursin("execution_planning_only", rendered_objective_extension_report)
+    cli_objective_extension_report = run_experiment_main(["--validate-objectives"])
+    @test cli_objective_extension_report.total == objective_extension_report.total
+    @test cli_objective_extension_report.valid == objective_extension_report.valid
+
+    scaffold_dir = mktempdir()
+    scaffold = scaffold_objective_extension(
+        "mode_coupling_demo";
+        dir=scaffold_dir,
+        description="Demo objective for mode-coupling research planning.",
+    )
+    @test isfile(scaffold.toml_path)
+    @test isfile(scaffold.source_path)
+    @test scaffold.kind == :mode_coupling_demo
+    @test occursin("kind = \"mode_coupling_demo\"", read(scaffold.toml_path, String))
+    @test occursin("function mode_coupling_demo_cost", read(scaffold.source_path, String))
+    scaffold_contract = _parse_extension_contract(scaffold.toml_path)
+    scaffold_row = validate_objective_extension_contract(scaffold_contract)
+    @test scaffold_row.valid
+    @test !scaffold_row.promotable
+    @test "execution_planning_only" in scaffold_row.blockers
+    @test_throws ArgumentError scaffold_objective_extension("mode_coupling_demo"; dir=scaffold_dir)
+    forced_scaffold = scaffold_objective_extension("mode_coupling_demo"; dir=scaffold_dir, force=true)
+    @test forced_scaffold.toml_path == scaffold.toml_path
+    cli_scaffold_dir = mktempdir()
+    cli_scaffold = scaffold_objective_main([
+        "notebook_metric",
+        "--dir", cli_scaffold_dir,
+        "--description", "Objective drafted from notebook exploration.",
+    ])
+    @test isfile(cli_scaffold.toml_path)
+    @test isfile(cli_scaffold.source_path)
+    @test occursin("notebook_metric", read(cli_scaffold.toml_path, String))
+    variable_scaffold_dir = mktempdir()
+    variable_scaffold = scaffold_variable_extension(
+        "gain_tilt_demo";
+        dir=variable_scaffold_dir,
+        description="Demo variable for gain-tilt research planning.",
+        units="dB",
+        bounds="box constrained tilt coefficients",
+    )
+    @test isfile(variable_scaffold.toml_path)
+    @test isfile(variable_scaffold.source_path)
+    @test variable_scaffold.kind == :gain_tilt_demo
+    @test occursin("kind = \"gain_tilt_demo\"", read(variable_scaffold.toml_path, String))
+    @test occursin("function build_gain_tilt_demo_control", read(variable_scaffold.source_path, String))
+    variable_scaffold_contract = _parse_variable_extension_contract(variable_scaffold.toml_path)
+    variable_scaffold_row = validate_variable_extension_contract(variable_scaffold_contract)
+    @test variable_scaffold_row.valid
+    @test !variable_scaffold_row.promotable
+    @test "execution_planning_only" in variable_scaffold_row.blockers
+    @test_throws ArgumentError scaffold_variable_extension("gain_tilt_demo"; dir=variable_scaffold_dir)
+    forced_variable_scaffold = scaffold_variable_extension("gain_tilt_demo"; dir=variable_scaffold_dir, force=true)
+    @test forced_variable_scaffold.toml_path == variable_scaffold.toml_path
+    cli_variable_scaffold_dir = mktempdir()
+    cli_variable_scaffold = scaffold_variable_main([
+        "notebook_control",
+        "--dir", cli_variable_scaffold_dir,
+        "--description", "Variable drafted from notebook exploration.",
+        "--units", "normalized",
+        "--bounds", "projected to feasible range",
+    ])
+    @test isfile(cli_variable_scaffold.toml_path)
+    @test isfile(cli_variable_scaffold.source_path)
+    @test occursin("notebook_control", read(cli_variable_scaffold.toml_path, String))
     validation_report = validate_all_experiment_configs()
     @test validation_report.complete
     @test validation_report.total == length(approved_experiment_config_ids())
@@ -121,6 +230,24 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
     @test occursin("| Case | Value | Status | Artifact Status | Trust | Standard Images |", sweep_summary_md)
     @test occursin("| case_001 | 0.001 | complete | complete | present | complete | -20.00 | -30.00 | -10.00 | GOOD | true | 1 | /tmp/case_001/opt_result.jld2 |", sweep_summary_md)
     @test occursin("| case_002 | 0.002 | failed | incomplete |  |  |  |  |  |  |  |  | boom |", sweep_summary_md)
+    sweep_payload = experiment_sweep_summary_payload(sweep_spec, fake_sweep_results)
+    @test sweep_payload["schema"] == "experiment_sweep_summary_v1"
+    @test sweep_payload["sweep_id"] == "smf28_power_micro_sweep"
+    @test sweep_payload["case_count"] == 2
+    @test sweep_payload["complete"] == 1
+    @test sweep_payload["failed"] == 1
+    @test sweep_payload["cases"][1]["J_after_dB"] == -30.0
+    sweep_summary_csv = render_experiment_sweep_summary_csv(sweep_spec, fake_sweep_results)
+    @test startswith(sweep_summary_csv, "case,value,status,artifact_status")
+    @test occursin("case_001,0.001,complete,complete,present,complete,-20.0,-30.0,-10.0,GOOD,true,1", sweep_summary_csv)
+    sweep_summary_dir = mktempdir()
+    sweep_summary_paths = write_experiment_sweep_summary_files(sweep_spec, fake_sweep_results, sweep_summary_dir)
+    @test isfile(sweep_summary_paths.summary_path)
+    @test isfile(sweep_summary_paths.summary_json_path)
+    @test isfile(sweep_summary_paths.summary_csv_path)
+    written_payload = JSON3.read(read(sweep_summary_paths.summary_json_path, String))
+    @test written_payload.sweep_id == "smf28_power_micro_sweep"
+    @test length(written_payload.cases) == 2
     sweep_latest_root = mktempdir()
     old_sweep_dir = joinpath(sweep_latest_root, "demo_20260101_000000")
     new_sweep_dir = joinpath(sweep_latest_root, "demo_20260102_000000")
@@ -460,10 +587,19 @@ include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
     wrapper = read(joinpath(_ROOT, "scripts", "canonical", "run_experiment.jl"), String)
     @test occursin("workflows\", \"run_experiment.jl", wrapper)
     @test occursin("run_experiment_main(ARGS)", wrapper)
+    scaffold_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "scaffold_objective.jl"), String)
+    @test occursin("workflows\", \"scaffold_objective.jl", scaffold_wrapper)
+    @test occursin("scaffold_objective_main(ARGS)", scaffold_wrapper)
+    variable_scaffold_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "scaffold_variable.jl"), String)
+    @test occursin("workflows\", \"scaffold_variable.jl", variable_scaffold_wrapper)
+    @test occursin("scaffold_variable_main(ARGS)", variable_scaffold_wrapper)
 
     workflow = read(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"), String)
     @test count("render_experiment_completion_summary", workflow) >= 2
     @test occursin("--objectives", workflow)
+    @test occursin("--validate-objectives", workflow)
+    @test occursin("--variables", workflow)
+    @test occursin("--validate-variables", workflow)
     @test occursin("--latest", workflow)
     @test occursin("--compute-plan", workflow)
 

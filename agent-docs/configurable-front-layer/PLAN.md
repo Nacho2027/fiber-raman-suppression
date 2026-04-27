@@ -40,6 +40,7 @@ The front layer now supports:
 - neutral phase handoff
 - front-layer experiment sweep expansion and validation
 - metadata-only lab objective extensions under `lab_extensions/objectives/`
+- metadata-only lab variable extensions under `lab_extensions/variables/`
 
 This is enough for reproducible parameter exploration inside known physics and
 optimization contracts, currently centered on Raman suppression. It is not yet
@@ -66,7 +67,8 @@ Minimum scope:
 Current slice:
 
 - latest-sweep discovery is available through `run_experiment_sweep.jl --latest`
-- completed sweeps write `SWEEP_SUMMARY.md`
+- completed sweeps write `SWEEP_SUMMARY.md`, `SWEEP_SUMMARY.json`, and
+  `SWEEP_SUMMARY.csv`
 - the shared results index can scan sweep summaries without manually finding
   timestamped folders
 
@@ -106,8 +108,9 @@ Minimum scope:
 
 Current slice:
 
-- `run_experiment_sweep.jl --execute` writes `SWEEP_SUMMARY.md` with status,
-  objective metrics, convergence, iterations, and artifact/error path per case
+- `run_experiment_sweep.jl --execute` writes `SWEEP_SUMMARY.md`,
+  `SWEEP_SUMMARY.json`, and `SWEEP_SUMMARY.csv` with status, objective
+  metrics, convergence, iterations, and artifact/error path per case
 - summaries include artifact validation, trust-report, and standard-image status
   columns
 - `run_experiment_sweep.jl --latest` prints the latest completed sweep summary
@@ -133,8 +136,8 @@ Minimum scope:
 
 Current slice:
 
-- `scripts/canonical/index_results.jl` scans run artifacts and
-  `SWEEP_SUMMARY.md` files from one or more roots and renders Markdown or CSV
+- `scripts/canonical/index_results.jl` scans run artifacts and sweep summaries
+  from one or more roots and renders Markdown or CSV
 - `fiber_research_engine.index_results(...)` exposes the same index to
   notebooks without duplicating scan logic
 - ledger metadata is populated from `run_config.toml`, `opt_result.json`, and
@@ -150,8 +153,7 @@ Next promotion:
 
 - add date-range and trust-status filters once those fields are consistently
   normalized
-- add richer sweep parsing once sweep summaries carry explicit machine-readable
-  JSON/CSV sidecars instead of Markdown-only tables
+- add richer sweep visual comparison plots after campaign sidecars stabilize
 
 ### 5. Heavy Regime Promotion
 
@@ -183,11 +185,20 @@ Minimum scope:
 
 - declare metadata in `lab_extensions/objectives/*.toml`
 - make the contract discoverable through `--objectives`
+- validate metadata and promotion blockers through `--validate-objectives`
+- scaffold a new planning-only objective through
+  `scripts/canonical/scaffold_objective.jl`
 - document where to implement the formula
 - document where to implement/check gradients
 - document how to promote from `planning_only` to executable
 - document which tests must be added
 - document how to expose a config example
+
+Current slice:
+
+- scaffold helper creates a TOML contract plus Julia cost/gradient stubs
+- scaffold defaults remain `planning_only`, `research`, and `lab_extension`
+  so new science starts visible but non-executable
 
 Next promotion:
 
@@ -198,7 +209,7 @@ Next promotion:
 
 ### 7. Variable Authoring Guide
 
-Status: planned.
+Status: started.
 
 Purpose: let a new researcher add a new optimized control safely, including
 controls beyond spectral phase/amplitude when the physics and output semantics
@@ -211,6 +222,27 @@ Minimum scope:
 - define objective compatibility
 - define artifact/export meaning
 - add tests and one config example
+
+Current slice:
+
+- built-in variable contracts are discoverable through
+  `run_experiment.jl --variables`
+- planning-only variable extensions are discoverable under
+  `lab_extensions/variables/`
+- `run_experiment.jl --validate-variables` reports metadata validity and
+  promotion blockers
+- `scripts/canonical/scaffold_variable.jl` creates a TOML contract plus Julia
+  build/projection stubs with overwrite protection
+- `mode_weights_demo` demonstrates a multimode, non-executable variable
+  planning contract for future modal-weight research
+
+Next promotion:
+
+- add a real variable promotion guide that maps a variable contract into
+  `ControlLayout`, bounds/projection behavior, objective compatibility, and
+  artifact/export semantics
+- add one tiny executable variable smoke surface only after the control math and
+  output meaning are unambiguous
 
 ### 8. Scientific Acceptance Gate
 

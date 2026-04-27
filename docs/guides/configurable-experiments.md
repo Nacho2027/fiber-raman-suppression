@@ -26,7 +26,7 @@ The front layer is intentionally thin. Config files select from approved
 contracts; Julia code still owns the physics, gradients, objective formulas,
 solver behavior, and artifact validation.
 
-For new research objectives rather than safe built-ins, see
+For new research objectives or optimized variables rather than safe built-ins, see
 [research-extensions.md](./research-extensions.md).
 
 ## 1. List Available Experiments
@@ -76,6 +76,7 @@ julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
 ```
 
 Current single-mode objectives are Raman-focused because that is the first
@@ -102,7 +103,32 @@ Research extension contracts under `lab_extensions/objectives/` are listed by
 the same command. They are visible planning contracts, not automatically
 executable objectives.
 
-## 3. Dry-Run Before Compute
+Use `--validate-objectives` before trying to promote a new objective. It reports
+whether extension metadata is valid and which blockers still prevent execution,
+such as planning-only status, unpromoted backend, research maturity, or missing
+validation work.
+
+## 3. Inspect Variable Contracts
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --variables
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-variables
+```
+
+Current executable variable support is intentionally narrow:
+
+- `phase`: supported single-mode spectral phase control.
+- `amplitude`: experimental single-mode multivariable control.
+- `energy`: experimental single-mode multivariable control.
+- `phase` for `long_fiber` and `multimode`: planning/dry-run surfaces until
+  those regimes are promoted.
+
+Research variable contracts under `lab_extensions/variables/` are visible
+planning contracts. They document proposed controls, units, bounds/projection
+behavior, compatible objectives, parameterizations, and artifact semantics.
+They are not executable until promoted with implementation and tests.
+
+## 4. Dry-Run Before Compute
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
@@ -132,7 +158,7 @@ repo, instantiate Julia, dry-run the config there, then run the relevant
 workflow. Rivera Lab burst helper commands are shown only as optional examples
 for people who already have that environment configured.
 
-## 4. Edit Safe Knobs
+## 5. Edit Safe Knobs
 
 Make a copy of a nearby config in `configs/experiments/`, then edit only the
 knobs that are part of the current support boundary.
@@ -181,7 +207,7 @@ Keep these constraints in mind:
 - Export handoff is phase-only.
 - Neutral handoff is not a vendor-specific SLM loading file.
 
-## 5. Run
+## 6. Run
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
@@ -225,7 +251,7 @@ The command prints a completion summary with:
 - standard-image status
 - export-handoff status when export was requested
 
-## 6. Inspect The Saved Run
+## 7. Inspect The Saved Run
 
 Use the output directory printed by the run command:
 
@@ -257,7 +283,9 @@ julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf
 
 The sweep summary reports each case's execution status, artifact status,
 trust-report status, standard-image status, headline objective metrics, and
-artifact/error path.
+artifact/error path. Executed sweeps also write `SWEEP_SUMMARY.json` and
+`SWEEP_SUMMARY.csv` next to the Markdown summary; comparison tooling prefers
+the JSON sidecar when it is present and falls back to Markdown for older sweeps.
 
 To scan completed runs and sweep summaries without manually opening timestamped
 folders:
@@ -281,12 +309,12 @@ and meeting-table workflows. `--compare` ranks runs by mechanical lab readiness
 and then objective value; it is a triage view, not a scientific acceptance
 decision. `--compare-sweeps` summarizes completed sweep summaries by cases,
 failure count, best case, best achieved objective, and median achieved
-objective.
+objective, using `SWEEP_SUMMARY.json` when available.
 
 The inspection command is a checklist aid, not a substitute for reading the
 trust report or visually checking the standard images.
 
-## 7. Check Outputs
+## 8. Check Outputs
 
 A complete supported phase-only run should contain:
 
@@ -310,7 +338,7 @@ The neutral CSV handoff contains the simulation-axis wavelength/frequency grid,
 wrapped phase, unwrapped phase, and group delay. It is meant for lab conversion
 scripts and discussion, not direct loading into an arbitrary SLM.
 
-## 8. Lab-Ready Gate
+## 9. Lab-Ready Gate
 
 Before using a run as a lab reference:
 

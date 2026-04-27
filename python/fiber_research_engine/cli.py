@@ -18,6 +18,8 @@ RUN_EXPERIMENT = "scripts/canonical/run_experiment.jl"
 RUN_EXPERIMENT_SWEEP = "scripts/canonical/run_experiment_sweep.jl"
 INDEX_RESULTS = "scripts/canonical/index_results.jl"
 REFINE_AMP_ON_PHASE = "scripts/canonical/refine_amp_on_phase.jl"
+SCAFFOLD_OBJECTIVE = "scripts/canonical/scaffold_objective.jl"
+SCAFFOLD_VARIABLE = "scripts/canonical/scaffold_variable.jl"
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,82 @@ def capabilities(**kwargs) -> CommandResult:
 
 def objectives(**kwargs) -> CommandResult:
     return run_julia_cli(RUN_EXPERIMENT, "--objectives", **kwargs)
+
+
+def validate_objective_extensions(**kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--validate-objectives", **kwargs)
+
+
+def variables(**kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--variables", **kwargs)
+
+
+def validate_variable_extensions(**kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--validate-variables", **kwargs)
+
+
+def scaffold_objective(
+    kind: str,
+    *,
+    regime: str | None = None,
+    directory: str | Path | None = None,
+    description: str | None = None,
+    variables: Iterable[str] | None = None,
+    regularizers: Iterable[str] | None = None,
+    force: bool = False,
+    **kwargs,
+) -> CommandResult:
+    """Create a planning-only objective extension scaffold."""
+
+    args: list[str] = [kind]
+    if regime is not None:
+        args.extend(("--regime", regime))
+    if directory is not None:
+        args.extend(("--dir", str(directory)))
+    if description is not None:
+        args.extend(("--description", description))
+    if variables is not None:
+        args.extend(("--variables", ",".join(str(value) for value in variables)))
+    if regularizers is not None:
+        args.extend(("--regularizers", ",".join(str(value) for value in regularizers)))
+    if force:
+        args.append("--force")
+    return run_julia_cli(SCAFFOLD_OBJECTIVE, *args, **kwargs)
+
+
+def scaffold_variable(
+    kind: str,
+    *,
+    regime: str | None = None,
+    directory: str | Path | None = None,
+    description: str | None = None,
+    units: str | None = None,
+    bounds: str | None = None,
+    parameterizations: Iterable[str] | None = None,
+    objectives: Iterable[str] | None = None,
+    force: bool = False,
+    **kwargs,
+) -> CommandResult:
+    """Create a planning-only optimization variable extension scaffold."""
+
+    args: list[str] = [kind]
+    if regime is not None:
+        args.extend(("--regime", regime))
+    if directory is not None:
+        args.extend(("--dir", str(directory)))
+    if description is not None:
+        args.extend(("--description", description))
+    if units is not None:
+        args.extend(("--units", units))
+    if bounds is not None:
+        args.extend(("--bounds", bounds))
+    if parameterizations is not None:
+        args.extend(("--parameterizations", ",".join(str(value) for value in parameterizations)))
+    if objectives is not None:
+        args.extend(("--objectives", ",".join(str(value) for value in objectives)))
+    if force:
+        args.append("--force")
+    return run_julia_cli(SCAFFOLD_VARIABLE, *args, **kwargs)
 
 
 def validate_all_experiments(**kwargs) -> CommandResult:

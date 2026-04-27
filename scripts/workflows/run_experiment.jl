@@ -9,6 +9,9 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --list
     julia --project=. -t auto scripts/canonical/run_experiment.jl --capabilities
     julia --project=. -t auto scripts/canonical/run_experiment.jl --objectives
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-objectives
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --variables
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-variables
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-all
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
@@ -74,6 +77,28 @@ function run_experiment_main(args=ARGS)
         return nothing
     end
 
+    if args[1] == "--validate-objectives"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-objectives")
+        report = validate_objective_extension_contracts()
+        render_objective_extension_validation_report(report)
+        report.invalid == 0 || error("one or more objective extension contracts failed validation")
+        return report
+    end
+
+    if args[1] == "--variables"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --variables")
+        render_variable_registry()
+        return nothing
+    end
+
+    if args[1] == "--validate-variables"
+        length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-variables")
+        report = validate_variable_extension_contracts()
+        render_variable_extension_validation_report(report)
+        report.invalid == 0 || error("one or more variable extension contracts failed validation")
+        return report
+    end
+
     if args[1] == "--validate-all"
         length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-all")
         report = validate_all_experiment_configs()
@@ -117,7 +142,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)

@@ -12,8 +12,10 @@ const _OBJECTIVE_REGISTRY_JL_LOADED = true
 using TOML
 
 const OBJECTIVE_EXTENSION_DIR = normpath(joinpath(@__DIR__, "..", "..", "lab_extensions", "objectives"))
+const OBJECTIVE_REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
 
 _objective_normalize_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
+_objective_safe_name(x) = replace(String(_objective_normalize_symbol(x)), r"[^A-Za-z0-9_]" => "_")
 
 const OBJECTIVE_CONTRACTS = (
     (
@@ -174,6 +176,194 @@ function objective_extension_contract(kind::Symbol, regime::Symbol)
     isempty(matches) && throw(ArgumentError(
         "objective extension `$(kind)` is not registered for regime `$(regime)`; registered extensions: $(collect(registered_objective_extension_kinds(regime)))"))
     return only(matches)
+end
+
+function _extension_source_path(contract)
+    isempty(contract.source) && return ""
+    isabspath(contract.source) ? contract.source : normpath(joinpath(@__DIR__, "..", "..", contract.source))
+end
+
+function _source_mentions_function(source_text::AbstractString, function_name::AbstractString)
+    isempty(function_name) && return false
+    return occursin(Regex("\\b" * Base.escape_string(function_name) * "\\b"), source_text)
+end
+
+function validate_objective_extension_contract(contract)
+    errors = String[]
+    blockers = String[]
+
+    contract.kind == Symbol("") && push!(errors, "missing_kind")
+    contract.regime == Symbol("") && push!(errors, "missing_regime")
+    isempty(contract.description) && push!(errors, "missing_description")
+    isempty(contract.source) && push!(errors, "missing_source")
+    isempty(contract.function_name) && push!(errors, "missing_function")
+    isempty(contract.gradient_name) && push!(errors, "missing_gradient")
+    isempty(contract.validation) && push!(errors, "missing_validation")
+    isempty(contract.supported_variables) && push!(errors, "missing_supported_variables")
+
+    source_path = _extension_source_path(contract)
+    source_exists = !isempty(source_path) && isfile(source_path)
+    source_text = source_exists ? read(source_path, String) : ""
+    source_exists || push!(errors, "source_missing")
+    source_exists && _source_mentions_function(source_text, contract.function_name) ||
+        push!(errors, "function_missing_in_source")
+    source_exists && _source_mentions_function(source_text, contract.gradient_name) ||
+        push!(errors, "gradient_missing_in_source")
+
+    contract.execution == :planning_only && push!(blockers, "execution_planning_only")
+    contract.execution == :executable || contract.execution == :planning_only ||
+        push!(errors, "unknown_execution")
+    contract.backend == :lab_extension && push!(blockers, "backend_not_promoted")
+    contract.maturity in ("supported", "experimental") || push!(blockers, "maturity_$(contract.maturity)")
+    isempty(contract.validation) || occursin("Requires", contract.validation) &&
+        push!(blockers, "validation_requirements_unmet")
+
+    valid = isempty(errors)
+    promotable = valid && isempty(blockers)
+    return (
+        kind = contract.kind,
+        regime = contract.regime,
+        execution = contract.execution,
+        maturity = contract.maturity,
+        backend = contract.backend,
+        source = source_path,
+        source_exists = source_exists,
+        function_name = contract.function_name,
+        gradient_name = contract.gradient_name,
+        valid = valid,
+        promotable = promotable,
+        errors = Tuple(errors),
+        blockers = Tuple(blockers),
+    )
+end
+
+function validate_objective_extension_contracts(; regime::Union{Nothing,Symbol}=nothing)
+    rows = Tuple(validate_objective_extension_contract(contract)
+        for contract in registered_objective_extension_contracts(regime))
+    valid = count(row -> row.valid, rows)
+    promotable = count(row -> row.promotable, rows)
+    return (
+        total = length(rows),
+        valid = valid,
+        invalid = length(rows) - valid,
+        promotable = promotable,
+        rows = rows,
+    )
+end
+
+function render_objective_extension_validation_report(report; io::IO=stdout)
+    println(io, "# Objective extension validation")
+    println(io)
+    println(io, "- Total: `", report.total, "`")
+    println(io, "- Valid metadata: `", report.valid, "`")
+    println(io, "- Invalid metadata: `", report.invalid, "`")
+    println(io, "- Promotion-ready: `", report.promotable, "`")
+    println(io)
+    println(io, "| Objective | Regime | Execution | Maturity | Backend | Valid | Promotable | Errors | Blockers | Source |")
+    println(io, "|---|---|---|---|---|---|---|---|---|---|")
+    for row in report.rows
+        println(io,
+            "| ", row.kind,
+            " | ", row.regime,
+            " | ", row.execution,
+            " | ", row.maturity,
+            " | ", row.backend,
+            " | ", row.valid,
+            " | ", row.promotable,
+            " | ", join(row.errors, ","),
+            " | ", join(row.blockers, ","),
+            " | ", row.source,
+            " |")
+    end
+    return nothing
+end
+
+function _objective_source_field(path::AbstractString)
+    apath = abspath(path)
+    root = abspath(OBJECTIVE_REPO_ROOT)
+    prefix = root * Base.Filesystem.path_separator
+    return startswith(apath, prefix) ? relpath(apath, root) : apath
+end
+
+function _toml_string_array(values)
+    return "[" * join(("\"" * replace(String(value), "\"" => "\\\"") * "\"" for value in values), ", ") * "]"
+end
+
+function _toml_nested_variables(variables)
+    return "[" * join((_toml_string_array(vars) for vars in variables), ", ") * "]"
+end
+
+function _objective_stub_text(kind_name::AbstractString, cost_name::AbstractString, gradient_name::AbstractString)
+    return """
+\"\"\"
+Planning-only objective extension stub for `$kind_name`.
+
+Replace these stubs with the objective definition, units/normalization notes,
+and derivative strategy before promoting this contract to executable status.
+\"\"\"
+
+function $cost_name(args...)
+    throw(ArgumentError(
+        "$kind_name is a planning-only objective contract; implement and promote this objective before execution"))
+end
+
+function $gradient_name(args...)
+    throw(ArgumentError(
+        "$kind_name is a planning-only objective contract; implement and promote this gradient before execution"))
+end
+"""
+end
+
+function scaffold_objective_extension(
+    kind;
+    regime=:single_mode,
+    dir::AbstractString=OBJECTIVE_EXTENSION_DIR,
+    description::AbstractString="Research objective contract. Replace with physical quantity, units, and normalization.",
+    variables=(("phase",),),
+    regularizers=("gdd", "boundary"),
+    force::Bool=false,
+)
+    kind_name = _objective_safe_name(kind)
+    isempty(kind_name) && throw(ArgumentError("objective kind cannot be empty"))
+    regime_name = String(_objective_normalize_symbol(regime))
+    mkpath(dir)
+
+    toml_path = joinpath(dir, "$(kind_name).toml")
+    source_path = joinpath(dir, "$(kind_name).jl")
+    if !force && (isfile(toml_path) || isfile(source_path))
+        throw(ArgumentError(
+            "objective scaffold for `$(kind_name)` already exists under `$(dir)`; pass force=true to overwrite"))
+    end
+
+    cost_name = "$(kind_name)_cost"
+    gradient_name = "$(kind_name)_gradient"
+    variable_tuples = Tuple(Tuple(String(item) for item in vars) for vars in variables)
+    source_field = _objective_source_field(source_path)
+    toml_text = """
+kind = "$(kind_name)"
+regime = "$(regime_name)"
+backend = "lab_extension"
+description = "$(replace(String(description), "\"" => "\\\""))"
+maturity = "research"
+execution = "planning_only"
+source = "$(replace(source_field, "\\" => "/"))"
+function = "$(cost_name)"
+gradient = "$(gradient_name)"
+validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
+supported_variables = $(_toml_nested_variables(variable_tuples))
+allowed_regularizers = $(_toml_string_array(regularizers))
+"""
+
+    write(toml_path, toml_text)
+    write(source_path, _objective_stub_text(kind_name, cost_name, gradient_name))
+    return (
+        kind = Symbol(kind_name),
+        regime = Symbol(regime_name),
+        toml_path = abspath(toml_path),
+        source_path = abspath(source_path),
+        function_name = cost_name,
+        gradient_name = gradient_name,
+    )
 end
 
 function experiment_objective_contract(spec)

@@ -18,6 +18,7 @@ using TOML
 
 include(joinpath(@__DIR__, "canonical_runs.jl"))
 include(joinpath(@__DIR__, "objective_registry.jl"))
+include(joinpath(@__DIR__, "variable_registry.jl"))
 
 const EXPERIMENT_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
 const DEFAULT_EXPERIMENT_SPEC = DEFAULT_CANONICAL_RUN_ID
@@ -346,6 +347,7 @@ function validate_experiment_spec(spec)
 
     spec.controls.variables in caps.variables || throw(ArgumentError(
         "variables $(spec.controls.variables) are not currently supported for regime `$(spec.problem.regime)`; supported tuples: $(collect(caps.variables))"))
+    variable_contracts = experiment_variable_contracts(spec)
     spec.controls.parameterization in caps.parameterizations || throw(ArgumentError(
         "parameterization `$(spec.controls.parameterization)` is not supported for regime `$(spec.problem.regime)`"))
     spec.controls.initialization in caps.initializations || throw(ArgumentError(
@@ -376,6 +378,10 @@ function validate_experiment_spec(spec)
     spec.solver.max_iter > 0 || throw(ArgumentError("solver.max_iter must be positive"))
 
     mode = experiment_execution_mode(spec)
+    for contract in variable_contracts
+        spec.controls.parameterization in contract.parameterizations || throw(ArgumentError(
+            "variable `$(contract.kind)` does not support parameterization `$(spec.controls.parameterization)`; supported parameterizations: $(collect(contract.parameterizations))"))
+    end
     spec.controls.variables in objective_contract.supported_variables || throw(ArgumentError(
         "variables $(spec.controls.variables) are not supported by objective `$(spec.objective.kind)`"))
     if mode == :phase_only
@@ -493,7 +499,7 @@ function render_experiment_capabilities(; io::IO=stdout)
     println(io, "  single_mode phase-only is the supported local execution path.")
     println(io, "  single_mode multivariable controls are experimental.")
     println(io, "  long_fiber and multimode are planning/dry-run surfaces until their dedicated workflows are promoted.")
-    println(io, "  Configs select from these contracts; new physics still belongs in code first.")
+    println(io, "  Configs select from these contracts; new physics and new controls still belong in code first.")
     return nothing
 end
 

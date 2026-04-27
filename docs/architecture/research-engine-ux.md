@@ -150,6 +150,23 @@ gradient = "my_new_objective_gradient"
 supported_variables = [["phase"]]
 ```
 
+or, for a new optimized control:
+
+```toml
+kind = "my_new_variable"
+regime = "single_mode"
+backend = "lab_extension"
+maturity = "research"
+execution = "planning_only"
+source = "lab_extensions/variables/my_new_variable.jl"
+build_function = "build_my_new_variable_control"
+projection_function = "project_my_new_variable_control"
+units = "physical units or normalization"
+bounds = "bounds or projection behavior"
+parameterizations = ["full_grid"]
+compatible_objectives = ["raman_band"]
+```
+
 Pain points addressed:
 
 - a closed menu limits future research
@@ -162,6 +179,8 @@ Design rule:
 - extensions are visible contracts first
 - execution promotion requires implementation, tests, validation, and output
   semantics
+- objective and variable scaffolds should create planning-only contracts, not
+  hidden executable behavior
 
 ### 6. Results / Campaign Index
 

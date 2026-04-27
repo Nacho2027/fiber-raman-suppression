@@ -47,6 +47,12 @@ with five stable contracts:
     backend mapping, and allowed regularizers
   - discovers metadata-only lab objective extension contracts from
     `lab_extensions/objectives/*.toml`
+- `scripts/lib/variable_registry.jl`
+  - defines the code-owned optimized-variable contracts, units,
+    parameterizations, maturity, and artifact semantics for the current support
+    boundary
+  - discovers metadata-only lab variable extension contracts from
+    `lab_extensions/variables/*.toml`
 - `scripts/lib/experiment_runner.jl`
   - maps validated specs onto the existing `run_optimization(...)` and
     `run_multivar_optimization(...)` paths
@@ -58,6 +64,8 @@ with five stable contracts:
   - supports `--capabilities`
   - supports `--objectives`
   - supports `--validate-all`
+  - supports `--variables`
+  - supports `--validate-variables`
   - supports `--dry-run`
   - supports `--compute-plan`
   - supports `--latest`
@@ -111,6 +119,18 @@ with five stable contracts:
     guides, and scientific acceptance gates
 - `lab_extensions/objectives/pulse_compression_demo.toml`
   - demonstrates a non-Raman, planning-only objective extension contract
+- `run_experiment.jl --validate-objectives`
+  - validates objective extension metadata and reports promotion blockers
+    before any extension can be treated as executable
+- `scripts/canonical/scaffold_objective.jl`
+  - creates a planning-only objective extension TOML and Julia cost/gradient
+    stub with overwrite protection
+- `scripts/canonical/scaffold_variable.jl`
+  - creates a planning-only variable extension TOML and Julia build/projection
+    stub with overwrite protection
+- `lab_extensions/variables/mode_weights_demo.toml`
+  - demonstrates a multimode, planning-only optimized-variable contract for
+    future modal-weight research
 - `docs/guides/research-extensions.md`
   - documents the UX principle: safe defaults plus open extension contracts,
     not a closed objective menu
@@ -144,6 +164,9 @@ with five stable contracts:
 - Treat lab extension contracts as visible research surfaces. They are not
   executable until promoted with implementation, tests, validation, and output
   semantics.
+- Treat future variables the same way as future objectives: make units, bounds,
+  projection behavior, compatible objectives, and artifacts explicit before
+  execution.
 - Keep one validated backend. CLI, notebooks, sweeps, future GUIs, and lab
   scripts should call the same contracts rather than reimplementing science
   logic.
@@ -190,6 +213,26 @@ and experimentally:
 - `--objectives` also prints research extension objective contracts from
   `lab_extensions/objectives/`, including execution status such as
   `planning_only`
+- `--validate-objectives` reports objective-extension metadata validity and
+  promotion blockers. The current `pulse_compression_demo` contract is valid
+  metadata but not promotion-ready because it remains planning-only, uses the
+  lab-extension backend, has research maturity, and declares unmet validation
+  requirements.
+- `scaffold_objective.jl` gives researchers a safe starting point for a new
+  objective without copying boilerplate by hand. Generated objectives remain
+  planning-only until explicitly promoted with implementation, tests, and
+  output semantics.
+- `--variables` prints built-in optimized-variable contracts and planning-only
+  research variable extensions.
+- `--validate-variables` reports variable-extension metadata validity and
+  promotion blockers. The current `mode_weights_demo` contract is valid
+  metadata but not promotion-ready because it remains planning-only, uses the
+  lab-extension backend, has research maturity, and declares unmet validation
+  requirements.
+- `scaffold_variable.jl` gives researchers a safe starting point for a new
+  optimized control without editing deep internals. Generated variables remain
+  planning-only until units, bounds/projection behavior, objective
+  compatibility, artifact semantics, implementation, and tests are promoted.
 - experimental `raman_peak` objective dispatch is exposed as a phase-only smoke
   surface without changing the supported default `raman_band` path
 - phase-only export requests now call the canonical handoff exporter and attach
@@ -216,7 +259,8 @@ and experimentally:
 - `run_experiment_sweep.jl --validate-all` validates every approved front-layer
   sweep config
 - `run_experiment_sweep.jl --execute` runs locally supported expanded cases
-  deliberately and records complete/failed/skipped rows in a Markdown summary
+  deliberately and records complete/failed/skipped rows in Markdown, JSON, and
+  CSV summaries
 - sweep summaries now include artifact-validation, trust-report, and
   standard-image status columns per case
 - `run_experiment_sweep.jl --latest` resolves and prints the newest completed
@@ -231,9 +275,9 @@ and experimentally:
   run config path, and artifact path
 - result-index comparison mode ranks run artifacts by mechanical lab readiness
   and then objective value for meeting-sized shortlists
-- sweep-comparison mode parses completed `SWEEP_SUMMARY.md` tables and ranks
-  campaigns by best achieved case while keeping case counts and failure counts
-  visible
+- sweep-comparison mode prefers completed `SWEEP_SUMMARY.json` sidecars and
+  falls back to Markdown tables for older sweeps; it ranks campaigns by best
+  achieved case while keeping case counts and failure counts visible
 - `long_fiber`
 - variables `[:phase]`
 - objective `raman_band`
@@ -365,10 +409,58 @@ falling through.
   rendered a sweep comparison table from completed front-layer sweep summaries,
   including case counts, failures, best case, best objective, and median
   objective
+- `julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute smf28_power_micro_sweep`
+  was repeated after adding sidecars and wrote `SWEEP_SUMMARY.md`,
+  `SWEEP_SUMMARY.json`, and `SWEEP_SUMMARY.csv` under
+  `results/raman/sweeps/front_layer/smf28_power_micro_sweep_20260426_2352316`
+- `julia -t auto --project=. scripts/canonical/index_results.jl --compare-sweeps --top 3 results/raman/sweeps/front_layer --contains 2352316`
+  ranked the fresh sweep from `SWEEP_SUMMARY.json`
+- red-first regression was added for objective-extension promotion validation;
+  it failed before `validate_objective_extension_contracts(...)` and
+  `run_experiment.jl --validate-objectives`, then passed after implementation
+- `julia --project=. scripts/canonical/run_experiment.jl --validate-objectives`
+  reports one valid metadata contract, zero invalid contracts, and zero
+  promotion-ready contracts for the current planning-only
+  `pulse_compression_demo`
+- `PYTHONPATH=python python3 -m unittest discover -s test/python` passed
+  (`13/13`) after exposing objective-extension validation and objective
+  scaffolding to notebooks
+- `julia --project=. scripts/canonical/scaffold_objective.jl cli_smoke_objective --dir <tmp> --description "CLI smoke objective."`
+  created a planning-only TOML contract and Julia stub in a temporary
+  directory, with no real lab objective files left behind
 - `TEST_TIER=fast julia -t auto --project=. test/runtests.jl` passed after the
-  results-index ledger/comparison slice: repository structure `19/19`,
-  canonical lab-facing surface `149/149`, experiment front layer `210/210`,
-  Phase 16 fast `95/95`
+  objective-scaffold slice: repository structure `19/19`, canonical
+  lab-facing surface `150/150`, experiment front layer `251/251`, Phase 16
+  fast `95/95`
+- Routine sweep output generated by the final full fast-tier verification under
+  timestamp `20260426_2352316` was removed from the source boundary afterward,
+  and `results/raman/manifest.json` no longer contains that timestamp. The
+  preexisting/shared front-layer sweep output under timestamp
+  `20260426_2123863` was left in place.
+- `jq empty results/raman/manifest.json` passed after cleanup.
+- Regression coverage was added for variable-extension discovery, validation,
+  and scaffolding through `variable_registry.jl`,
+  `run_experiment.jl --variables`, `run_experiment.jl --validate-variables`,
+  and `scaffold_variable.jl`.
+- `julia --project=. -e 'using Test; const _ROOT = pwd(); include("test/core/test_experiment_front_layer.jl")'`
+  passed after the variable-extension slice (`289/289`).
+- `PYTHONPATH=python python3 -m unittest discover -s test/python` passed
+  after exposing variable listing, validation, and scaffolding to notebooks
+  (`16/16`).
+- `julia --project=. scripts/canonical/run_experiment.jl --validate-all`
+  passed after variable-contract validation was wired into experiment
+  validation (`7/7` approved experiment configs).
+- `julia --project=. scripts/canonical/run_experiment.jl --variables` and
+  `julia --project=. scripts/canonical/run_experiment.jl --validate-variables`
+  passed; the current `mode_weights_demo` variable extension is valid metadata
+  and not promotion-ready.
+- `julia --project=. scripts/canonical/scaffold_variable.jl cli_smoke_variable --dir <tmp> --description "CLI smoke variable." --units normalized --bounds "box constrained"`
+  created a planning-only TOML contract and Julia stub in a temporary
+  directory, with no real lab variable files left behind.
+- `TEST_TIER=fast julia -t auto --project=. test/runtests.jl` passed after the
+  variable-extension slice: repository structure `19/19`, canonical
+  lab-facing surface `150/150`, experiment front layer `289/289`, experiment
+  sweep sidecars `13/13`, Phase 16 fast `95/95`.
 
 ## Review Findings
 

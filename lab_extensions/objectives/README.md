@@ -14,6 +14,23 @@ It does not make a new objective executable automatically. That is intentional:
 a real objective needs units, normalization, gradient/adjoint behavior,
 validation checks, output metrics, and artifact meaning.
 
+## Scaffold
+
+Create a planning-only objective contract plus Julia stub with:
+
+```bash
+julia -t auto --project=. scripts/canonical/scaffold_objective.jl my_objective \
+  --description "What this objective measures and why."
+```
+
+The scaffold refuses to overwrite existing files unless `--force` is supplied.
+After scaffolding, run:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
+julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
+```
+
 ## Contract Shape
 
 Create a TOML file in this directory:

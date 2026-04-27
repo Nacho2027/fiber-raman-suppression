@@ -1,0 +1,15 @@
+kind = "mode_weights_demo"
+regime = "multimode"
+backend = "lab_extension"
+description = "Demo planning contract for optimizing multimode launch or modal weighting controls."
+maturity = "research"
+execution = "planning_only"
+source = "lab_extensions/variables/mode_weights_demo.jl"
+build_function = "build_mode_weights_demo_control"
+projection_function = "project_mode_weights_demo_control"
+units = "normalized modal power fractions"
+bounds = "nonnegative weights projected to unit total power"
+parameterizations = ["mode_basis"]
+compatible_objectives = ["mmf_sum", "mmf_fundamental", "mmf_worst_mode"]
+artifact_semantics = "Requires modal weight tables, per-mode diagnostics, and output coupling interpretation before execution."
+validation = "Requires units, simplex projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution."
