@@ -56,35 +56,40 @@
   `results/burst-logs/overnight/20260427/mmf-window-threshold4096.log`, remote
   log `results/burst-logs/M-mmfthr4096_20260427T082013Z.log`, command
   `MMF_VALIDATION_CASES=threshold MMF_VALIDATION_MAX_ITER=4 MMF_VALIDATION_THRESHOLD_TW=96 MMF_VALIDATION_THRESHOLD_NT=4096 julia -t auto --project=. scripts/research/mmf/mmf_window_validation.jl`.
+- `2026-04-27T09:02Z`: `M-mmfthr4096` exited cleanly with rc=0. Results were
+  copied back from burst to local `results/raman/phase36_window_validation/` and
+  `results/burst-logs/M-mmfthr4096_20260427T082013Z.log`.
+- `2026-04-27T09:04Z`: visual inspection completed for the standard image set
+  and MMF-specific plots. Figures rendered correctly, but the optimized result
+  is a boundary artifact: summary reports `quality=invalid-window`,
+  `boundary_ok=false`, `edge_fraction=1.00e+00`, and the phase diagnostics show
+  extreme noisy group delay/GDD.
 
 ## Current Interpretation
 
 - Threshold validation at `Nt=8192` crossed into memory failure twice: once
   near evaluation 6 and again as an uninspectable host after evaluation 1 in the
-  lower-iteration recovery run. The active recovery path is threshold-only at
-  `Nt=4096`, `tw=96 ps`, `max_iter=4`.
+  lower-iteration recovery run.
+- Threshold validation at `Nt=4096`, `tw=96 ps`, `max_iter=4` completed, but
+  the apparent `27.12 dB` suppression is invalid because `boundary_ok=false`.
 - Memory pressure is the main risk. Neither the queued aggressive case
   (`Nt=16384`, `tw=160 ps`) nor another `Nt=8192` threshold run should be
   attempted on this VM without reducing memory footprint.
-- Do not launch another permanent-burst heavy job while `M-mmfthr4096` holds
-  the heavy lock.
-- Do not interpret the transient `-41 dB` evaluation as science until the
-  script writes `mmf_window_validation_summary.md`, JLD2 artifacts, and the
-  required standard image set.
+- Do not interpret the `-45.07 dB` optimized threshold result as physical
+  Raman suppression. It is a numerical/window artifact under the current trust
+  criteria.
+- Aggressive validation was not attempted after the memory failures; on the
+  current `c3-highcpu-22` VM, it should be considered blocked pending a
+  larger-memory machine or lower-memory implementation.
 
 ## Recovery Criteria
 
 - If the process exits cleanly, inspect
   `results/raman/phase36_window_validation/mmf_window_validation_summary.md`
   and verify standard image sets before deciding next steps.
-- If `M-mmfthr4096` completes, verify summary, JLD2, and standard images, then
-  decide whether this lower-resolution result is enough to close the window
-  artifact question or whether a larger-memory VM is required.
-- If `M-mmfthr4096` also OOMs or becomes uninspectable, stop trying this window
-  validation on `c3-highcpu-22` and record that the current MMF validation
-  requires either a larger-memory machine or a lower-memory implementation.
-- If threshold completes but aggressive OOMs, preserve threshold outputs and
-  relaunch aggressive separately with a lower-memory configuration rather than
-  rerunning threshold.
-- After final completion, pull burst results back explicitly before relying on
-  local `results/`.
+- Close this overnight MMF validation loop as a negative/trust-failed result on
+  current compute.
+- If MMF is reopened, do not use this result as positive physics. Reopen only
+  with a plan for boundary-safe parameterization, stronger phase regularization,
+  or a larger-memory validation path.
+- Stop permanent burst after notes are committed.
