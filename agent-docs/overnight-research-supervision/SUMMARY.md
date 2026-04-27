@@ -534,3 +534,25 @@ single monolithic fragile run.
   phase/case standard image sets. Representative weakest/best image sets were
   visually inspected and were not blank or corrupt; diagnostics remain rough
   but interpretable.
+
+## 2026-04-27 18:05 UTC Supervisor Check
+
+- Active quota mix is below limit after cleanup: `fiber-raman-burst` is
+  `TERMINATED`, and the only active C3 ephemeral is
+  `fiber-raman-temp-l-200resume1-20260427t165232z` for the 200 m long-fiber
+  continuation. No multivar ephemeral is running.
+- MMF recovery `M-mmffix` completed and synced local artifacts. The summary
+  reports `quality=invalid-window`, `boundary_ok=false`, `J_ref=-17.96 dB`,
+  `J_opt=-45.07 dB`, nominal `27.12 dB` improvement, and edge fraction
+  `5.02e-02`. The four standard images were visually inspected and were not
+  blank or corrupt, but the phase/group-delay diagnostic is extremely rough;
+  keep this closed as a numerical-window caveat rather than accepted MMF
+  science. Permanent burst was stopped after verifying no remote MMF Julia,
+  tmux, or heavy-lock process remained.
+- Long-fiber continuation `L-200resume1` is still alive and CPU-active. It has
+  checkpointed through `ckpt_iter_0480.jld2` and improved from the resumed
+  `f=-52.97751 dB` to `f=-53.44527 dB` by optimizer step 5. The prior
+  interpolation caveat still applies: the `Nt=65536`, `tw=320 ps` resume grid
+  drops about 68% of the stored spectral range.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  was not modified.
