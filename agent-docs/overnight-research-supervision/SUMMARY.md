@@ -92,6 +92,29 @@ single monolithic fragile run.
   only active multivar VM. At approximately 06:32 UTC it was still in
   dependency precompile (`116/142` packages).
 
+## 2026-04-27 06:36 UTC Supervisor Check
+
+- Active quota mix is correct: permanent `fiber-raman-burst` plus two
+  `c3-highcpu-8` ephemerals:
+  `fiber-raman-temp-l-200mhc8-20260427t060246z` and
+  `fiber-raman-temp-v-mvampoph4-20260427t062900z`.
+- Deterministic watchdog cron is still installed at 15 minute cadence and was
+  not modified.
+- MMF `M-mmfwin3` is alive on permanent burst. Remote log reached the
+  threshold case, iteration 3, with Julia still running.
+- Long-fiber `L-200mhc8` is alive on the 200 m ephemeral. Remote log shows the
+  200 m fresh run reached iteration 5 with `f=-5.290051e+01`; checkpoints were
+  written through `ckpt_iter_0005.jld2`.
+- `V-mvengoph4` completed and synced results, but the `energy_on_phase` case is
+  still not accepted. The remote run used stale commit `708db14`, not
+  `4d426df`, and failed with the old negative-energy assertion. Only the
+  phase-only reference artifacts exist under
+  `results/raman/multivar/variable_ablation_overnight_energy_on_phase_20260427/`.
+  Because no `energy_on_phase_result.jld2` exists, the watchdog/sequence can
+  safely retry this case later.
+- Current `V-mvampoph4` was verified on commit `4d426df` and includes the
+  log-energy fix. It is running `amp_on_phase`; no intervention needed.
+
 ## 2026-04-27 Codex Cron Supervisor
 
 - Added `scripts/ops/codex_overnight_check.sh`, a `flock`-guarded wrapper
