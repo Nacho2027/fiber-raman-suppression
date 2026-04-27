@@ -136,7 +136,13 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
     _push_blocker!(blockers, summary.standard_images.complete, "missing_standard_images")
     _push_blocker!(blockers, summary.converged === true, "not_converged")
     _push_blocker!(blockers, isfinite(Float64(summary.J_after_dB)), "missing_objective_metric")
-    require_export && _push_blocker!(blockers, summary.export_handoff.complete, "missing_export_handoff")
+    if require_export
+        if !summary.export_handoff.files_complete
+            push!(blockers, "missing_export_handoff")
+        elseif !summary.export_handoff.phase_csv_valid
+            push!(blockers, "invalid_export_phase_csv")
+        end
+    end
 
     return (
         kind = :run,
@@ -149,7 +155,11 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
         standard_images_complete = summary.standard_images.complete,
         standard_images_missing = Tuple(summary.standard_images.missing),
         export_handoff_complete = summary.export_handoff.complete,
+        export_handoff_files_complete = summary.export_handoff.files_complete,
         export_handoff_dir = summary.export_handoff.dir,
+        export_phase_csv_valid = summary.export_handoff.phase_csv_valid,
+        export_phase_csv_rows = summary.export_handoff.phase_csv_rows,
+        export_phase_csv_errors = Tuple(summary.export_handoff.phase_csv_errors),
         converged = summary.converged,
         quality = summary.quality,
         J_after_dB = summary.J_after_dB,
@@ -233,6 +243,11 @@ function render_lab_ready_report(report; io::IO=stdout)
             println(io, "- Standard images missing: `", join(report.standard_images_missing, ","), "`")
         end
         println(io, "- Export handoff complete: `", report.export_handoff_complete, "`")
+        println(io, "- Export phase CSV valid: `", report.export_phase_csv_valid, "`")
+        println(io, "- Export phase CSV rows: `", report.export_phase_csv_rows, "`")
+        if !isempty(report.export_phase_csv_errors)
+            println(io, "- Export phase CSV errors: `", join(report.export_phase_csv_errors, ","), "`")
+        end
         println(io, "- Converged: `", report.converged, "`")
         println(io, "- Quality: `", report.quality, "`")
         println(io, "- J_after_dB: `", report.J_after_dB, "`")

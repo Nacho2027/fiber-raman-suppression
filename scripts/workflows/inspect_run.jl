@@ -17,6 +17,108 @@ const INSPECT_EXPORT_REQUIRED_FILES = (
     source_config = "source_run_config.toml",
 )
 
+const INSPECT_PHASE_CSV_REQUIRED_COLUMNS = (
+    "index",
+    "frequency_offset_THz",
+    "absolute_frequency_THz",
+    "wavelength_nm",
+    "phase_wrapped_rad",
+    "phase_unwrapped_rad",
+    "group_delay_fs",
+)
+
+function _push_phase_csv_error!(errors::Vector{String}, message::AbstractString)
+    length(errors) < 12 && push!(errors, String(message))
+    return errors
+end
+
+function validate_phase_profile_csv(path::AbstractString)
+    errors = String[]
+    isfile(path) || return (
+        path = String(path),
+        exists = false,
+        valid = false,
+        row_count = 0,
+        columns = String[],
+        errors = ("missing_phase_profile_csv",),
+    )
+
+    lines = readlines(path)
+    if isempty(lines)
+        return (
+            path = String(path),
+            exists = true,
+            valid = false,
+            row_count = 0,
+            columns = String[],
+            errors = ("missing_header",),
+        )
+    end
+
+    header = split(strip(first(lines)), ",")
+    missing_columns = setdiff(collect(INSPECT_PHASE_CSV_REQUIRED_COLUMNS), header)
+    isempty(missing_columns) || _push_phase_csv_error!(
+        errors,
+        string("missing_columns:", join(missing_columns, "|")),
+    )
+    length(lines) > 1 || _push_phase_csv_error!(errors, "missing_data_rows")
+
+    column_index = Dict(name => idx for (idx, name) in pairs(header))
+    row_count = 0
+    isempty(missing_columns) || return (
+        path = String(path),
+        exists = true,
+        valid = false,
+        row_count = row_count,
+        columns = header,
+        errors = Tuple(errors),
+    )
+
+    numeric_columns = setdiff(collect(INSPECT_PHASE_CSV_REQUIRED_COLUMNS), ["index"])
+    for (line_number, line) in enumerate(lines[2:end])
+        row_label = line_number + 1
+        fields = split(line, ","; keepempty=true)
+        if length(fields) != length(header)
+            _push_phase_csv_error!(
+                errors,
+                "row_$(row_label)_field_count_$(length(fields))_expected_$(length(header))",
+            )
+            continue
+        end
+
+        row_count += 1
+        index_value = tryparse(Int, strip(fields[column_index["index"]]))
+        if index_value === nothing
+            _push_phase_csv_error!(errors, "row_$(row_label)_invalid_index")
+        elseif index_value != row_count
+            _push_phase_csv_error!(
+                errors,
+                "row_$(row_label)_index_$(index_value)_expected_$(row_count)",
+            )
+        end
+
+        for column in numeric_columns
+            value = tryparse(Float64, strip(fields[column_index[column]]))
+            if value === nothing || !isfinite(value)
+                _push_phase_csv_error!(errors, "row_$(row_label)_invalid_$(column)")
+                continue
+            end
+            if column in ("absolute_frequency_THz", "wavelength_nm") && value <= 0
+                _push_phase_csv_error!(errors, "row_$(row_label)_nonpositive_$(column)")
+            end
+        end
+    end
+
+    return (
+        path = String(path),
+        exists = true,
+        valid = isempty(errors),
+        row_count = row_count,
+        columns = header,
+        errors = Tuple(errors),
+    )
+end
+
 function export_handoff_status(run_dir::AbstractString)
     export_dir = joinpath(run_dir, "export_handoff")
     paths = Dict{Symbol,String}()
@@ -28,6 +130,9 @@ function export_handoff_status(run_dir::AbstractString)
         isfile(path) || push!(missing, filename)
     end
 
+    phase_csv_validation = validate_phase_profile_csv(paths[:phase_csv])
+    files_complete = isdir(export_dir) && isempty(missing)
+
     return (
         dir = export_dir,
         phase_csv = paths[:phase_csv],
@@ -37,7 +142,11 @@ function export_handoff_status(run_dir::AbstractString)
         present = sort!([filename for filename in values(INSPECT_EXPORT_REQUIRED_FILES)
                          if isfile(joinpath(export_dir, filename))]),
         missing = sort!(missing),
-        complete = isdir(export_dir) && isempty(missing),
+        files_complete = files_complete,
+        phase_csv_valid = phase_csv_validation.valid,
+        phase_csv_rows = phase_csv_validation.row_count,
+        phase_csv_errors = phase_csv_validation.errors,
+        complete = files_complete && phase_csv_validation.valid,
     )
 end
 
@@ -88,8 +197,12 @@ function render_run_summary(summary; io::IO=stdout)
     if summary.export_handoff.complete
         println(io, "Export handoff dir: ", summary.export_handoff.dir)
         println(io, "Export phase CSV: ", summary.export_handoff.phase_csv)
+        println(io, "Export phase CSV rows: ", summary.export_handoff.phase_csv_rows)
     elseif isdir(summary.export_handoff.dir)
         println(io, "Export handoff missing: ", join(summary.export_handoff.missing, ", "))
+        if !summary.export_handoff.phase_csv_valid
+            println(io, "Export phase CSV invalid: ", join(summary.export_handoff.phase_csv_errors, ", "))
+        end
     else
         println(io, "Export handoff: none")
     end

@@ -300,14 +300,35 @@ kind = "lbfgs"
     @test summary_with_export.export_handoff.phase_csv == exported.phase_csv
     @test summary_with_export.export_handoff.metadata_json == exported.metadata_json
     @test summary_with_export.export_handoff.source_config == joinpath(export_dir, "source_run_config.toml")
+    @test summary_with_export.export_handoff.phase_csv_valid
+    @test summary_with_export.export_handoff.phase_csv_rows == 8
+    @test isempty(summary_with_export.export_handoff.phase_csv_errors)
 
     rendered_with_export = sprint(io -> render_run_summary(summary_with_export; io=io))
     @test occursin("Export handoff complete: true", rendered_with_export)
     @test occursin("phase_profile.csv", rendered_with_export)
+    @test occursin("Export phase CSV rows: 8", rendered_with_export)
 
     exported_gate = lab_ready_run_report(run_dir; require_export=true)
     @test exported_gate.pass
     @test exported_gate.export_handoff_complete
+    @test exported_gate.export_phase_csv_valid
+    @test exported_gate.export_phase_csv_rows == 8
+
+    write(exported.phase_csv, """
+index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_rad,phase_unwrapped_rad,group_delay_fs
+1,0.0,193.4,1550.0,0.0,0.0,0.0
+2,0.2,NaN,1548.0,0.0,0.0,0.0
+""")
+    invalid_export_summary = inspect_run_summary(run_dir)
+    @test !invalid_export_summary.export_handoff.complete
+    @test invalid_export_summary.export_handoff.files_complete
+    @test !invalid_export_summary.export_handoff.phase_csv_valid
+    @test any(contains("invalid_absolute_frequency_THz"), invalid_export_summary.export_handoff.phase_csv_errors)
+
+    invalid_export_gate = lab_ready_run_report(run_dir; require_export=true)
+    @test !invalid_export_gate.pass
+    @test "invalid_export_phase_csv" in invalid_export_gate.blockers
 
     amp_run_dir = joinpath(tmp, "amp_run")
     mkpath(amp_run_dir)

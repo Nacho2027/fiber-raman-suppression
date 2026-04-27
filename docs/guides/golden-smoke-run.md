@@ -42,7 +42,7 @@ A golden smoke run is mechanically valid only if all of these pass:
 - `lab_ready.jl --latest research_engine_export_smoke --require-export`
   reports `PASS`.
 - `inspect_run.jl <run-dir>` reports standard image set complete and export
-  handoff complete.
+  handoff complete, with a valid `phase_profile.csv` row count.
 - The four required standard images are visually inspected:
   `opt_phase_profile.png`, `opt_evolution.png`, `opt_phase_diagnostic.png`,
   and `opt_evolution_unshaped.png`.
@@ -64,6 +64,8 @@ Status: PASS
 Blockers: none
 Standard images complete: true
 Export handoff complete: true
+Export phase CSV valid: true
+Export phase CSV rows: 1024
 Converged: true
 Quality: EXCELLENT
 J_after_dB: -45.963546468444825
