@@ -122,6 +122,22 @@ kind = "lbfgs"
 | case_002 | 0.2 | failed |  |  |  | ERROR | false | 0 | failed |
 | case_003 | 0.3 | complete | -19.0 | -35.0 | -16.0 | GOOD | true | 5 | case_003/opt_result.jld2 |
 """)
+    sweep_summary_json_path = joinpath(sweep_dir, "SWEEP_SUMMARY.json")
+    open(sweep_summary_json_path, "w") do io
+        JSON3.pretty(io, Dict(
+            "schema" => "experiment_sweep_summary_v1",
+            "sweep_id" => "demo_sweep",
+            "case_count" => 3,
+            "complete" => 2,
+            "failed" => 1,
+            "skipped" => 0,
+            "cases" => [
+                Dict("case" => "case_001", "status" => "complete", "J_after_dB" => -42.0),
+                Dict("case" => "case_002", "status" => "failed", "J_after_dB" => nothing),
+                Dict("case" => "case_003", "status" => "complete", "J_after_dB" => -50.0),
+            ],
+        ))
+    end
 
     index = build_results_index([tmp])
     @test index.total == 2
@@ -168,9 +184,10 @@ kind = "lbfgs"
     @test sweep_row.cases == 3
     @test sweep_row.complete == 2
     @test sweep_row.failed == 1
-    @test sweep_row.best_case == "case_001"
-    @test sweep_row.best_J_after_dB == -42.0
-    @test sweep_row.median_J_after_dB == -38.5
+    @test sweep_row.best_case == "case_003"
+    @test sweep_row.best_J_after_dB == -50.0
+    @test sweep_row.median_J_after_dB == -46.0
+    @test sweep_row.path == sweep_summary_json_path
     rendered_sweep_comparison = render_sweep_comparison(sweep_comparison)
     @test occursin("# Sweep Comparison", rendered_sweep_comparison)
     @test occursin("demo_sweep", rendered_sweep_comparison)

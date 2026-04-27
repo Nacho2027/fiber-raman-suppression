@@ -12,6 +12,7 @@ const _EXPERIMENT_SWEEP_JL_LOADED = true
 using TOML
 using Printf
 using Dates
+using JSON3
 
 include(joinpath(@__DIR__, "experiment_spec.jl"))
 
@@ -273,6 +274,120 @@ end
 
 function _sweep_result_field(result, field::Symbol)
     return hasproperty(result, field) ? getproperty(result, field) : ""
+end
+
+function _sweep_json_value(value)
+    if isnothing(value) || ismissing(value) || value == ""
+        return nothing
+    elseif value isa Symbol
+        return string(value)
+    else
+        return value
+    end
+end
+
+function _csv_cell(value)
+    text = if isnothing(value) || ismissing(value)
+        ""
+    elseif value isa AbstractFloat
+        isfinite(value) ? string(value) : ""
+    else
+        string(value)
+    end
+    needs_quotes = any(ch -> ch in (',', '"', '\n', '\r'), text)
+    escaped = replace(text, "\"" => "\"\"")
+    return needs_quotes ? "\"$escaped\"" : escaped
+end
+
+function _sweep_summary_row(result)
+    status = string(result.status)
+    artifact_or_error = status == "complete" ?
+        String(result.artifact_path) :
+        (hasproperty(result, :error) ? String(result.error) : "")
+    return Dict{String,Any}(
+        "case" => String(result.label),
+        "value" => result.value,
+        "status" => status,
+        "artifact_status" => _sweep_json_value(_sweep_result_field(result, :artifact_status)),
+        "trust_report_status" => _sweep_json_value(_sweep_result_field(result, :trust_report_status)),
+        "standard_images_status" => _sweep_json_value(_sweep_result_field(result, :standard_images_status)),
+        "J_before_dB" => _sweep_json_value(_sweep_summary_field(result, :J_before_dB)),
+        "J_after_dB" => _sweep_json_value(_sweep_summary_field(result, :J_after_dB)),
+        "delta_J_dB" => _sweep_json_value(_sweep_summary_field(result, :delta_J_dB)),
+        "quality" => _sweep_json_value(_sweep_summary_field(result, :quality)),
+        "converged" => _sweep_json_value(_sweep_summary_field(result, :converged)),
+        "iterations" => _sweep_json_value(_sweep_summary_field(result, :iterations)),
+        "output_dir" => _sweep_json_value(_sweep_result_field(result, :output_dir)),
+        "artifact_path" => _sweep_json_value(_sweep_result_field(result, :artifact_path)),
+        "artifact_or_error" => artifact_or_error,
+        "error" => status == "complete" ? nothing : _sweep_json_value(artifact_or_error),
+    )
+end
+
+function experiment_sweep_summary_payload(sweep_spec, results)
+    rows = [_sweep_summary_row(result) for result in results]
+    return Dict{String,Any}(
+        "schema" => "experiment_sweep_summary_v1",
+        "sweep_id" => String(sweep_spec.id),
+        "description" => String(sweep_spec.description),
+        "base_experiment" => String(sweep_spec.base_experiment),
+        "parameter" => String(sweep_spec.sweep.parameter),
+        "cases" => rows,
+        "case_count" => length(rows),
+        "complete" => count(row -> row["status"] == "complete", rows),
+        "failed" => count(row -> row["status"] == "failed", rows),
+        "skipped" => count(row -> row["status"] == "skipped", rows),
+        "generated_by" => "scripts/canonical/run_experiment_sweep.jl",
+    )
+end
+
+function render_experiment_sweep_summary_csv(sweep_spec, results)
+    columns = (
+        "case",
+        "value",
+        "status",
+        "artifact_status",
+        "trust_report_status",
+        "standard_images_status",
+        "J_before_dB",
+        "J_after_dB",
+        "delta_J_dB",
+        "quality",
+        "converged",
+        "iterations",
+        "output_dir",
+        "artifact_path",
+        "artifact_or_error",
+        "error",
+    )
+    payload = experiment_sweep_summary_payload(sweep_spec, results)
+    lines = [join(columns, ",")]
+    for row in payload["cases"]
+        push!(lines, join((_csv_cell(get(row, column, nothing)) for column in columns), ","))
+    end
+    return join(lines, "\n")
+end
+
+function write_experiment_sweep_summary_files(sweep_spec, results, sweep_dir::AbstractString)
+    summary_md = render_experiment_sweep_summary(sweep_spec, results)
+    summary_csv = render_experiment_sweep_summary_csv(sweep_spec, results)
+    payload = experiment_sweep_summary_payload(sweep_spec, results)
+
+    md_path = joinpath(sweep_dir, "SWEEP_SUMMARY.md")
+    json_path = joinpath(sweep_dir, "SWEEP_SUMMARY.json")
+    csv_path = joinpath(sweep_dir, "SWEEP_SUMMARY.csv")
+
+    write(md_path, summary_md)
+    open(json_path, "w") do io
+        JSON3.pretty(io, payload)
+    end
+    write(csv_path, summary_csv)
+
+    return (
+        summary_path = md_path,
+        summary_json_path = json_path,
+        summary_csv_path = csv_path,
+    )
 end
 
 function render_experiment_sweep_summary(sweep_spec, results)

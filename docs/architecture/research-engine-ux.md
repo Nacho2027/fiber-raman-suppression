@@ -211,7 +211,10 @@ decide whether a result is scientifically accepted; it makes the evidence
 easier to find. The comparison view ranks runs by mechanical readiness and then
 objective value, so professors can quickly find candidates for deeper review.
 The sweep comparison view ranks completed campaign summaries by best achieved
-case while keeping case counts and failures visible.
+case while keeping case counts and failures visible. New sweeps write
+`SWEEP_SUMMARY.json` and `SWEEP_SUMMARY.csv` sidecars so campaign comparison
+does not depend on Markdown parsing; older Markdown-only sweeps remain
+readable as a fallback.
 
 Pain points addressed:
 

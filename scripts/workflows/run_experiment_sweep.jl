@@ -92,13 +92,13 @@ function execute_experiment_sweep(sweep_spec;
         end
     end
 
-    summary_md = render_experiment_sweep_summary(sweep_spec, Tuple(results))
-    summary_path = joinpath(sweep_dir, "SWEEP_SUMMARY.md")
-    write(summary_path, summary_md)
+    summary_files = write_experiment_sweep_summary_files(sweep_spec, Tuple(results), sweep_dir)
     return (
         sweep_spec = sweep_spec,
         output_dir = sweep_dir,
-        summary_path = summary_path,
+        summary_path = summary_files.summary_path,
+        summary_json_path = summary_files.summary_json_path,
+        summary_csv_path = summary_files.summary_csv_path,
         results = Tuple(results),
     )
 end
@@ -148,6 +148,8 @@ function run_experiment_sweep_main(args=ARGS)
         println("Experiment sweep complete")
         println("Output directory: ", result.output_dir)
         println("Summary: ", result.summary_path)
+        println("Summary JSON: ", result.summary_json_path)
+        println("Summary CSV: ", result.summary_csv_path)
         println()
         print(read(result.summary_path, String))
         return result

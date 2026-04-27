@@ -41,9 +41,15 @@ julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf
 ```
 
 Execution writes a timestamped sweep directory under `output_root`, copies the
-sweep config, and writes `SWEEP_SUMMARY.md`. The summary table includes case
-status, artifact validation status, trust-report status, standard-image status,
-headline objective metrics, convergence, iterations, and artifact/error path.
+sweep config, and writes three synchronized summaries:
+
+- `SWEEP_SUMMARY.md`: human-readable table for quick inspection.
+- `SWEEP_SUMMARY.json`: machine-readable campaign ledger for comparison tools.
+- `SWEEP_SUMMARY.csv`: spreadsheet/notebook-friendly case table.
+
+The summary rows include case status, artifact validation status, trust-report
+status, standard-image status, headline objective metrics, convergence,
+iterations, output directory, and artifact/error path.
 
 The current sweep layer supports these parameter paths:
 

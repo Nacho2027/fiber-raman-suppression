@@ -32,6 +32,7 @@ include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
 include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
+include(joinpath(@__DIR__, "core", "test_experiment_sweep_sidecars.jl"))
 
 @testset "Phase 16 — fast tier" begin
 
