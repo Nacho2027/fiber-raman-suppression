@@ -10,6 +10,12 @@ handoff, and pass the lab-readiness gate.
 Use:
 
 ```bash
+make golden-smoke
+```
+
+The target expands to the explicit gate/run/gate sequence:
+
+```bash
 julia -t auto --project=. scripts/canonical/lab_ready.jl --config research_engine_export_smoke
 julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_export_smoke
 julia -t auto --project=. scripts/canonical/lab_ready.jl --latest research_engine_export_smoke --require-export

@@ -9,7 +9,7 @@
 JULIA ?= julia
 JL     = $(JULIA) --project=.
 
-.PHONY: help install test test-slow test-full optimize sweep report clean
+.PHONY: help install test test-slow test-full golden-smoke optimize sweep report clean
 
 .DEFAULT_GOAL := help
 
@@ -18,6 +18,7 @@ help:
 	@echo ""
 	@echo "  make install     Install Julia dependencies (one-time, ~2 min)"
 	@echo "  make test        Fast regression tier (simulation-free, ≤30 s)"
+	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"
 	@echo "  make test-slow   Slow tier (~5 min; burst VM recommended)"
 	@echo "  make test-full   Full tier (~20 min; burst VM)"
 	@echo "  make optimize    Canonical SMF-28 optimization (~5 min)"
@@ -38,6 +39,11 @@ test-slow:
 
 test-full:
 	TEST_TIER=full $(JL) -t auto test/runtests.jl
+
+golden-smoke:
+	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_export_smoke
+	$(JL) -t auto scripts/canonical/run_experiment.jl research_engine_export_smoke
+	$(JL) -t auto scripts/canonical/lab_ready.jl --latest research_engine_export_smoke --require-export
 
 optimize:
 	$(JL) -t auto scripts/canonical/optimize_raman.jl

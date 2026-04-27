@@ -227,7 +227,8 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_ex
 ```
 
 For the complete mechanical acceptance procedure, including the strict
-`--require-export` gate, see [golden-smoke-run.md](./golden-smoke-run.md).
+`--require-export` gate, run `make golden-smoke` or see
+[golden-smoke-run.md](./golden-smoke-run.md).
 
 For long-fiber planning, dry-run only on local machines:
 

@@ -11,7 +11,7 @@ Options:
     --help                 Show this message.
 """
 
-include(joinpath(@__DIR__, "..", "lib", "experiment_runner.jl"))
+include(joinpath(@__DIR__, "..", "lib", "experiment_spec.jl"))
 include(joinpath(@__DIR__, "inspect_run.jl"))
 
 function _lab_ready_usage()
@@ -162,9 +162,36 @@ end
 function lab_ready_latest_report(spec::AbstractString; require_export::Bool=false)
     loaded = load_experiment_spec(spec)
     validate_experiment_spec(loaded)
-    latest_dir = latest_experiment_output_dir(loaded)
+    latest_dir = _lab_ready_latest_output_dir(loaded)
     run_report = lab_ready_run_report(latest_dir; require_export=require_export)
     return (; run_report..., kind = :latest, target = spec, latest_dir = latest_dir)
+end
+
+function _lab_ready_experiment_output_dirs(spec; require_artifact::Bool=true)
+    isdir(spec.output_root) || return String[]
+    prefix = string(spec.output_tag, "_")
+    dirs = String[]
+    for entry in readdir(spec.output_root; join=true)
+        isdir(entry) || continue
+        startswith(basename(entry), prefix) || continue
+        if require_artifact
+            try
+                resolve_run_artifact_path(entry)
+            catch
+                continue
+            end
+        end
+        push!(dirs, entry)
+    end
+    sort!(dirs; by=basename)
+    return dirs
+end
+
+function _lab_ready_latest_output_dir(spec; require_artifact::Bool=true)
+    dirs = _lab_ready_experiment_output_dirs(spec; require_artifact=require_artifact)
+    isempty(dirs) && throw(ArgumentError(
+        "no completed runs found for experiment `$(spec.id)` under `$(spec.output_root)`"))
+    return last(dirs)
 end
 
 function _status_word(report)

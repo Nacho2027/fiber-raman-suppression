@@ -398,4 +398,8 @@ kind = "lbfgs"
     lab_ready_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "lab_ready.jl"), String)
     @test occursin("workflows\", \"lab_ready.jl", lab_ready_wrapper)
     @test occursin("lab_ready_main(ARGS)", lab_ready_wrapper)
+
+    makefile = read(joinpath(_ROOT, "Makefile"), String)
+    @test occursin("golden-smoke:", makefile)
+    @test occursin("lab_ready.jl --latest research_engine_export_smoke --require-export", makefile)
 end
