@@ -34,6 +34,7 @@ const MV_ABLATION_OUT = joinpath("results", "raman", "multivar", "variable_ablat
 const MV_ABLATION_PHASE_ITER = parse(Int, get(ENV, "MV_ABLATION_PHASE_ITER", "50"))
 const MV_ABLATION_MV_ITER = parse(Int, get(ENV, "MV_ABLATION_MV_ITER", "60"))
 const MV_ABLATION_ENERGY_ITER = parse(Int, get(ENV, "MV_ABLATION_ENERGY_ITER", "30"))
+const MV_ABLATION_CASES_RAW = strip(get(ENV, "MV_ABLATION_CASES", "all"))
 mkpath(MV_ABLATION_OUT)
 
 const MV_ABLATION_KW = (
@@ -47,6 +48,19 @@ const MV_ABLATION_KW = (
     fR = 0.18,
     pulse_fwhm = 185e-15,
 )
+
+function _selected_cases()
+    if isempty(MV_ABLATION_CASES_RAW) || lowercase(MV_ABLATION_CASES_RAW) == "all"
+        return Set(["all"])
+    end
+    return Set(strip.(split(MV_ABLATION_CASES_RAW, ",")))
+end
+
+const MV_ABLATION_CASES = _selected_cases()
+
+function _selected_case(label::AbstractString)
+    return "all" in MV_ABLATION_CASES || label in MV_ABLATION_CASES
+end
 
 function _linear_phase_cost(φ, uω0, fiber, sim, band_mask)
     J, _ = cost_and_gradient(φ, uω0, fiber, sim, band_mask; log_cost = false)
@@ -245,6 +259,7 @@ end
 @info "  Multivar Variable Ablation — SMF-28 L=2m P=0.30W"
 @info "═══════════════════════════════════════════════════════════════"
 @info "output directory: $MV_ABLATION_OUT"
+@info "selected cases: $(join(sort(collect(MV_ABLATION_CASES)), ","))"
 
 @info "▶ phase-only reference"
 t_phase = time()
@@ -297,7 +312,8 @@ rows = Any[
 ]
 _write_summary(rows)
 
-_run_case_record!(rows,
+if _selected_case("amp_unshaped")
+    _run_case_record!(rows,
         label = "amp_unshaped",
         variables = (:amplitude,),
         uω0_case = uω0,
@@ -310,7 +326,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("energy_unshaped")
+    _run_case_record!(rows,
         label = "energy_unshaped",
         variables = (:energy,),
         uω0_case = uω0,
@@ -323,7 +341,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_ENERGY_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("amp_energy_unshaped")
+    _run_case_record!(rows,
         label = "amp_energy_unshaped",
         variables = (:amplitude, :energy),
         uω0_case = uω0,
@@ -336,7 +356,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("amp_on_phase")
+    _run_case_record!(rows,
         label = "amp_on_phase",
         variables = (:amplitude,),
         uω0_case = uω0_phase,
@@ -349,7 +371,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("energy_on_phase")
+    _run_case_record!(rows,
         label = "energy_on_phase",
         variables = (:energy,),
         uω0_case = uω0_phase,
@@ -362,7 +386,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_ENERGY_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("amp_energy_on_phase")
+    _run_case_record!(rows,
         label = "amp_energy_on_phase",
         variables = (:amplitude, :energy),
         uω0_case = uω0_phase,
@@ -375,7 +401,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("phase_energy_cold")
+    _run_case_record!(rows,
         label = "phase_energy_cold",
         variables = (:phase, :energy),
         uω0_case = uω0,
@@ -388,7 +416,9 @@ _run_case_record!(rows,
         J_phase_dB = J_phase_dB,
         max_iter = MV_ABLATION_MV_ITER,
     )
-_run_case_record!(rows,
+end
+if _selected_case("phase_amp_energy_warm")
+    _run_case_record!(rows,
         label = "phase_amp_energy_warm",
         variables = (:phase, :amplitude, :energy),
         uω0_case = uω0,
@@ -404,6 +434,7 @@ _run_case_record!(rows,
         A0 = ones(size(φ_phase)),
         E0 = E_ref,
     )
+end
 
 summary_path = _write_summary(rows)
 @info "wrote variable ablation summary: $summary_path"

@@ -86,17 +86,37 @@ end
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
 
+function _env_float(name::AbstractString, default::Float64)
+    return parse(Float64, get(ENV, name, string(default)))
+end
+
+function _env_int(name::AbstractString, default::Int)
+    return parse(Int, get(ENV, name, string(default)))
+end
+
+function _lf_default_label(L_m::Real)
+    if abs(L_m - round(L_m)) < 1e-9
+        return @sprintf("%dm", round(Int, L_m))
+    end
+    return replace(@sprintf("%.3gm", L_m), "." => "p")
+end
+
+function _safe_label(label::AbstractString)
+    return replace(strip(label), r"[^A-Za-z0-9_-]" => "_")
+end
+
 const LF100_RESULTS_DIR = joinpath("results", "raman", "phase16")
-const LF100_CKPT_DIR    = joinpath(LF100_RESULTS_DIR, "100m_optim")
 const LF100_FIGURE_DIR  = joinpath("results", "images")
 const LF100_WARM_START_JLD2 = joinpath("results", "raman", "sweeps", "smf28",
                                        "L2m_P0.05W", "opt_result.jld2")
 
-const LF100_L          = 100.0
-const LF100_P_CONT     = 0.05
-const LF100_NT         = 32768
-const LF100_TIME_WIN   = 160.0
-const LF100_BETA_ORDER = 2
+const LF100_L          = _env_float("LF100_L", 100.0)
+const LF100_P_CONT     = _env_float("LF100_P_CONT", 0.05)
+const LF100_NT         = _env_int("LF100_NT", 32768)
+const LF100_TIME_WIN   = _env_float("LF100_TIME_WIN", 160.0)
+const LF100_RUN_LABEL  = _safe_label(get(ENV, "LF100_RUN_LABEL", _lf_default_label(LF100_L)))
+const LF100_CKPT_DIR   = joinpath(LF100_RESULTS_DIR, "$(LF100_RUN_LABEL)_optim")
+const LF100_BETA_ORDER = _env_int("LF100_BETA_ORDER", 2)
 const LF100_MAX_ITER   = parse(Int, get(ENV, "LF100_MAX_ITER", "100"))
 const LF100_CKPT_EVERY = 5
 const LF100_CKPT_TIME_GATE_S = 600.0   # 10 min
@@ -299,7 +319,7 @@ function lf100_figure(run_fresh, run_resume, resume_split_iter, out_path)
             alpha = 0.6, label = "resume split")
     end
     ax.set_ylabel("J [dB]  (cost)")
-    ax.set_title(@sprintf("L=100 m SMF-28 P=%.3f W — L-BFGS convergence", LF100_P_CONT))
+    ax.set_title(@sprintf("L=%.0f m SMF-28 P=%.3f W — L-BFGS convergence", LF100_L, LF100_P_CONT))
     ax.grid(true, alpha = 0.3)
     ax.legend(loc = "upper right")
 
@@ -344,7 +364,7 @@ function lf100_mode_fresh()
     )
 
     phi_opt = reshape(Optim.minimizer(run_fresh.result), LF100_NT, 1)
-    out_path = joinpath(LF100_RESULTS_DIR, "100m_opt_full_result.jld2")
+    out_path = joinpath(LF100_RESULTS_DIR, "$(LF100_RUN_LABEL)_opt_full_result.jld2")
     JLD2.jldsave(out_path;
         phi_opt        = phi_opt,
         phi_warm       = prob.phi_warm,
@@ -368,11 +388,11 @@ function lf100_mode_fresh()
     @info "saved $out_path"
 
     lf100_figure(run_fresh, nothing, 0,
-        joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_100m.png"))
+        joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_$(LF100_RUN_LABEL).png"))
 
     # MANDATORY canonical image set (Project rule 2, 2026-04-17).
-    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_100m_opt",
-        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_opt"))
+    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_$(LF100_RUN_LABEL)_opt",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_$(LF100_RUN_LABEL)_opt"))
 
     return (run_fresh = run_fresh, run_resume = nothing)
 end
@@ -396,7 +416,7 @@ function lf100_mode_resume()
     )
 
     phi_opt = reshape(Optim.minimizer(run_resume.result), LF100_NT, 1)
-    out_path = joinpath(LF100_RESULTS_DIR, "100m_opt_resume_result.jld2")
+    out_path = joinpath(LF100_RESULTS_DIR, "$(LF100_RUN_LABEL)_opt_resume_result.jld2")
     JLD2.jldsave(out_path;
         phi_opt        = phi_opt,
         phi_warm       = prob.phi_warm,
@@ -419,8 +439,8 @@ function lf100_mode_resume()
     )
     @info "saved $out_path"
 
-    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_100m_resume",
-        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_resume"))
+    lf100_save_standard_images(prob, vec(phi_opt); tag = "F_$(LF100_RUN_LABEL)_resume",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_$(LF100_RUN_LABEL)_resume"))
 
     return (run_fresh = nothing, run_resume = run_resume)
 end
@@ -473,7 +493,7 @@ function lf100_mode_resume_demo()
 
     # Save fresh/full reference
     phi_opt_ref = reshape(Optim.minimizer(run_ref.result), LF100_NT, 1)
-    full_path = joinpath(LF100_RESULTS_DIR, "100m_opt_full_result.jld2")
+    full_path = joinpath(LF100_RESULTS_DIR, "$(LF100_RUN_LABEL)_opt_full_result.jld2")
     JLD2.jldsave(full_path;
         phi_opt        = phi_opt_ref,
         phi_warm       = prob.phi_warm,
@@ -497,7 +517,7 @@ function lf100_mode_resume_demo()
 
     # Save resumed run result for comparison
     phi_opt_res = reshape(Optim.minimizer(run_B.result), LF100_NT, 1)
-    resume_path = joinpath(LF100_RESULTS_DIR, "100m_opt_resume_result.jld2")
+    resume_path = joinpath(LF100_RESULTS_DIR, "$(LF100_RUN_LABEL)_opt_resume_result.jld2")
     JLD2.jldsave(resume_path;
         phi_opt        = phi_opt_res,
         phi_warm       = prob.phi_warm,
@@ -525,11 +545,11 @@ function lf100_mode_resume_demo()
 
     # Figure uses the resume_demo traces (Phase A + Phase B)
     lf100_figure(run_A, run_B, 15,
-        joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_100m.png"))
+        joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_$(LF100_RUN_LABEL).png"))
 
     # MANDATORY canonical image set (Project rule 2, 2026-04-17).
-    lf100_save_standard_images(prob, vec(phi_opt_ref); tag = "F_100m_opt",
-        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_100m_opt"))
+    lf100_save_standard_images(prob, vec(phi_opt_ref); tag = "F_$(LF100_RUN_LABEL)_opt",
+        output_dir = joinpath(LF100_RESULTS_DIR, "standard_images_F_$(LF100_RUN_LABEL)_opt"))
 
     return (run_fresh = run_ref, run_resume = run_B, pass_resume = pass_resume)
 end
@@ -540,7 +560,7 @@ end
 
 function lf100_main()
     @info "═══════════════════════════════════════════════════════════════"
-    @info @sprintf("Long-fiber 100 m optimization — Session F / Phase 16 — start %s", now())
+    @info @sprintf("Long-fiber %.0f m optimization — Session F / Phase 16 — start %s", LF100_L, now())
     @info "═══════════════════════════════════════════════════════════════"
     @info @sprintf("Julia threads: %d  BLAS threads: %d",
         Threads.nthreads(), BLAS.get_num_threads())
