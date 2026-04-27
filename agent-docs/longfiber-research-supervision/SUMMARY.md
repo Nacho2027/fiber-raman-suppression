@@ -28,14 +28,44 @@ continuation ladder toward 200 m is trustworthy.
 
 ## Active Run
 
-- No accepted long-fiber run is active as of this note update.
-- Back off materially before the next ephemeral launch to avoid GCE
-  operation-rate failures; the short cooldown before `L-longfiber5` was not
-  enough.
-- Next command shape should be a single shell-wrapped command:
-  `bash -lc 'julia --project=. -e "using Pkg; Pkg.instantiate()" && exec env LF100_MODE=fresh LF100_MAX_ITER=25 julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl'`
-- Use the fixed local `~/bin/burst-spawn-temp`, which archives modified
-  results before VM destruction.
+- Active tag: `L-200mhc8`
+- Active VM: `fiber-raman-temp-l-200mhc8-20260427t060246z`
+- Local supervisor tmux: `overnight-longfiber-hc8`
+- Launcher log:
+  `results/burst-logs/overnight/20260427/longfiber-200mhc8.log`
+- Remote log:
+  `results/burst-logs/L-200mhc8_20260427T060342Z.log`
+- Command:
+  `LF100_MODE=fresh LF100_L=200 LF100_NT=65536 LF100_TIME_WIN=320 LF100_RUN_LABEL=200m_overngt LF100_MAX_ITER=15 julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl`
+- Current observation at `2026-04-27T06:07Z`: VM is running, heavy lock is held
+  by `L-200mhc8`, and Julia is still instantiating/precompiling packages before
+  the scientific script starts.
+- Observation at `2026-04-27T06:12:57Z`: precompile finished, the 200 m
+  optimization started, iteration 0 reported `J = -33.94595 dB` with gradient
+  norm `2.250432`, and checkpoint
+  `results/raman/phase16/200m_overngt_optim/ckpt_iter_0001.jld2` was written.
+- Safety copy pulled locally at `2026-04-27T06:13Z`: the checkpoint directory
+  and `results/burst-logs/L-200mhc8_20260427T060342Z.log`.
+- Observation at `2026-04-27T06:18:53Z`: optimizer reached displayed
+  iteration 3 with visible `J = -48.00428 dB`, gradient norm `3.546717e-02`.
+  Remote checkpoints now include `ckpt_iter_0001.jld2` and
+  `ckpt_iter_0005.jld2`. Julia RSS was about 10 GB on `c3-highcpu-8`.
+- Safety copy pulled locally at `2026-04-27T06:19Z`: checkpoint directory
+  through `ckpt_iter_0005.jld2` and the remote run log.
+- Observation at `2026-04-27T06:24:41Z`: optimizer still active. Visible
+  iteration 5 reached `J = -52.90051 dB`, gradient norm `2.602734e-01`.
+  No final JLD2 or standard images yet; latest checkpoint remained
+  `ckpt_iter_0005.jld2`.
+- Observation at `2026-04-27T06:30Z`: no new log line after visible iteration
+  5, but the Julia process was active (`~112%` CPU, `~10 GB` RSS) with about
+  `5.7 GB` memory available, so treat this as a long solve/line-search, not a
+  hang.
+- Observation at `2026-04-27T06:40Z`: still no new log line after visible
+  iteration 5, but Julia remained CPU-active (`~112%`) and the remote tmux
+  session was alive. No final artifacts yet; latest preserved checkpoint is
+  still `ckpt_iter_0005.jld2`.
+- Do not launch another long-fiber ephemeral while this VM is active. Respect
+  C3 quota so multivar can keep one `c3-highcpu-8`.
 
 ## Verification Requirements
 
@@ -43,6 +73,11 @@ continuation ladder toward 200 m is trustworthy.
   accepted run.
 - Confirm canonical standard images under
   `results/raman/phase16/standard_images_F_100m_opt/`.
+- For the active 200 m run, expected outputs are:
+  `results/raman/phase16/200m_overngt_optim/`,
+  `results/raman/phase16/200m_overngt_opt_full_result.jld2`,
+  `results/images/physics_16_03_optimization_trace_200m_overngt.png`, and
+  `results/raman/phase16/standard_images_F_200m_overngt_opt/`.
 - Confirm long-fiber human plots exist or regenerate them:
   `physics_16_03_optimization_trace_100m.png`,
   `physics_16_04_phi_profile_2m_vs_100m.png`,
