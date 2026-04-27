@@ -600,3 +600,29 @@ single monolithic fragile run.
 - Multivar remains closed. The deterministic watchdog cron is still installed
   at the 15 minute cadence and is reporting `multivar sequence already closed
   by accepted results/caveats; not restarting`.
+
+## 2026-04-27 19:33 UTC Supervisor Check
+
+- Active C3 quota remains within limits: `C3_CPUS usage=30 limit=50`.
+  `fiber-raman-burst` is `TERMINATED`, long-fiber `L-200resume1` is running on
+  one `c3-highcpu-8`, and MMF follow-up `M-mmfgdd` is running on one
+  `c3-highcpu-22`. No multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active on commit `47546d3`, which
+  contains the `4d426df` multivar log-energy fix. It has checkpointed through
+  `ckpt_iter_0677.jld2`; latest logged optimizer value is `f=-53.44511 dB` at
+  step 8. Keep the existing caveat that the `Nt=65536`, `tw=320 ps` continuation
+  grid drops about 68% of the stored spectral range.
+- MMF boundary-only follow-up `M-mmfbnd` completed and synced local artifacts.
+  Summary status is now `quality=meaningful`, `boundary_ok=true`,
+  `J_ref=-17.96 dB`, `J_opt=-45.04 dB`, nominal `27.09 dB` improvement, and
+  edge fraction `2.74e-07`. The four standard images were visually inspected
+  and were not blank or corrupt; the phase/group-delay diagnostic remains very
+  rough, so treat this as a promising MMF follow-up result that still needs the
+  active GDD regularization check before promotion.
+- MMF GDD-regularized follow-up `M-mmfgdd` is alive and CPU-active on commit
+  `47546d3` with `MMF_VALIDATION_LAMBDA_BOUNDARY=0.05` and
+  `MMF_VALIDATION_LAMBDA_GDD=1e-4`. The remote log has reached MMF setup and the
+  objective surface announcement; no local artifacts are synced yet because the
+  job is still running.
+- Multivar remains closed with accepted/caveat outputs, and the deterministic
+  watchdog cron remains installed at the 15 minute cadence.
