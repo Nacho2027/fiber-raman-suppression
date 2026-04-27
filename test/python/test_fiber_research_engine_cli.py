@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from fiber_research_engine.cli import (
     INDEX_RESULTS,
+    LAB_READY,
     REFINE_AMP_ON_PHASE,
     RUN_EXPERIMENT,
     RUN_EXPERIMENT_SWEEP,
@@ -16,6 +17,9 @@ from fiber_research_engine.cli import (
     index_results,
     index_results_csv,
     julia_cli_args,
+    lab_ready_config,
+    lab_ready_latest,
+    lab_ready_run,
     refine_amp_on_phase,
     run_julia_cli,
     scaffold_objective,
@@ -323,6 +327,47 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertIn("--csv", called_args)
         self.assertIn("--top", called_args)
         self.assertIn("2", called_args)
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_lab_ready_config_delegates_to_canonical_gate(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Lab Readiness Gate\n"
+        run_mock.return_value.stderr = ""
+
+        result = lab_ready_config("research_engine_smoke", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Lab Readiness Gate", result.stdout)
+        self.assertEqual(
+            run_mock.call_args.args[0][-3:],
+            (LAB_READY, "--config", "research_engine_smoke"),
+        )
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_lab_ready_run_supports_export_requirement(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Lab Readiness Gate\n"
+        run_mock.return_value.stderr = ""
+
+        lab_ready_run("results/run", require_export=True, repo_root=Path("/tmp/repo"))
+
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], LAB_READY)
+        self.assertIn("--run", called_args)
+        self.assertIn("results/run", called_args)
+        self.assertIn("--require-export", called_args)
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_lab_ready_latest_delegates_to_latest_gate(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "# Lab Readiness Gate\n"
+        run_mock.return_value.stderr = ""
+
+        lab_ready_latest("research_engine_poc", repo_root=Path("/tmp/repo"))
+
+        self.assertEqual(
+            run_mock.call_args.args[0][-3:],
+            (LAB_READY, "--latest", "research_engine_poc"),
+        )
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_failed_command_raises_when_check_enabled(self, run_mock):

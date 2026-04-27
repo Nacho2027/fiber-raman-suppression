@@ -11,6 +11,7 @@ point readers toward first.
 - `run_experiment.jl` — run one front-layer experiment config (single-mode phase-only slice currently implemented)
 - `run_sweep.jl` — run one approved sweep workflow
 - `inspect_run.jl` — inspect one saved run bundle
+- `lab_ready.jl` — run pass/fail lab-readiness gates for configs and completed runs
 - `export_run.jl` — export one saved run as an experiment-facing handoff bundle
 - `refine_amp_on_phase.jl` — optional experimental second-stage amplitude-on-phase refinement
 - `generate_reports.jl` — regenerate sweep reports and presentation figures

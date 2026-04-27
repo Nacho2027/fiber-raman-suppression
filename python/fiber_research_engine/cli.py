@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_EXPERIMENT = "scripts/canonical/run_experiment.jl"
 RUN_EXPERIMENT_SWEEP = "scripts/canonical/run_experiment_sweep.jl"
 INDEX_RESULTS = "scripts/canonical/index_results.jl"
+LAB_READY = "scripts/canonical/lab_ready.jl"
 REFINE_AMP_ON_PHASE = "scripts/canonical/refine_amp_on_phase.jl"
 SCAFFOLD_OBJECTIVE = "scripts/canonical/scaffold_objective.jl"
 SCAFFOLD_VARIABLE = "scripts/canonical/scaffold_variable.jl"
@@ -258,6 +259,40 @@ def index_results_csv(*roots: str, **kwargs) -> CommandResult:
     """Render the shared results index as CSV for pandas/Excel workflows."""
 
     return index_results(*roots, csv=True, **kwargs)
+
+
+def lab_ready_config(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    """Run the lab-readiness gate for one experiment config."""
+
+    return run_julia_cli(LAB_READY, "--config", spec, **kwargs)
+
+
+def lab_ready_run(
+    path: str,
+    *,
+    require_export: bool = False,
+    **kwargs,
+) -> CommandResult:
+    """Run the lab-readiness gate for one completed run directory or artifact."""
+
+    args: list[str] = ["--run", path]
+    if require_export:
+        args.append("--require-export")
+    return run_julia_cli(LAB_READY, *args, **kwargs)
+
+
+def lab_ready_latest(
+    spec: str = "research_engine_poc",
+    *,
+    require_export: bool = False,
+    **kwargs,
+) -> CommandResult:
+    """Run the lab-readiness gate for the latest completed run of a config."""
+
+    args: list[str] = ["--latest", spec]
+    if require_export:
+        args.append("--require-export")
+    return run_julia_cli(LAB_READY, *args, **kwargs)
 
 
 def _amp_on_phase_refinement_args(

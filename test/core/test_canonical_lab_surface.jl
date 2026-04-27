@@ -5,6 +5,7 @@ include(joinpath(_ROOT, "scripts", "lib", "run_artifacts.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "results_index.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "inspect_run.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "export_run.jl"))
+include(joinpath(_ROOT, "scripts", "workflows", "lab_ready.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
 
 @testset "Canonical lab-facing surface" begin
@@ -261,6 +262,20 @@ kind = "lbfgs"
     @test occursin("Export handoff complete: false", rendered)
     @test occursin("SMF-28", rendered)
 
+    gate = lab_ready_run_report(run_dir)
+    @test gate.pass
+    @test isempty(gate.blockers)
+    @test gate.standard_images_complete
+    @test gate.converged
+    @test gate.quality == "GOOD"
+    rendered_gate = sprint(io -> render_lab_ready_report(gate; io=io))
+    @test occursin("Lab Readiness Gate", rendered_gate)
+    @test occursin("Status: `PASS`", rendered_gate)
+
+    export_required_gate = lab_ready_run_report(run_dir; require_export=true)
+    @test !export_required_gate.pass
+    @test "missing_export_handoff" in export_required_gate.blockers
+
     export_dir = joinpath(run_dir, "export_handoff")
     exported = export_run_bundle(run_dir, export_dir)
     @test isfile(exported.phase_csv)
@@ -289,6 +304,10 @@ kind = "lbfgs"
     rendered_with_export = sprint(io -> render_run_summary(summary_with_export; io=io))
     @test occursin("Export handoff complete: true", rendered_with_export)
     @test occursin("phase_profile.csv", rendered_with_export)
+
+    exported_gate = lab_ready_run_report(run_dir; require_export=true)
+    @test exported_gate.pass
+    @test exported_gate.export_handoff_complete
 
     amp_run_dir = joinpath(tmp, "amp_run")
     mkpath(amp_run_dir)
@@ -375,4 +394,8 @@ kind = "lbfgs"
     wrapper_refine = read(joinpath(_ROOT, "scripts", "canonical", "refine_amp_on_phase.jl"), String)
     @test occursin("workflows\", \"refine_amp_on_phase.jl", wrapper_refine)
     @test occursin("refine_amp_on_phase_main(ARGS)", wrapper_refine)
+
+    lab_ready_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "lab_ready.jl"), String)
+    @test occursin("workflows\", \"lab_ready.jl", lab_ready_wrapper)
+    @test occursin("lab_ready_main(ARGS)", lab_ready_wrapper)
 end

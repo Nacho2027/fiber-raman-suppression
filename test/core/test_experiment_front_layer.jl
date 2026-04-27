@@ -4,6 +4,7 @@ include(joinpath(_ROOT, "scripts", "lib", "experiment_spec.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_sweep.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "run_experiment.jl"))
+include(joinpath(_ROOT, "scripts", "workflows", "lab_ready.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "scaffold_objective.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
 
@@ -100,6 +101,14 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     cli_objective_extension_report = run_experiment_main(["--validate-objectives"])
     @test cli_objective_extension_report.total == objective_extension_report.total
     @test cli_objective_extension_report.valid == objective_extension_report.valid
+
+    lab_ready_config = lab_ready_config_report("research_engine_smoke")
+    @test lab_ready_config.pass
+    @test lab_ready_config.mode == :phase_only
+    @test lab_ready_config.objective == :raman_band
+    rendered_lab_ready_config = sprint(io -> render_lab_ready_report(lab_ready_config; io=io))
+    @test occursin("Lab Readiness Gate", rendered_lab_ready_config)
+    @test occursin("Status: `PASS`", rendered_lab_ready_config)
 
     scaffold_dir = mktempdir()
     scaffold = scaffold_objective_extension(

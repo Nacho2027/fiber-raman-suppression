@@ -59,6 +59,7 @@ To check every approved experiment config without launching optimization:
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-all
+julia -t auto --project=. scripts/canonical/lab_ready.jl --config research_engine_poc
 ```
 
 For parameter-space questions, use the front-layer sweep command. It expands a
@@ -263,6 +264,7 @@ Or inspect the latest completed run for a config:
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --latest research_engine_poc
+julia -t auto --project=. scripts/canonical/lab_ready.jl --latest research_engine_poc
 ```
 
 Inspection reports:
@@ -314,6 +316,18 @@ objective, using `SWEEP_SUMMARY.json` when available.
 The inspection command is a checklist aid, not a substitute for reading the
 trust report or visually checking the standard images.
 
+For a strict pass/fail mechanical gate on a specific run directory or artifact,
+use:
+
+```bash
+julia -t auto --project=. scripts/canonical/lab_ready.jl --run results/raman/<run_id>/
+julia -t auto --project=. scripts/canonical/lab_ready.jl --run results/raman/<run_id>/ --require-export
+```
+
+The gate checks the result artifact, JSON sidecar, copied config, trust report,
+standard image set, convergence flag, and objective metric. With
+`--require-export`, it also requires a complete `export_handoff/` bundle.
+
 ## 8. Check Outputs
 
 A complete supported phase-only run should contain:
@@ -342,6 +356,8 @@ scripts and discussion, not direct loading into an arbitrary SLM.
 
 Before using a run as a lab reference:
 
+- `lab_ready.jl --config <id>` passes for the intended config.
+- `lab_ready.jl --run <dir>` passes for the completed run.
 - `inspect_run.jl` reports the standard image set complete.
 - The trust report passes the relevant checks.
 - The four standard images have been visually inspected.
