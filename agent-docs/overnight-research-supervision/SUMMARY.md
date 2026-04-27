@@ -480,3 +480,31 @@ single monolithic fragile run.
   threshold `invalid-window` caveat, long-fiber 200 m artifacts and standard
   images are present, and the accepted multivar result directories each have
   the expected case/phase standard images.
+
+## 2026-04-27 15:05 UTC Supervisor Check
+
+- The deterministic watchdog restarted `overnight-multivar-seq4` at 14:45 UTC
+  because it did not recognize the already accepted retry/caveat multivar
+  outputs. This produced a duplicate `energy_on_phase` run under the original
+  `overnight_energy_on_phase_20260427` tag; it completed with `rc=0` from
+  commit `d1c7fc0`, which contains the log-energy coordinate fix. Local
+  artifacts now include `energy_on_phase_result.jld2`, SLM JSON, summary
+  markdown, and the phase/case standard image sets; PNG statistics show the
+  images are nonblank.
+- The same restarted sequence began `phase_energy_cold` as `V-mvpheng4` on
+  `fiber-raman-temp-v-mvpheng4-20260427t145606z`. Because this case was
+  already documented as a pathological cold-start caveat and the active seq4
+  body would later relaunch the already-closed original `amp_energy_unshaped`
+  case, the redundant remote tmux job was stopped before it reached the
+  multivar case. `burst-spawn-temp` synced partial logs/results and destroyed
+  the VM cleanly.
+- Patched `scripts/ops/overnight_research_watchdog.sh` so it recognizes the
+  accepted multivar retry/caveat outputs: `energy_on_phase_retry1`,
+  `phase_energy_cold` as an accepted incomplete caveat, and
+  `amp_energy_unshaped_retry3`. `bash -n` passed, per-case completion checks
+  returned success, and a manual watchdog pass reported
+  `multivar sequence already closed by accepted results/caveats; not
+  restarting`.
+- Final inventory after cleanup: `fiber-raman-burst` is `TERMINATED`, no
+  `fiber-raman-temp-*` ephemerals are running, and no overnight tmux supervisor
+  sessions or burst helper processes remain active.

@@ -29,6 +29,41 @@ active_local_mmf_launcher() {
     ps -eo cmd | grep -E 'parallel_research_lane\.sh --lane mmf|burst-run-heavy M-mmf' | grep -v grep >/dev/null 2>&1
 }
 
+multivar_case_complete() {
+    local case="$1"
+    local result_dir="results/raman/multivar/variable_ablation_overnight_${case}_20260427"
+
+    case "$case" in
+        energy_on_phase)
+            [[ -f "$result_dir/energy_on_phase_result.jld2" ]] ||
+                [[ -f results/raman/multivar/variable_ablation_overnight_energy_on_phase_retry1_20260427/energy_on_phase_result.jld2 ]]
+            ;;
+        phase_energy_cold)
+            [[ -f "$result_dir/phase_energy_cold_result.jld2" ]] ||
+                {
+                    [[ -f "$result_dir/phase_only_reference_result.jld2" ]] &&
+                    [[ -f "$result_dir/variable_ablation_summary.md" ]]
+                }
+            ;;
+        amp_energy_unshaped)
+            [[ -f "$result_dir/amp_energy_unshaped_result.jld2" ]] ||
+                [[ -f results/raman/multivar/variable_ablation_overnight_amp_energy_unshaped_retry3_20260427/amp_energy_unshaped_result.jld2 ]]
+            ;;
+        *)
+            [[ -f "$result_dir/${case}_result.jld2" ]]
+            ;;
+    esac
+}
+
+multivar_sequence_closed() {
+    multivar_case_complete energy_on_phase &&
+        multivar_case_complete amp_on_phase &&
+        multivar_case_complete amp_energy_on_phase &&
+        multivar_case_complete phase_energy_cold &&
+        multivar_case_complete phase_amp_energy_warm &&
+        multivar_case_complete amp_energy_unshaped
+}
+
 active_instance_names() {
     gcloud compute instances list \
         --project="$PROJECT" \
@@ -60,6 +95,10 @@ launch_multivar_sequence() {
     if active_multivar_supervisor || vm_exists 'fiber-raman-temp-v-mv'; then
         return 0
     fi
+    if multivar_sequence_closed; then
+        log "multivar sequence already closed by accepted results/caveats; not restarting"
+        return 0
+    fi
 
     log "restarting multivar sequential supervisor"
     tmux new-session -d -s overnight-multivar-seq4 "
@@ -75,7 +114,7 @@ launch_multivar_sequence() {
             case=\${case_tag%%:*}
             tag=\${case_tag##*:}
             result_dir=\"results/raman/multivar/variable_ablation_overnight_\${case}_20260427\"
-            if [[ -f \"\$result_dir/\${case}_result.jld2\" ]]; then
+            if scripts/ops/overnight_research_watchdog.sh --multivar-case-complete \"\$case\" >/dev/null 2>&1; then
                 echo \"[\$(date -u +%FT%TZ)] skipping completed \$case\" | tee -a '$LOG_DIR/multivar-seq4.log'
                 continue
             fi
@@ -142,6 +181,11 @@ launch_mmf_if_missing() {
             --log-file '$LOG_DIR/mmf-window-validation3.log'
     "
 }
+
+if [[ "${1:-}" == "--multivar-case-complete" ]]; then
+    multivar_case_complete "${2:?case name required}"
+    exit $?
+fi
 
 log "watchdog tick"
 log "instances: $(active_instance_names | tr '\n' ' ')"
