@@ -19,6 +19,8 @@ Useful environment overrides:
     MMF_VALIDATION_THRESHOLD_NT=8192
     MMF_VALIDATION_AGGRESSIVE_TW=96
     MMF_VALIDATION_AGGRESSIVE_NT=16384
+    MMF_VALIDATION_F_CALLS_LIMIT=80
+    MMF_VALIDATION_TIME_LIMIT_SECONDS=10800
 """
 
 ENV["MPLBACKEND"] = "Agg"
@@ -183,11 +185,13 @@ function run_mmf_window_validation()
     max_iter = _env_int("MMF_VALIDATION_MAX_ITER", 6)
     λ_gdd = _env_float("MMF_VALIDATION_LAMBDA_GDD", 0.0)
     λ_boundary = _env_float("MMF_VALIDATION_LAMBDA_BOUNDARY", 0.0)
+    f_calls_limit = _env_int("MMF_VALIDATION_F_CALLS_LIMIT", 0)
+    time_limit = _env_float("MMF_VALIDATION_TIME_LIMIT_SECONDS", NaN)
     rows = NamedTuple[]
     @info "MMF window validation"
     @info @sprintf("Threads: %d", Threads.nthreads())
-    @info @sprintf("max_iter=%d lambda_gdd=%.3e lambda_boundary=%.3e save_dir=%s",
-        max_iter, λ_gdd, λ_boundary, SAVE_DIR)
+    @info @sprintf("max_iter=%d f_calls_limit=%d time_limit=%s lambda_gdd=%.3e lambda_boundary=%.3e save_dir=%s",
+        max_iter, f_calls_limit, string(time_limit), λ_gdd, λ_boundary, SAVE_DIR)
 
     for cfg in _selected_cases()
         cfg = merge(cfg, (λ_gdd = λ_gdd, λ_boundary = λ_boundary))
@@ -213,6 +217,8 @@ function run_mmf_window_validation()
                 variant = :sum,
                 λ_gdd = cfg.λ_gdd,
                 λ_boundary = cfg.λ_boundary,
+                f_calls_limit = f_calls_limit,
+                time_limit = time_limit,
                 seed = DEFAULT_SEED,
                 save_dir = SAVE_DIR,
                 tag = tag,

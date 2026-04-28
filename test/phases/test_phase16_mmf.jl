@@ -113,6 +113,31 @@ end
     @test maximum(abs.(ifft(uω, 1) .- ut_centered)) > 0.1
 end
 
+@testset "Phase 16 — MMF optimizer hard-stops before extra propagations" begin
+    setup = setup_mmf_raman_problem(;
+        preset = :GRIN_50,
+        L_fiber = 0.05,
+        P_cont = 0.01,
+        Nt = 2^8,
+        time_window = 8.0,
+    )
+
+    opt = optimize_mmf_phase(
+        setup.uω0,
+        setup.mode_weights,
+        setup.fiber,
+        setup.sim,
+        setup.band_mask;
+        max_iter = 5,
+        f_calls_limit = 2,
+        time_limit = 60.0,
+        verbose = false,
+    )
+    @test length(opt.J_history) <= 2
+    @test opt.stopped_by === :f_calls_limit
+    @test opt.result === nothing
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Testset 3: finite-difference gradient check at M=6
 # ─────────────────────────────────────────────────────────────────────────────

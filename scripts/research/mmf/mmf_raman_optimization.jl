@@ -39,6 +39,14 @@ using MultiModeNoise
 using Optim
 using PyPlot
 
+struct MMFOptimizationLimit <: Exception
+    reason::Symbol
+end
+
+function Base.showerror(io::IO, err::MMFOptimizationLimit)
+    print(io, "MMF optimization stopped by ", err.reason, " limit")
+end
+
 include(joinpath(@__DIR__, "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "src", "mmf_cost.jl"))
 
@@ -290,6 +298,10 @@ L-BFGS driver for the MMF Raman-phase optimization.
 - `log_cost::Bool = true`
 - `store_trace::Bool = true`
 - `seed::Int = 42`
+- `f_calls_limit::Int = 0`, `time_limit::Real = NaN`: hard driver-side
+  pre-evaluation limits. Optim.jl only checks some limits after an iteration,
+  which can include many expensive line-search evaluations; these guards stop
+  before the next propagation call and return the best observed phase.
 - `verbose::Bool = true`
 """
 function optimize_mmf_phase(
@@ -306,6 +318,8 @@ function optimize_mmf_phase(
     log_cost::Bool = true,
     store_trace::Bool = true,
     seed::Int = 42,
+    f_calls_limit::Int = 0,
+    time_limit::Real = NaN,
     verbose::Bool = true,
 )
     Nt = size(uω0_base, 1)
@@ -314,8 +328,18 @@ function optimize_mmf_phase(
     @assert length(φ_init) == Nt
 
     J_history = Float64[]
+    best_J = Inf
+    best_φ = copy(φ_init)
+    hard_time_limit = Float64(time_limit)
+    t_start = time()
 
     function fg!(F, G, φ)
+        if f_calls_limit > 0 && length(J_history) >= f_calls_limit
+            throw(MMFOptimizationLimit(:f_calls_limit))
+        end
+        if isfinite(hard_time_limit) && hard_time_limit > 0 && time() - t_start >= hard_time_limit
+            throw(MMFOptimizationLimit(:time_limit))
+        end
         J, g = cost_and_gradient_mmf(
             φ, c_m, uω0_base, fiber, sim, band_mask;
             variant = variant,
@@ -326,6 +350,10 @@ function optimize_mmf_phase(
             G .= g
         end
         push!(J_history, J)
+        if J < best_J
+            best_J = J
+            best_φ = copy(φ)
+        end
         if verbose && length(J_history) % 1 == 0
             @info @sprintf("  iter %3d: J = %.6e (%s)",
                 length(J_history), J, log_cost ? "dB" : "linear")
@@ -333,20 +361,37 @@ function optimize_mmf_phase(
         return J
     end
 
-    result = Optim.optimize(
-        Optim.only_fg!(fg!),
-        φ_init,
-        Optim.LBFGS(),
-        Optim.Options(
-            iterations = max_iter,
-            store_trace = store_trace,
-            show_trace = false,
-            allow_f_increases = true,
-        ),
-    )
+    result = nothing
+    stopped_by = nothing
+    φ_opt = best_φ
+    J_final = best_J
+    try
+        result = Optim.optimize(
+            Optim.only_fg!(fg!),
+            φ_init,
+            Optim.LBFGS(),
+            Optim.Options(
+                iterations = max_iter,
+                f_calls_limit = f_calls_limit,
+                store_trace = store_trace,
+                show_trace = false,
+                allow_f_increases = true,
+                time_limit = hard_time_limit,
+            ),
+        )
 
-    φ_opt   = Optim.minimizer(result)
-    J_final = Optim.minimum(result)
+        φ_opt   = Optim.minimizer(result)
+        J_final = Optim.minimum(result)
+    catch err
+        if err isa MMFOptimizationLimit
+            stopped_by = err.reason
+            if verbose
+                @info "MMF optimization stopped by driver-side limit; returning best observed phase" reason=stopped_by evaluations=length(J_history)
+            end
+        else
+            rethrow()
+        end
+    end
 
     # Also report linear-scale J at φ_opt for logging
     J_lin, _ = cost_and_gradient_mmf(
@@ -366,6 +411,7 @@ function optimize_mmf_phase(
         J_lin     = J_lin,
         J_history = J_history,
         result    = result,
+        stopped_by = stopped_by,
     )
 end
 
@@ -535,6 +581,8 @@ function run_mmf_baseline(;
     log_cost::Bool = true,
     λ_gdd::Real = 0.0,
     λ_boundary::Real = 0.0,
+    f_calls_limit::Int = 0,
+    time_limit::Real = NaN,
     seed::Int = 42,
     save_dir::String = joinpath(@__DIR__, "..", "..", "..", "results", "raman", "phase16"),
     tag::String = "",
@@ -579,6 +627,8 @@ function run_mmf_baseline(;
         log_cost = log_cost,
         λ_gdd = λ_gdd,
         λ_boundary = λ_boundary,
+        f_calls_limit = f_calls_limit,
+        time_limit = time_limit,
         seed = seed,
     )
     wall_time = time() - t0

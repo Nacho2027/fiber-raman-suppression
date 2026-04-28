@@ -99,6 +99,7 @@
 | E3 | burst `M-mmfbnd` constrained attempt on permanent VM | same threshold case, `λ_boundary=0.05`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | did not start Julia output | permanent burst VM entered `STOPPING` immediately after wrapper acquired lock on two launch attempts | superseded by ephemeral rerun |
 | E4 | ephemeral `M-mmfbnd` boundary-constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=0`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | `J_sum -17.96 -> -45.04 dB`, `Δ=27.09 dB` | `max_edge=2.74e-07`, input `2.74e-07`, output `2.64e-07`, `boundary_ok=true`; per-mode plot shows suppression across launched modes | window artifact no longer explains the gain, but phase still visually aggressive |
 | E5 | ephemeral `M-mmfgdd` boundary+GDD constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=1e-4`, `SAVE_DIR=results/raman/phase36_window_validation_gdd` | raw Raman `J_sum -17.96 -> -49.69 dB`, `Δ=31.73 dB`; penalized objective ended at `-29.53 dB` | `max_edge=2.07e-11`, input `2.07e-11`, output `1.98e-11`, `boundary_ok=true`; `J_fund=-49.65 dB`, `J_worst=-45.35 dB` | accepted as current MMF candidate; needs robustness, not window rescue |
+| E6 | ephemeral `M-mmfg8192` grid-refinement attempt | same as E5 but `Nt=8192`, `TW=96 ps`, `SAVE_DIR=results/raman/phase36_window_validation_gdd_nt8192` | inconclusive; best observed penalized objective plateaued near `-30.38 dB` after ~5.5 h | no final summary/standard images; manual termination caused result archive not to sync | not accepted evidence; rerun with explicit evaluation/time limits |
 
 ### Visual Inspection
 
@@ -169,10 +170,17 @@ current candidate: `GRIN_50`, `L=2 m`, `P=0.20 W`, `Nt=4096`, `TW=96 ps`,
 
 Remaining scientific todos before treating this as robust or publication-grade:
 
-- Repeat E5 at least once with a different seed or slightly different optimizer
-  budget to check whether the basin is stable.
+- Do not rely on `seed` repeats in `mmf_window_validation.jl` until the driver
+  supports a nonzero/random `φ0`; the current validation path warm-starts from
+  zeros.
+- Rerun the `Nt=8192`, `TW=96 ps` refinement with explicit function-evaluation
+  or wall-time limits so it exits cleanly and writes standard images.
+  `mmf_window_validation.jl` now exposes
+  `MMF_VALIDATION_F_CALLS_LIMIT` and `MMF_VALIDATION_TIME_LIMIT_SECONDS`, and
+  `optimize_mmf_phase` enforces the evaluation limit before each expensive MMF
+  propagation call.
 - Run a small time-window/Nt ladder around the E5 settings, for example
-  `TW=72/96/128 ps` with `Nt=4096/8192` as quota allows.
+  `TW=72/96/128 ps` with bounded optimizer settings as quota allows.
 - Reopen the mode-coefficient follow-up now that window trust passes: test
   launch coefficient sensitivity and verify that suppression is not an artifact
   of the default LP01-heavy launch.
