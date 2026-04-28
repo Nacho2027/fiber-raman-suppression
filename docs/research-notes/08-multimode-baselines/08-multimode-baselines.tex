@@ -120,6 +120,36 @@ The shared-phase gradient sums the modal sensitivities:
 This is the same phase-chain rule as the single-mode case, except every mode
 contributes to the same phase pixel.
 
+\subsection*{Where the Shared-Phase Gradient Comes From}
+
+Start with one frequency sample \(k\). The optimizer is not choosing a separate
+phase for every mode. It chooses one number \(\phi_k\), and that same number is
+applied to all modal spectra:
+\[
+    \hat u_{m,k}(0;\phi)=\hat u_{m,k,0}e^{i\phi_k}.
+\]
+A small phase change therefore gives
+\[
+    \delta \hat u_{m,k}(0)=i\hat u_{m,k}(0)\delta\phi_k.
+\]
+If \(\lambda_{m,k}(0)=\partial J/\partial \hat u_{m,k}(0)^*\) is the adjoint
+sensitivity at the input, then the real objective changes by
+\[
+    \delta J =
+    2\operatorname{Re}\sum_{m,k}
+    \lambda_{m,k}(0)^*\,\delta \hat u_{m,k}(0).
+\]
+Substituting the phase perturbation and collecting the coefficient of
+\(\delta\phi_k\) gives the formula above. The only new MMF feature is the modal
+sum: all modes vote on the same phase knob.
+
+\subsection*{TL;DR for the Board}
+
+Think of each wavelength as one knob shared by six mode channels. Turning that
+knob rotates the complex field in every mode at that wavelength. The adjoint
+tells us whether each modal rotation helps or hurts the Raman objective, and
+the gradient adds those six votes into one update for the shared knob.
+
 \subsection*{Accepted Regularized Surface}
 
 The accepted constrained run uses a dB-scaled surface of the form
@@ -169,6 +199,22 @@ check, not just because it has a low Raman number.
 
 \section{Implementation Surface}
 
+\subsection*{Provenance and Reproducibility Check}
+
+The accepted numbers in this note come from the dedicated MMF window-validation
+driver, not from a presentation-only plotting script. The run wrote the
+standard image set, the mode-resolved spectra, and the validation summary. It
+was then visually inspected because the core risk in this lane is numerical
+trust, not just whether an optimizer prints a lower objective.
+
+The accepted run is intentionally modest: \(N_t=4096\), \(96\,\mathrm{ps}\),
+six scalar modes, and four optimizer iterations. Attempts to push the same
+case to \(N_t=8192\) were compute-limited and did not produce accepted standard
+artifacts. This is why the claim is a qualified simulation finding rather than
+a paper-grade MMF generalization.
+
+\subsection*{Code Path}
+
 \begin{tabularx}{\linewidth}{@{}p{0.34\linewidth}X@{}}
 \toprule
 \textbf{Component} & \textbf{Role} \\
@@ -212,48 +258,34 @@ valid result.}
 
 \section{Representative Result Pages}
 
-\subsection{No-Shaping Control}
-\begin{figure}[H]
+\begin{figure}[p]
 \centering
-\includegraphics[width=0.70\linewidth]{figures/mmf_control_evolution.png}
-\caption{No-shaping control for the accepted MMF operating point. This is the
-baseline heat map for judging whether the shared spectral phase changed Raman
-growth.}
+\includegraphics[height=0.52\textheight,keepaspectratio]{figures/mmf_control_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.34\textheight,keepaspectratio]{figures/mmf_control_evolution.png}
+\caption{No-optimization control for the accepted MMF operating point. The top
+panel records the flat shared phase \(\phi_k=0\); the bottom panel is the
+actual no-shaping spectral-evolution heat map used as the control reference.}
 \end{figure}
 
-\subsection{Rejected Unregularized Run}
-\begin{figure}[H]
+\begin{figure}[p]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/mmf_rejected_unregularized_phase_diagnostic.png}
-\caption*{Rejected unregularized phase diagnostic.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/mmf_rejected_unregularized_evolution.png}
-\caption*{Rejected unregularized heat map.}
-\end{minipage}
+\includegraphics[height=0.52\textheight,keepaspectratio]{figures/mmf_rejected_unregularized_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.34\textheight,keepaspectratio]{figures/mmf_rejected_unregularized_evolution.png}
 \caption{The unregularized run visually suppresses Raman output, but it is not
 accepted because corrected raw-edge diagnostics show temporal-window
 contamination.}
 \end{figure}
 
-\subsection{Accepted Boundary+GDD Run}
-\begin{figure}[H]
+\begin{figure}[p]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/mmf_accepted_phase_diagnostic.png}
-\caption*{Accepted phase diagnostic.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/mmf_accepted_evolution.png}
-\caption*{Accepted optimized heat map.}
-\end{minipage}
+\includegraphics[height=0.52\textheight,keepaspectratio]{figures/mmf_accepted_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.34\textheight,keepaspectratio]{figures/mmf_accepted_evolution.png}
 \caption{Accepted constrained MMF result: \(-17.96\rightarrow -49.69\,\mathrm{dB}\) under the mode-summed Raman objective, with raw edge fractions near \(2\times10^{-11}\).}
 \end{figure}
 

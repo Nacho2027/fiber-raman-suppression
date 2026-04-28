@@ -1190,3 +1190,19 @@ repaired the depot state and allowed the tests to pass.
     plot validation, summary metadata, and overview rendering support existed.
   - Experiment front-layer tests passed (`439/439`).
   - Experiment config adversarial coverage passed (`196/196`).
+  - Gain-tilt variable integration passed (`46/46`).
+  - Python wrapper tests passed (`38/38`).
+  - `run_experiment.jl --validate-all` passed (`11/11`).
+  - Real scalar-search smoke passed:
+    `./fiberlab explore run research_engine_gain_tilt_scalar_search_smoke --local-smoke`.
+  - Latest verified output:
+    `results/raman/smoke/smf28_gain_tilt_scalar_search_smoke_20260428_2205865`.
+  - Summary inspection confirmed `zoom.source=config_time_range`,
+    `time_range=[-0.75, 0.75]`, normalized temporal overview, and 55 dB
+    spectral dynamic range.
+  - Visual inspection opened `opt_explore_overview.png`; the temporal pulse is
+    centered, normalized, and restricted to the configured window, and the
+    spectrum/objective/control panels render coherently.
+  - `./fiberlab explore compare` found the run with complete standard images
+    and variable artifacts.
+  - `make lab-ready` passed end-to-end after the change.
