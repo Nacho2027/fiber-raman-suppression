@@ -115,7 +115,7 @@ kind = "lbfgs"
     mkpath(sweep_dir)
     sweep_summary_path = joinpath(sweep_dir, "SWEEP_SUMMARY.md")
     write(sweep_summary_path, """
-# Experiment Sweep Summary: demo_sweep
+# Experiment Sweep Summary: sample_sweep
 
 | Case | Value | Status | J_before [dB] | J_after [dB] | ΔJ [dB] | Quality | Converged | Iterations | Artifact / Error |
 |---|---:|---|---:|---:|---:|---|---|---:|---|
@@ -127,7 +127,7 @@ kind = "lbfgs"
     open(sweep_summary_json_path, "w") do io
         JSON3.pretty(io, Dict(
             "schema" => "experiment_sweep_summary_v1",
-            "sweep_id" => "demo_sweep",
+            "sweep_id" => "sample_sweep",
             "case_count" => 3,
             "complete" => 2,
             "failed" => 1,
@@ -160,12 +160,12 @@ kind = "lbfgs"
     rendered_index = render_results_index(index)
     @test occursin("# Results Index", rendered_index)
     @test occursin("SMF-28", rendered_index)
-    @test occursin("demo_sweep", rendered_index)
+    @test occursin("sample_sweep", rendered_index)
     run_only_index = filter_results_index(index; kind=:run, fiber="SMF-28", complete_images=true)
     @test run_only_index.total == 1
     @test only(run_only_index.rows).kind == :run
     @test filter_results_index(index; kind=:sweep).total == 1
-    @test filter_results_index(index; contains="demo").total == 1
+    @test filter_results_index(index; contains="sample_sweep").total == 1
     @test filter_results_index(index; config_id="smf28_L2m_P0p2W").total == 1
     @test filter_results_index(index; objective="raman_band", regime="single_mode").total == 1
     @test filter_results_index(index; solver="lbfgs", lab_ready=true).total == 1
@@ -181,7 +181,7 @@ kind = "lbfgs"
     sweep_comparison = compare_sweep_summaries(index)
     @test sweep_comparison.total == 1
     sweep_row = only(sweep_comparison.rows)
-    @test sweep_row.id == "demo_sweep"
+    @test sweep_row.id == "sample_sweep"
     @test sweep_row.cases == 3
     @test sweep_row.complete == 2
     @test sweep_row.failed == 1
@@ -191,7 +191,7 @@ kind = "lbfgs"
     @test sweep_row.path == sweep_summary_json_path
     rendered_sweep_comparison = render_sweep_comparison(sweep_comparison)
     @test occursin("# Sweep Comparison", rendered_sweep_comparison)
-    @test occursin("demo_sweep", rendered_sweep_comparison)
+    @test occursin("sample_sweep", rendered_sweep_comparison)
     sweep_comparison_csv = render_sweep_comparison_csv(sweep_comparison)
     @test startswith(sweep_comparison_csv, "rank,id,cases,complete,failed,skipped")
     csv_index = render_results_index_csv(run_only_index)
@@ -199,7 +199,7 @@ kind = "lbfgs"
     @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,", csv_index)
     @test occursin("variable_artifacts_complete", csv_index)
     @test occursin(",SMF-28,2.0,0.2,-20.0,-40.0,-20.0,GOOD,true,12,true,true", csv_index)
-    @test !occursin("demo_sweep", csv_index)
+    @test !occursin("sample_sweep", csv_index)
 
     mv_tmp = mktempdir()
     mv_dir = joinpath(mv_tmp, "mv_run")

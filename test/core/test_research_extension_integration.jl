@@ -36,8 +36,8 @@ end
 
 @testset "Research extension integration" begin
     @testset "Non-Raman objective extension is discoverable but gated" begin
-        @test :pulse_compression_demo in registered_objective_extension_kinds(:single_mode)
-        contract = objective_extension_contract(:pulse_compression_demo, :single_mode)
+        @test :pulse_compression_planning in registered_objective_extension_kinds(:single_mode)
+        contract = objective_extension_contract(:pulse_compression_planning, :single_mode)
         row = validate_objective_extension_contract(contract)
         @test row.valid
         @test !row.promotable
@@ -45,21 +45,21 @@ end
         @test "backend_not_promoted" in row.blockers
 
         listing = sprint(io -> render_objective_registry(; io=io, regime=:single_mode))
-        @test occursin("pulse_compression_demo", listing)
+        @test occursin("pulse_compression_planning", listing)
         @test occursin("execution=planning_only", listing)
 
         path = _extension_mutated_config(
-            "kind = \"raman_band\"" => "kind = \"pulse_compression_demo\"",
+            "kind = \"raman_band\"" => "kind = \"pulse_compression_planning\"",
         )
         message = _extension_validation_message(path)
-        @test occursin("objective `pulse_compression_demo` is a research extension", message)
+        @test occursin("objective `pulse_compression_planning` is a research extension", message)
         @test occursin("not promoted for execution", message)
         @test occursin("execution_planning_only", message)
     end
 
     @testset "Non-standard variable extension is discoverable but gated" begin
-        @test :gain_tilt_demo in registered_variable_extension_kinds(:single_mode)
-        contract = variable_extension_contract(:gain_tilt_demo, :single_mode)
+        @test :gain_tilt_planning in registered_variable_extension_kinds(:single_mode)
+        contract = variable_extension_contract(:gain_tilt_planning, :single_mode)
         row = validate_variable_extension_contract(contract)
         @test row.valid
         @test !row.promotable
@@ -67,14 +67,14 @@ end
         @test "backend_not_promoted" in row.blockers
 
         listing = sprint(io -> render_variable_registry(; io=io, regime=:single_mode))
-        @test occursin("gain_tilt_demo", listing)
+        @test occursin("gain_tilt_planning", listing)
         @test occursin("execution=planning_only", listing)
 
         path = _extension_mutated_config(
-            "variables = [\"phase\"]" => "variables = [\"gain_tilt_demo\"]",
+            "variables = [\"phase\"]" => "variables = [\"gain_tilt_planning\"]",
         )
         message = _extension_validation_message(path)
-        @test occursin("variable `gain_tilt_demo` is a research extension", message)
+        @test occursin("variable `gain_tilt_planning` is a research extension", message)
         @test occursin("not promoted for execution", message)
         @test occursin("execution_planning_only", message)
     end

@@ -294,7 +294,7 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         run_mock.return_value.stderr = ""
 
         result = scaffold_objective(
-            "mode_coupling_demo",
+            "mode_coupling_planning",
             regime="single_mode",
             directory=Path("/tmp/objectives"),
             description="Mode coupling research objective.",
@@ -307,7 +307,7 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertIn("scaffold", result.stdout)
         called_args = run_mock.call_args.args[0]
         self.assertEqual(called_args[4], SCAFFOLD_OBJECTIVE)
-        self.assertIn("mode_coupling_demo", called_args)
+        self.assertIn("mode_coupling_planning", called_args)
         self.assertIn("--regime", called_args)
         self.assertIn("single_mode", called_args)
         self.assertIn("--dir", called_args)
@@ -327,7 +327,7 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         run_mock.return_value.stderr = ""
 
         result = scaffold_variable(
-            "gain_tilt_demo",
+            "gain_tilt_planning",
             regime="single_mode",
             directory=Path("/tmp/variables"),
             description="Gain tilt research variable.",
@@ -342,7 +342,7 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertIn("scaffold", result.stdout)
         called_args = run_mock.call_args.args[0]
         self.assertEqual(called_args[4], SCAFFOLD_VARIABLE)
-        self.assertIn("gain_tilt_demo", called_args)
+        self.assertIn("gain_tilt_planning", called_args)
         self.assertIn("--regime", called_args)
         self.assertIn("single_mode", called_args)
         self.assertIn("--dir", called_args)

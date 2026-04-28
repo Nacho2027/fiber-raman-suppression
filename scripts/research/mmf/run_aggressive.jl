@@ -3,7 +3,7 @@ Phase 16 Plan 01 — aggressive-config baseline.
 
 The mild config (L=1m, P=0.05W, GRIN-50) that matches the SMF canonical
 produces N_sol ≈ 0.9 — sub-soliton regime with no Raman to suppress and
-zero-headroom convergence. For a meaningful MMF Raman demonstration we
+zero-headroom convergence. For a meaningful MMF Raman validation we
 need to push into the soliton regime. This driver runs:
 
   - M=6 baseline @ GRIN_50, L=2m, P=0.5W, 1 seed (42), 25 iters

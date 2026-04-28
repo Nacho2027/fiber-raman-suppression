@@ -99,7 +99,7 @@ supported single-run surface, acceptance requires:
 The primary lab baseline is `smf28_L2m_P0p2W`. It must additionally report
 `converged=true` before being used as the reference baseline for lab handoff.
 
-For the full local, smoke, milestone, and demo-week gate sequence, see
+For the full local, smoke, milestone, and handoff gate sequence, see
 [lab-readiness.md](./lab-readiness.md).
 
 For the configurable front layer, use

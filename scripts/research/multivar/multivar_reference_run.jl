@@ -1,5 +1,5 @@
 """
-Multi-Variable Optimizer Demonstration Run (Session A)
+Multi-Variable Optimizer Reference Run (Session A)
 
 Compares phase-only (existing) vs. joint (phase + amplitude) multi-variable
 optimization at the SMF-28 canonical config (Run 2 equivalent:
@@ -14,7 +14,7 @@ Success criteria:
   ΔJ(multivar) − ΔJ(phase-only) ≤ -0.5 dB   (multi-var strictly better)
 
 Run on burst VM:
-    julia -t auto --project=. scripts/multivar_demo.jl
+    julia -t auto --project=. scripts/research/multivar/multivar_reference_run.jl
 """
 
 try using Revise catch end
@@ -36,11 +36,11 @@ const OUT_DIR = joinpath("results", "raman", "multivar", "smf28_L2m_P030W")
 mkpath(OUT_DIR)
 
 @info "═══════════════════════════════════════════════════════════════"
-@info "  Multi-Variable Demo — SMF-28 L=2m P=0.30W (canonical Run 2)"
+@info "  Multi-Variable Reference Run — SMF-28 L=2m P=0.30W (canonical Run 2)"
 @info "═══════════════════════════════════════════════════════════════"
 
 # ── Shared run config ────────────────────────────────────────────────────────
-const DEMO_KW = (
+const REF_KW = (
     L_fiber = 2.0,
     P_cont = 0.30,
     Nt = 2^13,
@@ -60,7 +60,7 @@ const MAX_ITER = 50
 @info "▶ Run A: phase-only reference (optimize_spectral_phase)"
 t_A = time()
 result_A, uω0_A, fiber_A, sim_A, band_mask_A, Δf_A = run_optimization(
-    ; DEMO_KW...,
+    ; REF_KW...,
     max_iter = MAX_ITER, validate = false,
     λ_gdd = 1e-4, λ_boundary = 1.0, log_cost = true,
     fiber_name = "SMF-28",
@@ -86,10 +86,10 @@ J0_dB = MultiModeNoise.lin_to_dB(J0_lin)
 
 @info "▶ Run B: joint phase+amplitude from cold start (tanh reparam, plain LBFGS)"
 # log_cost=false so the log-scale gradient amplification that caused
-# cold-start to accept a zero-length step in the previous demo does not kick
+# cold-start to accept a zero-length step in the previous reference run does not kick
 # in. At J=7e-1 initial, linear-cost gradient is O(1) and well-conditioned.
 outB = run_multivar_optimization(
-    ; DEMO_KW...,
+    ; REF_KW...,
     variables = (:phase, :amplitude),
     max_iter = 2 * MAX_ITER,
     validate = false,
@@ -115,7 +115,7 @@ J_B_dB = MultiModeNoise.lin_to_dB(J_B_lin)
 # L-BFGS line search. Linear cost near an optimum gives gradient proportional
 # to J — well-conditioned.
 outB_warm = run_multivar_optimization(
-    ; DEMO_KW...,
+    ; REF_KW...,
     variables = (:phase, :amplitude),
     max_iter = 2 * MAX_ITER,
     validate = false,
@@ -156,11 +156,11 @@ struct_stub = (
 )
 meta_A = Dict{Symbol,Any}(
     :fiber_name => "SMF-28",
-    :L_m => DEMO_KW.L_fiber, :P_cont_W => DEMO_KW.P_cont,
-    :lambda0_nm => 1550.0, :fwhm_fs => DEMO_KW.pulse_fwhm * 1e15,
+    :L_m => REF_KW.L_fiber, :P_cont_W => REF_KW.P_cont,
+    :lambda0_nm => 1550.0, :fwhm_fs => REF_KW.pulse_fwhm * 1e15,
     :rep_rate_Hz => 80.5e6,
-    :gamma => DEMO_KW.gamma_user, :betas => DEMO_KW.betas_user,
-    :time_window_ps => DEMO_KW.Nt * sim_A["Δt"],
+    :gamma => REF_KW.gamma_user, :betas => REF_KW.betas_user,
+    :time_window_ps => REF_KW.Nt * sim_A["Δt"],
     :sim_Dt => sim_A["Δt"], :sim_omega0 => sim_A["ω0"],
     :J_before => J0_lin, :delta_J_dB => ΔJ_A_dB,
     :band_mask => band_mask_A, :uomega0 => uω0_A,
@@ -241,7 +241,7 @@ ax2.grid(true, alpha=0.3)
 
 fig.suptitle(@sprintf(
     "SMF-28 L=%.1fm P=%.2fW:  phase-only ΔJ=%.2f dB | cold ΔJ=%.2f dB (Δ=%.2f) | warm ΔJ=%.2f dB (Δ=%.2f)",
-    DEMO_KW.L_fiber, DEMO_KW.P_cont,
+    REF_KW.L_fiber, REF_KW.P_cont,
     ΔJ_A_dB, ΔJ_B_dB, ΔJ_B_dB - ΔJ_A_dB,
     ΔJ_Bw_dB, ΔJ_Bw_dB - ΔJ_A_dB))
 fig.tight_layout()
@@ -259,7 +259,7 @@ best_improvement = min(improvement_cold, improvement_warm)
 
 @info @sprintf("""
 ═══════════════════════════════════════════════════════════════
-  DEMO RESULTS
+  REFERENCE RUN RESULTS
 ───────────────────────────────────────────────────────────────
   Phase-only            ΔJ = %.2f dB
   Multivariate (cold)   ΔJ = %.2f dB   (Δ vs phase-only = %+.2f dB)
@@ -275,7 +275,7 @@ best_improvement = min(improvement_cold, improvement_warm)
     best_improvement ≤ -0.5 ? "PASS" : "FAIL — gap smaller than threshold")
 
 if best_improvement > -0.5
-    @warn "Demo did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config."
+    @warn "Reference run did not meet success criterion. Possible causes: local minimum, regularizer over-constraint, or multivar genuinely not helpful at this config."
 end
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -296,7 +296,7 @@ save_standard_set(
     band_mask_A, Δf_A, -5.0;
     tag = "phase_only_L2m_P0p3W",
     fiber_name = "SMF28",
-    L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+    L_m = REF_KW.L_fiber, P_W = REF_KW.P_cont,
     output_dir = OUT_DIR,
 )
 
@@ -308,7 +308,7 @@ let αB = outB.outcome.diagnostics[:alpha], AB = outB.outcome.A_opt
         outB.band_mask, Δf_A, -5.0;
         tag = "mv_cold_L2m_P0p3W",
         fiber_name = "SMF28",
-        L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+        L_m = REF_KW.L_fiber, P_W = REF_KW.P_cont,
         output_dir = OUT_DIR,
     )
 end
@@ -321,9 +321,9 @@ let αBw = outB_warm.outcome.diagnostics[:alpha], ABw = outB_warm.outcome.A_opt
         outB_warm.band_mask, Δf_A, -5.0;
         tag = "mv_warm_L2m_P0p3W",
         fiber_name = "SMF28",
-        L_m = DEMO_KW.L_fiber, P_W = DEMO_KW.P_cont,
+        L_m = REF_KW.L_fiber, P_W = REF_KW.P_cont,
         output_dir = OUT_DIR,
     )
 end
 
-@info "═══ Multivar demo complete ═══"
+@info "═══ Multivar reference run complete ═══"

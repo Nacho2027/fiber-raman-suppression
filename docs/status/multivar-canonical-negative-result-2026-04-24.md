@@ -24,7 +24,7 @@ produced the required standard image sets, and returned a negative result:
 | Joint phase+amplitude, cold start | `-18.3 dB` | `-16.78 dB` | `+22.52 dB` worse |
 | Joint phase+amplitude, warm start | `-31.2 dB` | `-29.72 dB` | `+9.58 dB` worse |
 
-The joint demo success criterion was not met. The comparison plot also shows
+The joint reference-run success criterion was not met. The comparison plot also shows
 the phase-only trace reaching a lower objective than either joint
 multivariable trace.
 

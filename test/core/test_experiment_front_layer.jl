@@ -45,26 +45,26 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("Control layout", rendered_phase_layout)
     @test occursin("optimizer_length=8192", rendered_phase_layout)
     @test occursin("phase_profile", rendered_phase_layout)
-    @test :mode_weights_demo in registered_variable_extension_kinds(:multimode)
-    variable_extension_contract_demo = variable_extension_contract(:mode_weights_demo, :multimode)
-    @test variable_extension_contract_demo.execution == :planning_only
-    @test variable_extension_contract_demo.backend == :lab_extension
-    @test isfile(joinpath(_ROOT, variable_extension_contract_demo.source))
+    @test :mode_weights_planning in registered_variable_extension_kinds(:multimode)
+    variable_extension_contract_sample = variable_extension_contract(:mode_weights_planning, :multimode)
+    @test variable_extension_contract_sample.execution == :planning_only
+    @test variable_extension_contract_sample.backend == :lab_extension
+    @test isfile(joinpath(_ROOT, variable_extension_contract_sample.source))
     variable_listing = sprint(io -> render_variable_registry(; io=io))
     @test occursin("Built-in optimization variable contracts", variable_listing)
     @test occursin("Research extension variable contracts", variable_listing)
-    @test occursin("mode_weights_demo", variable_listing)
+    @test occursin("mode_weights_planning", variable_listing)
     variable_extension_report = validate_variable_extension_contracts()
     @test variable_extension_report.total >= 1
     @test variable_extension_report.valid == variable_extension_report.total
     @test variable_extension_report.promotable == 0
-    mode_weights_row = only(filter(row -> row.kind == :mode_weights_demo, variable_extension_report.rows))
+    mode_weights_row = only(filter(row -> row.kind == :mode_weights_planning, variable_extension_report.rows))
     @test mode_weights_row.valid
     @test !mode_weights_row.promotable
     @test "execution_planning_only" in mode_weights_row.blockers
     rendered_variable_extension_report = sprint(io -> render_variable_extension_validation_report(variable_extension_report; io=io))
     @test occursin("Variable extension validation", rendered_variable_extension_report)
-    @test occursin("mode_weights_demo", rendered_variable_extension_report)
+    @test occursin("mode_weights_planning", rendered_variable_extension_report)
     cli_variable_extension_report = run_experiment_main(["--validate-variables"])
     @test cli_variable_extension_report.total == variable_extension_report.total
     @test cli_variable_extension_report.valid == variable_extension_report.valid
@@ -99,28 +99,28 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("raman_band", capabilities)
     @test occursin("raman_peak", capabilities)
     @test occursin("mmf_sum", capabilities)
-    @test :pulse_compression_demo in registered_objective_extension_kinds(:single_mode)
-    extension_contract = objective_extension_contract(:pulse_compression_demo, :single_mode)
-    @test extension_contract.kind == :pulse_compression_demo
+    @test :pulse_compression_planning in registered_objective_extension_kinds(:single_mode)
+    extension_contract = objective_extension_contract(:pulse_compression_planning, :single_mode)
+    @test extension_contract.kind == :pulse_compression_planning
     @test extension_contract.execution == :planning_only
     @test extension_contract.backend == :lab_extension
     @test isfile(joinpath(_ROOT, extension_contract.source))
     extension_listing = sprint(io -> render_objective_registry(; io=io))
     @test occursin("Research extension objective contracts", extension_listing)
-    @test occursin("pulse_compression_demo", extension_listing)
+    @test occursin("pulse_compression_planning", extension_listing)
     @test occursin("execution=planning_only", extension_listing)
     objective_extension_report = validate_objective_extension_contracts()
     @test objective_extension_report.total >= 1
     @test objective_extension_report.valid == objective_extension_report.total
     @test objective_extension_report.promotable == 0
-    pulse_extension_row = only(filter(row -> row.kind == :pulse_compression_demo, objective_extension_report.rows))
+    pulse_extension_row = only(filter(row -> row.kind == :pulse_compression_planning, objective_extension_report.rows))
     @test pulse_extension_row.valid
     @test !pulse_extension_row.promotable
     @test "execution_planning_only" in pulse_extension_row.blockers
     @test isempty(pulse_extension_row.errors)
     rendered_objective_extension_report = sprint(io -> render_objective_extension_validation_report(objective_extension_report; io=io))
     @test occursin("Objective extension validation", rendered_objective_extension_report)
-    @test occursin("pulse_compression_demo", rendered_objective_extension_report)
+    @test occursin("pulse_compression_planning", rendered_objective_extension_report)
     @test occursin("execution_planning_only", rendered_objective_extension_report)
     cli_objective_extension_report = run_experiment_main(["--validate-objectives"])
     @test cli_objective_extension_report.total == objective_extension_report.total
@@ -136,22 +136,22 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
 
     scaffold_dir = mktempdir()
     scaffold = scaffold_objective_extension(
-        "mode_coupling_demo";
+        "mode_coupling_planning";
         dir=scaffold_dir,
-        description="Demo objective for mode-coupling research planning.",
+        description="Planning-only objective for mode-coupling research.",
     )
     @test isfile(scaffold.toml_path)
     @test isfile(scaffold.source_path)
-    @test scaffold.kind == :mode_coupling_demo
-    @test occursin("kind = \"mode_coupling_demo\"", read(scaffold.toml_path, String))
-    @test occursin("function mode_coupling_demo_cost", read(scaffold.source_path, String))
+    @test scaffold.kind == :mode_coupling_planning
+    @test occursin("kind = \"mode_coupling_planning\"", read(scaffold.toml_path, String))
+    @test occursin("function mode_coupling_planning_cost", read(scaffold.source_path, String))
     scaffold_contract = _parse_extension_contract(scaffold.toml_path)
     scaffold_row = validate_objective_extension_contract(scaffold_contract)
     @test scaffold_row.valid
     @test !scaffold_row.promotable
     @test "execution_planning_only" in scaffold_row.blockers
-    @test_throws ArgumentError scaffold_objective_extension("mode_coupling_demo"; dir=scaffold_dir)
-    forced_scaffold = scaffold_objective_extension("mode_coupling_demo"; dir=scaffold_dir, force=true)
+    @test_throws ArgumentError scaffold_objective_extension("mode_coupling_planning"; dir=scaffold_dir)
+    forced_scaffold = scaffold_objective_extension("mode_coupling_planning"; dir=scaffold_dir, force=true)
     @test forced_scaffold.toml_path == scaffold.toml_path
     cli_scaffold_dir = mktempdir()
     cli_scaffold = scaffold_objective_main([
@@ -164,24 +164,24 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("notebook_metric", read(cli_scaffold.toml_path, String))
     variable_scaffold_dir = mktempdir()
     variable_scaffold = scaffold_variable_extension(
-        "gain_tilt_demo";
+        "gain_tilt_planning";
         dir=variable_scaffold_dir,
-        description="Demo variable for gain-tilt research planning.",
+        description="Planning-only variable for gain-tilt research.",
         units="dB",
         bounds="box constrained tilt coefficients",
     )
     @test isfile(variable_scaffold.toml_path)
     @test isfile(variable_scaffold.source_path)
-    @test variable_scaffold.kind == :gain_tilt_demo
-    @test occursin("kind = \"gain_tilt_demo\"", read(variable_scaffold.toml_path, String))
-    @test occursin("function build_gain_tilt_demo_control", read(variable_scaffold.source_path, String))
+    @test variable_scaffold.kind == :gain_tilt_planning
+    @test occursin("kind = \"gain_tilt_planning\"", read(variable_scaffold.toml_path, String))
+    @test occursin("function build_gain_tilt_planning_control", read(variable_scaffold.source_path, String))
     variable_scaffold_contract = _parse_variable_extension_contract(variable_scaffold.toml_path)
     variable_scaffold_row = validate_variable_extension_contract(variable_scaffold_contract)
     @test variable_scaffold_row.valid
     @test !variable_scaffold_row.promotable
     @test "execution_planning_only" in variable_scaffold_row.blockers
-    @test_throws ArgumentError scaffold_variable_extension("gain_tilt_demo"; dir=variable_scaffold_dir)
-    forced_variable_scaffold = scaffold_variable_extension("gain_tilt_demo"; dir=variable_scaffold_dir, force=true)
+    @test_throws ArgumentError scaffold_variable_extension("gain_tilt_planning"; dir=variable_scaffold_dir)
+    forced_variable_scaffold = scaffold_variable_extension("gain_tilt_planning"; dir=variable_scaffold_dir, force=true)
     @test forced_variable_scaffold.toml_path == variable_scaffold.toml_path
     cli_variable_scaffold_dir = mktempdir()
     cli_variable_scaffold = scaffold_variable_main([
@@ -282,9 +282,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test written_payload.sweep_id == "smf28_power_micro_sweep"
     @test length(written_payload.cases) == 2
     sweep_latest_root = mktempdir()
-    old_sweep_dir = joinpath(sweep_latest_root, "demo_20260101_000000")
-    new_sweep_dir = joinpath(sweep_latest_root, "demo_20260102_000000")
-    incomplete_sweep_dir = joinpath(sweep_latest_root, "demo_20260103_000000")
+    old_sweep_dir = joinpath(sweep_latest_root, "sample_20260101_000000")
+    new_sweep_dir = joinpath(sweep_latest_root, "sample_20260102_000000")
+    incomplete_sweep_dir = joinpath(sweep_latest_root, "sample_20260103_000000")
     other_sweep_dir = joinpath(sweep_latest_root, "other_20260104_000000")
     for dir in (old_sweep_dir, new_sweep_dir, incomplete_sweep_dir, other_sweep_dir)
         mkpath(dir)
@@ -295,7 +295,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     latest_sweep_spec = (;
         sweep_spec...,
         output_root = sweep_latest_root,
-        output_tag = "demo",
+        output_tag = "sample",
     )
     @test experiment_sweep_output_directories(latest_sweep_spec) == [old_sweep_dir, new_sweep_dir]
     @test latest_experiment_sweep_output_dir(latest_sweep_spec) == new_sweep_dir
@@ -712,9 +712,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test_throws ArgumentError validate_experiment_spec(export_without_group_delay)
 
     latest_root = mktempdir()
-    old_dir = joinpath(latest_root, "demo_20260101_000000")
-    new_dir = joinpath(latest_root, "demo_20260102_000000")
-    incomplete_dir = joinpath(latest_root, "demo_20260103_000000")
+    old_dir = joinpath(latest_root, "sample_20260101_000000")
+    new_dir = joinpath(latest_root, "sample_20260102_000000")
+    incomplete_dir = joinpath(latest_root, "sample_20260103_000000")
     other_dir = joinpath(latest_root, "other_20260104_000000")
     for dir in (old_dir, new_dir, incomplete_dir, other_dir)
         mkpath(dir)
@@ -725,7 +725,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     latest_spec = (
         spec...,
         output_root = latest_root,
-        output_tag = "demo",
+        output_tag = "sample",
     )
     run_dirs = experiment_run_directories(latest_spec)
     @test run_dirs == [old_dir, new_dir]

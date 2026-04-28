@@ -34,7 +34,7 @@ burst-ssh "cd fiber-raman-suppression && WAIT_TIMEOUT_SEC=3600 \
 
 | Session | Example tags |
 |---|---|
-| A-multivar | `A-multivar`, `A-gradcheck`, `A-demo` |
+| A-multivar | `A-multivar`, `A-gradcheck`, `A-reference` |
 | C-multimode | `C-smoke`, `C-M2-run` |
 | D-simple | `D-transfer`, `D-perturb` |
 | E-sweep | `E-sweep1`, `E-sweep2`, `E-sweep1b` |

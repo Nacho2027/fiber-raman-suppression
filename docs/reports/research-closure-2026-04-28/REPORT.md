@@ -64,7 +64,7 @@ Artifact evidence checked:
 | Long-fiber | `results/raman/phase16/200m_overngt_opt_resume_result.jld2` and the four files under `results/raman/phase16/standard_images_F_200m_overngt_resume/` | Completed milestone; not optimizer-converged |
 | MMF | `results/raman/phase36_window_validation_gdd/mmf_window_validation_summary.md` plus total/per-mode/phase/convergence plots and the standard image set | Qualified 4096-grid simulation claim |
 | Multivar | staged ablation summaries under `results/raman/multivar/variable_ablation_overnight_*_20260427/` and representative standard image sets | Direct joint closed as negative; staged refinement positive |
-| Supported smoke | latest `results/raman/smoke/smf28_phase_export_smoke_*` bundles with trust report, standard images, and export handoff | Supported lab demo path |
+| Supported smoke | latest `results/raman/smoke/smf28_phase_export_smoke_*` bundles with trust report, standard images, and export handoff | Supported lab handoff path |
 
 Validation commands for the lab surface:
 
@@ -81,7 +81,7 @@ make lab-ready
 make golden-smoke
 ```
 
-For demo-week readiness, `make lab-ready` and `make golden-smoke` are the
+For handoff readiness, `make lab-ready` and `make golden-smoke` are the
 decisive local gates. Slow/full tiers remain milestone gates and should run on
 appropriate compute when making broader numerical or physics claims.
 

@@ -3,7 +3,7 @@
 [<- docs index](../README.md) | [first lab user](./first-lab-user-walkthrough.md) | [configurable experiments](./configurable-experiments.md)
 
 This is the operational definition of lab readiness for the configurable
-research engine. It is stricter than demo readiness.
+research engine.
 
 Lab readiness means a new lab user can install the repo, inspect the supported
 research surface, run the supported workflow, verify the artifacts, and know
@@ -16,8 +16,6 @@ For the shortest onboarding path, start with
 
 Use these levels when discussing the repo.
 
-- Demo-ready: the public UX is coherent and the simulation-free acceptance
-  harness passes.
 - Locally lab-ready: supported configs, validation gates, Python wrappers,
   artifact contracts, indexing, and lab-ready gates pass on a normal workstation.
 - Smoke lab-ready: the smallest supported real run executes, writes artifacts,
@@ -145,17 +143,17 @@ After it passes, inspect the generated standard images:
 Do not call a real generated run lab-ready until the standard images have been
 visually inspected. File existence alone is not enough.
 
-Golden-smoke outputs are retained so they can be inspected. After the demo or
+Golden-smoke outputs are retained so they can be inspected. After the
 verification pass, prune older routine smoke runs with:
 
 ```bash
 make prune-smoke
 ```
 
-## Demo-Week Checklist
+## Handoff Checklist
 
-For a short live demo, do not start from the whole research history. Use this
-fixed sequence:
+For a lab handoff or group walkthrough, do not start from the whole research
+history. Use the normal supported workflow:
 
 ```bash
 make lab-ready
@@ -166,7 +164,7 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl --latest research_
 julia -t auto --project=. scripts/canonical/index_telemetry.jl --sort elapsed --desc --top 10
 ```
 
-Then show:
+Then inspect:
 
 - `scripts/canonical/run_experiment.jl --dry-run research_engine_poc`
   to prove the normal supported run is inspectable before execution.
@@ -176,11 +174,10 @@ Then show:
 - The `export_handoff/` bundle, especially the neutral phase CSV and
   `roundtrip_validation.json`, when the selected normal run enables export.
 
-The demo should be the normal supported workflow, not a special path. If the
-normal workflow is too slow or visually unconvincing for a live meeting, fix the
-supported workflow or use a clearly labeled smaller supported config such as
-`research_engine_export_smoke`; do not introduce a separate demo-only pass
-criterion.
+There is no separate presentation path. If the normal workflow is too slow or
+visually unconvincing for a group walkthrough, fix the supported workflow or use
+a clearly labeled smaller supported config such as `research_engine_export_smoke`;
+do not introduce a separate pass criterion.
 
 ## Milestone Gate
 

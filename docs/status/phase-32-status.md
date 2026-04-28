@@ -21,7 +21,7 @@ The main candidates were:
 The phase has real implementation artifacts:
 
 - `scripts/research/phases/phase32/richardson_audit.jl`
-- `scripts/research/phases/phase32/demo.jl`
+- `scripts/research/phases/phase32/reference_run.jl`
 - `scripts/research/phases/phase32/mpe_offline.jl`
 
 and partial results under `results/phase32/`.

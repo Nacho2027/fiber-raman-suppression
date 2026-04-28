@@ -122,7 +122,7 @@ const PATH_STATUSES = (:ok, :degraded, :broken)
 Immutable plan for a continuation run.
 
 # Fields
-- `continuation_id::String`        — caller-supplied identifier (e.g., "p30_demo_smf28_L")
+- `continuation_id::String`        — caller-supplied identifier (e.g., "p30_reference_smf28_L")
 - `ladder_var::Symbol`             — one of `:L`, `:P`, `:Nphi`, `:lambda`
 - `values::Vector{Float64}`        — ladder values in physical units
                                       (metres for `:L`, W for `:P`, count for
@@ -554,7 +554,7 @@ are deferred (see module docstring for tracking).
 # Example
 ```julia
 schedule = ContinuationSchedule(
-    continuation_id = "demo_lambda",
+    continuation_id = "sample_lambda",
     ladder_var = :lambda,
     values = [1e-2, 1e-3],
     base_config = Dict{String,Any}("L_fiber"=>2.0, "P_cont"=>0.2,

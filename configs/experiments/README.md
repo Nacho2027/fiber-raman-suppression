@@ -228,7 +228,7 @@ If a combination is not supported, validation should fail before compute.
 - Experimental `long_fiber` configs are validation/dry-run only on local
   machines and must use `verification.mode = "burst_required"`. Their
   `controls.policy` selects the dedicated long-fiber workflow mode (`fresh`,
-  `resume`, or `resume_demo`) used in the generated `LF100_*` command.
+  `resume`, or `resume_check`) used in the generated `LF100_*` command.
 - Experimental `multimode` configs are validation/dry-run only on local
   machines and must use `verification.mode = "burst_required"`. The first
   planning surface is GRIN-50, shared spectral phase, and mode-summed Raman

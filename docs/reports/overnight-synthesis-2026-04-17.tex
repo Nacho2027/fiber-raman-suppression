@@ -72,7 +72,7 @@
 This report synthesizes roughly 12 hours of parallel computational work executed overnight across up to 8 concurrent Claude Code sessions. Four numbered phases of structured research (Phases 13--16) and seven topical sessions (A/C/D/E/F/H) advanced the spectral-phase Raman-suppression program on multiple fronts:
 (i) a \emph{determinism fix} that restores bit-for-bit reproducibility of the L-BFGS optimizer at a 21.4\% runtime cost,
 (ii) a \emph{Hessian eigenspectrum diagnosis} that proves the canonical optima are saddle points rather than minima,
-(iii) a \emph{low-resolution phase parameterization} sweep that demonstrates $\mathrm{N}_\varphi \approx 128$ shaper pixels already reach the full-resolution suppression floor, and
+(iii) a \emph{low-resolution phase parameterization} sweep showing $\mathrm{N}_\varphi \approx 128$ shaper pixels already reach the full-resolution suppression floor, and
 (iv) a \emph{robustness / stability study} showing the simple-phase optimum is sharp (razor-thin basin, $\sigma_{3\text{dB}} = 0.025$ rad) but is an excellent warm-start initializer for L-BFGS at nearby operating points, reaching $-79.5$ dB on HNLF from an SMF-28 seed.
 Parallel scaffolding for a multi-variable optimizer (Session A), multimode-fiber extension (Session C), 100-m long-fiber propagation (Session F), and a cost-function head-to-head audit (Session H) is code-complete but was blocked at execution time by a burst-VM freeze. Seven session branches remain unmerged to \texttt{main}. The report ends with a concrete inventory of open issues and recommended next actions.
 \end{abstract}
@@ -98,7 +98,7 @@ Parallel scaffolding for a multi-variable optimizer (Session A), multimode-fiber
 
 \begin{verdict}{Code shipped overnight but not yet run}
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Session A (multi-variable optimizer)} --- 1005 LoC shipping $\{\varphi,A,E\}$ joint optimization in one forward/adjoint solve; 42/42 unit tests pass; gradient-FD check and SMF-28 A/B demo \emph{not run} (burst-VM blocked).
+  \item \textbf{Session A (multi-variable optimizer)} --- 1005 LoC shipping $\{\varphi,A,E\}$ joint optimization in one forward/adjoint solve; 42/42 unit tests pass; gradient-FD check and SMF-28 A/B reference run \emph{not run} (burst-VM blocked).
   \item \textbf{Session C (multimode extension)} --- 1998 LoC of MMF scaffolding, $M=1$ limit driver, joint $(\varphi, c_m)$ stub; zero production runs committed.
   \item \textbf{Session F (100 m long fiber)} --- 3723 LoC with $\mathrm{Nt}=32768$, $T=160$ ps, derived time-window research; 6-task queue launcher with heavy-lock discipline; all killed by VM freeze.
   \item \textbf{Session H (cost-function audit)} --- 4651 LoC for 4 cost variants $\times$ 3 $(\text{fiber}, L, P)$ regimes; drivers code-complete; 12-run matrix never executed.
@@ -123,7 +123,7 @@ Seven session branches remain unmerged to \texttt{main}. They hold roughly 51 co
 \toprule
 Session & Topic & Commits & Merged & Status \\
 \midrule
-A-multivar   & $\{\varphi, A, E\}$ joint optimizer      & 7  & no & Code $+$ tests pass; demo blocked on VM \\
+A-multivar   & $\{\varphi, A, E\}$ joint optimizer      & 7  & no & Code $+$ tests pass; reference run blocked on VM \\
 C-multimode  & MMF Raman optimization scaffold          & 6  & no & No SUMMARY; runs never executed \\
 D-simple     & Phase 17 stability study                 & 3  & no & \textbf{Complete}; verdict SHARP\_LUCKY \\
 E-sweep      & Low-res phase sweep (Phase 16)           & 10 & no & Sweep 1 done; Sweep 2 partial (18 / 32) \\
@@ -409,7 +409,7 @@ But L-BFGS \emph{warm-started} from the baseline $\varphi_{\mathrm{opt}}$ reache
 
 The simple-phase profile lives in a \emph{stable manifold of many nearby basins}, so simplicity is a useful \emph{initialization prior} but not a \emph{generalization property} of one attractor. Low-$\Phi_{\mathrm{NL}}$ attractors are structurally simpler than high-$\Phi_{\mathrm{NL}}$ ones, but simplicity predicts neither basin width nor parameter transferability on its own.
 
-\textbf{Experimental consequence.} SLM-class shaper calibration noise would destroy the $-77$ dB advantage. Before pushing any candidate to the lab, either (i) find a flatter basin, or (ii) demonstrate closed-loop re-optimization with a phase-error estimator. The Sweep-E candidates at $\mathrm{N}_\varphi = 57$ should be re-run through Session D's protocol to see whether low-res parameterization buys robustness in exchange for the 2--10 dB it gives up on depth.
+\textbf{Experimental consequence.} SLM-class shaper calibration noise would destroy the $-77$ dB advantage. Before pushing any candidate to the lab, either (i) find a flatter basin, or (ii) validate closed-loop re-optimization with a phase-error estimator. The Sweep-E candidates at $\mathrm{N}_\varphi = 57$ should be re-run through Session D's protocol to see whether low-res parameterization buys robustness in exchange for the 2--10 dB it gives up on depth.
 \end{verdict}
 
 \newpage
@@ -440,10 +440,10 @@ where $\alpha = \sqrt{E / E_{\mathrm{ref}}}$ normalizes pulse energy. A mode-coe
 \subsection{Status}
 
 \begin{itemize}[leftmargin=*]
-  \item 1005 LoC core $+$ 222 LoC demo $+$ 148 LoC gradient test $+$ 101 LoC unit test.
+  \item 1005 LoC core $+$ 222 LoC reference driver $+$ 148 LoC gradient test $+$ 101 LoC unit test.
   \item \textbf{Unit tests: 42/42 pass} on \texttt{claude-code-host} --- pack/unpack, \texttt{sanitize\_variables}, \texttt{MVConfig}, scaling vectors.
   \item Gradient validation (FD vs.\ adjoint at $10^{-6}$ tolerance): \textbf{not run}.
-  \item SMF-28 $L=2$ m, $P=0.30$ W A/B demo vs.\ phase-only, target $\geq 0.5$ dB improvement: \textbf{not run}.
+  \item SMF-28 $L=2$ m, $P=0.30$ W A/B reference run vs.\ phase-only, target $\geq 0.5$ dB improvement: \textbf{not run}.
   \item Both blocked on burst-VM heavy-lock held by Session E's 12-point sweep, then by the VM freeze.
 \end{itemize}
 
@@ -516,7 +516,7 @@ The launcher queue reached T4 start ($\sim$03:22 UTC) but the burst VM hard-lock
 \begin{itemize}[leftmargin=*]
   \item $\beta_{\mathrm{order}} = 2$ (session used \texttt{:SMF28\_beta2\_only}); Phase 12 used $\beta_{\mathrm{order}} = 3$. A flag in 3 drivers flips this.
   \item Solver \texttt{reltol} effectively $10^{-8}$ (hardcoded inside \texttt{MultiModeNoise.solve\_disp\_mmf}); tighter than the research target.
-  \item Mode dispatch via \texttt{LF100\_MODE} env variable (\texttt{fresh} / \texttt{resume} / \texttt{resume\_demo}, default \texttt{resume\_demo}).
+  \item Mode dispatch via \texttt{LF100\_MODE} env variable (\texttt{fresh} / \texttt{resume} / \texttt{resume\_check}, default \texttt{resume\_check}).
 \end{itemize}
 
 \newpage
@@ -587,7 +587,7 @@ Time (UTC) & Event \\
 2026-04-17 03:20 & Session D transferability study starts. \\
 2026-04-17 03:22 & Session F long-fiber queue launches (T4). \\
 2026-04-17 03:32 & Session E third sweep (E-sweep1b) tmux starts. \\
-2026-04-17 03:34 & Session A A/B demo tmux starts. \\
+2026-04-17 03:34 & Session A A/B reference-run tmux starts. \\
 2026-04-17 03:43:54 & Serial console last activity --- session-1446 starts, never deactivates. \\
 2026-04-17 04:28 & SSH to \texttt{fiber-raman-burst} hangs at 15 s and 60 s timeouts. \\
 2026-04-17 04:28$+$ & 45+ minutes of kernel silence; \texttt{gcloud compute describe} reports \texttt{status: RUNNING}. \\
@@ -616,7 +616,7 @@ Reset is pragmatic but destroys cross-session state, so the CLAUDE.md ``actions 
   \item Session E Sweep 2 (14 of 32 configs missing): \emph{lost}.
   \item Session F long-fiber queue (T4--T6): \emph{lost}.
   \item Session H 12-run cost-audit matrix: \emph{never started} but \emph{lost burst-VM time window}.
-  \item Session A FD gradient check $+$ SMF A/B demo: \emph{lost}.
+  \item Session A FD gradient check $+$ SMF A/B reference run: \emph{lost}.
   \item Session C MMF runs: \emph{never started}.
 \end{itemize}
 
@@ -649,7 +649,7 @@ Phase 13 & Hessian only validated at $\mathrm{Nt} = 8192$; $\mathrm{Nt} = 4096$ 
 Session E & Sweep 2: 14 of 32 configs unfinished (HNLF $L \geq 0.5$ m, SMF-28 $L = 2$ m) & Re-run $\sim 30$ min at 16 threads, burst VM dedicated \\
 Session E & Newton-on-reduced-subspace (candidate \#3, $\mathrm{N}_\varphi = 57$, potentially $-90$ dB) & New phase: trust-region Newton with explicit $57 \times 57$ Hessian \\
 Session D & Central Session-E claim (``low-res phases are more robust than $\mathrm{Nt}$-dim'') untested on Pareto candidates & Re-run Session D protocol on candidates \#1--3 \\
-Session A & Gradient-FD check and SMF-28 A/B demo not run & Run after VM recovery; unit tests already pass \\
+Session A & Gradient-FD check and SMF-28 A/B reference run not run & Run after VM recovery; unit tests already pass \\
 Session C & Zero production runs committed; no SUMMARY or FINDINGS & Smoke-test at $M = 1$; compare to SMF canonical \\
 Session F & T3 / T4 / T5 / T6 queue killed; no FINDINGS from 100 m & Re-launch via \texttt{longfiber\_burst\_launcher.sh}; checkpoint/resume should recover from last save \\
 Session H & 12-run audit matrix never executed & Serialize launches behind heavy-lock after VM reset \\
@@ -680,7 +680,7 @@ Infrastructure & Rule P5 heavy-lock not respected by sibling sessions & Add mand
 \textbf{Follow-up phases.}
 \begin{enumerate}[leftmargin=*,resume]
   \item Newton-on-reduced-subspace on Session E candidates --- direct Hessian factorization at $\mathrm{N}_\varphi = 57$, expected $-90$ dB.
-  \item Session A multi-variable demo: measure whether joint $\{\varphi, A, E\}$ wins $\geq 0.5$ dB over phase-only.
+  \item Session A multi-variable reference run: measure whether joint $\{\varphi, A, E\}$ wins $\geq 0.5$ dB over phase-only.
   \item Session C MMF at $M \geq 2$: first production run after $M = 1$ byte-identity check.
 \end{enumerate}
 

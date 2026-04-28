@@ -109,7 +109,7 @@ To check every approved experiment config without launching optimization:
 ./fiberlab ready config research_engine_poc
 ```
 
-Before a demo or handoff, run the simulation-free research-engine acceptance
+Before handoff, run the simulation-free research-engine acceptance
 harness:
 
 ```bash

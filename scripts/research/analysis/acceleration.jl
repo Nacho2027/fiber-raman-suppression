@@ -261,7 +261,7 @@ end
 
 Reject an extrapolation combination whose weights blow up beyond `threshold`
 (default `1e3`). Also rejects non-finite entries. This is the pre-registered
-gate used by Plan 02's demo driver before committing an accelerated prediction.
+gate used by Plan 02's reference driver before committing an accelerated prediction.
 
 # Returns
 - `(true,  "ok")`                                       if `max|γ| ≤ threshold`.

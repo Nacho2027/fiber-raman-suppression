@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 30 Plan 01 — Long-fiber SMF-28 cold-start vs continuation demo.
+# Phase 30 Plan 01 — Long-fiber SMF-28 cold-start vs continuation reference run.
 #
 # Runs the flagship hard regime (SMF-28, L = 1 m → 10 m → 100 m, P = 0.2 W)
 # via `scripts/continuation.jl`:
@@ -15,8 +15,8 @@
 #
 # HEAVY RUN — use burst-run-heavy wrapper per CLAUDE.md Rule P5:
 #   burst-ssh "cd fiber-raman-suppression && git pull && \
-#              ~/bin/burst-run-heavy P30-continuation-demo \
-#              'julia -t auto --project=. scripts/demo.jl'"
+#              ~/bin/burst-run-heavy P30-continuation-reference \
+#              'julia -t auto --project=. scripts/research/phases/phase30/reference_run.jl'"
 # Do NOT run directly on claude-code-host (CLAUDE.md Rule 1). Stop the burst
 # VM on exit (`burst-stop`, Rule 3).
 #
@@ -82,7 +82,7 @@ Shared schedule for both arms so budget parity is structurally guaranteed.
 """
 function _build_schedule()
     return ContinuationSchedule(
-        continuation_id  = "p30_demo_smf28_L",
+        continuation_id  = "p30_reference_smf28_L",
         ladder_var       = :L,
         values           = P30_LADDER_L,
         base_config      = Dict{String,Any}(
@@ -252,7 +252,7 @@ function _render_results_md(cold::Vector{ContinuationStepResult},
         println(io)
         println(io, "The competitive-dB branch of the Raman-suppression landscape is Hessian-")
         println(io, "indefinite everywhere surveyed (Phase 22 sharpness-Pareto, Phase 35 saddle-")
-        println(io, "escape verdict). The L-ladder in this demo traverses saddles, not a smooth")
+        println(io, "escape verdict). The L-ladder in this reference run traverses saddles, not a smooth")
         println(io, "minimum branch. Detectors D1-D8 are designed to tolerate indefinite")
         println(io, "Hessians; Hessian sign change (D6) is informational only. Only the N_phi")
         println(io, "ladder (Phase 31) has a theoretical minimum-branch regime.")
@@ -285,8 +285,8 @@ function _render_results_md(cold::Vector{ContinuationStepResult},
         println(io)
         println(io, "```bash")
         println(io, "burst-ssh \"cd fiber-raman-suppression && git pull && \\")
-        println(io, "           ~/bin/burst-run-heavy P30-continuation-demo \\")
-        println(io, "           'julia -t auto --project=. scripts/demo.jl'\"")
+        println(io, "           ~/bin/burst-run-heavy P30-continuation-reference \\")
+        println(io, "           'julia -t auto --project=. scripts/research/phases/phase30/reference_run.jl'\"")
         println(io, "```")
     end
     @info "Wrote 30-RESULTS.md" path=P30_RESULTS_PATH
@@ -312,7 +312,7 @@ function _persist_arm(results::Vector{ContinuationStepResult},
         # inside run_ladder; a second call merges without clobbering, which
         # lets us record the arm-level `is_cold_start_baseline` field here).
         attach_continuation_metadata!(r.trust_report, Dict{String,Any}(
-            "continuation_id"        => "p30_demo_smf28_L",
+            "continuation_id"        => "p30_reference_smf28_L",
             "ladder_var"             => "L",
             "step_index"             => r.step_index,
             "is_cold_start_baseline" => cold_start,
@@ -379,7 +379,7 @@ function main()
     _emit_standard_images(_final_phi_opt(results_cont), P30_TAG_CONT)
     # Write the head-to-head RESULTS file.
     _render_results_md(results_cold, results_cont)
-    @info "Phase 30 demo complete" cold_steps=length(results_cold) cont_steps=length(results_cont)
+    @info "Phase 30 reference run complete" cold_steps=length(results_cold) cont_steps=length(results_cont)
     return (results_cold, results_cont)
 end
 

@@ -12,7 +12,7 @@ Phase 30 turned continuation from an informal warm-start habit into an explicit 
 - per-step trust reporting
 - a required cold-start comparison
 
-The flagship demo was a long-fiber SMF-28 ladder at `L = 1 -> 10 -> 100 m`.
+The flagship reference run was a long-fiber SMF-28 ladder at `L = 1 -> 10 -> 100 m`.
 
 ## Current status
 
@@ -21,7 +21,7 @@ The flagship demo was a long-fiber SMF-28 ladder at `L = 1 -> 10 -> 100 m`.
 The continuation scaffold exists in:
 
 - `scripts/research/analysis/continuation.jl`
-- `scripts/research/phases/phase30/demo.jl`
+- `scripts/research/phases/phase30/reference_run.jl`
 
 The first heavy run was attempted on `2026-04-21`, but the empirical head-to-head did not complete.
 
@@ -46,12 +46,12 @@ This phase is not blocked on missing API work. The repo has an explicit continua
 
 ### 2. The first flagship regime was infrastructure-bad, not just numerically hard
 
-The long-fiber SMF-28 demo exposed a practical issue:
+The long-fiber SMF-28 reference run exposed a practical issue:
 
 - `setup_raman_problem` auto-sizing is physically reasonable
-- but it makes the selected `100 m` regime too expensive for this demo shape
+- but it makes the selected `100 m` regime too expensive for this reference-run shape
 
-So the first blocked item is not "does continuation exist?" It is "can the demo be run in a bounded regime or with an explicit grid cap?"
+So the first blocked item is not "does continuation exist?" It is "can the reference run be executed in a bounded regime or with an explicit grid cap?"
 
 ## Recommended interpretation
 
@@ -66,7 +66,7 @@ Do not cite Phase 30 as proving continuation beats cold start on the long-fiber 
 
 The next honest Phase 30 follow-up is one of:
 
-1. Re-run the demo with an explicit `Nt` / time-window cap appropriate for methodology comparison.
+1. Re-run the reference case with an explicit `Nt` / time-window cap appropriate for methodology comparison.
 2. Re-scope the ladder to a hard but bounded regime where both arms can complete.
 
 Until then, Phase 30 should be treated as "framework landed, benchmark inconclusive."

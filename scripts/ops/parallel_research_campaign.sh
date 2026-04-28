@@ -60,7 +60,7 @@ mmf_cmd="${MMF_CMD:-julia -t auto --project=. scripts/research/mmf/baseline.jl}"
 multivar_target="${MULTIVAR_TARGET:-ephemeral}"
 multivar_tag="${MULTIVAR_TAG:-V-multivar}"
 multivar_machine_type="${MULTIVAR_MACHINE_TYPE:-c3-highcpu-8}"
-multivar_cmd="${MULTIVAR_CMD:-julia -t auto --project=. scripts/research/multivar/multivar_demo.jl}"
+multivar_cmd="${MULTIVAR_CMD:-julia -t auto --project=. scripts/research/multivar/multivar_reference_run.jl}"
 
 longfiber_target="${LONGFIBER_TARGET:-ephemeral}"
 longfiber_tag="${LONGFIBER_TAG:-L-longfiber}"

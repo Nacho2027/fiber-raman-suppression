@@ -345,7 +345,7 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
-            policies = (:fresh, :resume, :resume_demo),
+            policies = (:fresh, :resume, :resume_check),
             grid_policies = (:exact, :auto_if_undersized),
             artifact_bundles = (:standard,),
             export_profiles = Tuple(registered_export_profiles()),

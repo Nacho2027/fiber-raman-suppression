@@ -25,7 +25,7 @@ help:
 	@echo "  make install     Install Julia deps and Python wrapper"
 	@echo "  make test        Fast Julia regression tier (simulation-free)"
 	@echo "  make test-python Python wrapper unit tests"
-	@echo "  make acceptance  Research-engine pre-demo acceptance harness"
+	@echo "  make acceptance  Research-engine acceptance harness"
 	@echo "  make lab-ready   Local lab-readiness gate for supported workflows"
 	@echo "  make doctor      Verify tools, Julia tests, and Python wrapper tests"
 	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"

@@ -299,7 +299,7 @@ or if any of the required keys is absent.
 # Example
 ```julia
 attach_continuation_metadata!(report, Dict{String,Any}(
-    "continuation_id" => "p30_demo_smf28_L",
+    "continuation_id" => "p30_reference_smf28_L",
     "ladder_var"      => "L",
     "step_index"      => 2,
     "ladder_value"    => 10.0,

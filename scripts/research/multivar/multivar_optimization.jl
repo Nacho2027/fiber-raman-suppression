@@ -86,7 +86,7 @@ Base.@kwdef mutable struct MVConfig
     #   :tanh    → A = 1 + δ_bound · tanh(ξ); optimizer works on ξ ∈ ℝ, plain LBFGS.
     #   :fminbox → A is the search variable directly; Fminbox(LBFGS) enforces bounds.
     # Default :tanh avoids the barrier-wrapper overhead that made :fminbox stall in
-    # the 16-01 demo (see SUMMARY.md "partial" section).
+    # the 16-01 reference run (see SUMMARY.md "partial" section).
     amp_param::Symbol   = :tanh
     s_φ::Float64        = 1.0
     s_A::Float64        = 1.0   # set from δ_bound at construction if default
@@ -755,7 +755,7 @@ function optimize_spectral_multivariable(
     # BackTracking but that did no better (cold-start accepted zero-length
     # steps on the first attempt). Root cause of poor convergence is the
     # log_cost gradient scaling near an optimum, not the linesearch choice.
-    # Demo now uses log_cost=false for multivar runs to avoid that pathology.
+    # Reference runs use log_cost=false for multivar runs to avoid that pathology.
     method_lbfgs = LBFGS(m=10)
 
     opts = Optim.Options(

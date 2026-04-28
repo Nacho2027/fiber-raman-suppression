@@ -147,7 +147,7 @@ At 04:28 UTC this morning, seven concurrent heavy Julia jobs on the 22-core burs
 
 \subsection*{Shipped overnight but not yet run due to the VM freeze}
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Multi-variable optimizer} (joint $\varphi$, amplitude $A$, pulse energy $E$ in one adjoint solve) --- 1000 LoC, 42/42 unit tests pass, gradient FD check and SMF-28 A/B demo pending.
+  \item \textbf{Multi-variable optimizer} (joint $\varphi$, amplitude $A$, pulse energy $E$ in one adjoint solve) --- 1000 LoC, 42/42 unit tests pass, gradient FD check and SMF-28 A/B reference run pending.
   \item \textbf{Multimode fiber extension} ($M > 1$) --- 2000 LoC scaffold, $M=1$ reference driver ready; first production run pending.
   \item \textbf{100 m long-fiber propagation} (50$\times$ longer than anything we've done) --- 3700 LoC with checkpoint/resume, $\mathrm{Nt}=32768$, $T=160$ ps, MI gain verified negligible ($g_{\max} L = 0.013$); queue killed mid-flight.
   \item \textbf{Cost-function head-to-head audit} --- 12-run matrix of 4 cost variants across 3 regimes (weak-NL, multi-modal, HNLF strong-$\gamma$); all code and tests land; never executed.

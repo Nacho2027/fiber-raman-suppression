@@ -55,13 +55,13 @@ files unless you pass `--force`.
 The generated TOML declares the scientific contract:
 
 ```toml
-kind = "pulse_compression_demo"
+kind = "pulse_compression_planning"
 regime = "single_mode"
 backend = "lab_extension"
-description = "Demo non-Raman objective contract for pulse-compression research extension planning."
+description = "Planning-only non-Raman objective contract for pulse-compression research extension work."
 maturity = "research"
 execution = "planning_only"
-source = "lab_extensions/objectives/pulse_compression_demo.jl"
+source = "lab_extensions/objectives/pulse_compression_planning.jl"
 function = "pulse_compression_cost"
 gradient = "pulse_compression_gradient"
 validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
@@ -166,7 +166,7 @@ a name in TOML; it needs implementation, tests, and output meaning first.
 The current single-mode non-standard example is:
 
 ```text
-gain_tilt_demo
+gain_tilt_planning
 ```
 
 It represents a planning-only smooth spectral gain/attenuation tilt control.

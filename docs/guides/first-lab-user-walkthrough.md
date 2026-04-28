@@ -178,9 +178,9 @@ handoff workflows:
 The current supported lab workflow is intentionally narrow because trust is
 more valuable than exposing every research branch at once.
 
-## 8. Demo Script
+## 8. Group Walkthrough
 
-For a live demo, use this sequence:
+For a group walkthrough, use the normal supported workflow:
 
 ```bash
 make lab-ready

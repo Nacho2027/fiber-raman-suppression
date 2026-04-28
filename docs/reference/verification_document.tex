@@ -150,7 +150,7 @@ This is physically realizable using standard pulse shaping technology: a spatial
 
 \item \textbf{Adjoint methods for the NLSE:} Marcuse (1990) applied perturbation theory to the NLSE. More recently, \emph{Adjoint sensitivity analysis approach for the nonlinear Schr\"odinger equation} by Ganapathysubramanian and Zabaras (Optics Letters, 2019) explicitly derived adjoint-based gradients for NLSE optimization in fiber optics. The mathematical framework---Lagrange multipliers enforcing the PDE constraint, backward propagation of the co-state---is standard in PDE-constrained optimization (see Hinze et al., 2009; Tr\"oltzsch, 2010).
 
-\item \textbf{Raman suppression techniques:} Published approaches include spectral filtering via fiber Bragg gratings (Chen et al., Appl.\ Opt.\ 2017), fiber design (large mode area, photonic crystal fibers), and simply using shorter fibers or lower power. Spectral \emph{amplitude} shaping for SRS control has been demonstrated, but spectral \emph{phase} optimization via adjoint methods for Raman suppression appears to be unexplored in the published literature as of 2025.
+\item \textbf{Raman suppression techniques:} Published approaches include spectral filtering via fiber Bragg gratings (Chen et al., Appl.\ Opt.\ 2017), fiber design (large mode area, photonic crystal fibers), and simply using shorter fibers or lower power. Spectral \emph{amplitude} shaping for SRS control has been shown experimentally, but spectral \emph{phase} optimization via adjoint methods for Raman suppression appears to be unexplored in the published literature as of 2025.
 
 \item \textbf{L-BFGS for PDE-constrained optimization:} L-BFGS is the default optimizer in major PDE-constrained optimization frameworks (dolfin-adjoint, ADCME). It is well-suited because it requires only gradient evaluations (no Hessian), has low memory footprint via limited-memory updates, and handles large parameter spaces ($N_t \sim 10^4$) efficiently.
 \end{itemize}
@@ -891,7 +891,7 @@ Other regularizers \emph{do} exist elsewhere in the repo --- for example the amp
 
 \subsection{Is the Research Approach Sound? (R2, R3, R4)}
 
-\textbf{R2 --- Is adjoint optimization established?} Yes. Adjoint-based gradient computation through nonlinear PDEs is a mature technique in fluid dynamics (dating to the 1970s), aerodynamic shape optimization, and seismic inversion. Its application to the NLSE specifically was demonstrated by Ganapathysubramanian and Zabaras (Optics Letters, 2019). The present implementation is a straightforward application of established methodology.
+\textbf{R2 --- Is adjoint optimization established?} Yes. Adjoint-based gradient computation through nonlinear PDEs is a mature technique in fluid dynamics (dating to the 1970s), aerodynamic shape optimization, and seismic inversion. Its application to the NLSE specifically was shown by Ganapathysubramanian and Zabaras (Optics Letters, 2019). The present implementation is a straightforward application of established methodology.
 
 \textbf{R3 --- Are there better alternatives?} Spectral phase shaping is one of several approaches:
 \begin{itemize}[leftmargin=*]
@@ -1747,7 +1747,7 @@ issue (\texttt{.planning/phases/18-cost-config-c/CONTEXT.md}). The
 \subsection{What did NOT survive the audit}
 \label{sec:april-wrong}
 
-Three claims from the original synthesis were demoted:
+Three claims from the original synthesis were downgraded:
 
 \textbf{(W1) ``$a_2(100\,\mathrm{m})/a_2(2\,\mathrm{m}) = -3.30$ vs.\ pure-GVD-predicted $+50$ is a structural-adaptation fingerprint.''}
 The weighted quadratic fit of $\varphi_\text{opt}(\omega)$ over the

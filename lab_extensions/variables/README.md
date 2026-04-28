@@ -58,10 +58,10 @@ Use `execution = "planning_only"` until the control has:
 
 ## Current Examples
 
-- `gain_tilt_demo`: single-mode smooth spectral gain/attenuation tilt. This is
+- `gain_tilt_planning`: single-mode smooth spectral gain/attenuation tilt. This is
   a non-standard control example for future pulse-shaping, gain-shaping, or
   hardware-transfer research. It is metadata-valid but planning-only.
-- `mode_weights_demo`: multimode modal-weight control. This remains
+- `mode_weights_planning`: multimode modal-weight control. This remains
   planning-only while MMF promotion work is still separate.
 
 If a config references either extension today, the front layer should recognize

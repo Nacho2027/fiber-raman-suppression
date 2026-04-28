@@ -1,7 +1,7 @@
 """
 Multivar variable-impact ablation at the canonical SMF-28 point.
 
-This is the next step after `multivar_demo.jl`: rather than only comparing
+This is the next step after `multivar_reference_run.jl`: rather than only comparing
 phase-only with joint phase+amplitude, it screens the available single-mode
 control families:
 

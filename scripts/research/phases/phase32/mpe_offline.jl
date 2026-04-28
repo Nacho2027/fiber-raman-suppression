@@ -14,7 +14,7 @@
 #
 #   1. results/phase30/continuation_L_100m/continuation_step_{1,2,3}.jld2
 #   2. results/phase32/expt1_polywarmstart_L100m/results_naive.jld2
-#   3. Inline 3-step ladder (mirrors scripts/demo.jl).
+#   3. Inline 3-step ladder (mirrors the Phase 32 reference run).
 #
 # All paths end in a `phi_hist::Vector{Vector{Float64}}` of 3 entries on the
 # fixed Nt = 2^14 grid.

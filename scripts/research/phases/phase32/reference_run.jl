@@ -18,7 +18,7 @@
 # HEAVY RUN — use burst-run-heavy wrapper per CLAUDE.md Rule P5:
 #   burst-ssh "cd fiber-raman-suppression && git pull && \
 #              ~/bin/burst-run-heavy P-32-accel-expt1 \
-#              'julia -t auto --project=. scripts/demo.jl'"
+#              'julia -t auto --project=. scripts/research/phases/phase32/reference_run.jl'"
 # Stop the burst VM on exit (`burst-stop`, Rule 3).
 #
 # Outputs (under results/phase32/expt1_polywarmstart_L100m/):
@@ -395,7 +395,7 @@ function _render_experiment1_section(
     println(buf, "")
     println(buf, "## Experiment 1 — Polynomial warm-start on SMF-28 L-ladder [1, 10, 100] m")
     println(buf, "")
-    println(buf, "_populated by scripts/demo.jl_")
+    println(buf, "_populated by scripts/research/phases/phase32/reference_run.jl_")
     println(buf, "")
     println(buf, "Generated: ", Dates.format(now(UTC), dateformat"yyyy-mm-ddTHH:MM:SSZ"))
     println(buf, "")

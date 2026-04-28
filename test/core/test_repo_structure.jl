@@ -89,7 +89,7 @@ using Test
     @test occursin("make golden-smoke", closure_text)
     @test occursin("Direct joint multivariable optimization is generally better", closure_text)
     lab_readiness_text = read(lab_readiness_guide, String)
-    @test occursin("Demo-Week Checklist", lab_readiness_text)
+    @test occursin("Handoff Checklist", lab_readiness_text)
     @test occursin("Current Research Closure State", lab_readiness_text)
     @test occursin("first-lab-user-walkthrough.md", lab_readiness_text)
     supported_workflows_text = read(supported_workflows_guide, String)

@@ -9,7 +9,7 @@ crash does not lose progress (D-F-05).
 Two modes controlled by ENV var `LF100_MODE`:
   - "fresh"  (default) : start from warm phi@2m, run max 100 iter
   - "resume"           : load highest-iter ckpt in LF100_OUT_DIR, continue
-  - "resume_demo"      : two-phase run — run 15 iter, reload from ckpt, run
+  - "resume_check"     : two-phase run — run 15 iter, reload from ckpt, run
                          remaining iter. Produces both `100m_opt_full_result.jld2`
                          (fresh run) and `100m_opt_resume_result.jld2` (resumed
                          run) so downstream analysis can verify final-J parity.
@@ -22,7 +22,7 @@ instead replicates its forward+adjoint glue here so the callback is wired in.
 Outputs:
   results/raman/phase16/100m_optim/ckpt_iter_0005.jld2 ... ckpt_iter_XXXX.jld2
   results/raman/phase16/100m_opt_full_result.jld2
-  results/raman/phase16/100m_opt_resume_result.jld2  (only in resume_demo)
+  results/raman/phase16/100m_opt_resume_result.jld2  (only in resume_check)
   results/images/physics_16_03_optimization_trace_100m.png
 
 Launch on burst VM with heavy lock:
@@ -30,7 +30,7 @@ Launch on burst VM with heavy lock:
              (touch /tmp/burst-heavy-lock && \\
               cd fiber-raman-suppression && git pull && \\
               tmux new -d -s F-100m-opt \\
-                  'LF100_MODE=resume_demo julia -t auto --project=. \\
+                  'LF100_MODE=resume_check julia -t auto --project=. \\
                         scripts/research/longfiber/longfiber_optimize_100m.jl \\
                         > results/raman/phase16/100m_opt.log 2>&1; \\
                    rm -f /tmp/burst-heavy-lock; burst-stop')"
@@ -345,7 +345,7 @@ function lf100_figure(run_fresh, run_resume, resume_split_iter, out_path)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Modes: fresh / resume / resume_demo
+# Modes: fresh / resume / resume_check
 # ─────────────────────────────────────────────────────────────────────────────
 
 function lf100_mode_fresh()
@@ -445,35 +445,35 @@ function lf100_mode_resume()
     return (run_fresh = nothing, run_resume = run_resume)
 end
 
-function lf100_mode_resume_demo()
+function lf100_mode_resume_check()
     prob = lf100_build_problem()
 
-    # Phase A: fresh, run 15 iter into a demo subdir.
-    demo_dir = joinpath(LF100_CKPT_DIR, "resume_demo_phaseA")
-    mkpath(demo_dir)
+    # Phase A: fresh, run 15 iter into a resume-check subdir.
+    check_dir = joinpath(LF100_CKPT_DIR, "resume_check_phaseA")
+    mkpath(check_dir)
     x0 = vec(prob.phi_warm)
-    @info "═════ Phase A (resume_demo): 15 iter fresh ═════"
+    @info "═════ Phase A (resume_check): 15 iter fresh ═════"
     run_A = lf100_run_lbfgs(x0, prob.cg;
         max_iter    = 15,
-        out_dir     = demo_dir,
+        out_dir     = check_dir,
         config_hash = prob.config_hash,
         iter_offset = 0,
     )
 
-    # Phase B: resume from the highest-iter checkpoint in demo_dir.
-    @info "═════ Phase B (resume_demo): resume and continue ═════"
-    resume = longfiber_resume_from_ckpt(demo_dir;
+    # Phase B: resume from the highest-iter checkpoint in check_dir.
+    @info "═════ Phase B (resume_check): resume and continue ═════"
+    resume = longfiber_resume_from_ckpt(check_dir;
         expected_config_hash = prob.config_hash)
     run_B = lf100_run_lbfgs(resume.x, prob.cg;
         max_iter    = LF100_MAX_ITER - resume.iter,
-        out_dir     = demo_dir,
+        out_dir     = check_dir,
         config_hash = prob.config_hash,
         iter_offset = resume.iter,
     )
 
     # ALSO do an uninterrupted reference run in the main CKPT_DIR so we have a
     # baseline to compare final J against (1e-6 relative tolerance per plan).
-    @info "═════ Phase C (resume_demo): uninterrupted reference run in main CKPT_DIR ═════"
+    @info "═════ Phase C (resume_check): uninterrupted reference run in main CKPT_DIR ═════"
     mkpath(LF100_CKPT_DIR)
     run_ref = lf100_run_lbfgs(vec(prob.phi_warm), prob.cg;
         max_iter    = LF100_MAX_ITER,
@@ -485,10 +485,10 @@ function lf100_mode_resume_demo()
     J_ref    = Optim.minimum(run_ref.result)
     J_resume = Optim.minimum(run_B.result)
     Δrel     = abs(J_resume - J_ref) / max(abs(J_ref), 1e-20)
-    @info @sprintf("resume-demo: J_ref=%.4f dB, J_resume=%.4f dB, Δrel=%.2e",
+    @info @sprintf("resume-check: J_ref=%.4f dB, J_resume=%.4f dB, Δrel=%.2e",
         J_ref, J_resume, Δrel)
     pass_resume = Δrel < 1e-6
-    @info @sprintf("[%s] resume-demo final-J parity (< 1e-6 relative)",
+    @info @sprintf("[%s] resume-check final-J parity (< 1e-6 relative)",
         pass_resume ? "PASS" : "FAIL")
 
     # Save fresh/full reference
@@ -543,7 +543,7 @@ function lf100_mode_resume_demo()
     )
     @info "saved $resume_path"
 
-    # Figure uses the resume_demo traces (Phase A + Phase B)
+    # Figure uses the resume-check traces (Phase A + Phase B)
     lf100_figure(run_A, run_B, 15,
         joinpath(LF100_FIGURE_DIR, "physics_16_03_optimization_trace_$(LF100_RUN_LABEL).png"))
 
@@ -573,17 +573,17 @@ function lf100_main()
         return lf100_mode_fresh()
     elseif mode == "resume"
         return lf100_mode_resume()
-    elseif mode == "resume_demo"
-        return lf100_mode_resume_demo()
+    elseif mode == "resume_check"
+        return lf100_mode_resume_check()
     else
-        error("unknown LF100_MODE=$mode — valid: fresh | resume | resume_demo")
+        error("unknown LF100_MODE=$mode — valid: fresh | resume | resume_check")
     end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     result = lf100_main()
     if hasproperty(result, :pass_resume) && result.pass_resume === false
-        @error "resume-demo parity check FAILED — inspect traces and ckpts"
+        @error "resume-check parity check FAILED — inspect traces and ckpts"
         exit(1)
     end
     @info @sprintf("100 m optimization run: done at %s", now())

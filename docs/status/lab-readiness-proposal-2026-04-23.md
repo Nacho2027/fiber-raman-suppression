@@ -221,7 +221,7 @@ Current status in the repo is:
 
 - the joint `:phase + :amplitude + :energy` machinery exists
 - smoke tests and artifact validation exist
-- the canonical demo still underperforms phase-only on the reference case
+- the canonical reference run still underperforms phase-only on the reference case
 
 So the right product decision is:
 
