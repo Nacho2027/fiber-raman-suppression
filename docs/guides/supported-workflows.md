@@ -115,13 +115,16 @@ Use this classification when deciding what blocks lab rollout:
   staged amp-on-phase refinement is a credible optional research workflow.
 - Long-fiber is research-grade for the current 50-100 m single-mode story. It
   should be documented as an exploratory workflow, not a turnkey group platform.
-- MMF is not closed. The current window-validation evidence marks the available
-  positive result as boundary/window corrupted, so MMF remains parked until a
-  new numerical strategy or larger-memory validation plan exists.
+- MMF is active and working as a qualified research path. The original
+  unregularized positive result was boundary/window corrupted, but the newer
+  boundary+GDD-regularized GRIN-50 result passes corrected temporal-edge checks
+  and is presentation-ready as a constrained simulation finding. It still needs
+  grid refinement, launch-composition sensitivity, and model-scope checks before
+  it becomes paper-grade or lab-supported.
 
 In practical terms: lab rollout should not wait on more multivar or long-fiber
-science. It should keep the default supported workflow narrow and leave MMF out
-of demos and lab handoff claims.
+science. It should keep the default supported workflow narrow. MMF can be shown
+as a qualified research result, but not as the default lab handoff workflow.
 
 ## Why this boundary exists
 
