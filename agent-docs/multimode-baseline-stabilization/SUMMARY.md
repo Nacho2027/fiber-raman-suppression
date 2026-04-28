@@ -100,6 +100,8 @@
 | E4 | ephemeral `M-mmfbnd` boundary-constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=0`, `SAVE_DIR=results/raman/phase36_window_validation_boundary` | `J_sum -17.96 -> -45.04 dB`, `Δ=27.09 dB` | `max_edge=2.74e-07`, input `2.74e-07`, output `2.64e-07`, `boundary_ok=true`; per-mode plot shows suppression across launched modes | window artifact no longer explains the gain, but phase still visually aggressive |
 | E5 | ephemeral `M-mmfgdd` boundary+GDD constrained rerun | same threshold case, `λ_boundary=0.05`, `λ_gdd=1e-4`, `SAVE_DIR=results/raman/phase36_window_validation_gdd` | raw Raman `J_sum -17.96 -> -49.69 dB`, `Δ=31.73 dB`; penalized objective ended at `-29.53 dB` | `max_edge=2.07e-11`, input `2.07e-11`, output `1.98e-11`, `boundary_ok=true`; `J_fund=-49.65 dB`, `J_worst=-45.35 dB` | accepted as current MMF candidate; needs robustness, not window rescue |
 | E6 | ephemeral `M-mmfg8192` grid-refinement attempt | same as E5 but `Nt=8192`, `TW=96 ps`, `SAVE_DIR=results/raman/phase36_window_validation_gdd_nt8192` | inconclusive; best observed penalized objective plateaued near `-30.38 dB` after ~5.5 h | no final summary/standard images; manual termination caused result archive not to sync | not accepted evidence; rerun with explicit evaluation/time limits |
+| E7 | bounded ephemeral retries `M-mmfg8192b1/b2` | same as E6, with `MMF_VALIDATION_F_CALLS_LIMIT=80`, `MMF_VALIDATION_TIME_LIMIT_SECONDS=10800` | inconclusive; `b2` reached only iter 2 (`-17.37495 dB`) before manual stop | `c3-highcpu-22` hit memory ceiling: about `42 GiB / 43 GiB` used, `~344 MiB` available, no swap; no standard images | grid-refinement is compute-limited, not scientifically accepted |
+| E8 | larger-memory allocation attempts | same E6 command on `c3-highmem-22`, `c3-standard-22`, and `c3-highcpu-44` | did not run | highmem/standard 22 were stocked out in `us-east5-a`; highcpu-44 exceeded `C3_CPUS` quota 50 while longfiber ephemeral was running | paper-grade E6 needs larger-memory quota/stock or memory-reduced solver |
 
 ### Visual Inspection
 
@@ -173,8 +175,10 @@ Remaining scientific todos before treating this as robust or publication-grade:
 - Do not rely on `seed` repeats in `mmf_window_validation.jl` until the driver
   supports a nonzero/random `φ0`; the current validation path warm-starts from
   zeros.
-- Rerun the `Nt=8192`, `TW=96 ps` refinement with explicit function-evaluation
-  or wall-time limits so it exits cleanly and writes standard images.
+- Rerun the `Nt=8192`, `TW=96 ps` refinement on a larger-memory C3 allocation
+  or after reducing solver memory use. The bounded driver works, but
+  `c3-highcpu-22` reaches the memory ceiling before a publishable grid artifact
+  is produced.
   `mmf_window_validation.jl` now exposes
   `MMF_VALIDATION_F_CALLS_LIMIT` and `MMF_VALIDATION_TIME_LIMIT_SECONDS`, and
   `optimize_mmf_phase` enforces the evaluation limit before each expensive MMF

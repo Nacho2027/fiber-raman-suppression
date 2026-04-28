@@ -107,12 +107,15 @@ Message:
   the run starts from `phi=0`.
 - A first `Nt=8192`, `TW=96 ps` refinement attempt found a comparable
   constrained basin but did not complete with standard images.
+- A bounded retry hit the `c3-highcpu-22` memory ceiling before producing
+  standard images; larger-memory shapes were blocked by stock/quota.
 
 ## Slide 12 - Paper-Readiness Gate
 
 Paper-grade claim after:
 
-- E6 grid refinement is rerun with `MMF_VALIDATION_F_CALLS_LIMIT` /
+- E6 grid refinement is rerun on larger-memory compute, or after reducing
+  solver memory use, with `MMF_VALIDATION_F_CALLS_LIMIT` /
   `MMF_VALIDATION_TIME_LIMIT_SECONDS` and images are inspected.
 - launch sensitivity is measured;
 - mode-coefficient preflight passes;

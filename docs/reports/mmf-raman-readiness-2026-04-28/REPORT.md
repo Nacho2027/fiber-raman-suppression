@@ -98,6 +98,8 @@ Regression coverage:
 | E4 boundary | `Nt=4096`, `TW=96 ps`, `lambda_boundary=0.05`, `lambda_gdd=0` | `-17.96 -> -45.04 dB` | edge `2.74e-7`, pass | gain survives raw-edge penalty |
 | E5 boundary+GDD | `Nt=4096`, `TW=96 ps`, `lambda_boundary=0.05`, `lambda_gdd=1e-4` | `-17.96 -> -49.69 dB` | edge `2.07e-11`, pass | strongest current candidate |
 | E6 grid refinement | `Nt=8192`, `TW=96 ps`, same E5 penalties | inconclusive; best observed penalized objective plateaued near `-30.38 dB` | no final standard images; result archive did not sync after manual termination | not accepted; rerun with evaluation/time limits |
+| E7 bounded grid refinement | E6 plus `MMF_VALIDATION_F_CALLS_LIMIT=80`, `MMF_VALIDATION_TIME_LIMIT_SECONDS=10800` | inconclusive; reached only iter 2 on `c3-highcpu-22` | memory ceiling: about `42 GiB / 43 GiB` used, `~344 MiB` available, no swap; no standard images | paper-grade refinement needs larger-memory compute or a memory-reduced solver |
+| E8 larger-memory allocation | E7 on `c3-highmem-22`, `c3-standard-22`, `c3-highcpu-44` | did not run | highmem/standard were stocked out; highcpu-44 exceeded current `C3_CPUS` quota | compute access is now the blocker |
 
 For E5, the diagnostic report also gives `J_fund=-49.65 dB` and
 `J_worst=-45.35 dB`, so the improvement is not only hidden in the summed
@@ -134,7 +136,11 @@ A manuscript can honestly claim the following now:
 
 For a full research-paper claim, the grid-refinement gate remains open. The
 first `Nt=8192`, `TW=96 ps` attempt found a comparable constrained basin but
-did not exit cleanly or produce standard images, so it is not accepted evidence.
+did not exit cleanly or produce standard images. A bounded retry verified the
+new evaluation/time-limit path but showed that `c3-highcpu-22` is memory-limited
+for this grid. Larger-memory shapes were unavailable under current stock/quota.
+Therefore E5 remains the accepted candidate, and `Nt=8192` is a compute gate,
+not accepted corroborating evidence.
 
 Do not claim yet:
 
@@ -148,10 +154,10 @@ Do not claim yet:
 
 Required:
 
-- Rerun E6 (`Nt=8192`, `TW=96 ps`) with explicit function-evaluation/time
-  limits, for example
-  `MMF_VALIDATION_F_CALLS_LIMIT=80 MMF_VALIDATION_TIME_LIMIT_SECONDS=10800`,
-  and inspect its standard images.
+- Rerun E6 (`Nt=8192`, `TW=96 ps`) on larger-memory compute, or first reduce
+  solver memory use, with
+  `MMF_VALIDATION_F_CALLS_LIMIT=80 MMF_VALIDATION_TIME_LIMIT_SECONDS=10800`;
+  inspect its standard images before accepting it.
 - Add a small launch-composition sensitivity matrix: default, LP01-only,
   balanced low-order, and reduced LP01 launch.
 - Run mode-coefficient gradient preflight now that MMF window trust passes.
@@ -179,7 +185,9 @@ After adding boundary and GDD penalties, the same physical regime shows a
 and `TW=96 ps`, with raw input/output edge fractions below `3e-11` and
 suppression across the launched modes. A first `Nt=8192` refinement attempt
 found a similar constrained optimization basin but did not complete with
-standard artifacts. These results identify a plausible spectral-phase control
-mechanism in an idealized GRIN-MMF model while motivating follow-up tests over
-launch composition, bounded grid refinement, random mode coupling, and
-phase-actuator constraints before experimental generalization.
+standard artifacts, and a bounded retry exposed a memory ceiling on the
+available `c3-highcpu-22` worker. These results identify a plausible
+spectral-phase control mechanism in an idealized GRIN-MMF model while
+motivating follow-up tests over launch composition, larger-memory grid
+refinement, random mode coupling, and phase-actuator constraints before
+experimental generalization.
