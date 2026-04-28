@@ -12,8 +12,6 @@ point readers toward first.
 - `run_sweep.jl` — run one approved sweep workflow
 - `inspect_run.jl` — inspect one saved run bundle
 - `lab_ready.jl` — run pass/fail lab-readiness gates for configs and completed runs
-- `demo_run_check.jl` — check a short live-demo run for artifacts, export,
-  and meaningful suppression without requiring canonical optimizer convergence
 - `export_run.jl` — export one saved run as an experiment-facing handoff bundle
 - `index_telemetry.jl` — summarize compute telemetry for runtime and memory planning
 - `refine_amp_on_phase.jl` — optional experimental second-stage amplitude-on-phase refinement

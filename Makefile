@@ -15,7 +15,7 @@ SMOKE_KEEP ?= 3
 JL     = $(JULIA) --project=.
 VENV_PYTHON = $(VENV)/bin/python
 
-.PHONY: help check-tools check-python-venv install install-julia install-python test test-python test-slow test-full acceptance lab-ready doctor golden-smoke prune-smoke demo-run demo-check optimize sweep report docker-build docker-test clean
+.PHONY: help check-tools check-python-venv install install-julia install-python test test-python test-slow test-full acceptance lab-ready doctor golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
 
 .DEFAULT_GOAL := help
 
@@ -30,8 +30,6 @@ help:
 	@echo "  make doctor      Verify tools, Julia tests, and Python wrapper tests"
 	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"
 	@echo "  make prune-smoke Keep newest SMOKE_KEEP golden-smoke runs; delete older smoke outputs"
-	@echo "  make demo-run    Run a short live-demo simulation with real artifacts/export"
-	@echo "  make demo-check  Check latest live-demo run artifacts/export/objective"
 	@echo "  make test-slow   Slow tier (~5 min; burst VM recommended)"
 	@echo "  make test-full   Full tier (~20 min; burst VM)"
 	@echo "  make optimize    Canonical SMF-28 optimization (~5 min)"
@@ -119,15 +117,6 @@ prune-smoke:
 		printf '%s\n' "$$old_runs" | xargs rm -rf; \
 		echo "Pruned older golden-smoke runs; kept newest $$keep."; \
 	fi
-
-demo-run:
-	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_live_demo
-	$(JL) -t auto scripts/canonical/run_experiment.jl --dry-run research_engine_live_demo
-	$(JL) -t auto scripts/canonical/run_experiment.jl research_engine_live_demo
-	$(JL) -t auto scripts/canonical/demo_run_check.jl --latest research_engine_live_demo
-
-demo-check:
-	$(JL) -t auto scripts/canonical/demo_run_check.jl --latest research_engine_live_demo
 
 optimize:
 	$(JL) -t auto scripts/canonical/optimize_raman.jl

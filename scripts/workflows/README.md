@@ -20,7 +20,6 @@ Typical examples:
 - result comparison workflows
 - compute telemetry indexing
 - lab-readiness gates
-- live-demo run checks
 - optional second-stage refinement workflows
 - standard-image regeneration
 
