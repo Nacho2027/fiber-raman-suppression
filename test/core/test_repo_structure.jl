@@ -49,7 +49,15 @@ using Test
         "research-closure-2026-04-28", "REPORT.md")
     lab_readiness_guide = joinpath(project_root, "docs", "guides", "lab-readiness.md")
     supported_workflows_guide = joinpath(project_root, "docs", "guides", "supported-workflows.md")
-    for doc_path in (closure_report, lab_readiness_guide, supported_workflows_guide)
+    first_lab_user_guide = joinpath(project_root, "docs", "guides", "first-lab-user-walkthrough.md")
+    golden_smoke_guide = joinpath(project_root, "docs", "guides", "golden-smoke-run.md")
+    for doc_path in (
+        closure_report,
+        lab_readiness_guide,
+        supported_workflows_guide,
+        first_lab_user_guide,
+        golden_smoke_guide,
+    )
         @test isfile(doc_path)
     end
     closure_text = read(closure_report, String)
@@ -61,6 +69,17 @@ using Test
     lab_readiness_text = read(lab_readiness_guide, String)
     @test occursin("Demo-Week Checklist", lab_readiness_text)
     @test occursin("Current Research Closure State", lab_readiness_text)
+    @test occursin("first-lab-user-walkthrough.md", lab_readiness_text)
+    supported_workflows_text = read(supported_workflows_guide, String)
+    @test occursin("first-lab-user-walkthrough.md", supported_workflows_text)
+    first_lab_user_text = read(first_lab_user_guide, String)
+    @test occursin("make lab-ready", first_lab_user_text)
+    @test occursin("make golden-smoke", first_lab_user_text)
+    @test occursin("Notebook Pattern", first_lab_user_text)
+    @test occursin("export_handoff", first_lab_user_text)
+    golden_smoke_text = read(golden_smoke_guide, String)
+    @test occursin("Clean-clone rehearsal on 2026-04-28", golden_smoke_text)
+    @test occursin("smf28_phase_export_smoke_20260428_1611741", golden_smoke_text)
 
     include_smoke_scripts = [
         joinpath(scripts_root, "workflows", "run_comparison.jl"),

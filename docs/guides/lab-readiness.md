@@ -1,6 +1,6 @@
 # Lab Readiness
 
-[<- docs index](../README.md) | [configurable experiments](./configurable-experiments.md)
+[<- docs index](../README.md) | [first lab user](./first-lab-user-walkthrough.md) | [configurable experiments](./configurable-experiments.md)
 
 This is the operational definition of lab readiness for the configurable
 research engine. It is stricter than demo readiness.
@@ -8,6 +8,9 @@ research engine. It is stricter than demo readiness.
 Lab readiness means a new lab user can install the repo, inspect the supported
 research surface, run the supported workflow, verify the artifacts, and know
 which experimental surfaces are intentionally blocked until promoted.
+
+For the shortest onboarding path, start with
+[first-lab-user-walkthrough.md](./first-lab-user-walkthrough.md).
 
 ## Readiness Levels
 

@@ -1,8 +1,11 @@
 # Supported Workflows
 
-[← docs index](../README.md) · [project README](../../README.md)
+[<- docs index](../README.md) | [first lab user](./first-lab-user-walkthrough.md) | [project README](../../README.md)
 
 This file defines the first honest supported surface for the repository.
+
+For a step-by-step new-user handoff, start with
+[first-lab-user-walkthrough.md](./first-lab-user-walkthrough.md).
 
 ## Supported now
 

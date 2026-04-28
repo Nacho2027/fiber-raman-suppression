@@ -49,7 +49,38 @@ A golden smoke run is mechanically valid only if all of these pass:
 - `export_handoff/phase_profile.csv`, `metadata.json`, `README.md`,
   `roundtrip_validation.json`, and `source_run_config.toml` are present.
 
-## Verified Example
+## Verified Examples
+
+Clean-clone rehearsal on 2026-04-28 from commit `0d4c4e7`:
+
+```text
+/tmp/fiber-raman-clean-rehearsal/results/raman/smoke/smf28_phase_export_smoke_20260428_1611741
+```
+
+Observed gate summary:
+
+```text
+Status: PASS
+Blockers: none
+Standard images complete: true
+Variable artifacts complete: true
+Export handoff complete: true
+Export phase CSV valid: true
+Export phase CSV rows: 1024
+Converged: true
+Quality: EXCELLENT
+J_after_dB: -45.963546468444825
+Delta_J_dB: -0.0006783608010110243
+```
+
+Visual inspection notes:
+
+- `opt_phase_profile.png`: rendered before/after spectrum, pulse shape, and
+  group delay panels; tiny one-iteration phase change is expected.
+- `opt_evolution.png`: rendered optimized spectral evolution with sane axes.
+- `opt_phase_diagnostic.png`: rendered wrapped/unwrapped phase and derivative
+  diagnostics with no missing panels.
+- `opt_evolution_unshaped.png`: rendered unshaped evolution for comparison.
 
 Verified on 2026-04-27:
 
