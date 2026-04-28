@@ -6,10 +6,10 @@ Status: **closed / exploring**.
 
 ## Decision
 
-The MMF lane is not a supported front-layer execution workflow. It remains a
-dedicated research lane under `scripts/research/mmf/`, with configurable
-front-layer support limited to validation, dry-run planning, and compute-plan
-inspection.
+The MMF lane is part of the production CLI as an experimental planning and
+user-exploration surface. It is not promoted to the supported local execution
+backend. Real propagation remains a dedicated research workflow under
+`scripts/research/mmf/` and should run on burst/cluster-class compute.
 
 The current accepted candidate is the constrained E5 run:
 
@@ -29,14 +29,15 @@ Do not claim generic experimental MMF Raman suppression from this result.
 
 ## Integration Boundary
 
-- Front-layer MMF configs must remain `experimental`,
+- Front-layer MMF configs are valid production CLI inputs for planning,
+  validation, and user-defined exploration. They must remain `experimental`,
   `verification.mode = "burst_required"`, and dry-run/planning only.
 - Real MMF execution should use `scripts/research/mmf/mmf_window_validation.jl`
   or the dedicated MMF scripts on burst/cluster-class compute.
 - Every MMF run that produces `phi_opt` must leave the standard image set and
   must be visually inspected before acceptance.
-- Do not promote MMF into `run_supported_experiment` until the memory/grid,
-  launch, and coupling gates below are reopened and resolved.
+- Do not promote MMF into the default local execution backend until the
+  memory/grid, launch, and coupling gates below are reopened and resolved.
 
 ## Current Run Commands
 

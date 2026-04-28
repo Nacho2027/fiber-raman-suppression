@@ -3,11 +3,11 @@
 This directory contains the multimode Raman optimization workflow, its setup
 helpers, baseline runners, and associated analysis scripts.
 
-This is **closed / exploring** research tooling. It is valuable and maintained,
-but it is not part of the small supported public entry surface for first-time
-users. The configurable front layer may plan or dry-run MMF configs, but real
-MMF execution should stay in this directory and run on burst/cluster-class
-compute.
+This is **closed / exploring** research tooling. It is part of the production
+CLI as an experimental planning and user-exploration surface, but it is not
+promoted to the default supported local execution backend. The configurable
+front layer may validate and dry-run MMF configs; real MMF propagation should
+stay in this directory and run on burst/cluster-class compute.
 
 ## Current Status
 
@@ -34,8 +34,9 @@ or quota during the April 28 run.
 
 ### Front-Layer Planning Only
 
-Use the research-engine config only to validate intent and inspect the generated
-plan. This should not execute MMF propagation locally:
+Use the research-engine config to validate intent and inspect the generated
+plan through the production CLI. This should not execute MMF propagation
+locally:
 
 ```bash
 julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run grin50_mmf_phase_sum_poc

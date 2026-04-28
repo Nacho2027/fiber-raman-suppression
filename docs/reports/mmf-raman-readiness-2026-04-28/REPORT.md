@@ -4,8 +4,9 @@ Date: 2026-04-28
 
 ## Executive Claim
 
-Operational status: **closed / exploring**. Keep MMF as a dedicated research
-lane, with front-layer configs limited to planning/dry-run validation.
+Operational status: **closed / exploring**. MMF remains available through the
+production CLI for experimental planning and user-defined exploration, while
+real propagation stays in the dedicated MMF research lane.
 
 The current MMF result is **presentation-ready as a qualified simulation
 finding**:
