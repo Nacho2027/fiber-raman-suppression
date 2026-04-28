@@ -1171,3 +1171,28 @@ single monolithic fragile run.
   images are present locally. The deterministic watchdog cron remains installed
   at the 15 minute cadence. No source patch, test run, commit, or relaunch was
   performed during this check.
+
+## 2026-04-28 23:10 UTC Supervisor Check
+
+- Active GCE inventory remains within quota but still at the MMF retry ceiling:
+  `C3_CPUS usage=44 limit=50`. `fiber-raman-burst` is `TERMINATED`; the only
+  active research VM is MMF `M-mmfg8192s44c2` on
+  `fiber-raman-temp-m-mmfg8192s44c2-20260428t194709z` (`c3-standard-44`,
+  `us-east5-c`). No long-fiber or multivar VM is running, and no multivar
+  relaunch was attempted because an additional `c3-highcpu-8` would exceed the
+  regional C3 quota while the MMF retry is active.
+- MMF `M-mmfg8192s44c2` is alive in remote tmux and Julia remains CPU-active
+  with wide memory headroom. The run hit the intended driver-side time limit
+  after 28 objective evaluations and used the fixed best-observed fallback:
+  best regularized objective `J_final=-32.28527 dB`, unregularized Raman report
+  `J_lin=7.502e-05` (`-41.25 dB`). The job is still in post-run diagnostics /
+  image generation, and no result files or standard images are present yet
+  under `results/raman/phase36_window_validation_gdd_nt8192_final/`.
+- Local `HEAD` is `eea7368` and contains the prior `4d426df` multivar
+  log-energy fix. The active MMF VM's stale image checkout remains at
+  `8b14314`, but this MMF run was launched with uploaded source paths and is
+  demonstrably running the fixed MMF time-limit fallback. Multivar is not
+  active, so the stale checkout does not currently affect a multivar job.
+- Long-fiber 200 m remains completed with the accepted 14:12 UTC caveats. The
+  deterministic watchdog cron remains installed at the 15 minute cadence. No
+  source patch, test run, commit, or relaunch was performed during this check.
