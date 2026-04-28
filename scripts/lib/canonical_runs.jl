@@ -18,6 +18,8 @@ const _CANONICAL_RUNS_JL_LOADED = true
 using Dates
 using TOML
 
+include(joinpath(@__DIR__, "common.jl"))
+
 const CANONICAL_RUN_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "runs"))
 const CANONICAL_SWEEP_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "sweeps"))
 const DEFAULT_CANONICAL_RUN_ID = "smf28_L2m_P0p2W"

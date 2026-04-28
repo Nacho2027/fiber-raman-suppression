@@ -112,6 +112,18 @@ def validate_variable_extensions(**kwargs) -> CommandResult:
     return run_julia_cli(RUN_EXPERIMENT, "--validate-variables", **kwargs)
 
 
+def control_layout(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--control-layout", spec, **kwargs)
+
+
+def artifact_plan(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--artifact-plan", spec, **kwargs)
+
+
+def compute_plan(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    return run_julia_cli(RUN_EXPERIMENT, "--compute-plan", spec, **kwargs)
+
+
 def scaffold_objective(
     kind: str,
     *,
@@ -184,6 +196,12 @@ def dry_run_experiment(spec: str = "research_engine_poc", **kwargs) -> CommandRe
     return run_julia_cli(RUN_EXPERIMENT, "--dry-run", spec, **kwargs)
 
 
+def latest_experiment(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    """Inspect the latest completed run for one experiment config."""
+
+    return run_julia_cli(RUN_EXPERIMENT, "--latest", spec, **kwargs)
+
+
 def run_experiment(spec: str, **kwargs) -> CommandResult:
     """Execute one supported experiment through the Julia front layer."""
 
@@ -200,6 +218,18 @@ def validate_all_sweeps(**kwargs) -> CommandResult:
 
 def dry_run_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandResult:
     return run_julia_cli(RUN_EXPERIMENT_SWEEP, "--dry-run", spec, **kwargs)
+
+
+def execute_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandResult:
+    """Execute one supported experiment sweep through the Julia front layer."""
+
+    return run_julia_cli(RUN_EXPERIMENT_SWEEP, "--execute", spec, **kwargs)
+
+
+def latest_sweep(spec: str = "smf28_power_micro_sweep", **kwargs) -> CommandResult:
+    """Inspect the latest completed sweep output for one sweep config."""
+
+    return run_julia_cli(RUN_EXPERIMENT_SWEEP, "--latest", spec, **kwargs)
 
 
 def index_results(

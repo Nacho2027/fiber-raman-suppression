@@ -12,6 +12,8 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-objectives
     julia --project=. -t auto scripts/canonical/run_experiment.jl --variables
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-variables
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --control-layout [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --artifact-plan [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-all
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
@@ -99,6 +101,22 @@ function run_experiment_main(args=ARGS)
         return report
     end
 
+    if args[1] == "--control-layout"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --control-layout [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        validate_experiment_spec(spec)
+        render_control_layout_plan(spec)
+        return control_layout_plan(spec)
+    end
+
+    if args[1] == "--artifact-plan"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --artifact-plan [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        validate_experiment_spec(spec)
+        render_experiment_artifact_plan(spec)
+        return experiment_artifact_plan(spec)
+    end
+
     if args[1] == "--validate-all"
         length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-all")
         report = validate_all_experiment_configs()
@@ -142,13 +160,15 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)
-    if mode in (:long_fiber_phase, :multimode_phase)
-        regime_label = mode == :long_fiber_phase ? "Long-fiber" : "Multimode"
-        workflow_label = mode == :long_fiber_phase ? "burst long-fiber" : "multimode baseline"
+    if mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase)
+        regime_label = mode == :long_fiber_phase ? "Long-fiber" :
+            mode == :multimode_phase ? "Multimode" : "Amp-on-phase"
+        workflow_label = mode == :long_fiber_phase ? "burst long-fiber" :
+            mode == :multimode_phase ? "multimode baseline" : "staged amp-on-phase refinement"
         error(
             "$(regime_label) front-layer configs are validation/dry-run only on this machine. " *
             "Inspect the plan with `julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(args[1])`, " *

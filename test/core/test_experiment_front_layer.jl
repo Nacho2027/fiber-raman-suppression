@@ -16,6 +16,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test "grin50_mmf_phase_sum_poc" in approved_experiment_config_ids()
     @test "smf28_longfiber_phase_poc" in approved_experiment_config_ids()
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
+    @test "smf28_amp_on_phase_refinement_poc" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
     @test spec.id == "smf28_phase_lbfgs_poc"
@@ -24,6 +25,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test spec.problem.preset == :SMF28
     @test spec.controls.variables == (:phase,)
     @test spec.controls.parameterization == :full_grid
+    @test spec.controls.policy == :direct
     @test spec.objective.kind == :raman_band
     @test spec.solver.kind == :lbfgs
     @test spec.export_plan.profile == :neutral_csv_v1
@@ -32,6 +34,17 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test phase_variable_contract.kind == :phase
     @test phase_variable_contract.backend == :spectral_phase
     @test :full_grid in phase_variable_contract.parameterizations
+    @test :phase_profile in phase_variable_contract.artifact_hooks
+    @test :group_delay in phase_variable_contract.artifact_hooks
+    phase_layout = control_layout_plan(spec)
+    @test phase_layout.total_length == string(spec.problem.Nt)
+    @test only(phase_layout.blocks).name == :phase
+    @test only(phase_layout.blocks).shape == "8192 x 1"
+    @test occursin("rad", only(phase_layout.blocks).units)
+    rendered_phase_layout = sprint(io -> render_control_layout_plan(spec; io=io))
+    @test occursin("Control layout", rendered_phase_layout)
+    @test occursin("optimizer_length=8192", rendered_phase_layout)
+    @test occursin("phase_profile", rendered_phase_layout)
     @test :mode_weights_demo in registered_variable_extension_kinds(:multimode)
     variable_extension_contract_demo = variable_extension_contract(:mode_weights_demo, :multimode)
     @test variable_extension_contract_demo.execution == :planning_only
@@ -60,7 +73,18 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test band_contract.kind == :raman_band
     @test band_contract.backend == :raman_optimization
     @test (:phase,) in band_contract.supported_variables
+    @test :J_after_dB in band_contract.metrics
+    @test :spectrum_before_after in band_contract.artifact_hooks
     @test :gdd in band_contract.allowed_regularizers
+    artifact_plan = experiment_artifact_plan(spec)
+    @test artifact_plan.implemented
+    @test :standard_image_set in Tuple(request.hook for request in artifact_plan.hooks)
+    @test :spectrum_before_after in Tuple(request.hook for request in artifact_plan.hooks)
+    @test :phase_profile in Tuple(request.hook for request in artifact_plan.hooks)
+    rendered_artifact_plan = sprint(io -> render_experiment_artifact_plan(spec; io=io))
+    @test occursin("Artifact plan", rendered_artifact_plan)
+    @test occursin("implemented_now=true", rendered_artifact_plan)
+    @test occursin("plots.phase_profile", rendered_artifact_plan)
     @test :raman_peak in registered_objective_kinds(:single_mode)
     peak_contract = objective_contract(:raman_peak, :single_mode)
     @test peak_contract.kind == :raman_peak
@@ -314,6 +338,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test long_spec.maturity == "experimental"
     @test long_spec.problem.regime == :long_fiber
     @test long_spec.controls.variables == (:phase,)
+    @test long_spec.controls.policy == :fresh
     @test long_spec.objective.kind == :raman_band
     @test long_spec.verification.mode == :burst_required
     @test experiment_execution_mode(long_spec) == :long_fiber_phase
@@ -329,6 +354,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("Optional Rivera Lab burst helper", long_compute_plan)
     @test occursin("No command in this plan is launched automatically", long_compute_plan)
     @test occursin("scripts/research/longfiber/longfiber_optimize_100m.jl", long_compute_plan)
+    @test occursin("LF100_MODE=fresh", long_compute_plan)
+    @test occursin("LF100_L=100.0", long_compute_plan)
     @test_throws ArgumentError run_supported_experiment(long_spec; timestamp="test")
     @test_throws ErrorException run_experiment_main(["smf28_longfiber_phase_poc"])
 
@@ -368,15 +395,42 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test mv_spec.id == "smf28_phase_amplitude_energy_poc"
     @test mv_spec.maturity == "experimental"
     @test mv_spec.controls.variables == (:phase, :amplitude, :energy)
+    @test mv_spec.controls.policy == :direct
     @test mv_spec.artifacts.bundle == :experimental_multivar
     @test mv_spec.objective.regularizers[:energy] == 1.0
     mv_caps = validate_experiment_spec(mv_spec)
     @test (:phase, :amplitude, :energy) in mv_caps.variables
+    mv_layout = control_layout_plan(mv_spec)
+    @test length(mv_layout.blocks) == 3
+    @test mv_layout.total_length == string(2 * mv_spec.problem.Nt + 1)
+    @test :amplitude_mask in only(filter(block -> block.name == :amplitude, mv_layout.blocks)).artifact_hooks
+    mv_artifact_plan = experiment_artifact_plan(mv_spec)
+    @test mv_artifact_plan.implemented
+    @test :amplitude_mask in Tuple(request.hook for request in mv_artifact_plan.hooks)
+    @test :energy_scale in Tuple(request.hook for request in mv_artifact_plan.hooks)
+    @test !(:trust_report in Tuple(request.hook for request in mv_artifact_plan.hooks))
+    @test isempty(mv_artifact_plan.planned)
 
     phase_exec = experiment_execution_mode(spec)
     @test phase_exec == :phase_only
     mv_exec = experiment_execution_mode(mv_spec)
     @test mv_exec == :multivar
+
+    staged_mv_spec = load_experiment_spec("smf28_amp_on_phase_refinement_poc")
+    @test staged_mv_spec.id == "smf28_amp_on_phase_refinement_poc"
+    @test staged_mv_spec.controls.variables == (:phase, :amplitude)
+    @test staged_mv_spec.controls.policy == :amp_on_phase
+    @test staged_mv_spec.controls.policy_options[:delta_bound] == 0.10
+    @test experiment_execution_mode(staged_mv_spec) == :amp_on_phase
+    @test (:phase, :amplitude) in validate_experiment_spec(staged_mv_spec).variables
+    staged_mv_plan = render_experiment_plan(staged_mv_spec)
+    @test occursin("Execution: mode=amp_on_phase", staged_mv_plan)
+    @test occursin("policy=amp_on_phase", staged_mv_plan)
+    staged_mv_compute_plan = render_experiment_compute_plan(staged_mv_spec)
+    @test occursin("Staged multivar command", staged_mv_compute_plan)
+    @test occursin("scripts/canonical/refine_amp_on_phase.jl", staged_mv_compute_plan)
+    @test occursin("--delta-bound 0.1", staged_mv_compute_plan)
+    @test_throws ArgumentError run_supported_experiment(staged_mv_spec; timestamp="test")
 
     mv_kwargs = supported_experiment_run_kwargs(mv_spec)
     @test mv_kwargs.variables == (:phase, :amplitude, :energy)
@@ -397,8 +451,14 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("Experiment spec: smf28_phase_lbfgs_poc", rendered)
     @test occursin("Execution: mode=phase_only", rendered)
     @test occursin("Controls: variables=[:phase]", rendered)
+    @test occursin("Control layout: optimizer_length=8192", rendered)
     @test occursin("Objective: kind=raman_band", rendered)
     @test occursin("backend=raman_optimization", rendered)
+    @test occursin("Artifact plan: implemented_now=true", rendered)
+    cli_control_layout = run_experiment_main(["--control-layout", "research_engine_poc"])
+    @test cli_control_layout.total_length == "8192"
+    cli_artifact_plan = run_experiment_main(["--artifact-plan", "research_engine_poc"])
+    @test cli_artifact_plan.implemented
     local_compute_plan = render_experiment_compute_plan(spec)
     @test occursin("Local command", local_compute_plan)
     @test occursin("run_experiment.jl research_engine_poc", local_compute_plan)
@@ -471,6 +531,79 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     export_report = validate_experiment_export_bundle(export_spec, exported)
     @test export_report.complete
     @test isempty(export_report.missing)
+
+    artifact_tmp = mktempdir()
+    artifact_prefix = joinpath(artifact_tmp, "mv_opt")
+    artifact_uω0, artifact_fiber, artifact_sim, artifact_band_mask, _, _ = setup_raman_problem_exact(
+        Nt=64,
+        time_window=2.0,
+        L_fiber=0.001,
+        P_cont=0.001,
+        β_order=3,
+        fiber_preset=:SMF28,
+    )
+    artifact_A = reshape(1.0 .+ 0.05 .* sin.(range(0, 2π; length=artifact_sim["Nt"])), artifact_sim["Nt"], 1)
+    artifact_outcome = (
+        A_opt = artifact_A,
+        φ_opt = zeros(artifact_sim["Nt"], 1),
+        E_opt = 2.0,
+        E_ref = 1.0,
+        diagnostics = Dict{Symbol,Any}(
+            :alpha => sqrt(2.0),
+            :A_extrema => extrema(artifact_A),
+        ),
+    )
+    artifact_bundle = (
+        output_dir = artifact_tmp,
+        save_prefix = artifact_prefix,
+        outcome = artifact_outcome,
+        meta = Dict{Symbol,Any}(:lambda0_nm => 1550.0, :fwhm_fs => 185.0),
+        uω0 = artifact_uω0,
+        fiber = artifact_fiber,
+        sim = artifact_sim,
+        band_mask = artifact_band_mask,
+    )
+    mv_variable_artifacts = write_multivar_variable_artifacts(mv_spec, artifact_bundle)
+    @test mv_variable_artifacts.complete
+    @test isfile(mv_variable_artifacts.paths[:amplitude_mask])
+    @test isfile(mv_variable_artifacts.paths[:energy_throughput])
+    @test isfile(mv_variable_artifacts.paths[:energy_scale])
+    @test isfile(mv_variable_artifacts.paths[:peak_power])
+    energy_metrics = JSON3.read(read(mv_variable_artifacts.paths[:energy_scale], String))
+    @test energy_metrics.schema_version == "multivar_energy_metrics_v1"
+    @test energy_metrics.E_opt_over_E_ref == 2.0
+    pulse_metrics = JSON3.read(read(mv_variable_artifacts.paths[:peak_power], String))
+    @test pulse_metrics.schema_version == "multivar_pulse_metrics_v1"
+    @test pulse_metrics.energy_scale_alpha == sqrt(2.0)
+
+    mv_artifact_path = string(artifact_prefix, "_result.jld2")
+    mv_sidecar_path = string(artifact_prefix, "_slm.json")
+    mv_config_copy = joinpath(artifact_tmp, "run_config.toml")
+    write(mv_artifact_path, "fake multivar jld2\n")
+    write(mv_sidecar_path, "{}\n")
+    write(mv_config_copy, "id = \"smf28_phase_amplitude_energy_poc\"\n")
+    for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
+        write(string(artifact_prefix, suffix), "")
+    end
+    mv_validation_bundle = (
+        spec = mv_spec,
+        output_dir = artifact_tmp,
+        save_prefix = artifact_prefix,
+        config_copy = mv_config_copy,
+        artifact_path = mv_artifact_path,
+        sidecar_path = mv_sidecar_path,
+    )
+    mv_artifact_report = validate_experiment_artifacts(mv_validation_bundle)
+    @test mv_artifact_report.complete
+    @test mv_artifact_report.extra_artifacts.complete
+    @test :amplitude_mask in mv_artifact_report.extra_artifacts.hooks
+    @test :energy_scale in mv_artifact_report.extra_artifacts.hooks
+    @test :peak_power in mv_artifact_report.extra_artifacts.hooks
+    rm(mv_variable_artifacts.paths[:peak_power])
+    broken_mv_artifact_report = validate_experiment_artifacts(mv_validation_bundle; throw_on_error=false)
+    @test !broken_mv_artifact_report.complete
+    @test !broken_mv_artifact_report.extra_artifacts.complete
+    @test any(endswith("_pulse_metrics.json"), broken_mv_artifact_report.extra_artifacts.missing)
 
     write(phase_csv, "")
     write(metadata_json, "not json\n")
@@ -609,6 +742,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("--validate-objectives", workflow)
     @test occursin("--variables", workflow)
     @test occursin("--validate-variables", workflow)
+    @test occursin("--control-layout", workflow)
+    @test occursin("--artifact-plan", workflow)
     @test occursin("--latest", workflow)
     @test occursin("--compute-plan", workflow)
 

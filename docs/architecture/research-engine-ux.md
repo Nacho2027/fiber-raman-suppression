@@ -249,10 +249,33 @@ Pain points addressed:
 - parsing configs
 - validation
 - objective and variable contracts
+- control layout planning: units, bounds, shapes, and optimizer-vector blocks
 - solver dispatch
+- artifact planning from regime/objective/variable hooks
 - output schema
 - trust checks
 - artifact paths and provenance
+
+## Control And Artifact Planning
+
+The exploratory-physics surface should be explicit about two things before a
+run launches:
+
+- `ControlLayout`: what each optimized variable means physically, its units,
+  bounds, shape, and optimizer-vector representation.
+- `ArtifactPlan`: which plots, metrics, tables, and reports are required by the
+  regime, objective, and variables.
+
+Dry-runs should make both visible:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --control-layout my_config
+julia -t auto --project=. scripts/canonical/run_experiment.jl --artifact-plan my_config
+```
+
+This is the bridge between configurability and lab usability. The engine should
+not guess graphs. Instead, contracts request named artifact hooks, each with a
+default view rule and a future config override key.
 
 ### CLI Owns
 

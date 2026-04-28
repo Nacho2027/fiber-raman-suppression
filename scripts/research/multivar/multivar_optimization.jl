@@ -49,11 +49,12 @@ ensure_deterministic_environment()
 # Constants and config struct (Script Constant Prefix convention: MV_)
 # ─────────────────────────────────────────────────────────────────────────────
 
-const MV_LEGAL_VARS = (:phase, :amplitude, :energy, :mode_coeffs)
+const MV_LEGAL_VARS = (:phase, :amplitude, :energy, :gain_tilt, :mode_coeffs)
 const MV_DEFAULT_DELTA_AMP = 0.10     # box half-width for A(ω)
 const MV_DEFAULT_EPS_FD_PHASE  = 1e-5
 const MV_DEFAULT_EPS_FD_AMP    = 1e-6
 const MV_DEFAULT_EPS_FD_ENERGY = 1e-6  # log-energy coordinate step
+const MV_DEFAULT_EPS_FD_GAIN_TILT = 1e-6
 
 """
     MVConfig
@@ -62,8 +63,8 @@ Container for all multi-variable optimizer settings.  Pass via `cfg` to
 `cost_and_gradient_multivar` and the convenience wrappers.
 
 Fields
-  variables::Tuple{Vararg{Symbol}}  subset of (:phase, :amplitude, :energy)
-  δ_bound::Float64                   box half-width for A (used if :amplitude)
+  variables::Tuple{Vararg{Symbol}}  subset of (:phase, :amplitude, :energy, :gain_tilt)
+  δ_bound::Float64                   box half-width for A and gain tilt
   s_φ::Float64                       phase preconditioning scale
   s_A::Float64                       amplitude preconditioning scale
   s_E::Float64                       energy preconditioning scale
@@ -191,7 +192,36 @@ function mv_block_offsets(cfg::MVConfig, Nt::Int, M::Int)
         offsets[:energy] = cursor:cursor
         cursor += 1
     end
+    if :gain_tilt in cfg.variables
+        offsets[:gain_tilt] = cursor:cursor
+        cursor += 1
+    end
     return (ranges=offsets, n_total=cursor - 1)
+end
+
+"""
+    mv_gain_tilt_basis(sim, Nt, M)
+
+Return a dimensionless frequency-ramp basis in FFT storage order. The basis is
+centered and normalized to `maximum(abs.(basis)) == 1`, so the scalar tilt
+coefficient has an inspectable physical meaning independent of grid size.
+"""
+function mv_gain_tilt_basis(sim::Dict, Nt::Int, M::Int)
+    Δf = collect(FFTW.fftfreq(Nt, 1 / sim["Δt"]))
+    denom = max(maximum(abs.(Δf)), eps())
+    q = Δf ./ denom
+    q .-= mean(q)
+    q ./= max(maximum(abs.(q)), eps())
+    return repeat(reshape(Float64.(q), Nt, 1), 1, M)
+end
+
+function mv_gain_tilt_amplitude(search_scalar::Real, cfg::MVConfig, sim::Dict, Nt::Int, M::Int)
+    basis = mv_gain_tilt_basis(sim, Nt, M)
+    slope = cfg.δ_bound * tanh(Float64(search_scalar))
+    d_slope_dξ = cfg.δ_bound * (1.0 - tanh(Float64(search_scalar))^2)
+    A_tilt = @. 1.0 + slope * basis
+    dA_dξ = @. d_slope_dξ * basis
+    return A_tilt, dA_dξ, slope
 end
 
 """
@@ -207,7 +237,8 @@ function mv_unpack(x::AbstractVector{<:Real}, cfg::MVConfig, Nt::Int, M::Int, E_
     # The scalar energy search coordinate is η = log(E), so line-search probes
     # remain positive without box constraints.
     E = haskey(off.ranges, :energy)    ? exp(x[first(off.ranges[:energy])])                    : Float64(E_ref)
-    return (φ=φ, A=A, E=E, offsets=off)
+    gain_tilt = haskey(off.ranges, :gain_tilt) ? Float64(x[first(off.ranges[:gain_tilt])]) : 0.0
+    return (φ=φ, A=A, E=E, gain_tilt=gain_tilt, offsets=off)
 end
 
 """
@@ -216,7 +247,7 @@ end
 Inverse of `mv_unpack`: assemble the flat vector from the enabled variable
 blocks (discarding any block not in `cfg.variables`).
 """
-function mv_pack(φ, A, E, cfg::MVConfig, Nt::Int, M::Int)
+function mv_pack(φ, A, E, cfg::MVConfig, Nt::Int, M::Int; gain_tilt::Real=0.0)
     off = mv_block_offsets(cfg, Nt, M)
     x = zeros(off.n_total)
     if haskey(off.ranges, :phase)
@@ -229,7 +260,44 @@ function mv_pack(φ, A, E, cfg::MVConfig, Nt::Int, M::Int)
         @assert isfinite(E) && E > 0 "energy must be finite positive to pack, got $E"
         x[first(off.ranges[:energy])] = log(Float64(E))
     end
+    if haskey(off.ranges, :gain_tilt)
+        x[first(off.ranges[:gain_tilt])] = Float64(gain_tilt)
+    end
     return x
+end
+
+function mv_physical_amplitude(unpacked, cfg::MVConfig, sim::Dict, Nt::Int, M::Int)
+    A_amp_raw = unpacked.A
+    A_amp = if :amplitude in cfg.variables && cfg.amp_param === :tanh
+        1.0 .+ cfg.δ_bound .* tanh.(A_amp_raw)
+    else
+        A_amp_raw
+    end
+    if :gain_tilt in cfg.variables
+        A_tilt, dA_tilt_dξ, slope = mv_gain_tilt_amplitude(unpacked.gain_tilt, cfg, sim, Nt, M)
+        return (A = A_amp .* A_tilt, A_amp = A_amp, A_tilt = A_tilt,
+                dA_tilt_dξ = dA_tilt_dξ, slope = slope)
+    end
+    return (A = A_amp, A_amp = A_amp, A_tilt = ones(Nt, M),
+            dA_tilt_dξ = zeros(Nt, M), slope = 0.0)
+end
+
+function _accumulate_A_space_gradient!(
+    g::AbstractVector{<:Real},
+    off,
+    g_A_total,
+    A_amp,
+    A_tilt,
+    dA_amp_dξ,
+    dA_tilt_dξ,
+)
+    if haskey(off.ranges, :amplitude)
+        g[off.ranges[:amplitude]] .+= vec(g_A_total .* A_tilt .* dA_amp_dξ)
+    end
+    if haskey(off.ranges, :gain_tilt)
+        g[first(off.ranges[:gain_tilt])] += sum(g_A_total .* A_amp .* dA_tilt_dξ)
+    end
+    return g
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -279,13 +347,17 @@ function cost_and_gradient_multivar(
     #   :tanh    → search variable is ξ; A = 1 + δ·tanh(ξ), bounded in (1-δ, 1+δ).
     #              ∂A/∂ξ = δ·(1 - tanh²(ξ)) = δ - (A-1)²/δ   (stable via (A-1))
     #   :fminbox → search variable IS A; no transform here (Fminbox enforces bounds).
-    dA_dξ = nothing
+    dA_amp_dξ = ones(Nt, M)
     if :amplitude in cfg.variables && cfg.amp_param === :tanh
-        A = 1.0 .+ cfg.δ_bound .* tanh.(A_raw)
-        dA_dξ = cfg.δ_bound .* (1.0 .- tanh.(A_raw) .^ 2)
+        A_amp = 1.0 .+ cfg.δ_bound .* tanh.(A_raw)
+        dA_amp_dξ = cfg.δ_bound .* (1.0 .- tanh.(A_raw) .^ 2)
     else
-        A = A_raw
+        A_amp = A_raw
     end
+    physical_A = mv_physical_amplitude(parts, cfg, sim, Nt, M)
+    A = physical_A.A
+    A_tilt = physical_A.A_tilt
+    dA_tilt_dξ = physical_A.dA_tilt_dξ
 
     # PRECONDITIONS
     @assert all(isfinite, φ) "phase has NaN/Inf"
@@ -335,8 +407,10 @@ function cost_and_gradient_multivar(
     #   For :tanh parameterization, multiply by dA/dξ (chain rule).
     if haskey(off.ranges, :amplitude)
         g_A = @. 2.0 * α * real(conj(λ0) * cis(φ) * uω0)
-        g_out = dA_dξ === nothing ? g_A : (g_A .* dA_dξ)   # d/dξ when :tanh
-        g[off.ranges[:amplitude]] .= vec(g_out)
+        _accumulate_A_space_gradient!(g, off, g_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
+    elseif haskey(off.ranges, :gain_tilt)
+        g_A = @. 2.0 * α * real(conj(λ0) * cis(φ) * uω0)
+        _accumulate_A_space_gradient!(g, off, g_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
     end
 
     #   Energy uses η = log(E). The raw derivative is
@@ -406,8 +480,13 @@ function cost_and_gradient_multivar(
                     real.(conj.(fft_edge) .* u_shaped ./ A) .-
                     edge_frac .* abs2.(u_shaped) ./ A
                 )
-                g_boundary_A_out = dA_dξ === nothing ? g_boundary_A : (g_boundary_A .* dA_dξ)
-                g[off.ranges[:amplitude]] .+= vec(g_boundary_A_out)
+                _accumulate_A_space_gradient!(g, off, g_boundary_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
+            elseif haskey(off.ranges, :gain_tilt)
+                g_boundary_A = coeff .* (
+                    real.(conj.(fft_edge) .* u_shaped ./ A) .-
+                    edge_frac .* abs2.(u_shaped) ./ A
+                )
+                _accumulate_A_space_gradient!(g, off, g_boundary_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
             end
         end
         if J_b > 0
@@ -419,7 +498,7 @@ function cost_and_gradient_multivar(
     # Amplitude regularizers (inherited from amplitude_optimization.jl)
     # Accumulate in A-space first, then chain-rule through dA/dξ at the end so
     # the :tanh path gets a consistent ∂J_total/∂ξ.
-    if haskey(off.ranges, :amplitude)
+    if haskey(off.ranges, :amplitude) || haskey(off.ranges, :gain_tilt)
         uω0_abs2 = abs2.(uω0)
         E_original = sum(uω0_abs2)
         g_A_reg = zeros(Nt, M)
@@ -472,9 +551,8 @@ function cost_and_gradient_multivar(
             reg_breakdown["J_tv"] = J_tv
         end
 
-        # Chain-rule the accumulated A-space reg gradient into ξ-space when :tanh.
-        g_A_reg_out = dA_dξ === nothing ? g_A_reg : (g_A_reg .* dA_dξ)
-        g[off.ranges[:amplitude]] .+= vec(g_A_reg_out)
+        # Chain-rule the accumulated A-space reg gradient into active controls.
+        _accumulate_A_space_gradient!(g, off, g_A_reg, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
     end
 
     # Log-cost transform of the full regularized scalar objective.
@@ -513,6 +591,9 @@ function build_scaling_vector(cfg::MVConfig, Nt::Int, M::Int)
     end
     if haskey(off.ranges, :energy)
         s[first(off.ranges[:energy])] = cfg.s_E
+    end
+    if haskey(off.ranges, :gain_tilt)
+        s[first(off.ranges[:gain_tilt])] = 1.0
     end
     return s
 end
@@ -703,11 +784,8 @@ function optimize_spectral_multivariable(
     # When :tanh, `unpacked.A` is ξ (search variable). Compute the physical A
     # for the return value; cost_and_gradient_multivar does this transform
     # internally each call, so the diagnostics below see the right A.
-    A_opt_physical = if (:amplitude in vars) && amp_param === :tanh
-        1.0 .+ δ_bound .* tanh.(unpacked.A)
-    else
-        unpacked.A
-    end
+    physical_opt = mv_physical_amplitude(unpacked, cfg, sim, Nt, M)
+    A_opt_physical = physical_opt.A
 
     elapsed = time() - t_start
 
@@ -722,6 +800,8 @@ function optimize_spectral_multivariable(
         φ_opt = unpacked.φ,
         A_opt = A_opt_physical,
         E_opt = unpacked.E,
+        gain_tilt_opt = physical_opt.slope,
+        gain_tilt_search = unpacked.gain_tilt,
         E_ref = E_ref,
         J_opt = J_opt,
         g_norm = norm(g_opt),
@@ -777,13 +857,15 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         # shaping
         phi_opt = outcome.φ_opt,
         amp_opt = outcome.A_opt,
+        gain_tilt_opt = Float64(get(outcome, :gain_tilt_opt, 0.0)),
+        gain_tilt_search = Float64(get(outcome, :gain_tilt_search, 0.0)),
         E_opt = E_opt,
         E_ref = E_ref,
         c_opt = ComplexF64[1.0 + 0im for _ in 1:M],  # stub per Decision D4
         uomega0 = Matrix{ComplexF64}(get(meta, :uomega0, zeros(ComplexF64, Nt, M))),
         # metrics
         J_before = Float64(get(meta, :J_before, NaN)),
-        J_after  = Float64(outcome.J_opt),
+        J_after  = Float64(get(meta, :J_after_lin, outcome.J_opt)),
         delta_J_dB = Float64(get(meta, :delta_J_dB, NaN)),
         grad_norm = Float64(outcome.g_norm),
         converged = Optim.converged(outcome.result),
@@ -859,13 +941,14 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         "outputs" => Dict(
             "phase"     => Dict("storage_key" => "phi_opt", "shape" => [Nt, M], "units" => "rad"),
             "amplitude" => Dict("storage_key" => "amp_opt", "shape" => [Nt, M], "units" => "dimensionless"),
+            "gain_tilt" => Dict("storage_key" => "gain_tilt_opt", "units" => "dimensionless bounded slope"),
             "energy_E"  => Dict("storage_key" => "E_opt", "units" => "arb."),
             "energy_reference" => Dict("storage_key" => "E_ref", "units" => "arb."),
             "mode_coeffs" => Dict("storage_key" => "c_opt", "shape" => [M], "units" => "dimensionless complex"),
         ),
         "metrics" => Dict(
             "J_before" => Float64(get(meta, :J_before, NaN)),
-            "J_after"  => Float64(outcome.J_opt),
+            "J_after"  => Float64(get(meta, :J_after_lin, outcome.J_opt)),
             "delta_J_dB" => Float64(get(meta, :delta_J_dB, NaN)),
             "converged" => Optim.converged(outcome.result),
             "iterations" => outcome.iterations,
@@ -906,6 +989,8 @@ function load_multivar_result(prefix::AbstractString)
     return (
         phi_opt = payload["phi_opt"],
         amp_opt = payload["amp_opt"],
+        gain_tilt_opt = haskey(payload, "gain_tilt_opt") ? payload["gain_tilt_opt"] : 0.0,
+        gain_tilt_search = haskey(payload, "gain_tilt_search") ? payload["gain_tilt_search"] : 0.0,
         E_opt = payload["E_opt"],
         E_ref = payload["E_ref"],
         c_opt = payload["c_opt"],
@@ -951,8 +1036,15 @@ function run_multivar_optimization(;
     λ_gdd::Real=1e-4, λ_boundary::Real=1.0,
     λ_energy::Real=1.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0, λ_flat::Real=0.0,
     log_cost::Bool=true,
+    objective_kind::Symbol=:raman_band,
+    solver_reltol::Real=1e-8,
+    solver_f_abstol=:auto,
+    solver_g_abstol=:auto,
     kwargs...,
 )
+    objective_kind == :raman_band || throw(ArgumentError(
+        "multivar optimization currently supports objective_kind=:raman_band, got $(objective_kind)"))
+    _ = (solver_reltol, solver_f_abstol, solver_g_abstol)
     t0 = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
 
@@ -1034,6 +1126,7 @@ function run_multivar_optimization(;
         :sim_Dt => sim["Δt"],
         :sim_omega0 => sim["ω0"],
         :J_before => J_before,
+        :J_after_lin => J_after_lin,
         :delta_J_dB => ΔJ_dB,
         :band_mask => band_mask,
         :uomega0 => uω0,
@@ -1108,7 +1201,8 @@ function mv_validate_gradient(
         1.0 .+ 0.02 .* randn(Nt, M)  # A in box
     end
     E_test = E_ref * (1.0 + 0.05 * randn())
-    x0 = mv_pack(φ_test, A_test, E_test, cfg, Nt, M)
+    gain_tilt_test = 0.1 * randn()
+    x0 = mv_pack(φ_test, A_test, E_test, cfg, Nt, M; gain_tilt=gain_tilt_test)
 
     # Linear-cost for clean FD comparison
     cfg_lin = deepcopy(cfg); cfg_lin.log_cost = false
@@ -1126,10 +1220,11 @@ function mv_validate_gradient(
         ε = var === :phase    ? MV_DEFAULT_EPS_FD_PHASE  :
             var === :amplitude ? MV_DEFAULT_EPS_FD_AMP    :
             var === :energy   ? MV_DEFAULT_EPS_FD_ENERGY :
+            var === :gain_tilt ? MV_DEFAULT_EPS_FD_GAIN_TILT :
                                 1e-6
         rng = off.ranges[var]
         # pick indices
-        idxs = if var === :energy
+        idxs = if var === :energy || var === :gain_tilt
             [first(rng)]
         else
             # first column is m=1; map (ω_sig, m=1) to flat index

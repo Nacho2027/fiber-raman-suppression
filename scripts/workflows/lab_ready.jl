@@ -119,21 +119,57 @@ function lab_ready_config_report(spec::AbstractString)
 end
 
 function _sidecar_for_artifact(path::AbstractString)
-    endswith(path, ".jld2") && return replace(path, r"\.jld2$" => ".json")
+    if endswith(path, ".jld2")
+        json_path = replace(path, r"\.jld2$" => ".json")
+        isfile(json_path) && return json_path
+        prefix = _artifact_result_prefix(path)
+        slm_path = string(prefix, "_slm.json")
+        isfile(slm_path) && return slm_path
+        return json_path
+    end
     endswith(path, ".json") && return path
     return string(path, ".json")
+end
+
+function _lab_ready_run_spec(run_config)
+    ismissing(run_config) && return nothing
+    try
+        return load_experiment_spec(String(run_config))
+    catch
+        return nothing
+    end
+end
+
+function _lab_ready_trust_required(spec)
+    isnothing(spec) && return true
+    return any(request -> request.hook == :trust_report, experiment_artifact_plan(spec).hooks)
+end
+
+function _lab_ready_extra_artifacts(spec, artifact_path::AbstractString)
+    isnothing(spec) && return (
+        complete = true,
+        checked = String[],
+        missing = String[],
+        paths = Dict{Symbol,Tuple{Vararg{String}}}(),
+        hooks = Symbol[],
+    )
+    return extra_artifact_hook_file_status(spec, _artifact_result_prefix(artifact_path))
 end
 
 function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
     blockers = String[]
     summary = inspect_run_summary(path)
     sidecar_path = _sidecar_for_artifact(String(summary.artifact))
+    run_spec = _lab_ready_run_spec(summary.run_config)
+    trust_required = _lab_ready_trust_required(run_spec)
+    extra_artifacts = _lab_ready_extra_artifacts(run_spec, String(summary.artifact))
 
     _push_blocker!(blockers, isfile(String(summary.artifact)), "missing_result_artifact")
     _push_blocker!(blockers, isfile(sidecar_path), "missing_json_sidecar")
     _push_blocker!(blockers, !ismissing(summary.run_config), "missing_run_config")
-    _push_blocker!(blockers, !isempty(summary.trust_reports), "missing_trust_report")
+    _push_blocker!(blockers, !trust_required || !isempty(summary.trust_reports), "missing_trust_report")
     _push_blocker!(blockers, summary.standard_images.complete, "missing_standard_images")
+    _push_blocker!(blockers, extra_artifacts.complete, "missing_variable_artifacts")
     _push_blocker!(blockers, summary.converged === true, "not_converged")
     _push_blocker!(blockers, isfinite(Float64(summary.J_after_dB)), "missing_objective_metric")
     if require_export
@@ -152,8 +188,13 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
         sidecar_path = sidecar_path,
         run_config = summary.run_config,
         trust_reports = Tuple(summary.trust_reports),
+        trust_report_required = trust_required,
         standard_images_complete = summary.standard_images.complete,
         standard_images_missing = Tuple(summary.standard_images.missing),
+        variable_artifacts_complete = extra_artifacts.complete,
+        variable_artifact_hooks = Tuple(extra_artifacts.hooks),
+        variable_artifact_paths = Tuple(extra_artifacts.checked),
+        variable_artifacts_missing = Tuple(extra_artifacts.missing),
         export_handoff_complete = summary.export_handoff.complete,
         export_handoff_files_complete = summary.export_handoff.files_complete,
         export_handoff_dir = summary.export_handoff.dir,
@@ -237,10 +278,18 @@ function render_lab_ready_report(report; io::IO=stdout)
         println(io, "- Artifact: `", report.artifact, "`")
         println(io, "- Sidecar: `", report.sidecar_path, "`")
         println(io, "- Run config: `", ismissing(report.run_config) ? "missing" : report.run_config, "`")
+        println(io, "- Trust report required: `", report.trust_report_required, "`")
         println(io, "- Trust reports: `", isempty(report.trust_reports) ? "none" : join(report.trust_reports, ","), "`")
         println(io, "- Standard images complete: `", report.standard_images_complete, "`")
         if !isempty(report.standard_images_missing)
             println(io, "- Standard images missing: `", join(report.standard_images_missing, ","), "`")
+        end
+        println(io, "- Variable artifacts complete: `", report.variable_artifacts_complete, "`")
+        if !isempty(report.variable_artifact_hooks)
+            println(io, "- Variable artifact hooks: `", join(string.(report.variable_artifact_hooks), ","), "`")
+        end
+        if !isempty(report.variable_artifacts_missing)
+            println(io, "- Variable artifacts missing: `", join(report.variable_artifacts_missing, ","), "`")
         end
         println(io, "- Export handoff complete: `", report.export_handoff_complete, "`")
         println(io, "- Export phase CSV valid: `", report.export_phase_csv_valid, "`")

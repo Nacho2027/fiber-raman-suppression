@@ -9,6 +9,8 @@ Shared functions (single source of truth):
 - `print_fiber_summary` — compute and display characteristic lengths and soliton number
 - `recommended_time_window` — safe time window from dispersive walk-off
 - `spectral_band_cost` — fractional spectral energy in a frequency band
+- `temporal_width_cost` — normalized temporal RMS-width cost for non-Raman
+  pulse-compression objectives
 - `compute_photon_number` — conserved photon-number invariant for GNLSE checks
 - `temporal_edge_fraction` — measure raw temporal energy near FFT window edges
 - `check_boundary_conditions` — legacy edge check with attenuator recovery
@@ -338,6 +340,49 @@ function spectral_peak_band_cost(uωf, band_mask)
     dJ = uωf .* (peak_mask .- J) ./ E_total
 
     @assert 0 ≤ J ≤ 1 "fractional peak energy J=$J out of [0,1]"
+    @assert all(isfinite, dJ) "gradient contains non-finite values"
+
+    return J, dJ
+end
+
+"""
+    temporal_width_cost(uωf, sim)
+
+Normalized temporal second-moment cost and its gradient.
+
+This is a non-Raman objective for phase-only pulse shaping. It transforms the
+output spectrum to the time domain, centers the plotting/order convention with
+`fftshift`, and minimizes energy away from the center of the simulated temporal
+window:
+
+```text
+J = sum((t / (T/2))^2 * |u(t)|^2) / sum(|u(t)|^2)
+```
+
+The returned gradient follows the same adjoint-terminal convention as
+`spectral_band_cost`: gradient with respect to `conj(uωf)`.
+"""
+function temporal_width_cost(uωf, sim)
+    @assert haskey(sim, "Nt") && haskey(sim, "Δt") "sim dict missing Nt or Δt"
+    Nt = Int(sim["Nt"])
+    @assert size(uωf, 1) == Nt "uωf rows ($(size(uωf,1))) must match sim Nt ($Nt)"
+
+    ut = ifft(uωf, 1)
+    ut_centered = fftshift(ut, 1)
+    E_total = sum(abs2.(ut_centered))
+    @assert E_total > 0 "field must have nonzero temporal energy"
+
+    Δt = Float64(sim["Δt"])
+    half_window = max(Δt * Nt / 2, eps(Float64))
+    t = ((collect(0:Nt-1) .- floor(Int, Nt / 2)) .* Δt) ./ half_window
+    weights = reshape(t .^ 2, Nt, 1)
+
+    J = sum(weights .* abs2.(ut_centered)) / E_total
+    grad_centered_t = ut_centered .* (weights .- J) ./ E_total
+    grad_t = ifftshift(grad_centered_t, 1)
+    dJ = fft(grad_t, 1) ./ Nt
+
+    @assert isfinite(J) && J >= 0 "temporal width cost J=$J must be finite and nonnegative"
     @assert all(isfinite, dJ) "gradient contains non-finite values"
 
     return J, dJ

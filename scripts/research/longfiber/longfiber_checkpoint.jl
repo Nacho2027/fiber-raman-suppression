@@ -322,14 +322,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @info @sprintf("resumed total: f=%.3e, ‖x-x*‖=%.3e, Δf/f_ref=%.2e",
         f_resumed, norm(x_resumed .- x_star), Δf)
 
-    # Hash mismatch test — should throw.
-    got_err = false
-    try
-        longfiber_resume_from_ckpt(tmpdir2; expected_config_hash = UInt64(0xdeadbeef))
-    catch e
-        got_err = true
+    # Hash mismatch test should throw. Keep this in a helper so the script is
+    # insensitive to Julia's top-level soft-scope assignment rules.
+    function _hash_mismatch_throws()
+        try
+            longfiber_resume_from_ckpt(tmpdir2; expected_config_hash = UInt64(0xdeadbeef))
+            return false
+        catch
+            return true
+        end
     end
-    @assert got_err "hash mismatch did NOT raise — resume guard is broken"
+    @assert _hash_mismatch_throws() "hash mismatch did NOT raise — resume guard is broken"
 
     @assert Δf < 1e-6 "resumed run diverged from reference: Δf/f_ref = $Δf"
     @info "longfiber_checkpoint unit test: PASSED"

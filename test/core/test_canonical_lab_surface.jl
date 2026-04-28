@@ -197,8 +197,70 @@ kind = "lbfgs"
     csv_index = render_results_index_csv(run_only_index)
     @test startswith(csv_index, "kind,id,config_id,regime,objective_kind,variables,solver_kind,timestamp_utc")
     @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,", csv_index)
-    @test occursin(",SMF-28,2.0,0.2,-20.0,-40.0,-20.0,GOOD,true,12,true,true,false,true,ready,", csv_index)
+    @test occursin("variable_artifacts_complete", csv_index)
+    @test occursin(",SMF-28,2.0,0.2,-20.0,-40.0,-20.0,GOOD,true,12,true,true", csv_index)
     @test !occursin("demo_sweep", csv_index)
+
+    mv_tmp = mktempdir()
+    mv_dir = joinpath(mv_tmp, "mv_run")
+    mkpath(mv_dir)
+    mv_artifact = joinpath(mv_dir, "opt_result.jld2")
+    MultiModeNoise.save_run(mv_artifact, payload)
+    rm(joinpath(mv_dir, "opt_result.json"); force=true)
+    write(joinpath(mv_dir, "opt_slm.json"), "{\"generated_at\":\"2026-04-27T00:00:00\"}\n")
+    cp(resolve_experiment_config_path("smf28_phase_amplitude_energy_poc"), joinpath(mv_dir, "run_config.toml"); force=true)
+    for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
+        write(joinpath(mv_dir, "opt" * suffix), "")
+    end
+    write(joinpath(mv_dir, "opt_amplitude_mask.png"), "")
+    write(joinpath(mv_dir, "opt_energy_metrics.json"), "{\"schema_version\":\"multivar_energy_metrics_v1\"}\n")
+    write(joinpath(mv_dir, "opt_pulse_metrics.json"), "{\"schema_version\":\"multivar_pulse_metrics_v1\"}\n")
+
+    mv_index = build_results_index([mv_tmp])
+    @test mv_index.total == 1
+    mv_row = only(mv_index.rows)
+    @test mv_row.config_id == "smf28_phase_amplitude_energy_poc"
+    @test mv_row.variables == "phase,amplitude,energy"
+    @test mv_row.variable_artifacts_complete
+    @test occursin("amplitude_mask", mv_row.variable_artifact_hooks)
+    @test occursin("energy_scale", mv_row.variable_artifact_hooks)
+    @test occursin("peak_power", mv_row.variable_artifact_hooks)
+    @test occursin("opt_amplitude_mask.png", mv_row.variable_artifact_paths)
+    @test isempty(mv_row.variable_artifacts_missing)
+    @test !mv_row.trust_report_present
+    @test mv_row.lab_ready
+    @test mv_row.readiness == "ready"
+    @test occursin("2026-04-27", mv_row.timestamp_utc)
+    rendered_mv_index = render_results_index(mv_index)
+    @test occursin("Variable Artifacts", rendered_mv_index)
+    @test occursin("smf28_phase_amplitude_energy_poc", rendered_mv_index)
+    mv_csv_index = render_results_index_csv(mv_index)
+    @test occursin("variable_artifact_paths", mv_csv_index)
+    @test filter_results_index(mv_index; contains="pulse_metrics").total == 1
+
+    mv_gate = lab_ready_run_report(mv_dir)
+    @test mv_gate.pass
+    @test mv_gate.trust_report_required == false
+    @test isempty(mv_gate.trust_reports)
+    @test mv_gate.variable_artifacts_complete
+    @test :amplitude_mask in mv_gate.variable_artifact_hooks
+    @test :peak_power in mv_gate.variable_artifact_hooks
+    @test occursin("opt_slm.json", mv_gate.sidecar_path)
+    rendered_mv_gate = sprint(io -> render_lab_ready_report(mv_gate; io=io))
+    @test occursin("Variable artifacts complete: `true`", rendered_mv_gate)
+    @test occursin("Trust report required: `false`", rendered_mv_gate)
+
+    rm(joinpath(mv_dir, "opt_pulse_metrics.json"))
+    mv_missing_index = build_results_index([mv_tmp])
+    mv_missing_row = only(mv_missing_index.rows)
+    @test !mv_missing_row.variable_artifacts_complete
+    @test occursin("opt_pulse_metrics.json", mv_missing_row.variable_artifacts_missing)
+    @test !mv_missing_row.lab_ready
+    @test occursin("missing_variable_artifacts", mv_missing_row.readiness)
+    mv_missing_gate = lab_ready_run_report(mv_dir)
+    @test !mv_missing_gate.pass
+    @test "missing_variable_artifacts" in mv_missing_gate.blockers
+    @test occursin("opt_pulse_metrics.json", only(mv_missing_gate.variable_artifacts_missing))
 
     @test suppression_quality_label(NaN) == "crashed"
     @test suppression_quality_label(1e-5) == "excellent"

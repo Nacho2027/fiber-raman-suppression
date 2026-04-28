@@ -96,6 +96,9 @@ supported single-run surface, acceptance requires:
 The primary lab baseline is `smf28_L2m_P0p2W`. It must additionally report
 `converged=true` before being used as the reference baseline for lab handoff.
 
+For the full local, smoke, milestone, and demo-week gate sequence, see
+[lab-readiness.md](./lab-readiness.md).
+
 For the configurable front layer, use
 [configurable-experiments.md](./configurable-experiments.md) as the operational
 guide. Its supported path is currently single-mode phase-only. Multivariable
@@ -122,17 +125,20 @@ Use those as research tools, not as the default interface for new lab users.
 
 Use this classification when deciding what blocks lab rollout:
 
-- Multivariable optimization is research-closed for the current decision. The
-  broad joint phase/amplitude/energy path should not become the default, but
-  staged amp-on-phase refinement is a credible optional research workflow.
-- Long-fiber is research-grade for the current 50-100 m single-mode story. It
-  should be documented as an exploratory workflow, not a turnkey group platform.
-- MMF is active and working as a qualified research path. The original
-  unregularized positive result was boundary/window corrupted, but the newer
-  boundary+GDD-regularized GRIN-50 result passes corrected temporal-edge checks
-  and is presentation-ready as a constrained simulation finding. It still needs
-  grid refinement, launch-composition sensitivity, and model-scope checks before
-  it becomes paper-grade or lab-supported.
+- Multivariable optimization is research-closed for the current packaging
+  decision. The broad direct phase/amplitude/energy path is a negative result
+  and should not become the default. Staged amp-on-phase refinement is the
+  credible optional experimental workflow.
+- Long-fiber has a completed 200 m single-mode milestone at about `-55.16 dB`
+  with a standard image set. It is image-backed but not optimizer-converged, so
+  document it as a research milestone rather than a turnkey group platform.
+- MMF is a qualified research path. The original unregularized positive result
+  was boundary/window corrupted, but the boundary+GDD-regularized GRIN-50
+  candidate passes corrected temporal-edge checks at the accepted 4096-grid
+  setting. High-grid refinement, launch-composition sensitivity, and model-scope
+  checks remain open before MMF becomes paper-grade or lab-supported.
+- Newton/preconditioning remains deferred. Keep it as a research note and do
+  not promote it into the production optimizer path.
 
 In practical terms: lab rollout should not wait on more multivar or long-fiber
 science. It should keep the default supported workflow narrow. MMF can be shown

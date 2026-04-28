@@ -92,6 +92,7 @@ function save_standard_set(
     fwhm_fs::Real = 185.0,
     n_z_samples::Int = 32,
     also_unshaped::Bool = true,
+    objective_kind::Symbol = :raman_band,
 )
     mkpath(output_dir)
 
@@ -112,6 +113,7 @@ function save_standard_set(
         band_mask, Δf, raman_threshold;
         save_path = path_6panel,
         metadata  = metadata,
+        objective_kind = objective_kind,
     )
     results[:phase_profile] = path_6panel
     @info "standard image wrote" kind="phase_profile (6-panel)" path=path_6panel
@@ -136,6 +138,7 @@ function save_standard_set(
         phi_opt, uω0_base, sim;
         save_path = path_diag,
         metadata  = metadata,
+        objective_kind = objective_kind,
     )
     results[:phase_diagnostic] = path_diag
     @info "standard image wrote" kind="phase diagnostic" path=path_diag

@@ -1,0 +1,77 @@
+id = "smf28_amp_on_phase_refinement_poc"
+description = "Experimental staged multivar config: optimize phase first, then bounded amplitude on the fixed phase."
+maturity = "experimental"
+output_root = "results/raman/multivar"
+output_tag = "smf28_amp_on_phase_refinement_poc"
+save_prefix_basename = "opt"
+
+[problem]
+regime = "single_mode"
+preset = "SMF28"
+L_fiber = 2.0
+P_cont = 0.30
+beta_order = 3
+Nt = 8192
+time_window = 20.0
+grid_policy = "auto_if_undersized"
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0
+
+[controls]
+variables = ["phase", "amplitude"]
+parameterization = "full_grid"
+initialization = "zero"
+policy = "amp_on_phase"
+
+[controls.policy_options]
+phase_iter = 50
+amp_iter = 60
+delta_bound = 0.10
+threshold_db = 3.0
+
+[objective]
+kind = "raman_band"
+log_cost = true
+
+[[objective.regularizer]]
+name = "gdd"
+lambda = 1.0e-4
+
+[[objective.regularizer]]
+name = "boundary"
+lambda = 1.0
+
+[[objective.regularizer]]
+name = "energy"
+lambda = 1.0
+
+[solver]
+kind = "lbfgs"
+max_iter = 60
+validate_gradient = false
+store_trace = true
+
+[artifacts]
+bundle = "experimental_multivar"
+save_payload = true
+save_sidecar = true
+update_manifest = false
+write_trust_report = false
+write_standard_images = true
+export_phase_handoff = false
+
+[verification]
+mode = "standard"
+block_on_failed_checks = true
+gradient_check = false
+taylor_check = false
+exact_grid_replay = false
+artifact_validation = true
+
+[export]
+enabled = false
+profile = "neutral_csv_v1"
+include_unwrapped_phase = true
+include_group_delay = true

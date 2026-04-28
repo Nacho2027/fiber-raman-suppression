@@ -10,16 +10,22 @@ from fiber_research_engine.cli import (
     RUN_EXPERIMENT_SWEEP,
     SCAFFOLD_OBJECTIVE,
     SCAFFOLD_VARIABLE,
+    artifact_plan,
     capabilities,
+    compute_plan,
+    control_layout,
     dry_run_amp_on_phase_refinement,
     dry_run_experiment,
     dry_run_sweep,
+    execute_sweep,
     index_results,
     index_results_csv,
     julia_cli_args,
     lab_ready_config,
     lab_ready_latest,
     lab_ready_run,
+    latest_experiment,
+    latest_sweep,
     refine_amp_on_phase,
     run_julia_cli,
     scaffold_objective,
@@ -71,6 +77,39 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         self.assertEqual(result.stdout, "sweep plan\n")
         called_args = run_mock.call_args.args[0]
         self.assertEqual(called_args[-3:], (RUN_EXPERIMENT_SWEEP, "--dry-run", "my_sweep"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_latest_experiment_delegates_to_latest_cli(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "latest run\n"
+        run_mock.return_value.stderr = ""
+
+        result = latest_experiment("my_config", repo_root=Path("/tmp/repo"))
+
+        self.assertEqual(result.stdout, "latest run\n")
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--latest", "my_config"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_execute_sweep_delegates_to_sweep_cli(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "running sweep\n"
+        run_mock.return_value.stderr = ""
+
+        result = execute_sweep("my_sweep", repo_root=Path("/tmp/repo"))
+
+        self.assertEqual(result.stdout, "running sweep\n")
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT_SWEEP, "--execute", "my_sweep"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_latest_sweep_delegates_to_sweep_cli(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "latest sweep\n"
+        run_mock.return_value.stderr = ""
+
+        result = latest_sweep("my_sweep", repo_root=Path("/tmp/repo"))
+
+        self.assertEqual(result.stdout, "latest sweep\n")
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT_SWEEP, "--latest", "my_sweep"))
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_dry_run_amp_on_phase_refinement_delegates_to_canonical_cli(self, run_mock):
@@ -154,6 +193,39 @@ class FiberResearchEngineCliTests(unittest.TestCase):
 
         self.assertIn("Variable extension validation", result.stdout)
         self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--validate-variables"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_control_layout_uses_safe_cli_path(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Control layout\n"
+        run_mock.return_value.stderr = ""
+
+        result = control_layout("my_config", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Control layout", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--control-layout", "my_config"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_artifact_plan_uses_safe_cli_path(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Artifact plan\n"
+        run_mock.return_value.stderr = ""
+
+        result = artifact_plan("my_config", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Artifact plan", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--artifact-plan", "my_config"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_compute_plan_uses_safe_cli_path(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Compute plan\n"
+        run_mock.return_value.stderr = ""
+
+        result = compute_plan("my_config", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Compute plan", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--compute-plan", "my_config"))
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_scaffold_objective_delegates_to_canonical_cli(self, run_mock):

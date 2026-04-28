@@ -71,6 +71,26 @@ function load_experiment_sweep_spec(spec::AbstractString)
     )
 end
 
+function validate_experiment_sweep_spec(sweep_spec)
+    sweep_spec.maturity in ("supported", "experimental") || throw(ArgumentError(
+        "experiment sweep maturity must be `supported` or `experimental`, got `$(sweep_spec.maturity)`"))
+    isempty(sweep_spec.sweep.values) && throw(ArgumentError(
+        "experiment sweep must define at least one value"))
+    if !isempty(sweep_spec.sweep.labels)
+        length(sweep_spec.sweep.labels) == length(sweep_spec.sweep.values) || throw(ArgumentError(
+            "sweep labels length must match values length"))
+        any(isempty, sweep_spec.sweep.labels) && throw(ArgumentError(
+            "sweep labels must be nonempty"))
+        length(unique(sweep_spec.sweep.labels)) == length(sweep_spec.sweep.labels) || throw(ArgumentError(
+            "sweep labels must be unique"))
+    end
+    sweep_spec.execution.mode == :dry_run || throw(ArgumentError(
+        "approved experiment sweeps must use execution.mode=\"dry_run\"; execution still requires explicit --execute"))
+    sweep_spec.execution.require_validate_all || throw(ArgumentError(
+        "approved experiment sweeps must keep execution.require_validate_all=true"))
+    return sweep_spec
+end
+
 function _case_label(sweep_spec, idx::Int)
     if !isempty(sweep_spec.sweep.labels)
         length(sweep_spec.sweep.labels) == length(sweep_spec.sweep.values) || throw(ArgumentError(
@@ -113,6 +133,7 @@ function _override_experiment_parameter(spec, parameter::AbstractString, value)
 end
 
 function expand_experiment_sweep(sweep_spec)
+    validate_experiment_sweep_spec(sweep_spec)
     base = load_experiment_spec(sweep_spec.base_experiment)
     validate_experiment_spec(base)
 

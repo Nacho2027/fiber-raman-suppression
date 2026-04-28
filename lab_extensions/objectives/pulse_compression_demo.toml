@@ -9,4 +9,6 @@ function = "pulse_compression_cost"
 gradient = "pulse_compression_gradient"
 validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
 supported_variables = [["phase"]]
+metrics = ["pulse_fwhm_fs", "peak_power_W", "time_bandwidth_product"]
+artifact_hooks = ["temporal_pulse_before_after", "pulse_width_metrics", "spectrum_before_after"]
 allowed_regularizers = ["gdd", "boundary"]

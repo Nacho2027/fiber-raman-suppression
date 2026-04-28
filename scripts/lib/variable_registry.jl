@@ -26,7 +26,10 @@ const VARIABLE_CONTRACTS = (
         description = "Spectral phase control on the simulation frequency grid.",
         maturity = "supported",
         units = "rad",
+        bounds = "unbounded real phase values; plots show wrapped, unwrapped, and group-delay views",
+        optimizer_representation = "full-grid real array with shape Nt x M",
         parameterizations = (:full_grid,),
+        artifact_hooks = (:phase_profile, :group_delay),
         artifact_semantics = "Phase profile, group delay, standard images, and neutral phase handoff.",
     ),
     (
@@ -36,7 +39,10 @@ const VARIABLE_CONTRACTS = (
         description = "Experimental spectral amplitude shaping control coupled to phase.",
         maturity = "experimental",
         units = "dimensionless transmission",
+        bounds = "positive transmission; current multivar path uses a tanh box around unity",
+        optimizer_representation = "full-grid real array or tanh search variable with shape Nt x M",
         parameterizations = (:full_grid,),
+        artifact_hooks = (:amplitude_mask, :shaped_input_spectrum, :energy_throughput),
         artifact_semantics = "Experimental multivariable payload; no neutral handoff yet.",
     ),
     (
@@ -46,8 +52,24 @@ const VARIABLE_CONTRACTS = (
         description = "Experimental pulse-energy control coupled to phase.",
         maturity = "experimental",
         units = "relative pulse energy",
+        bounds = "positive scalar energy scale",
+        optimizer_representation = "single positive scalar, preconditioned relative to input energy",
         parameterizations = (:full_grid,),
+        artifact_hooks = (:energy_scale, :peak_power),
         artifact_semantics = "Experimental multivariable payload; no neutral handoff yet.",
+    ),
+    (
+        kind = :gain_tilt,
+        regime = :single_mode,
+        backend = :spectral_gain_tilt,
+        description = "Experimental one-parameter smooth spectral gain/attenuation tilt coupled to phase.",
+        maturity = "experimental",
+        units = "dimensionless bounded transmission slope",
+        bounds = "bounded gain tilt around unity; current multivar path maps one scalar to A(omega)=1+delta*tanh(x)*normalized_frequency",
+        optimizer_representation = "single unconstrained scalar mapped to a smooth bounded spectral transmission ramp",
+        parameterizations = (:full_grid,),
+        artifact_hooks = (:gain_tilt_profile, :energy_throughput),
+        artifact_semantics = "Experimental gain-tilt profile plot and energy-throughput metrics; no neutral hardware handoff yet.",
     ),
     (
         kind = :phase,
@@ -56,7 +78,10 @@ const VARIABLE_CONTRACTS = (
         description = "Spectral phase control for long-fiber planning and burst-only workflows.",
         maturity = "experimental",
         units = "rad",
+        bounds = "unbounded real phase values; long-fiber execution remains workflow-specific",
+        optimizer_representation = "full-grid real array with shape Nt x M",
         parameterizations = (:full_grid,),
+        artifact_hooks = (:phase_profile, :group_delay),
         artifact_semantics = "Standard long-fiber artifacts after dedicated workflow promotion.",
     ),
     (
@@ -66,7 +91,10 @@ const VARIABLE_CONTRACTS = (
         description = "Shared spectral phase applied across the multimode propagation basis.",
         maturity = "experimental",
         units = "rad",
+        bounds = "unbounded real phase values shared across modes",
+        optimizer_representation = "shared spectral phase array on the propagation grid",
         parameterizations = (:shared_across_modes,),
+        artifact_hooks = (:phase_profile, :group_delay, :mode_resolved_spectra),
         artifact_semantics = "MMF planning artifacts until multimode execution is promoted.",
     ),
 )
@@ -120,7 +148,11 @@ function _parse_variable_extension_contract(path::AbstractString)
         projection_function = String(get(parsed, "projection_function", "")),
         units = String(get(parsed, "units", "")),
         bounds = String(get(parsed, "bounds", "")),
+        optimizer_representation = String(get(parsed, "optimizer_representation", "")),
         parameterizations = parameterizations,
+        artifact_hooks = haskey(parsed, "artifact_hooks") ?
+            Tuple(Symbol(String(item)) for item in parsed["artifact_hooks"]) :
+            Symbol[],
         compatible_objectives = objectives,
         artifact_semantics = String(get(parsed, "artifact_semantics", "")),
         validation = String(get(parsed, "validation", "")),
@@ -328,6 +360,7 @@ units = "$(replace(String(units), "\"" => "\\\""))"
 bounds = "$(replace(String(bounds), "\"" => "\\\""))"
 parameterizations = $(_variable_string_array(parameterizations))
 compatible_objectives = $(_variable_string_array(compatible_objectives))
+artifact_hooks = ["control_profile", "control_diagnostic"]
 artifact_semantics = "Requires output metrics, plots, and handoff semantics before execution."
 validation = "Requires units, bounds/projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution."
 """
@@ -354,7 +387,9 @@ function render_variable_registry(; io::IO=stdout, regime::Union{Nothing,Symbol}
             " backend=", contract.backend,
             " maturity=", contract.maturity,
             " units=", contract.units,
+            " bounds=", contract.bounds,
             " parameterizations=", join(string.(contract.parameterizations), ", "),
+            " artifacts=", join(string.(contract.artifact_hooks), ", "),
             " — ", contract.description)
     end
 
@@ -372,6 +407,7 @@ function render_variable_registry(; io::IO=stdout, regime::Union{Nothing,Symbol}
                 " maturity=", contract.maturity,
                 " units=", contract.units,
                 " parameterizations=", join(string.(contract.parameterizations), ", "),
+                " artifacts=", join(string.(contract.artifact_hooks), ", "),
                 " source=", contract.source,
                 " — ", contract.description)
         end

@@ -8,11 +8,12 @@ compact table so lab users can find and compare completed runs/campaigns.
 if !(@isdefined _RESULTS_INDEX_JL_LOADED)
 const _RESULTS_INDEX_JL_LOADED = true
 
-using Printf
 using JSON3
 using TOML
 
 include(joinpath(@__DIR__, "run_artifacts.jl"))
+include(joinpath(@__DIR__, "experiment_spec.jl"))
+include(joinpath(@__DIR__, "results_index_rendering.jl"))
 
 const INDEX_EXPORT_REQUIRED_FILES = (
     "phase_profile.csv",
@@ -20,28 +21,6 @@ const INDEX_EXPORT_REQUIRED_FILES = (
     "README.md",
     "source_run_config.toml",
 )
-
-function _index_float_cell(value)
-    if value isa AbstractFloat
-        isfinite(value) || return ""
-        format = 0 < abs(value) < 0.01 ? "%.4g" : "%.2f"
-        return Printf.format(Printf.Format(format), value)
-    end
-    return string(value)
-end
-
-function _csv_cell(value)
-    text = if ismissing(value)
-        ""
-    elseif value isa AbstractFloat
-        isfinite(value) ? string(value) : ""
-    else
-        string(value)
-    end
-    needs_quotes = any(ch -> ch in (',', '"', '\n', '\r'), text)
-    escaped = replace(text, "\"" => "\"\"")
-    return needs_quotes ? "\"$escaped\"" : escaped
-end
 
 function _nested_toml_value(data, keys::Tuple, default="")
     current = data
@@ -100,13 +79,29 @@ function _run_config_metadata(dir::AbstractString)
     end
 end
 
+function _artifact_save_prefix(path::AbstractString)
+    text = String(path)
+    for suffix in ("_result.jld2", "_result.json")
+        if endswith(text, suffix)
+            return text[1:(lastindex(text) - lastindex(suffix))]
+        end
+    end
+    root, _ = splitext(text)
+    return root
+end
+
 function _sidecar_metadata(path::AbstractString)
     sidecar = replace(path, r"\.jld2$" => ".json")
+    slm_sidecar = string(_artifact_save_prefix(path), "_slm.json")
+    if !isfile(sidecar) && isfile(slm_sidecar)
+        sidecar = slm_sidecar
+    end
     isfile(sidecar) || return (timestamp_utc = "", sidecar_path = "")
     try
         parsed = JSON3.read(read(sidecar, String))
         return (
-            timestamp_utc = hasproperty(parsed, :timestamp_utc) ? string(parsed.timestamp_utc) : "",
+            timestamp_utc = hasproperty(parsed, :timestamp_utc) ? string(parsed.timestamp_utc) :
+                (hasproperty(parsed, :generated_at) ? string(parsed.generated_at) : ""),
             sidecar_path = abspath(sidecar),
         )
     catch
@@ -128,12 +123,55 @@ function _export_handoff_complete(dir::AbstractString)
     return (complete = complete, path = complete ? abspath(export_dir) : "")
 end
 
-function _lab_readiness_status(; converged, standard_images_complete, trust_report_path, error="")
+function _index_experiment_spec(run_config_path::AbstractString)
+    isempty(run_config_path) && return nothing
+    isfile(run_config_path) || return nothing
+    try
+        return load_experiment_spec(run_config_path)
+    catch
+        return nothing
+    end
+end
+
+function _trust_report_required(index_spec)
+    isnothing(index_spec) && return true
+    return any(request -> request.hook == :trust_report, experiment_artifact_plan(index_spec).hooks)
+end
+
+function _index_extra_artifact_status(index_spec, artifact_path::AbstractString)
+    if isnothing(index_spec)
+        return (
+            complete = true,
+            hooks = "",
+            paths = "",
+            missing = "",
+        )
+    end
+
+    status = extra_artifact_hook_file_status(index_spec, _artifact_save_prefix(artifact_path))
+    return (
+        complete = status.complete,
+        hooks = join(string.(status.hooks), ","),
+        paths = join(status.checked, ","),
+        missing = join(status.missing, ","),
+    )
+end
+
+function _lab_readiness_status(;
+    converged,
+    standard_images_complete,
+    trust_report_path,
+    trust_report_required::Bool=true,
+    variable_artifacts_complete=true,
+    error="",
+)
     blockers = String[]
     isempty(error) || push!(blockers, "artifact_error")
     converged === true || push!(blockers, "not_converged")
     standard_images_complete === true || push!(blockers, "missing_standard_images")
-    isempty(trust_report_path) && push!(blockers, "missing_trust_report")
+    trust_report_required && isempty(trust_report_path) && push!(blockers, "missing_trust_report")
+    variable_artifacts_complete === false && push!(blockers, "missing_variable_artifacts")
+    ismissing(variable_artifacts_complete) && push!(blockers, "unknown_variable_artifacts")
     return (
         lab_ready = isempty(blockers),
         readiness = isempty(blockers) ? "ready" : join(blockers, ","),
@@ -257,13 +295,17 @@ function _safe_run_index_row(path::AbstractString)
         summary = canonical_run_summary(path)
         images = standard_image_set_status(path)
         meta = _run_config_metadata(summary.artifact_dir)
+        index_spec = _index_experiment_spec(meta.run_config_path)
         sidecar = _sidecar_metadata(String(summary.artifact))
         trust_report_path = _trust_report_path(summary.artifact_dir)
+        extra_artifacts = _index_extra_artifact_status(index_spec, String(summary.artifact))
         export_handoff = _export_handoff_complete(summary.artifact_dir)
         readiness = _lab_readiness_status(
             converged=summary.converged,
             standard_images_complete=images.complete,
             trust_report_path=trust_report_path,
+            trust_report_required=_trust_report_required(index_spec),
+            variable_artifacts_complete=extra_artifacts.complete,
         )
         return (
             kind = :run,
@@ -285,6 +327,10 @@ function _safe_run_index_row(path::AbstractString)
             iterations = summary.iterations,
             standard_images_complete = images.complete,
             trust_report_present = !isempty(trust_report_path),
+            variable_artifacts_complete = extra_artifacts.complete,
+            variable_artifact_hooks = extra_artifacts.hooks,
+            variable_artifact_paths = extra_artifacts.paths,
+            variable_artifacts_missing = extra_artifacts.missing,
             export_handoff_complete = export_handoff.complete,
             lab_ready = readiness.lab_ready,
             readiness = readiness.readiness,
@@ -323,6 +369,10 @@ function _safe_run_index_row(path::AbstractString)
             iterations = missing,
             standard_images_complete = false,
             trust_report_present = false,
+            variable_artifacts_complete = false,
+            variable_artifact_hooks = "",
+            variable_artifact_paths = "",
+            variable_artifacts_missing = "",
             export_handoff_complete = false,
             lab_ready = readiness.lab_ready,
             readiness = readiness.readiness,
@@ -357,6 +407,10 @@ function _sweep_index_row(path::AbstractString)
         iterations = missing,
         standard_images_complete = missing,
         trust_report_present = missing,
+        variable_artifacts_complete = missing,
+        variable_artifact_hooks = "",
+        variable_artifact_paths = "",
+        variable_artifacts_missing = "",
         export_handoff_complete = missing,
         lab_ready = missing,
         readiness = "",
@@ -422,6 +476,9 @@ function _row_contains(row, needle::AbstractString)
         row.fiber,
         row.quality,
         row.readiness,
+        row.variable_artifact_hooks,
+        row.variable_artifact_paths,
+        row.variable_artifacts_missing,
         row.trust_report_path,
         row.run_config_path,
         row.sidecar_path,
@@ -483,85 +540,6 @@ function filter_results_index(
     )
 end
 
-function render_results_index(index; io::Union{Nothing,IO}=nothing)
-    lines = String[
-        "# Results Index",
-        "",
-        "- Roots: `$(join(index.roots, "`, `"))`",
-        "- Entries: `$(index.total)`",
-        "",
-        "| Kind | ID | Config | Regime | Objective | Variables | Fiber | L [m] | P [W] | J_after [dB] | ΔJ [dB] | Quality | Lab Ready | Readiness | Std Images | Trust | Export | Path |",
-        "|---|---|---|---|---|---|---|---:|---:|---:|---:|---|---|---|---|---|---|---|",
-    ]
-
-    for row in index.rows
-        push!(lines, string(
-            "| ", row.kind,
-            " | ", row.id,
-            " | ", row.config_id,
-            " | ", row.regime,
-            " | ", row.objective_kind,
-            " | ", row.variables,
-            " | ", row.fiber,
-            " | ", _index_float_cell(row.L_m),
-            " | ", _index_float_cell(row.P_cont_W),
-            " | ", _index_float_cell(row.J_after_dB),
-            " | ", _index_float_cell(row.delta_J_dB),
-            " | ", row.quality,
-            " | ", ismissing(row.lab_ready) ? "" : string(row.lab_ready),
-            " | ", row.readiness,
-            " | ", ismissing(row.standard_images_complete) ? "" : string(row.standard_images_complete),
-            " | ", ismissing(row.trust_report_present) ? "" : string(row.trust_report_present),
-            " | ", ismissing(row.export_handoff_complete) ? "" : string(row.export_handoff_complete),
-            " | ", isempty(row.error) ? row.path : row.error,
-            " |"))
-    end
-
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
-end
-
-function render_results_index_csv(index; io::Union{Nothing,IO}=nothing)
-    columns = (
-        :kind,
-        :id,
-        :config_id,
-        :regime,
-        :objective_kind,
-        :variables,
-        :solver_kind,
-        :timestamp_utc,
-        :fiber,
-        :L_m,
-        :P_cont_W,
-        :J_before_dB,
-        :J_after_dB,
-        :delta_J_dB,
-        :quality,
-        :converged,
-        :iterations,
-        :standard_images_complete,
-        :trust_report_present,
-        :export_handoff_complete,
-        :lab_ready,
-        :readiness,
-        :trust_report_path,
-        :run_config_path,
-        :sidecar_path,
-        :export_handoff_path,
-        :path,
-        :error,
-    )
-    lines = [join(string.(columns), ",")]
-    for row in index.rows
-        push!(lines, join((_csv_cell(getproperty(row, col)) for col in columns), ","))
-    end
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
-end
-
 function compare_results_index(index; lab_ready_only::Bool=false,
                                export_ready_only::Bool=false,
                                top::Union{Nothing,Int}=nothing)
@@ -572,6 +550,7 @@ function compare_results_index(index; lab_ready_only::Bool=false,
         row.lab_ready === true ? 0 : 1,
         row.converged === true ? 0 : 1,
         row.standard_images_complete === true ? 0 : 1,
+        row.variable_artifacts_complete === true ? 0 : 1,
         row.trust_report_present === true ? 0 : 1,
         isnan(row.J_after_dB) ? Inf : row.J_after_dB,
         row.id,
@@ -584,69 +563,6 @@ function compare_results_index(index; lab_ready_only::Bool=false,
         total = length(rows),
         rows = Tuple(rows),
     )
-end
-
-function render_results_comparison(comparison; io::Union{Nothing,IO}=nothing)
-    lines = String[
-        "# Results Comparison",
-        "",
-        "- Roots: `$(join(comparison.roots, "`, `"))`",
-        "- Runs: `$(comparison.total)`",
-        "",
-        "| Rank | Lab Ready | Readiness | Config | Objective | Variables | Fiber | L [m] | P [W] | J_after [dB] | ΔJ [dB] | Quality | Std Images | Trust | Export | Path |",
-        "|---:|---|---|---|---|---|---|---:|---:|---:|---:|---|---|---|---|---|",
-    ]
-    for (rank, row) in enumerate(comparison.rows)
-        push!(lines, string(
-            "| ", rank,
-            " | ", row.lab_ready,
-            " | ", row.readiness,
-            " | ", row.config_id,
-            " | ", row.objective_kind,
-            " | ", row.variables,
-            " | ", row.fiber,
-            " | ", _index_float_cell(row.L_m),
-            " | ", _index_float_cell(row.P_cont_W),
-            " | ", _index_float_cell(row.J_after_dB),
-            " | ", _index_float_cell(row.delta_J_dB),
-            " | ", row.quality,
-            " | ", row.standard_images_complete,
-            " | ", row.trust_report_present,
-            " | ", row.export_handoff_complete,
-            " | ", isempty(row.error) ? row.path : row.error,
-            " |"))
-    end
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
-end
-
-function render_results_comparison_csv(comparison; io::Union{Nothing,IO}=nothing)
-    columns = (
-        :rank,
-        :lab_ready,
-        :readiness,
-        :config_id,
-        :objective_kind,
-        :variables,
-        :fiber,
-        :L_m,
-        :P_cont_W,
-        :J_after_dB,
-        :delta_J_dB,
-        :quality,
-        :standard_images_complete,
-        :trust_report_present,
-        :export_handoff_complete,
-        :path,
-    )
-    lines = [join(string.(columns), ",")]
-    for (rank, row) in enumerate(comparison.rows)
-        push!(lines, join((_csv_cell(col == :rank ? rank : getproperty(row, col)) for col in columns), ","))
-    end
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
 end
 
 function _json_property(object, name::Symbol, default=nothing)
@@ -717,58 +633,6 @@ function compare_sweep_summaries(index; top::Union{Nothing,Int}=nothing)
         total = length(rows),
         rows = Tuple(rows),
     )
-end
-
-function render_sweep_comparison(comparison; io::Union{Nothing,IO}=nothing)
-    lines = String[
-        "# Sweep Comparison",
-        "",
-        "- Roots: `$(join(comparison.roots, "`, `"))`",
-        "- Sweeps: `$(comparison.total)`",
-        "",
-        "| Rank | Sweep | Cases | Complete | Failed | Skipped | Best Case | Best J_after [dB] | Median J_after [dB] | Path |",
-        "|---:|---|---:|---:|---:|---:|---|---:|---:|---|",
-    ]
-    for (rank, row) in enumerate(comparison.rows)
-        push!(lines, string(
-            "| ", rank,
-            " | ", row.id,
-            " | ", row.cases,
-            " | ", row.complete,
-            " | ", row.failed,
-            " | ", row.skipped,
-            " | ", row.best_case,
-            " | ", _index_float_cell(row.best_J_after_dB),
-            " | ", _index_float_cell(row.median_J_after_dB),
-            " | ", isempty(row.error) ? row.path : row.error,
-            " |"))
-    end
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
-end
-
-function render_sweep_comparison_csv(comparison; io::Union{Nothing,IO}=nothing)
-    columns = (
-        :rank,
-        :id,
-        :cases,
-        :complete,
-        :failed,
-        :skipped,
-        :best_case,
-        :best_J_after_dB,
-        :median_J_after_dB,
-        :path,
-        :error,
-    )
-    lines = [join(string.(columns), ",")]
-    for (rank, row) in enumerate(comparison.rows)
-        push!(lines, join((_csv_cell(col == :rank ? rank : getproperty(row, col)) for col in columns), ","))
-    end
-    rendered = join(lines, "\n")
-    isnothing(io) || println(io, rendered)
-    return rendered
 end
 
 end # include guard

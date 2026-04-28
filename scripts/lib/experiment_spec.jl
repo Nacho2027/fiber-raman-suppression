@@ -19,6 +19,8 @@ using TOML
 include(joinpath(@__DIR__, "canonical_runs.jl"))
 include(joinpath(@__DIR__, "objective_registry.jl"))
 include(joinpath(@__DIR__, "variable_registry.jl"))
+include(joinpath(@__DIR__, "control_layout.jl"))
+include(joinpath(@__DIR__, "artifact_plan.jl"))
 
 const EXPERIMENT_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
 const DEFAULT_EXPERIMENT_SPEC = DEFAULT_CANONICAL_RUN_ID
@@ -64,6 +66,8 @@ approved_experiment_config_ids() = _approved_experiment_ids(EXPERIMENT_CONFIG_DI
 
 registered_experiment_regimes() = (:single_mode, :long_fiber, :multimode)
 
+const EXPERIMENT_PROMOTION_STAGES = (:planning, :smoke, :validated, :lab_ready)
+
 function resolve_experiment_config_path(spec::AbstractString)
     if isfile(spec)
         return abspath(spec)
@@ -80,6 +84,22 @@ end
 
 _normalize_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
 
+function _default_control_policy(regime::Symbol, controls)
+    haskey(controls, "policy") && return _normalize_symbol(controls["policy"])
+    regime == :long_fiber && return :fresh
+    regime == :multimode && return :planning
+    return :direct
+end
+
+function _policy_options_dict(controls)
+    raw = get(controls, "policy_options", Dict{String,Any}())
+    opts = Dict{Symbol,Any}()
+    for (key, value) in raw
+        opts[_normalize_symbol(key)] = value
+    end
+    return opts
+end
+
 function _normalize_lambda(x)
     if x isa AbstractString
         lower = lowercase(strip(String(x)))
@@ -87,6 +107,21 @@ function _normalize_lambda(x)
         return parse(Float64, lower)
     end
     return Float64(x)
+end
+
+function _normalize_auto_float(x)
+    if x isa AbstractString
+        lower = lowercase(strip(String(x)))
+        lower == "auto" && return :auto
+        return parse(Float64, lower)
+    end
+    return Float64(x)
+end
+
+function _require_auto_or_positive_finite(x, label::AbstractString)
+    x === :auto && return nothing
+    _require_positive_finite(Float64(x), label)
+    return nothing
 end
 
 function _regularizer_dict(entries)
@@ -111,6 +146,8 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
         _regularizer_dict(objective["regularizer"]) :
         Dict{Symbol,Any}()
 
+    regime = _normalize_symbol(problem["regime"])
+
     return (
         schema = :experiment_v1,
         id = String(parsed["id"]),
@@ -121,7 +158,7 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
         output_tag = String(get(parsed, "output_tag", parsed["id"])),
         save_prefix_basename = String(get(parsed, "save_prefix_basename", "opt")),
         problem = (
-            regime = _normalize_symbol(problem["regime"]),
+            regime = regime,
             preset = Symbol(String(problem["preset"])),
             L_fiber = Float64(problem["L_fiber"]),
             P_cont = Float64(problem["P_cont"]),
@@ -138,6 +175,8 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             variables = Tuple(_normalize_symbol(v) for v in get(controls, "variables", ["phase"])),
             parameterization = _normalize_symbol(get(controls, "parameterization", "full_grid")),
             initialization = _normalize_symbol(get(controls, "initialization", "zero")),
+            policy = _default_control_policy(regime, controls),
+            policy_options = _policy_options_dict(controls),
         ),
         objective = (
             kind = _normalize_symbol(objective["kind"]),
@@ -150,6 +189,8 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             validate_gradient = Bool(get(solver, "validate_gradient", false)),
             store_trace = Bool(get(solver, "store_trace", true)),
             reltol = Float64(get(solver, "reltol", 1e-8)),
+            f_abstol = _normalize_auto_float(get(solver, "f_abstol", "auto")),
+            g_abstol = _normalize_auto_float(get(solver, "g_abstol", "auto")),
         ),
         artifacts = (
             bundle = _normalize_symbol(get(artifacts, "bundle", "standard")),
@@ -214,6 +255,8 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             variables = (:phase,),
             parameterization = :full_grid,
             initialization = :zero,
+            policy = :direct,
+            policy_options = Dict{Symbol,Any}(),
         ),
         objective = (
             kind = :raman_band,
@@ -226,6 +269,8 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             validate_gradient = Bool(run_spec.kwargs.validate),
             store_trace = true,
             reltol = Float64(run_spec.kwargs.solver_reltol),
+            f_abstol = :auto,
+            g_abstol = :auto,
         ),
         artifacts = (
             bundle = :standard,
@@ -278,6 +323,7 @@ function experiment_capability_profile(regime::Symbol)
         return (
             variables = (
                 (:phase,),
+                (:phase, :gain_tilt),
                 (:phase, :amplitude),
                 (:phase, :energy),
                 (:phase, :amplitude, :energy),
@@ -286,6 +332,7 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
+            policies = (:direct, :amp_on_phase),
             grid_policies = (:auto_if_undersized, :exact),
             artifact_bundles = (:standard, :experimental_multivar),
             export_profiles = Tuple(registered_export_profiles()),
@@ -298,6 +345,7 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
+            policies = (:fresh, :resume, :resume_demo),
             grid_policies = (:exact, :auto_if_undersized),
             artifact_bundles = (:standard,),
             export_profiles = Tuple(registered_export_profiles()),
@@ -310,6 +358,7 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:shared_across_modes,),
             initializations = (:zero,),
+            policies = (:planning,),
             grid_policies = (:auto_if_undersized, :exact),
             artifact_bundles = (:mmf_planning,),
             export_profiles = Tuple(registered_export_profiles()),
@@ -320,6 +369,11 @@ end
 
 function experiment_execution_mode(spec)
     if spec.problem.regime == :single_mode
+        if spec.controls.policy == :amp_on_phase
+            spec.controls.variables == (:phase, :amplitude) || throw(ArgumentError(
+                "amp_on_phase policy requires controls.variables=[\"phase\", \"amplitude\"]"))
+            return :amp_on_phase
+        end
         if spec.controls.variables == (:phase,)
             return :phase_only
         end
@@ -339,19 +393,122 @@ end
 experiment_export_requested(spec) =
     Bool(spec.export_plan.enabled || spec.artifacts.export_phase_handoff)
 
+function _push_blocker!(blockers::Vector{Symbol}, blocker::Symbol)
+    blocker in blockers || push!(blockers, blocker)
+    return blockers
+end
+
+function experiment_promotion_status(spec)
+    mode = experiment_execution_mode(spec)
+    artifact_plan = experiment_artifact_plan(spec)
+    blockers = Symbol[]
+
+    artifact_plan.implemented || _push_blocker!(blockers, :unimplemented_artifacts)
+    spec.maturity == "supported" || _push_blocker!(blockers, :experimental_maturity)
+    spec.verification.mode == :burst_required && _push_blocker!(blockers, :burst_required)
+
+    front_layer_executable = mode in (:phase_only, :multivar)
+    if !front_layer_executable
+        _push_blocker!(blockers, mode == :amp_on_phase ? :dedicated_workflow_only : :front_layer_execution_blocked)
+    end
+
+    if mode == :multivar
+        spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
+        spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
+        experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
+    elseif mode == :amp_on_phase
+        _push_blocker!(blockers, :no_front_layer_execution)
+        spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
+        spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
+        experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
+    elseif mode in (:long_fiber_phase, :multimode_phase)
+        _push_blocker!(blockers, :no_local_smoke)
+        experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
+    end
+
+    stage =
+        mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase) ? :planning :
+        mode == :phase_only && spec.maturity == "supported" && artifact_plan.implemented ? :lab_ready :
+        mode in (:phase_only, :multivar) && artifact_plan.implemented ? :smoke :
+        :planning
+
+    requirements = stage == :lab_ready ? Symbol[] : Symbol[
+        :passing_config_validation,
+        :passing_executable_smoke,
+        :complete_artifact_set,
+        :visual_artifact_inspection,
+        :documented_scientific_scope,
+        :representative_real_size_validation,
+    ]
+
+    return (
+        stage = stage,
+        mode = mode,
+        executable = front_layer_executable,
+        local_execution_allowed = front_layer_executable && spec.verification.mode != :burst_required,
+        artifact_plan_implemented = artifact_plan.implemented,
+        blockers = Tuple(blockers),
+        requirements = Tuple(requirements),
+    )
+end
+
+function _promotion_blocker_summary(status)
+    isempty(status.blockers) && return "none"
+    return join(string.(status.blockers), ", ")
+end
+
+function _require_positive_finite(value, label::AbstractString)
+    numeric = Float64(value)
+    isfinite(numeric) && numeric > 0 || throw(ArgumentError("$label must be positive and finite"))
+    return nothing
+end
+
+function _validate_objective_regularizers(spec, objective_contract)
+    allowed = Set(objective_contract.allowed_regularizers)
+    for (name, lambda) in spec.objective.regularizers
+        name in allowed || throw(ArgumentError(
+            "regularizer `$(name)` is not allowed for objective `$(spec.objective.kind)`; allowed regularizers: $(collect(objective_contract.allowed_regularizers))"))
+        lambda == :auto && continue
+        lambda isa Real || throw(ArgumentError(
+            "regularizer `$(name)` lambda must be numeric or \"auto\""))
+        numeric = Float64(lambda)
+        isfinite(numeric) && numeric >= 0 || throw(ArgumentError(
+            "regularizer `$(name)` lambda must be nonnegative and finite"))
+    end
+    return nothing
+end
+
+function _reject_planning_variable_extensions(spec)
+    for variable in spec.controls.variables
+        variable in registered_variable_extension_kinds(spec.problem.regime) || continue
+        contract = variable_extension_contract(variable, spec.problem.regime)
+        row = validate_variable_extension_contract(contract)
+        blockers = isempty(row.blockers) ? "none" : join(row.blockers, ",")
+        errors = isempty(row.errors) ? "none" : join(row.errors, ",")
+        throw(ArgumentError(
+            "variable `$(variable)` is a research extension for regime `$(spec.problem.regime)`, but it is not promoted for execution; blockers: $(blockers); errors: $(errors)"))
+    end
+    return nothing
+end
+
 function validate_experiment_spec(spec)
     spec.maturity in ("supported", "experimental") || throw(ArgumentError(
         "experiment maturity must be `supported` or `experimental`, got `$(spec.maturity)`"))
 
     caps = experiment_capability_profile(spec.problem.regime)
 
-    spec.controls.variables in caps.variables || throw(ArgumentError(
-        "variables $(spec.controls.variables) are not currently supported for regime `$(spec.problem.regime)`; supported tuples: $(collect(caps.variables))"))
+    if !(spec.controls.variables in caps.variables)
+        _reject_planning_variable_extensions(spec)
+        throw(ArgumentError(
+            "variables $(spec.controls.variables) are not currently supported for regime `$(spec.problem.regime)`; supported tuples: $(collect(caps.variables))"))
+    end
     variable_contracts = experiment_variable_contracts(spec)
     spec.controls.parameterization in caps.parameterizations || throw(ArgumentError(
         "parameterization `$(spec.controls.parameterization)` is not supported for regime `$(spec.problem.regime)`"))
     spec.controls.initialization in caps.initializations || throw(ArgumentError(
         "initialization `$(spec.controls.initialization)` is not supported for regime `$(spec.problem.regime)`"))
+    spec.controls.policy in caps.policies || throw(ArgumentError(
+        "policy `$(spec.controls.policy)` is not supported for regime `$(spec.problem.regime)`; supported policies: $(collect(caps.policies))"))
     objective_contract = experiment_objective_contract(spec)
     spec.solver.kind in caps.solvers || throw(ArgumentError(
         "solver `$(spec.solver.kind)` is not supported for regime `$(spec.problem.regime)`"))
@@ -372,10 +529,17 @@ function validate_experiment_spec(spec)
     end
 
     spec.problem.Nt > 0 || throw(ArgumentError("problem.Nt must be positive"))
-    spec.problem.time_window > 0 || throw(ArgumentError("problem.time_window must be positive"))
-    spec.problem.L_fiber > 0 || throw(ArgumentError("problem.L_fiber must be positive"))
-    spec.problem.P_cont > 0 || throw(ArgumentError("problem.P_cont must be positive"))
+    _require_positive_finite(spec.problem.time_window, "problem.time_window")
+    _require_positive_finite(spec.problem.L_fiber, "problem.L_fiber")
+    _require_positive_finite(spec.problem.P_cont, "problem.P_cont")
+    _require_positive_finite(spec.problem.pulse_fwhm, "problem.pulse_fwhm")
+    _require_positive_finite(spec.problem.pulse_rep_rate, "problem.pulse_rep_rate")
+    spec.problem.β_order > 0 || throw(ArgumentError("problem.beta_order must be positive"))
     spec.solver.max_iter > 0 || throw(ArgumentError("solver.max_iter must be positive"))
+    _require_positive_finite(spec.solver.reltol, "solver.reltol")
+    _require_auto_or_positive_finite(spec.solver.f_abstol, "solver.f_abstol")
+    _require_auto_or_positive_finite(spec.solver.g_abstol, "solver.g_abstol")
+    _validate_objective_regularizers(spec, objective_contract)
 
     mode = experiment_execution_mode(spec)
     for contract in variable_contracts
@@ -392,7 +556,7 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "phase-only execution currently requires the full standard artifact bundle"))
         end
-    elseif mode == :multivar
+    elseif mode == :multivar || mode == :amp_on_phase
         if !(spec.artifacts.bundle == :experimental_multivar &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
              spec.artifacts.write_standard_images)
@@ -461,6 +625,19 @@ function experiment_plan_lines(spec)
         spec.problem.regime in (:long_fiber, :multimode)
     objective_contract = experiment_objective_contract(spec)
     export_contract = export_profile_contract(spec.export_plan.profile)
+    layout = control_layout_plan(spec)
+    artifact_plan = experiment_artifact_plan(spec)
+    promotion_status = experiment_promotion_status(spec)
+    layout_summary = join((string(block.name, ":", block.shape, ":", block.units)
+        for block in layout.blocks), "; ")
+    artifact_hook_summary = isempty(artifact_plan.hooks) ?
+        "none" :
+        join(string.(Tuple(request.hook for request in artifact_plan.hooks)), ", ")
+    policy_option_parts = String[]
+    for name in sort!(collect(keys(spec.controls.policy_options)); by=string)
+        push!(policy_option_parts, string(name, "=", spec.controls.policy_options[name]))
+    end
+    policy_option_summary = isempty(policy_option_parts) ? "none" : join(policy_option_parts, ", ")
 
     return [
         "Experiment spec: $(spec.id)",
@@ -469,11 +646,15 @@ function experiment_plan_lines(spec)
         "Schema: $(spec.schema)",
         "Config path: $(spec.config_path)",
         "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested) burst_required=$(burst_required)",
+        "Promotion stage: $(promotion_status.stage)",
+        "Promotion blockers: $(_promotion_blocker_summary(promotion_status))",
         "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W Nt=$(spec.problem.Nt) tw=$(spec.problem.time_window)ps grid=$(spec.problem.grid_policy)",
-        "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization)",
+        "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization) policy=$(spec.controls.policy) policy_options=$(policy_option_summary)",
+        "Control layout: optimizer_length=$(layout.total_length) blocks=$(layout_summary)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
         "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)",
         "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(export_contract.profile)",
+        "Artifact plan: implemented_now=$(artifact_plan.implemented) hooks=$(artifact_hook_summary)",
         "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",
     ]
 end
@@ -482,14 +663,17 @@ render_experiment_plan(spec) = join(experiment_plan_lines(spec), "\n")
 
 function render_experiment_capabilities(; io::IO=stdout)
     println(io, "Experiment capabilities:")
+    println(io, "  promotion_stages=", join(string.(EXPERIMENT_PROMOTION_STAGES), ", "))
     for regime in registered_experiment_regimes()
         caps = experiment_capability_profile(regime)
         println(io, "  regime=", regime)
+        println(io, "    current_stage=", regime == :single_mode ? "lab_ready for supported phase-only; smoke for experimental multivariable" : "planning")
         println(io, "    variables=", _objective_tuple_summary(caps.variables))
         println(io, "    objectives=", join(string.(caps.objectives), ", "))
         println(io, "    solvers=", join(string.(caps.solvers), ", "))
         println(io, "    parameterizations=", join(string.(caps.parameterizations), ", "))
         println(io, "    initializations=", join(string.(caps.initializations), ", "))
+        println(io, "    policies=", join(string.(caps.policies), ", "))
         println(io, "    grid_policies=", join(string.(caps.grid_policies), ", "))
         println(io, "    artifact_bundles=", join(string.(caps.artifact_bundles), ", "))
         println(io, "    export_profiles=", join(string.(caps.export_profiles), ", "))
@@ -570,6 +754,7 @@ function experiment_compute_plan_lines(spec)
     validate_experiment_spec(spec)
 
     mode = experiment_execution_mode(spec)
+    promotion_status = experiment_promotion_status(spec)
     spec_hint = experiment_cli_spec_hint(spec)
     dry_run_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(spec_hint)"
     local_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl $(spec_hint)"
@@ -578,25 +763,30 @@ function experiment_compute_plan_lines(spec)
         "Compute plan: $(spec.id)",
         "Regime: $(spec.problem.regime)",
         "Execution mode: $(mode)",
+        "Promotion status:",
+        "  Promotion stage: $(promotion_status.stage)",
+        "  Promotion blockers: $(_promotion_blocker_summary(promotion_status))",
         "No command in this plan is launched automatically.",
         "Inspect first:",
         "  $(dry_run_cmd)",
     ]
 
     if mode == :long_fiber_phase
+        lf_mode = string(spec.controls.policy)
+        lf_cmd = "LF100_MODE=$(lf_mode) LF100_L=$(spec.problem.L_fiber) LF100_P_CONT=$(spec.problem.P_cont) LF100_NT=$(spec.problem.Nt) LF100_TIME_WIN=$(spec.problem.time_window) LF100_BETA_ORDER=$(spec.problem.β_order) LF100_RUN_LABEL=$(spec.output_tag) LF100_MAX_ITER=$(spec.solver.max_iter) julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl"
         append!(lines, [
             "Provider-neutral path:",
             "  1. Use any sufficiently provisioned machine or cluster node.",
             "  2. Sync or clone this repository and instantiate the Julia project.",
             "  3. Run the dry-run command above on that machine to confirm the config.",
             "  4. Use the dedicated long-fiber workflow until front-layer burst execution is promoted:",
-            "     julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl",
+            "     $(lf_cmd)",
             "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
             "Local laptop/default VM guidance:",
             "  Long-fiber execution is intentionally blocked by the front layer because this config is marked burst_required.",
             "Optional Rivera Lab burst helper:",
             "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
-            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy F-longfiber 'julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl'\"",
+            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy F-longfiber '$(lf_cmd)'\"",
         ])
     elseif mode == :multimode_phase
         append!(lines, [
@@ -612,6 +802,21 @@ function experiment_compute_plan_lines(spec)
             "Optional Rivera Lab burst helper:",
             "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
             "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy M-mmf 'julia -t auto --project=. scripts/research/mmf/baseline.jl'\"",
+        ])
+    elseif mode == :amp_on_phase
+        opts = spec.controls.policy_options
+        phase_iter = Int(get(opts, :phase_iter, spec.solver.max_iter))
+        amp_iter = Int(get(opts, :amp_iter, spec.solver.max_iter))
+        delta_bound = Float64(get(opts, :delta_bound, 0.10))
+        threshold_db = Float64(get(opts, :threshold_db, 3.0))
+        refine_cmd = "julia -t auto --project=. scripts/canonical/refine_amp_on_phase.jl --tag $(spec.output_tag) --L $(spec.problem.L_fiber) --P $(spec.problem.P_cont) --phase-iter $(phase_iter) --amp-iter $(amp_iter) --delta-bound $(delta_bound) --threshold-db $(threshold_db)"
+        append!(lines, [
+            "Staged multivar command:",
+            "  $(refine_cmd)",
+            "Provider-neutral path:",
+            "  This config selects the staged amp-on-phase policy, not naive joint optimization.",
+            "  Run the dedicated refinement workflow on a workstation, burst VM, or cluster node with the Julia environment installed.",
+            "  Inspect the generated phase-only and amp-on-phase standard images before treating the result as complete.",
         ])
     else
         append!(lines, [

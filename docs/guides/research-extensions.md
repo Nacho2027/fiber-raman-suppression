@@ -36,14 +36,14 @@ lab_extensions/objectives/
 List built-in objectives and research extension contracts with:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
+./fiberlab objectives
+./fiberlab objectives --validate
 ```
 
 Start a new planning-only objective with:
 
 ```bash
-julia -t auto --project=. scripts/canonical/scaffold_objective.jl my_objective \
+./fiberlab scaffold objective my_objective \
   --description "What this objective measures and why."
 ```
 
@@ -75,9 +75,46 @@ function names. It also reports promotion blockers such as `planning_only`
 execution, unpromoted `lab_extension` backend, research maturity, and unmet
 validation requirements.
 
+If a config references a planning-only objective extension, the front layer
+recognizes it as a research extension and rejects execution with the promotion
+blockers. This is intentional. The error should say "not promoted for
+execution," not make the researcher guess whether they misspelled a closed menu
+choice.
+
 This does not make the objective executable automatically. That is intentional:
 passing metadata validation means the objective is findable and documented, not
 that its physics, gradients, artifacts, or acceptance checks are complete.
+
+## Promoted Experimental Example
+
+`temporal_width` is the first executable non-Raman objective in the front
+layer. It is built into the registry as an experimental single-mode, phase-only
+objective and is selected from config with:
+
+```toml
+[objective]
+kind = "temporal_width"
+log_cost = true
+```
+
+The smoke config is:
+
+```bash
+./fiberlab plan research_engine_temporal_width_smoke
+./fiberlab run research_engine_temporal_width_smoke
+```
+
+This example proves the path from "new objective" to "config-selected
+executable run" without editing the run driver. It optimizes a normalized
+temporal second moment and emits the standard artifact set with
+objective-aware labels, not Raman-specific objective labels.
+
+Current status: executable smoke, not lab-promoted science. The latest verified
+run improved the temporal-width objective, passed artifact validation, and had
+OK boundary/photon checks, but the `lab_ready --latest` promotion gate still
+blocks it on `not_converged` because the smoke stops at `max_iter`. That
+distinction is intentional: executable research smoke is not the same as a
+finished scientific claim.
 
 ## Promotion Checklist
 
@@ -108,14 +145,14 @@ clear.
 List built-in variables and planning-only variable contracts with:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --variables
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-variables
+./fiberlab variables
+./fiberlab variables --validate
 ```
 
 Start a new planning-only variable contract with:
 
 ```bash
-julia -t auto --project=. scripts/canonical/scaffold_variable.jl my_variable \
+./fiberlab scaffold variable my_variable \
   --description "What this control changes and why." \
   --units "physical units or normalization" \
   --bounds "bounds or projection behavior"
@@ -125,6 +162,38 @@ Variable contracts live under `lab_extensions/variables/`. They should define
 units, bounds/projection behavior, compatible objectives, parameterizations, and
 artifact semantics. A variable should not become executable just because it has
 a name in TOML; it needs implementation, tests, and output meaning first.
+
+The current single-mode non-standard example is:
+
+```text
+gain_tilt_demo
+```
+
+It represents a planning-only smooth spectral gain/attenuation tilt control.
+If a config tries to optimize it today, validation recognizes it as a research
+extension and blocks execution until projection behavior, throughput limits,
+gradient compatibility, artifacts, and hardware-safety checks are implemented.
+
+The promoted executable smoke version is the built-in experimental variable:
+
+```text
+gain_tilt
+```
+
+It is selected by `controls.variables = ["phase", "gain_tilt"]` and exercised
+by:
+
+```bash
+./fiberlab plan research_engine_gain_tilt_smoke
+./fiberlab run research_engine_gain_tilt_smoke
+```
+
+`gain_tilt` is intentionally narrow: one unconstrained optimizer scalar maps to
+a bounded smooth spectral transmission slope around unity. The run emits the
+standard image set plus `opt_gain_tilt_profile.png` and
+`opt_energy_metrics.json`. This proves the path from "new variable" to
+"config-selected executable smoke"; it is not a claim that gain-tilt control is
+scientifically optimal for Raman suppression.
 
 ## What This Means For Researchers
 

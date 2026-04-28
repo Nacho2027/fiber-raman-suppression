@@ -26,10 +26,13 @@ const OBJECTIVE_CONTRACTS = (
         maturity = "supported",
         supported_variables = (
             (:phase,),
+            (:phase, :gain_tilt),
             (:phase, :amplitude),
             (:phase, :energy),
             (:phase, :amplitude, :energy),
         ),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :raman_band_fraction),
+        artifact_hooks = (:spectrum_before_after, :raman_band_overlay, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -46,6 +49,22 @@ const OBJECTIVE_CONTRACTS = (
         description = "Maximum single-bin Raman-band fractional leakage with optional phase regularization.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :raman_peak_fraction),
+        artifact_hooks = (:spectrum_before_after, :raman_peak_marker, :convergence_trace),
+        allowed_regularizers = (
+            :gdd,
+            :boundary,
+        ),
+    ),
+    (
+        kind = :temporal_width,
+        regime = :single_mode,
+        backend = :raman_optimization,
+        description = "Non-Raman temporal second-moment pulse-width objective for phase-only pulse shaping.",
+        maturity = "experimental",
+        supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :temporal_width_fraction),
+        artifact_hooks = (:spectrum_before_after, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -58,6 +77,8 @@ const OBJECTIVE_CONTRACTS = (
         description = "Integrated Raman-band spectral power for long-fiber single-mode planning.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :raman_band_fraction),
+        artifact_hooks = (:spectrum_before_after, :raman_band_overlay, :longfiber_reach_diagnostic),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -70,6 +91,8 @@ const OBJECTIVE_CONTRACTS = (
         description = "Mode-summed multimode Raman leakage for shared spectral-phase planning.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :mode_summed_leakage),
+        artifact_hooks = (:mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -82,6 +105,8 @@ const OBJECTIVE_CONTRACTS = (
         description = "Fundamental-mode multimode Raman leakage diagnostic objective.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :fundamental_mode_leakage),
+        artifact_hooks = (:mode_resolved_spectra, :fundamental_mode_overlay, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -94,6 +119,8 @@ const OBJECTIVE_CONTRACTS = (
         description = "Worst-mode multimode Raman leakage diagnostic objective.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
+        metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :worst_mode_leakage),
+        artifact_hooks = (:mode_resolved_spectra, :worst_mode_table, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -114,6 +141,19 @@ function objective_contract(kind::Symbol, regime::Symbol)
         contract for contract in OBJECTIVE_CONTRACTS
         if contract.kind == kind && contract.regime == regime
     )
+    if isempty(matches)
+        extension_matches = Tuple(
+            contract for contract in registered_objective_extension_contracts(regime)
+            if contract.kind == kind
+        )
+        if !isempty(extension_matches)
+            row = validate_objective_extension_contract(only(extension_matches))
+            blockers = isempty(row.blockers) ? "none" : join(row.blockers, ",")
+            errors = isempty(row.errors) ? "none" : join(row.errors, ",")
+            throw(ArgumentError(
+                "objective `$(kind)` is a research extension for regime `$(regime)`, but it is not promoted for execution; blockers: $(blockers); errors: $(errors)"))
+        end
+    end
     isempty(matches) && throw(ArgumentError(
         "objective `$(kind)` is not registered for regime `$(regime)`; registered objectives: $(collect(registered_objective_kinds(regime)))"))
     return only(matches)
@@ -144,6 +184,12 @@ function _parse_extension_contract(path::AbstractString)
         gradient_name = String(get(parsed, "gradient", "")),
         validation = String(get(parsed, "validation", "")),
         supported_variables = variables,
+        metrics = haskey(parsed, "metrics") ?
+            Tuple(Symbol(String(item)) for item in parsed["metrics"]) :
+            Symbol[],
+        artifact_hooks = haskey(parsed, "artifact_hooks") ?
+            Tuple(Symbol(String(item)) for item in parsed["artifact_hooks"]) :
+            Symbol[],
         allowed_regularizers = Tuple(regularizers),
         config_path = abspath(path),
     )
@@ -351,6 +397,8 @@ function = "$(cost_name)"
 gradient = "$(gradient_name)"
 validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
 supported_variables = $(_toml_nested_variables(variable_tuples))
+metrics = ["objective_value"]
+artifact_hooks = ["objective_metric", "objective_diagnostic"]
 allowed_regularizers = $(_toml_string_array(regularizers))
 """
 
@@ -394,6 +442,8 @@ function render_objective_registry(; io::IO=stdout, regime::Union{Nothing,Symbol
             "  backend=", contract.backend,
             "  maturity=", contract.maturity)
         println(io, "    variables=", _objective_tuple_summary(contract.supported_variables))
+        println(io, "    metrics=", join(string.(contract.metrics), ", "))
+        println(io, "    artifacts=", join(string.(contract.artifact_hooks), ", "))
         println(io, "    regularizers=", join(string.(contract.allowed_regularizers), ", "))
         println(io, "    ", contract.description)
     end
@@ -411,6 +461,12 @@ function render_objective_registry(; io::IO=stdout, regime::Union{Nothing,Symbol
                 "  maturity=", contract.maturity,
                 "  execution=", contract.execution)
             println(io, "    variables=", _objective_tuple_summary(contract.supported_variables))
+            if !isempty(contract.metrics)
+                println(io, "    metrics=", join(string.(contract.metrics), ", "))
+            end
+            if !isempty(contract.artifact_hooks)
+                println(io, "    artifacts=", join(string.(contract.artifact_hooks), ", "))
+            end
             println(io, "    regularizers=", join(string.(contract.allowed_regularizers), ", "))
             if !isempty(contract.source)
                 println(io, "    source=", contract.source)

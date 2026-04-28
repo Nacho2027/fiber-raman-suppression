@@ -17,22 +17,28 @@ For the full lab-user workflow, see
 List available experiment configs:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --list
+./fiberlab configs
 ```
 
 Dry-run a config without launching optimization:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
+./fiberlab plan research_engine_poc
 ```
 
 The dry-run output shows the resolved execution mode and whether export is
-currently supported for that mode.
+currently supported for that mode. It also shows the promotion stage and
+promotion blockers. Treat those lines as the lab-facing status contract:
+
+- `planning`: inspectable config and compute plan only.
+- `smoke`: executable small-run path with artifact checks, still experimental.
+- `validated`: representative real-size checks completed on appropriate compute.
+- `lab_ready`: ready for another lab user to run and verify from docs/config.
 
 List objective/cost contracts available to configs:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
+./fiberlab objectives
 ```
 
 This lists both built-in executable objective contracts and research extension
@@ -42,13 +48,13 @@ discoverable planning surfaces until promoted with tests and a real backend.
 Validate research objective extension contracts:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
+./fiberlab objectives --validate
 ```
 
 Start a new planning-only objective contract without editing deep internals:
 
 ```bash
-julia -t auto --project=. scripts/canonical/scaffold_objective.jl my_objective \
+./fiberlab scaffold objective my_objective \
   --description "What this objective measures, including units and normalization."
 ```
 
@@ -60,20 +66,20 @@ physics, gradient strategy, artifact metrics, and tests have been promoted.
 List the regime/variable/objective/artifact capabilities in one place:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --capabilities
+./fiberlab capabilities
 ```
 
 List optimized variable/control contracts available to configs:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --variables
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-variables
+./fiberlab variables
+./fiberlab variables --validate
 ```
 
 Create a planning-only variable/control contract without making it executable:
 
 ```bash
-julia -t auto --project=. scripts/canonical/scaffold_variable.jl my_variable \
+./fiberlab scaffold variable my_variable \
   --description "What this control changes and why." \
   --units "physical units or normalization" \
   --bounds "bounds or projection behavior"
@@ -82,25 +88,25 @@ julia -t auto --project=. scripts/canonical/scaffold_variable.jl my_variable \
 Validate every approved experiment config without launching compute:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-all
+./fiberlab validate
 ```
 
 Run a validated config:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
+./fiberlab run research_engine_poc
 ```
 
 Inspect the latest completed run for a config:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --latest research_engine_poc
+./fiberlab latest research_engine_poc
 ```
 
 Print provider-neutral compute guidance without launching anything:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --compute-plan smf28_longfiber_phase_poc
+./fiberlab compute-plan smf28_longfiber_phase_poc
 ```
 
 After a run, the front layer validates the basic artifact contract before
@@ -120,22 +126,34 @@ step is obvious.
   validating the neutral CSV experimental handoff bundle.
 - `research_engine_peak_smoke.toml` is the tiny phase-only smoke surface for
   the experimental peak-bin Raman objective.
+- `research_engine_gain_tilt_smoke.toml` is the tiny phase plus gain-tilt
+  smoke surface for experimental non-standard variable execution.
 - `grin50_mmf_phase_sum_poc.toml` is the experimental GRIN-50 multimode
   planning surface. Use it for dry-run and compute planning, not local
   front-layer execution.
 - `smf28_longfiber_phase_poc.toml` is the experimental long-fiber planning
   surface. Use it for dry-run validation, not local execution.
 - `smf28_phase_amplitude_energy_poc.toml` is the experimental single-mode
-  phase/amplitude/energy surface.
+  direct-joint phase/amplitude/energy surface.
+- `smf28_amp_on_phase_refinement_poc.toml` is the experimental staged
+  multivar planning surface. It selects the `amp_on_phase` policy: optimize
+  phase first, then run bounded amplitude refinement on the fixed phase.
 
 Use `research_engine_poc.toml` for baseline lab runs. Use
 `research_engine_smoke.toml` for quick mechanical verification. Use
 `research_engine_export_smoke.toml` when checking the run-to-handoff path. Use
-`research_engine_peak_smoke.toml` only when testing objective dispatch. Use the
+`research_engine_peak_smoke.toml` only when testing objective dispatch. Use
+`research_engine_gain_tilt_smoke.toml` only when testing non-standard variable
+dispatch and variable-specific artifacts. Use the
 MMF and long-fiber configs only to inspect the front-layer plan before staging
-their dedicated heavy workflows. Use the
-experimental multivariable config when deliberately testing multivariable
-controls.
+their dedicated heavy workflows. Use direct-joint multivariable configs only
+when deliberately testing naive joint controls. Use `amp_on_phase` configs for
+the staged multivar workflow that currently has the best evidence.
+
+As of the current front layer, the supported phase-only export path reports
+`lab_ready`, direct experimental multivariable smokes report `smoke`, and MMF,
+long-fiber, and staged multivar planning configs report `planning` with explicit
+promotion blockers.
 
 ## Templates
 
@@ -151,16 +169,16 @@ given a real `id` / `output_tag`.
 After copying a template, run:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run <new_config_id>
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-all
+./fiberlab plan <new_config_id>
+./fiberlab validate
 ```
 
 For parameter sweeps over a base experiment, use
 `configs/experiment_sweeps/` and:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run smf28_power_micro_sweep
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
+./fiberlab sweep plan smf28_power_micro_sweep
+./fiberlab sweep latest smf28_power_micro_sweep
 ```
 
 ## Knobs Researchers Can Change First
@@ -171,9 +189,12 @@ julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf
 - `problem.Nt`
 - `problem.time_window`
 - `controls.variables`
+- `controls.policy`, within the validated support boundary
 - `objective.kind`, within the registered objective allowlist
 - `objective.regularizer` weights
 - `solver.max_iter`
+- `solver.f_abstol`
+- `solver.g_abstol`
 - `solver.validate_gradient`
 - `artifacts` bundle flags, within the validated support boundary
 
@@ -182,19 +203,26 @@ If a combination is not supported, validation should fail before compute.
 ## Current Boundaries
 
 - Supported execution is `single_mode` with `controls.variables = ["phase"]`.
-- Experimental execution allows `["phase", "amplitude"]`, `["phase", "energy"]`,
-  and `["phase", "amplitude", "energy"]`.
+- Experimental direct-joint execution allows `["phase", "amplitude"]`,
+  `["phase", "energy"]`, and `["phase", "amplitude", "energy"]`.
+- Experimental staged multivar planning uses
+  `controls.policy = "amp_on_phase"` with `controls.variables = ["phase",
+  "amplitude"]`; run it through
+  `scripts/canonical/refine_amp_on_phase.jl` from the compute plan.
 - Experimental `long_fiber` configs are validation/dry-run only on local
-  machines and must use `verification.mode = "burst_required"`.
+  machines and must use `verification.mode = "burst_required"`. Their
+  `controls.policy` selects the dedicated long-fiber workflow mode (`fresh`,
+  `resume`, or `resume_demo`) used in the generated `LF100_*` command.
 - Experimental `multimode` configs are validation/dry-run only on local
   machines and must use `verification.mode = "burst_required"`. The first
   planning surface is GRIN-50, shared spectral phase, and mode-summed Raman
   leakage.
 - Compute planning is provider-neutral. Rivera Lab burst commands are optional
   examples, not required infrastructure for outside users.
-- Implemented single-mode objectives are `raman_band` and experimental
-  `raman_peak`; implemented multimode planning objectives are `mmf_sum`,
-  `mmf_fundamental`, and `mmf_worst_mode`.
+- Implemented single-mode objectives are `raman_band`, experimental
+  `raman_peak`, and experimental non-Raman `temporal_width`; implemented
+  multimode planning objectives are `mmf_sum`, `mmf_fundamental`, and
+  `mmf_worst_mode`.
 - The only implemented solver in this front layer is `lbfgs`.
 - Objective names and allowed regularizers are code-defined in
   `scripts/lib/objective_registry.jl`; configs select from that registry.

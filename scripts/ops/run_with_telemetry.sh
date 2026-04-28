@@ -88,7 +88,7 @@ julia_threads="${JULIA_NUM_THREADS:-${JULIA_NUM_THREADS_AUTO:-}}"
 echo "timestamp_utc,elapsed_s,processes,cpu_percent_sum,mem_percent_sum,rss_kb_sum,vsz_kb_sum" > "$samples_csv"
 
 time_cmd=()
-if [[ -x /usr/bin/time ]]; then
+if [[ -x /usr/bin/time ]] && /usr/bin/time -v -o /dev/null true >/dev/null 2>&1; then
     time_cmd=(/usr/bin/time -v -o "$time_verbose")
 else
     : > "$time_verbose"
@@ -97,9 +97,17 @@ fi
 run_pid=""
 set +e
 if command -v setsid >/dev/null 2>&1; then
-    setsid --wait "${time_cmd[@]}" "$@" &
+    if [[ "${#time_cmd[@]}" -gt 0 ]]; then
+        setsid --wait "${time_cmd[@]}" "$@" &
+    else
+        setsid --wait "$@" &
+    fi
 else
-    "${time_cmd[@]}" "$@" &
+    if [[ "${#time_cmd[@]}" -gt 0 ]]; then
+        "${time_cmd[@]}" "$@" &
+    else
+        "$@" &
+    fi
 fi
 run_pid=$!
 set -e

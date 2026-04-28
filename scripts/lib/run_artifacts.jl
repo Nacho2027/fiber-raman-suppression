@@ -5,6 +5,7 @@ Helpers for resolving saved run artifacts and standard image bundles.
 if !(@isdefined _RUN_ARTIFACTS_JL_LOADED)
 const _RUN_ARTIFACTS_JL_LOADED = true
 
+using JLD2
 using MultiModeNoise
 
 const REQUIRED_STANDARD_IMAGE_SUFFIXES = (
@@ -64,6 +65,14 @@ function standard_image_set_status(path::AbstractString)
 end
 
 function _artifact_loaded_field(loaded, field::Symbol, default)
+    if loaded isa AbstractDict
+        if haskey(loaded, String(field))
+            return loaded[String(field)]
+        elseif haskey(loaded, field)
+            return loaded[field]
+        end
+        return default
+    end
     return hasproperty(loaded, field) ? getproperty(loaded, field) : default
 end
 
@@ -86,8 +95,23 @@ set used by maintained inspection and reporting workflows.
 """
 function canonical_run_summary(path::AbstractString)
     artifact = resolve_run_artifact_path(path)
-    loaded = MultiModeNoise.load_run(artifact)
+    loaded = try
+        MultiModeNoise.load_run(artifact)
+    catch err
+        if isfile(string(_artifact_result_prefix(artifact), "_slm.json"))
+            JLD2.load(artifact)
+        else
+            rethrow(err)
+        end
+    end
     return canonical_run_summary(loaded; artifact=artifact)
+end
+
+function _artifact_result_prefix(path::AbstractString)
+    text = String(path)
+    suffix = "_result.jld2"
+    endswith(text, suffix) || return first(splitext(text))
+    return text[1:(lastindex(text) - lastindex(suffix))]
 end
 
 function canonical_run_summary(loaded; artifact::Union{Nothing,AbstractString}=nothing)

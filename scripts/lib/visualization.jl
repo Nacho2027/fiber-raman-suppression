@@ -356,7 +356,8 @@ Phase is masked to -40 dB BEFORE unwrapping (BUG-03 fix). All spectral
 quantities are NaN-masked for display where power < -30 dB relative to peak.
 Spectral xlim auto-zooms to signal-bearing region (AXIS-02).
 """
-function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=nothing)
+function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=nothing,
+    objective_kind::Symbol=:raman_band)
     f0 = sim["f0"]
     ts_ps = sim["ts"] .* 1e12
     dω = _spectral_omega_step(sim)
@@ -393,7 +394,8 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=n
     ut_shaped = ifft(uω0_base .* cis.(φ), 1)
     Δf_inst = compute_instantaneous_frequency(ut_shaped[:, 1], sim)
 
-    λ_raman_onset = C_NM_THZ / (f0 - 13.2)  # 13.2 THz: silica Raman Stokes shift
+    show_raman_marker = objective_kind in (:raman_band, :raman_peak)
+    λ_raman_onset = show_raman_marker ? C_NM_THZ / (f0 - 13.2) : NaN  # 13.2 THz: silica Raman Stokes shift
 
     # Apply -30 dB NaN mask for DISPLAY only (after all derivative computations)
     φ_wrapped_display = _apply_dB_mask(φ_wrapped, spec_pos)
@@ -410,12 +412,14 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=n
 
     # Panel (1,1): Wrapped phase with pi-ticks (PHASE-04)
     axs[1, 1].plot(λ_nm, φ_wrapped_display, color=COLOR_REF, linewidth=0.8)
-    axs[1, 1].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+    if show_raman_marker
+        axs[1, 1].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+    end
     axs[1, 1].set_xlabel("Wavelength [nm]")
     axs[1, 1].set_title("Wrapped phase φ(ω)")
     set_phase_yticks!(axs[1, 1])
     axs[1, 1].set_xlim(spec_xlim...)
-    axs[1, 1].legend(fontsize=8)
+    show_raman_marker && axs[1, 1].legend(fontsize=8)
 
     # Remaining spectral panels: (row, col, data, ylabel, title)
     spectral_panels = [
@@ -425,12 +429,14 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=n
     ]
     for (r, c, data, ylabel, title) in spectral_panels
         axs[r, c].plot(λ_nm, data, color=COLOR_REF, linewidth=0.8)
-        axs[r, c].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+        if show_raman_marker
+            axs[r, c].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.6, label="Raman onset")
+        end
         axs[r, c].set_xlabel("Wavelength [nm]")
         axs[r, c].set_ylabel(ylabel)
         axs[r, c].set_title(title)
         axs[r, c].set_xlim(spec_xlim...)
-        axs[r, c].legend(fontsize=8)
+        show_raman_marker && axs[r, c].legend(fontsize=8)
     end
 
     # --- PHASE-03: GDD percentile clipping ---
@@ -895,7 +901,8 @@ Row 3: Phase [0, 2π] wrapped with π-ticks
 """
 function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
     band_mask, Δf, raman_threshold;
-    figsize=(12, 12), save_path=nothing, metadata=nothing)
+    figsize=(12, 12), save_path=nothing, metadata=nothing,
+    objective_kind::Symbol=:raman_band)
 
     ts_ps = sim["ts"] .* 1e12
     Nt = sim["Nt"]
@@ -907,8 +914,9 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
     λ_nm = C_NM_THZ ./ f_shifted
     λ0_nm = C_NM_THZ / f0
 
-    # Raman onset wavelength
-    λ_raman_onset = C_NM_THZ / (f0 + raman_threshold)
+    show_raman_marker = objective_kind in (:raman_band, :raman_peak)
+    λ_raman_onset = show_raman_marker ? C_NM_THZ / (f0 + raman_threshold) : NaN
+    objective_label = objective_kind == :temporal_width ? "temporal_width" : "J"
 
     # ── Pass 1: simulate both columns and collect results ──
     # Pre-compute all fields so shared quantities can be derived globally.
@@ -984,9 +992,10 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[1, col].set_xlim(spec_xlim...)
         axs[1, col].set_ylim(-60, 3)
 
-        # Raman onset line
-        axs[1, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--",
-            alpha=0.7, linewidth=1.0, label="Raman onset")
+        if show_raman_marker
+            axs[1, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--",
+                alpha=0.7, linewidth=1.0, label="Raman onset")
+        end
 
         axs[1, col].set_xlabel("Wavelength [nm]")
         axs[1, col].set_ylabel("Power [dB]")
@@ -994,9 +1003,13 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         axs[1, col].legend(fontsize=8, loc="upper right")
         axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
-        J_val = sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
+        J_val = if objective_kind == :temporal_width
+            temporal_width_cost(r.uωf, sim)[1]
+        else
+            sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
+        end
         push!(J_values, J_val)
-        axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
+        axs[1, col].annotate(@sprintf("%s = %.4f (%.1f dB)", objective_label, J_val, MultiModeNoise.lin_to_dB(J_val)),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
@@ -1049,7 +1062,9 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         # AXIS-02: auto-zoom spectral xlim (replaces fixed λ0 ± offset)
         axs[3, col].set_xlim(spec_xlim...)
         axs[3, col].set_title("Group delay τ(ω)")
-        axs[3, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.8)
+        if show_raman_marker
+            axs[3, col].axvline(x=λ_raman_onset, color=COLOR_RAMAN, ls="--", alpha=0.5, linewidth=0.8)
+        end
         axs[3, col].ticklabel_format(useOffset=false, style="plain", axis="x")
     end
 
@@ -1059,7 +1074,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         J_after_dB = MultiModeNoise.lin_to_dB(J_values[2])
         ΔJ_dB = J_after_dB - J_before_dB
         axs[1, 2].annotate(
-            @sprintf("J_before = %.1f dB\nJ_after  = %.1f dB\nDelta-J  = %.1f dB", J_before_dB, J_after_dB, -ΔJ_dB),
+            @sprintf("%s_before = %.1f dB\n%s_after  = %.1f dB\nDelta      = %.1f dB",
+                objective_label, J_before_dB, objective_label, J_after_dB, ΔJ_dB),
             xy=(0.05, 0.85), xycoords="axes fraction", va="top", fontsize=9,
             color=ΔJ_dB < 0 ? "darkgreen" : "darkred",
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))

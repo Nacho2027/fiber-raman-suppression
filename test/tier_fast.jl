@@ -33,6 +33,13 @@ include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
 include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_sweep_sidecars.jl"))
+include(joinpath(@__DIR__, "core", "test_research_engine_acceptance.jl"))
+include(joinpath(@__DIR__, "core", "test_experiment_config_adversarial.jl"))
+include(joinpath(@__DIR__, "core", "test_experiment_sweep_adversarial.jl"))
+include(joinpath(@__DIR__, "core", "test_research_extension_integration.jl"))
+include(joinpath(@__DIR__, "core", "test_non_raman_objective_integration.jl"))
+include(joinpath(@__DIR__, "core", "test_gain_tilt_variable_integration.jl"))
+include(joinpath(@__DIR__, "core", "test_regime_promotion_status.jl"))
 
 @testset "Phase 16 — fast tier" begin
 

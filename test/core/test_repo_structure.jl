@@ -45,6 +45,23 @@ using Test
     end
     @test isfile(joinpath(test_root, "README.md"))
 
+    closure_report = joinpath(project_root, "docs", "reports",
+        "research-closure-2026-04-28", "REPORT.md")
+    lab_readiness_guide = joinpath(project_root, "docs", "guides", "lab-readiness.md")
+    supported_workflows_guide = joinpath(project_root, "docs", "guides", "supported-workflows.md")
+    for doc_path in (closure_report, lab_readiness_guide, supported_workflows_guide)
+        @test isfile(doc_path)
+    end
+    closure_text = read(closure_report, String)
+    @test occursin("Lab Rollout Decision", closure_text)
+    @test occursin("Verification Record", closure_text)
+    @test occursin("make lab-ready", closure_text)
+    @test occursin("make golden-smoke", closure_text)
+    @test occursin("Direct joint multivariable optimization is generally better", closure_text)
+    lab_readiness_text = read(lab_readiness_guide, String)
+    @test occursin("Demo-Week Checklist", lab_readiness_text)
+    @test occursin("Current Research Closure State", lab_readiness_text)
+
     include_smoke_scripts = [
         joinpath(scripts_root, "workflows", "run_comparison.jl"),
         joinpath(scripts_root, "canonical", "generate_reports.jl"),

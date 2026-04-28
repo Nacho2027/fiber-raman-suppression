@@ -23,6 +23,8 @@ include(joinpath(@__DIR__, "experiment_spec.jl"))
 include(joinpath(@__DIR__, "raman_optimization.jl"))
 include(joinpath(@__DIR__, "run_artifacts.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
+include(joinpath(@__DIR__, "multivar_artifacts.jl"))
+include(joinpath(@__DIR__, "..", "research", "multivar", "multivar_optimization.jl"))
 include(joinpath(@__DIR__, "..", "workflows", "export_run.jl"))
 
 function experiment_output_dir(spec;
@@ -120,6 +122,14 @@ function validate_experiment_artifacts(run_bundle; throw_on_error::Bool=true)
         append!(missing, [string(standard_images.dir, "/", suffix) for suffix in standard_images.missing])
     end
 
+    extra_artifacts = extra_artifact_hook_file_status(spec, save_prefix)
+    for path in extra_artifacts.checked
+        _push_unique!(checked, path)
+    end
+    for path in extra_artifacts.missing
+        _push_unique!(missing, path)
+    end
+
     report = (
         complete = isempty(missing),
         checked = checked,
@@ -129,6 +139,7 @@ function validate_experiment_artifacts(run_bundle; throw_on_error::Bool=true)
         config_copy = config_copy,
         trust_report_path = trust_report_path,
         standard_images = standard_images,
+        extra_artifacts = extra_artifacts,
     )
 
     if !report.complete && throw_on_error
@@ -254,6 +265,9 @@ function render_experiment_completion_summary(run_bundle; io::IO=stdout)
         report = run_bundle.artifact_validation
         println(io, "Artifact validation: ", _experiment_status_word(report.complete))
         println(io, "Standard images: ", _experiment_status_word(report.standard_images.complete))
+        if !isempty(report.extra_artifacts.hooks)
+            println(io, "Variable artifacts: ", _experiment_status_word(report.extra_artifacts.complete))
+        end
         if !report.complete
             println(io, "Missing artifacts: ", join(report.missing, ", "))
         end
@@ -296,6 +310,8 @@ function supported_experiment_run_kwargs(spec)
         λ_boundary = Float64(λ_boundary),
         log_cost = spec.objective.log_cost,
         solver_reltol = spec.solver.reltol,
+        solver_f_abstol = spec.solver.f_abstol,
+        solver_g_abstol = spec.solver.g_abstol,
     )
 
     if mode == :phase_only
@@ -352,6 +368,9 @@ function run_supported_experiment(spec;
     elseif mode == :multimode_phase
         throw(ArgumentError(
             "multimode front-layer configs are validation/dry-run only for now; stage and run MMF jobs through the dedicated multimode baseline workflow"))
+    elseif mode == :amp_on_phase
+        throw(ArgumentError(
+            "amp_on_phase front-layer configs are validation/dry-run only for now; run the dedicated staged refinement workflow from the compute plan"))
     end
 
     save_prefix = experiment_save_prefix(spec; timestamp=timestamp)
@@ -382,12 +401,12 @@ function run_supported_experiment(spec;
         )))
     end
 
-    include(joinpath(@__DIR__, "..", "research", "multivar", "multivar_optimization.jl"))
     mv_run = run_multivar_optimization(;
         kwargs...,
         save_prefix=save_prefix,
     )
-    _save_multivar_standard_images(spec, mv_run)
+    mv_bundle = (; mv_run..., save_prefix=save_prefix, output_dir=output_dir)
+    _save_multivar_standard_images(spec, mv_bundle)
     Δf = fftshift(FFTW.fftfreq(mv_run.sim["Nt"], 1 / mv_run.sim["Δt"]))
 
     return _attach_artifact_validation((
@@ -397,6 +416,7 @@ function run_supported_experiment(spec;
         config_copy = config_copy,
         artifact_path = mv_run.saved.jld2,
         sidecar_path = mv_run.saved.json,
+        variable_artifacts = write_multivar_variable_artifacts(spec, mv_bundle),
         outcome = mv_run.outcome,
         meta = mv_run.meta,
         saved = mv_run.saved,

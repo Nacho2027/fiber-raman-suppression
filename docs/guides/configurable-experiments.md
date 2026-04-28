@@ -29,10 +29,14 @@ solver behavior, and artifact validation.
 For new research objectives or optimized variables rather than safe built-ins, see
 [research-extensions.md](./research-extensions.md).
 
+Use `./fiberlab` for normal lab operation. It is a checkout-local Python CLI
+that calls the maintained Julia scripts underneath, so it avoids forcing users
+to remember `julia -t auto --project=...` while preserving the same backend.
+
 ## 1. List Available Experiments
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --list
+./fiberlab configs
 ```
 
 Start with these configs:
@@ -43,6 +47,8 @@ Start with these configs:
   handoff export enabled.
 - `research_engine_peak_smoke`: experimental phase-only run for objective
   dispatch checks.
+- `research_engine_gain_tilt_smoke`: experimental phase plus one-parameter
+  gain-tilt smoke run for non-standard variable dispatch and artifacts.
 - `grin50_mmf_phase_sum_poc`: experimental GRIN-50 multimode planning surface;
   dry-run/validation only on local machines.
 - `smf28_longfiber_phase_poc`: experimental long-fiber planning surface;
@@ -52,32 +58,69 @@ Start with these configs:
 To see the whole front-layer support boundary in one command:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --capabilities
+./fiberlab capabilities
+```
+
+Every plan also reports a promotion stage:
+
+- `planning`: config validates and can produce a compute plan, but the front
+  layer intentionally blocks execution.
+- `smoke`: the path is executable for a small local run and has artifact checks,
+  but it is still experimental science.
+- `validated`: reserved for a promoted research surface after representative
+  real-size checks pass on appropriate compute.
+- `lab_ready`: supported path with local gates, artifacts, docs, and handoff
+  expectations strong enough for another lab user to run.
+
+Use the `Promotion blockers` line in `./fiberlab plan <id>` or
+`./fiberlab compute-plan <id>` as the authoritative explanation of why a config
+is not yet lab-ready. For example, MMF and long-fiber currently report planning
+status because local front-layer execution is blocked, heavy compute is required,
+and some regime-specific artifact hooks are still planned.
+
+To inspect how the optimizer vector and output plots will be assembled:
+
+```bash
+./fiberlab layout research_engine_poc
+./fiberlab artifacts research_engine_poc
 ```
 
 To check every approved experiment config without launching optimization:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-all
-julia -t auto --project=. scripts/canonical/lab_ready.jl --config research_engine_poc
+./fiberlab validate
+./fiberlab ready config research_engine_poc
 ```
+
+Before a demo or handoff, run the simulation-free research-engine acceptance
+harness:
+
+```bash
+make acceptance
+```
+
+This checks the front-layer UX as one instrument: config validation, dry-run
+surfaces, control/artifact plans, a synthetic completed phase/export run,
+artifact validation, result indexing, lab-ready gates, Python wrappers, and
+black-box gating for experimental MMF, multivariable, and long-fiber surfaces.
+It does not replace a real smoke run or visual inspection of generated plots.
 
 For parameter-space questions, use the front-layer sweep command. It expands a
 base experiment across a list of values, validates every generated case, and
 prints the plan without launching optimization:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --list
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run smf28_power_micro_sweep
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --validate-all
-julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
+./fiberlab sweep list
+./fiberlab sweep plan smf28_power_micro_sweep
+./fiberlab sweep validate
+./fiberlab sweep latest smf28_power_micro_sweep
 ```
 
 ## 2. Inspect Objective Contracts
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --objectives
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-objectives
+./fiberlab objectives
+./fiberlab objectives --validate
 ```
 
 Current single-mode objectives are Raman-focused because that is the first
@@ -112,8 +155,8 @@ validation work.
 ## 3. Inspect Variable Contracts
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --variables
-julia -t auto --project=. scripts/canonical/run_experiment.jl --validate-variables
+./fiberlab variables
+./fiberlab variables --validate
 ```
 
 Current executable variable support is intentionally narrow:
@@ -121,6 +164,8 @@ Current executable variable support is intentionally narrow:
 - `phase`: supported single-mode spectral phase control.
 - `amplitude`: experimental single-mode multivariable control.
 - `energy`: experimental single-mode multivariable control.
+- `gain_tilt`: experimental one-parameter bounded spectral transmission slope
+  coupled to phase; smoke-tested, not lab-promoted science.
 - `phase` for `long_fiber` and `multimode`: planning/dry-run surfaces until
   those regimes are promoted.
 
@@ -132,7 +177,7 @@ They are not executable until promoted with implementation and tests.
 ## 4. Dry-Run Before Compute
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
+./fiberlab plan research_engine_poc
 ```
 
 The dry-run should answer:
@@ -150,7 +195,7 @@ If validation fails here, fix the config before launching compute.
 For heavier configs, print a provider-neutral compute plan:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --compute-plan smf28_longfiber_phase_poc
+./fiberlab compute-plan smf28_longfiber_phase_poc
 ```
 
 This does not launch anything. It explains the portable path first: use any
@@ -211,7 +256,7 @@ Keep these constraints in mind:
 ## 6. Run
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
+./fiberlab run research_engine_poc
 ```
 
 For quick mechanical checks, use a smoke config:
@@ -254,6 +299,7 @@ The command prints a completion summary with:
 - result artifact path
 - artifact-validation status
 - standard-image status
+- variable-artifact status when the selected controls request extra outputs
 - export-handoff status when export was requested
 
 ## 7. Inspect The Saved Run
@@ -267,8 +313,8 @@ julia --project=. scripts/canonical/inspect_run.jl results/raman/<run_id>/
 Or inspect the latest completed run for a config:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --latest research_engine_poc
-julia -t auto --project=. scripts/canonical/lab_ready.jl --latest research_engine_poc
+./fiberlab latest research_engine_poc
+./fiberlab ready latest research_engine_poc
 ```
 
 Inspection reports:
@@ -308,8 +354,11 @@ julia -t auto --project=. scripts/canonical/index_results.jl --compare-sweeps --
 The index is read-only. It reports discovered run artifacts and sweep summaries
 with metadata from `run_config.toml` and `opt_result.json` when available:
 config id, regime, objective, variables, solver, timestamp, trust report path,
-run config path, headline metrics, and standard-image completeness. Use it as
-a meeting/re-entry map, then inspect the underlying run folder before making
+run config path, headline metrics, standard-image completeness, and
+variable-artifact completeness. For multivariable runs, this lets a lab user
+see whether the amplitude mask, energy metrics, and pulse metrics promised by
+the artifact plan are present without opening the folder manually. Use it as a
+meeting/re-entry map, then inspect the underlying run folder before making
 scientific claims. CSV output is intended for notebook, pandas, spreadsheet,
 and meeting-table workflows. `--compare` ranks runs by mechanical lab readiness
 and then objective value; it is a triage view, not a scientific acceptance
@@ -329,8 +378,12 @@ julia -t auto --project=. scripts/canonical/lab_ready.jl --run results/raman/<ru
 ```
 
 The gate checks the result artifact, JSON sidecar, copied config, trust report,
-standard image set, convergence flag, and objective metric. With
-`--require-export`, it also requires a complete `export_handoff/` bundle.
+standard image set, variable-specific artifacts requested by the artifact plan,
+convergence flag, and objective metric. Trust reports are required only for
+run modes whose artifact plan includes a trust-report hook; experimental
+phase/amplitude/energy runs instead require their amplitude, energy, and pulse
+metric artifacts. With `--require-export`, it also requires a complete
+`export_handoff/` bundle.
 
 ## 8. Check Outputs
 
@@ -344,6 +397,16 @@ A complete supported phase-only run should contain:
 - `opt_evolution.png`
 - `opt_phase_diagnostic.png`
 - `opt_evolution_unshaped.png`
+
+A complete experimental phase/amplitude/energy run should also contain the
+variable-specific artifacts requested by its artifact plan:
+
+- `opt_amplitude_mask.png`
+- `opt_energy_metrics.json`
+- `opt_pulse_metrics.json`
+
+These files are now part of front-layer artifact validation. If one is missing,
+the run is mechanically incomplete even if the main JLD2 result exists.
 
 If neutral handoff export was enabled, it should also contain:
 
@@ -365,6 +428,7 @@ Before using a run as a lab reference:
 - `inspect_run.jl` reports the standard image set complete.
 - The trust report passes the relevant checks.
 - The four standard images have been visually inspected.
+- Any variable-specific artifacts requested by the artifact plan are complete.
 - The config copy matches the intended experiment.
 - Any neutral handoff bundle is complete and generated from the intended run.
 - For a real baseline, the optimizer status and final objective are scientifically

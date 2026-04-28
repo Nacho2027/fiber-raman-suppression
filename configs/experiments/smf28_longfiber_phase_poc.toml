@@ -23,6 +23,7 @@ raman_threshold = -5.0
 variables = ["phase"]
 parameterization = "full_grid"
 initialization = "zero"
+policy = "fresh"
 
 [objective]
 kind = "raman_band"

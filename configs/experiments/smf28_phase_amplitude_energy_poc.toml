@@ -23,6 +23,7 @@ raman_threshold = -5.0
 variables = ["phase", "amplitude", "energy"]
 parameterization = "full_grid"
 initialization = "zero"
+policy = "direct"
 
 [objective]
 kind = "raman_band"

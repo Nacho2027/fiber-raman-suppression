@@ -61,7 +61,7 @@ verbatim so existing analysis scripts keep working. Common fields include:
   "payload_file": "smf28_L2.0m_P0.2W_20260417T153000.jld2",
   "run_id": "smf28_L2.0m_P0.2W_20260417T153000",
   "git_sha": "aa2e9b3",
-  "julia_version": "1.12.4",
+  "julia_version": "1.12.6",
   "timestamp_utc": "2026-04-17T15:30:00Z",
   "fiber_preset": "SMF28",
   "L_m": 2.0,
@@ -87,7 +87,7 @@ verbatim so existing analysis scripts keep working. Common fields include:
 | `payload_file` | string | Relative filename of the sibling `.jld2`. |
 | `run_id` | string | Unique identifier, typically `<preset>_L<x>m_P<y>W_<ts>`. |
 | `git_sha` | string | Short commit hash at run time. |
-| `julia_version` | string | `VERSION` at run time (e.g., `"1.12.4"`). |
+| `julia_version` | string | `VERSION` at run time (e.g., `"1.12.6"`). |
 | `timestamp_utc` | string | ISO 8601 UTC timestamp. |
 | `fiber_preset` | string | One of `"SMF28"`, `"HNLF_normal"`, `"HNLF_anomalous"`, … |
 | `L_m` | number | Fiber length in meters. |

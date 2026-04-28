@@ -2,17 +2,19 @@
 
 [← docs index](../README.md) · [project README](../../README.md)
 
-Install Julia and the project's dependencies so you can run `make test` and
-`make optimize` from a fresh clone.
+Install Julia, the pinned Julia package environment, and the optional
+Python/Jupyter wrapper so you can run `make doctor` and `make optimize` from a
+fresh clone.
 
 ## Requirements
 
 | Tool | Version | Why |
 |------|---------|-----|
-| Julia | ≥ 1.9.3 (recommended 1.12.x, Manifest pinned to 1.12.4) | Compiler + package manager. |
-| Python | 3.x with Matplotlib | PyPlot.jl calls matplotlib via PyCall. Auto-installed by Conda.jl on first run if you don't pre-install. |
+| Julia | 1.12.6 pinned by `.julia-version` and `Manifest.toml` | Compiler + package manager. |
+| Python | 3.10+ (`.python-version` records 3.11) | Local `.venv` for the notebook wrapper. PyPlot.jl may also bootstrap its own Python via Conda.jl. |
 | Git | any recent version | Clone + pull updates. |
 | `make` | GNU make ≥ 3.81 | Runs the convenience targets (`make install`, `make test`, …). |
+| Docker | optional | Runs the reference Linux/headless environment from `Dockerfile`. |
 
 No GPU required. Sweeps benefit from multicore but are not GPU-accelerated.
 
@@ -21,12 +23,16 @@ No GPU required. Sweeps benefit from multicore but are not GPU-accelerated.
 ```bash
 git clone <repo-url>
 cd fiber-raman-suppression
-make install     # runs `julia --project -e 'using Pkg; Pkg.instantiate()'`
-make test        # fast tier (≤30 s) — should exit 0
+make install     # Julia instantiate + local .venv with fiber-research-engine
+make doctor      # tool check + fast Julia tests + Python wrapper tests
 ```
 
 If `make install` times out or errors, read the [Troubleshooting](#troubleshooting)
 section below.
+
+For Julia-only work, use `make install-julia` and `make test`. For notebooks or
+Python orchestration, keep `make install-python` in the setup path so imports
+work without `PYTHONPATH` hacks.
 
 ## Environment-specific notes
 
@@ -37,6 +43,8 @@ section below.
 - On first run, Conda.jl bootstraps a local Python environment with
   Matplotlib. The first `julia --project ...` invocation will be slow (~2 min)
   while it downloads binaries.
+- The repo's Python helper is installed into `.venv` by `make install-python`;
+  use `.venv/bin/python` or activate `.venv` for notebook-side imports.
 - `ENV["MPLBACKEND"] = "Agg"` is set at the top of every entry-point script —
   if you run Julia interactively, set it yourself before `using PyPlot`.
 
@@ -44,8 +52,12 @@ section below.
 
 - Install Julia via `juliaup` or the official tarball. Distro packages are
   usually behind.
-- Make sure `gcc`, `libstdc++`, and `fontconfig` are present (needed by
-  Matplotlib).
+- Make sure `gcc`, `g++`, `libstdc++`, `fontconfig`, `python3-venv`, and
+  `python3-pip` are present.
+- On Debian/Ubuntu, the usual prerequisite install is:
+  ```bash
+  sudo apt install git make gcc g++ fontconfig python3 python3-venv python3-pip
+  ```
 - FFTW_jll / MKL_jll binaries are downloaded automatically; don't install
   system `libfftw3` separately.
 
@@ -68,6 +80,18 @@ belong. See the burst-VM helper commands (`burst-start`, `burst-ssh`,
 `burst-stop`) documented in the top-level `CLAUDE.md` and in
 [quickstart-sweep.md](./quickstart-sweep.md).
 
+## Container Option
+
+Use the container when you want a clean Linux/headless reference environment
+instead of depending on the host's Python, matplotlib, or system libraries:
+
+```bash
+make docker-build
+make docker-test
+```
+
+See [container.md](./container.md) for the full workflow.
+
 ## Determinism note
 
 The project uses `scripts/lib/determinism.jl` to pin FFTW planning to `ESTIMATE`
@@ -87,6 +111,27 @@ FFT-touching code runs.
   julia --project -e 'ENV["PYTHON"]=""; using Pkg; Pkg.build("PyCall")'
   ```
   forces a rebuild using Conda.jl's own Python.
+
+### Python import errors
+
+Run:
+
+```bash
+make install-python
+make test-python
+```
+
+The Python package is installed from `pyproject.toml` into `.venv`. You should
+not need to set `PYTHONPATH=python` after installation.
+
+### `make install-python` reports missing venv support
+
+Install your platform's Python venv package and retry:
+
+```bash
+sudo apt install python3-venv python3-pip
+make install-python
+```
 
 ### `MPLBACKEND` / matplotlib display errors
 

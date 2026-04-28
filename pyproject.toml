@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fiber-research-engine"
+version = "0.1.0"
+description = "Notebook and CLI helpers for configurable fiber-optic optimization workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Rivera Lab" },
+]
+
+[project.scripts]
+fiberlab = "fiber_research_engine.app:main"
+
+[tool.setuptools.package-dir]
+"" = "python"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["fiber_research_engine*"]
+namespaces = false

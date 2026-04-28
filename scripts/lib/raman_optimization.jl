@@ -80,9 +80,15 @@ function raman_cost_surface_spec(;
     λ_gdd::Real=0.0,
     λ_boundary::Real=0.0,
     objective_kind::Symbol=:raman_band,
-    objective_label::AbstractString="single-mode Raman spectral phase optimization")
+    objective_label::AbstractString=_single_mode_objective_label(objective_kind))
 
-    physics_label = objective_kind == :raman_peak ? "physics_peak" : "physics"
+    physics_label = if objective_kind == :raman_peak
+        "physics_peak"
+    elseif objective_kind == :temporal_width
+        "temporal_width"
+    else
+        "physics"
+    end
     return build_objective_surface_spec(;
         objective_label = objective_label,
         log_cost = log_cost,
@@ -136,8 +142,10 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
         J, λωL = spectral_band_cost(uωf, band_mask)
     elseif objective_kind == :raman_peak
         J, λωL = spectral_peak_band_cost(uωf, band_mask)
+    elseif objective_kind == :temporal_width
+        J, λωL = temporal_width_cost(uωf, sim)
     else
-        throw(ArgumentError("unknown Raman objective kind `$(objective_kind)`"))
+        throw(ArgumentError("unknown single-mode phase objective kind `$(objective_kind)`"))
     end
 
     # Adjoint solve: propagate λ backward from L to 0
@@ -178,7 +186,8 @@ end
 
 function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     φ0=nothing, max_iter=50, λ_gdd=0.0, λ_boundary=0.0, store_trace::Bool=false,
-    log_cost::Bool=true, objective_kind::Symbol=:raman_band)
+    log_cost::Bool=true, objective_kind::Symbol=:raman_band,
+    solver_f_abstol=:auto, solver_g_abstol=:auto)
 
     # PRECONDITIONS
     @assert max_iter > 0 "max_iter must be positive"
@@ -210,7 +219,14 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     # NOTE: Both cost and gradient must be on the same scale for L-BFGS.
     # log_cost=true: cost in dB, gradient scaled by chain rule — keeps ∇J ~ O(1)
     # log_cost=false: cost and gradient both linear (legacy behavior)
-    f_tol = log_cost ? 0.01 : 1e-10  # 0.01 dB vs 1e-10 linear
+    default_f_tol = log_cost ? 0.01 : 1e-10  # 0.01 dB vs 1e-10 linear
+    f_tol = solver_f_abstol === :auto ? default_f_tol : Float64(solver_f_abstol)
+    options = if solver_g_abstol === :auto
+        Optim.Options(iterations=max_iter, f_abstol=f_tol, callback=callback, store_trace=store_trace)
+    else
+        Optim.Options(iterations=max_iter, f_abstol=f_tol, g_abstol=Float64(solver_g_abstol),
+            callback=callback, store_trace=store_trace)
+    end
     result = optimize(
         Optim.only_fg!() do F, G, φ_vec
             φ = reshape(φ_vec, Nt, M)
@@ -227,10 +243,19 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
         end,
         vec(φ0),
         LBFGS(),
-        Optim.Options(iterations=max_iter, f_abstol=f_tol, callback=callback, store_trace=store_trace)
+        options
     )
 
     return result
+end
+
+function _single_mode_objective_label(objective_kind::Symbol)
+    if objective_kind == :temporal_width
+        return "single-mode temporal pulse-width phase optimization"
+    elseif objective_kind == :raman_peak
+        return "single-mode Raman peak-bin spectral phase optimization"
+    end
+    return "single-mode Raman spectral phase optimization"
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -579,7 +604,8 @@ end
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
     λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
-    log_cost::Bool=true, objective_kind::Symbol=:raman_band, solver_reltol=1e-8, kwargs...)
+    log_cost::Bool=true, objective_kind::Symbol=:raman_band, solver_reltol=1e-8,
+    solver_f_abstol=:auto, solver_g_abstol=:auto, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
     fiber["reltol"] = Float64(solver_reltol)
@@ -611,7 +637,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
         objective_kind=objective_kind,
-        objective_label="single-mode Raman spectral phase optimization")
+        objective_label=_single_mode_objective_label(objective_kind))
 
     if validate
         @info "Gradient Validation"
@@ -627,7 +653,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
         max_iter=max_iter, φ0=φ0, objective_kind=objective_kind,
         λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
-        store_trace=true, log_cost=log_cost)
+        store_trace=true, log_cost=log_cost,
+        solver_f_abstol=solver_f_abstol, solver_g_abstol=solver_g_abstol)
 
     φ_before = zeros(Nt, M)
     φ_after = reshape(result.minimizer, Nt, M)
@@ -720,7 +747,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
         objective_spec=objective_spec,
-        objective_label="single-mode Raman spectral phase optimization")
+        objective_label=_single_mode_objective_label(objective_kind))
     trust_md_path = write_numerical_trust_report("$(save_prefix)_trust.md", trust_report)
     @info "Saved numerical trust report to $trust_md_path"
 
@@ -776,7 +803,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         # 3×2 optimization comparison (spectra, temporal, group delay)
         plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
             band_mask, Δf, raman_threshold;
-            save_path="$(save_prefix).png", metadata=run_meta)
+            save_path="$(save_prefix).png", metadata=run_meta,
+            objective_kind=objective_kind)
 
         # Evolution: solve both via propagate_and_plot_evolution (handles deepcopy + zsave),
         # then merge into a single 2×2 figure (ORG-01, ORG-02)
@@ -796,7 +824,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         # Phase diagnostic: spectral phase, group delay, GDD, instantaneous frequency
         @info "Phase Diagnostic"
         plot_phase_diagnostic(φ_after, uω0, sim;
-            save_path="$(save_prefix)_phase.png", metadata=run_meta)
+            save_path="$(save_prefix)_phase.png", metadata=run_meta,
+            objective_kind=objective_kind)
         close("all")
     end # do_plots
 
@@ -809,7 +838,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         P_W = run_meta.P_cont_W,
         output_dir = dirname(save_prefix) == "" ? "." : dirname(save_prefix),
         lambda0_nm = run_meta.lambda0_nm,
-        fwhm_fs = run_meta.fwhm_fs)
+        fwhm_fs = run_meta.fwhm_fs,
+        objective_kind = objective_kind)
 
     return result, uω0, fiber, sim, band_mask, Δf
 end

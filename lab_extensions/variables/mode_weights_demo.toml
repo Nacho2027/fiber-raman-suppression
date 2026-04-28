@@ -11,5 +11,7 @@ units = "normalized modal power fractions"
 bounds = "nonnegative weights projected to unit total power"
 parameterizations = ["mode_basis"]
 compatible_objectives = ["mmf_sum", "mmf_fundamental", "mmf_worst_mode"]
+optimizer_representation = "mode-count vector projected onto the probability simplex"
+artifact_hooks = ["mode_weight_bar_chart", "modal_power_table", "per_mode_leakage_table"]
 artifact_semantics = "Requires modal weight tables, per-mode diagnostics, and output coupling interpretation before execution."
 validation = "Requires units, simplex projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution."

@@ -1,6 +1,28 @@
 # Research Closure Audit
 
-Date: 2026-04-23
+Date: 2026-04-28
+
+## Current Maintainer Decision
+
+The active research lanes are closed enough for lab-readiness packaging:
+
+- MMF is no longer a blocker for lab rollout. It has a qualified corrected
+  4096-grid simulation candidate, but remains experimental and not
+  lab-supported.
+- Multivar is closed for the current packaging decision. Direct joint
+  optimization is negative; staged `amp_on_phase` is the useful optional path.
+- Long-fiber has a completed 200 m image-backed milestone. It should be shown
+  as a research result with caveats, not as the default lab workflow.
+
+The supported lab-ready surface remains narrow: single-mode, phase-only,
+Raman-band objective, standard images, trust report, export handoff, result
+indexing, and telemetry indexing.
+
+Source of record for human-facing closure:
+
+- `docs/reports/research-closure-2026-04-28/REPORT.md`
+- `docs/guides/lab-readiness.md`
+- `docs/guides/supported-workflows.md`
 
 ## Executive View
 

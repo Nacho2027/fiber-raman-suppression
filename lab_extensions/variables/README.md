@@ -55,3 +55,15 @@ Use `execution = "planning_only"` until the control has:
 - objective compatibility and gradient behavior
 - artifact metrics that make the result interpretable
 - one config example and one regression test
+
+## Current Examples
+
+- `gain_tilt_demo`: single-mode smooth spectral gain/attenuation tilt. This is
+  a non-standard control example for future pulse-shaping, gain-shaping, or
+  hardware-transfer research. It is metadata-valid but planning-only.
+- `mode_weights_demo`: multimode modal-weight control. This remains
+  planning-only while MMF promotion work is still separate.
+
+If a config references either extension today, the front layer should recognize
+the extension and reject execution with explicit promotion blockers rather than
+silently treating it as an unknown control.
