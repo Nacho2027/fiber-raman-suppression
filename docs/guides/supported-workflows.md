@@ -106,6 +106,23 @@ These remain useful, but they are not part of the first supported lab contract:
 
 Use those as research tools, not as the default interface for new lab users.
 
+## Research Lane Status
+
+Use this classification when deciding what blocks lab rollout:
+
+- Multivariable optimization is research-closed for the current decision. The
+  broad joint phase/amplitude/energy path should not become the default, but
+  staged amp-on-phase refinement is a credible optional research workflow.
+- Long-fiber is research-grade for the current 50-100 m single-mode story. It
+  should be documented as an exploratory workflow, not a turnkey group platform.
+- MMF is not closed. The current window-validation evidence marks the available
+  positive result as boundary/window corrupted, so MMF remains parked until a
+  new numerical strategy or larger-memory validation plan exists.
+
+In practical terms: lab rollout should not wait on more multivar or long-fiber
+science. It should keep the default supported workflow narrow and leave MMF out
+of demos and lab handoff claims.
+
 ## Why this boundary exists
 
 The repo contains more science than the first supported operational surface.
