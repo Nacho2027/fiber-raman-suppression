@@ -40,6 +40,7 @@ include(joinpath(@__DIR__, "core", "test_research_extension_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_non_raman_objective_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_gain_tilt_variable_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_regime_promotion_status.jl"))
+include(joinpath(@__DIR__, "core", "test_demo_run_check.jl"))
 
 @testset "Phase 16 — fast tier" begin
 

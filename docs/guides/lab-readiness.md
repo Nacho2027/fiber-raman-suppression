@@ -160,22 +160,32 @@ fixed sequence:
 ```bash
 make lab-ready
 make golden-smoke
-julia -t auto --project=. scripts/canonical/index_results.jl --compare --top 10 results/raman/smoke
+make demo-run
 julia -t auto --project=. scripts/canonical/index_telemetry.jl --sort elapsed --desc --top 10
 ```
 
 Then show:
 
-- `scripts/canonical/run_experiment.jl --dry-run research_engine_export_smoke`
+- `scripts/canonical/run_experiment.jl --dry-run research_engine_live_demo`
   to prove the run is inspectable before execution.
-- `scripts/canonical/lab_ready.jl --latest research_engine_export_smoke --require-export`
-  to prove the latest generated bundle passes the handoff gate.
-- The four standard images from the latest smoke directory.
+- `scripts/canonical/demo_run_check.jl --latest research_engine_live_demo`
+  to prove the latest generated demo bundle has standard artifacts, export, a
+  trust report, and meaningful suppression.
+- The four standard images from the latest demo directory.
 - The `export_handoff/` bundle, especially the neutral phase CSV and
   `roundtrip_validation.json`.
 
-This demo proves the lab-facing instrument works. It does not prove every
-experimental research lane is promoted.
+`make demo-run` is intentionally separate from `make golden-smoke`. Golden
+smoke is the smallest strict handoff proof and must pass `lab_ready --latest`.
+The live demo is a slightly larger SMF-28 phase-only run designed to show a
+visible before/after result in a research-group meeting. Its check requires
+complete artifacts/export and a minimum objective improvement, but reports
+optimizer convergence as advisory. Use `lab_ready --latest ...` when the claim
+is canonical convergence certification.
+
+This demo proves the lab-facing instrument can run a real short optimization
+and produce a handoff bundle. It does not prove every experimental research lane
+is promoted.
 
 ## Milestone Gate
 
@@ -204,10 +214,11 @@ The currently supported lab-facing path is:
 - trust report
 - optional neutral CSV phase handoff
 
-The best smoke config for this surface is:
+The best smoke and live-demo configs for this surface are:
 
 ```text
 research_engine_export_smoke
+research_engine_live_demo
 ```
 
 The best configurable baseline starting point is:
