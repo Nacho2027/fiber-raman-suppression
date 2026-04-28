@@ -650,3 +650,153 @@ single monolithic fragile run.
 - Multivar remains closed with accepted/caveat outputs. No relaunch was needed,
   and the deterministic watchdog cron remains installed at the 15 minute
   cadence.
+
+## 2026-04-27 21:05 UTC Supervisor Check
+
+- Active C3 quota remains controlled: only
+  `fiber-raman-temp-l-200resume1-20260427t165232z` is running as a
+  `c3-highcpu-8` ephemeral. `fiber-raman-burst` is `TERMINATED`, and no MMF or
+  multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active. Remote Julia has been
+  running for about four hours on commit `6240464`; the optimizer reached step
+  12 with `f=-53.45484 dB` and checkpointed through
+  `ckpt_iter_0810.jld2`. The existing resume-grid caveat still applies: the
+  `Nt=65536`, `tw=320 ps` continuation grid drops about 68% of the stored
+  spectral range.
+- MMF remains closed with the documented GDD follow-up artifacts under
+  `results/raman/phase36_window_validation_gdd/`; the expected summary and
+  standard image files are still present. Multivar remains closed with the
+  accepted positive/negative results and the documented incomplete
+  `phase_energy_cold` caveat.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  continues to report the multivar sequence closed by accepted
+  results/caveats. No failure, patch, or relaunch was needed during this
+  check.
+
+## 2026-04-27 21:32 UTC Supervisor Check
+
+- Active C3 quota remains controlled: only
+  `fiber-raman-temp-l-200resume1-20260427t165232z` is running as a
+  `c3-highcpu-8` ephemeral. `fiber-raman-burst` is `TERMINATED`, and no MMF or
+  multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active on commit `6240464`, which
+  contains the `4d426df` multivar log-energy fix. The optimizer has advanced to
+  step 13 with `f=-53.45479 dB` and checkpointed through
+  `ckpt_iter_0872.jld2`. The existing resume-grid caveat still applies: the
+  `Nt=65536`, `tw=320 ps` continuation grid drops about 68% of the stored
+  spectral range.
+- MMF remains closed with the GDD follow-up artifacts under
+  `results/raman/phase36_window_validation_gdd/`. Multivar remains closed with
+  accepted/caveat outputs, and no active multivar VM is present.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  reports the multivar sequence closed by accepted results/caveats. No failure,
+  patch, or relaunch was needed during this check.
+
+## 2026-04-27 22:02 UTC Supervisor Check
+
+- Active quota mix remains controlled: only
+  `fiber-raman-temp-l-200resume1-20260427t165232z` is running as a
+  `c3-highcpu-8` ephemeral. `fiber-raman-burst` is `TERMINATED`, and no MMF or
+  multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active in remote tmux on run
+  worktree commit `6240464`, which is newer than the `4d426df` multivar
+  log-energy fix. The optimizer has advanced to step 14 with
+  `f=-53.45474 dB` and checkpointed through `ckpt_iter_0942.jld2`. The existing
+  resume-grid caveat still applies: the `Nt=65536`, `tw=320 ps` continuation
+  grid drops about 68% of the stored spectral range.
+- MMF remains closed with the GDD follow-up artifacts under
+  `results/raman/phase36_window_validation_gdd/`; the summary reports
+  `quality=meaningful`, `boundary_ok=true`, and `J_opt=-49.69 dB`. Multivar
+  remains closed with accepted/caveat outputs and no active multivar VM.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  continues to report the multivar sequence closed by accepted
+  results/caveats. No failure, patch, or relaunch was needed during this
+  check.
+
+## 2026-04-28 01:05 UTC Supervisor Check
+
+- Active quota mix remains controlled: only
+  `fiber-raman-temp-l-200resume1-20260427t165232z` is running as a
+  `c3-highcpu-8` ephemeral. `fiber-raman-burst` is `TERMINATED`, and no MMF or
+  multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active in remote tmux on run
+  worktree commit `6240464`, which contains the `4d426df` multivar log-energy
+  fix. The optimizer has advanced to step 20 with `f=-53.45442 dB` and
+  checkpointed through `ckpt_iter_1340.jld2`. Objective movement is now small,
+  but the process is still consuming CPU and writing checkpoints, so it was
+  left running. The existing resume-grid caveat still applies: the `Nt=65536`,
+  `tw=320 ps` continuation grid drops about 68% of the stored spectral range.
+- MMF remains closed with the GDD follow-up artifacts under
+  `results/raman/phase36_window_validation_gdd/`; the expected summary and
+  standard image files are present. Multivar remains closed with the accepted
+  positive/negative results and documented `phase_energy_cold` caveat, and no
+  active multivar VM is present.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  continues to report the multivar sequence closed by accepted
+  results/caveats. No failure, source patch, or relaunch was needed during this
+  check.
+
+## 2026-04-28 01:35 UTC Supervisor Check
+
+- Active quota mix remains controlled: only
+  `fiber-raman-temp-l-200resume1-20260427t165232z` is running as a
+  `c3-highcpu-8` ephemeral. `fiber-raman-burst` is `TERMINATED`, and no MMF or
+  multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active in remote tmux on run
+  worktree commit `6240464`, which contains the `4d426df` multivar log-energy
+  fix. The optimizer has advanced to step 21 with `f=-53.45437 dB` and
+  checkpointed through `ckpt_iter_1395.jld2`. Objective movement remains small,
+  but the process is still consuming CPU and writing checkpoints, so it was
+  left running. The existing resume-grid caveat still applies: the `Nt=65536`,
+  `tw=320 ps` continuation grid drops about 68% of the stored spectral range.
+- MMF remains closed with the GDD follow-up artifacts under
+  `results/raman/phase36_window_validation_gdd/`; the expected summary and
+  standard image files are present. Multivar remains closed with accepted/caveat
+  outputs and no active multivar VM.
+- Deterministic watchdog cron remains installed at the 15 minute cadence and
+  continues to report the multivar sequence closed by accepted
+  results/caveats. No failure, source patch, test run, commit, or relaunch was
+  needed during this check.
+
+## 2026-04-28 02:35 UTC Supervisor Check
+
+- Active C3 quota remains within limits: `C3_CPUS usage=30 limit=50`.
+  `fiber-raman-burst` is `TERMINATED`; long-fiber `L-200resume1` is running on
+  one `c3-highcpu-8`, and MMF `M-mmfg8192` is running on one `c3-highcpu-22`.
+  No multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active in remote tmux on commit
+  `6240464`, which contains the `4d426df` multivar log-energy fix. The
+  optimizer has advanced to step 23 with `f=-53.45426 dB` and checkpointed
+  through `ckpt_iter_1508.jld2`. The existing resume-grid caveat still applies:
+  the `Nt=65536`, `tw=320 ps` continuation grid drops about 68% of the stored
+  spectral range.
+- MMF follow-up `M-mmfg8192` was launched on
+  `fiber-raman-temp-m-mmfg8192-20260428t022858z` for the GDD-regularized
+  threshold case at `Nt=8192`, `tw=96 ps`, writing to
+  `results/raman/phase36_window_validation_gdd_nt8192/`. The remote worktree
+  is commit `738a98c`. At inspection it was still in
+  `Pkg.instantiate()`/precompile, with no scientific artifacts expected yet.
+- Multivar remains closed with accepted/caveat outputs, and the deterministic
+  watchdog cron remains installed at the 15 minute cadence. No failure, source
+  patch, test run, commit, or relaunch was performed during this check.
+
+## 2026-04-28 03:01 UTC Supervisor Check
+
+- Active C3 quota remains within limits: `C3_CPUS usage=30 limit=50`.
+  `fiber-raman-burst` is `TERMINATED`; long-fiber `L-200resume1` is running on
+  one `c3-highcpu-8`, and MMF `M-mmfg8192` is running on one `c3-highcpu-22`.
+  No multivar ephemeral is running.
+- Long-fiber `L-200resume1` is alive and CPU-active in remote tmux on commit
+  `6240464`, which contains the `4d426df` multivar log-energy fix. The
+  optimizer has advanced to step 24 with `f=-53.45421 dB` and checkpointed
+  through `ckpt_iter_1563.jld2`. The existing resume-grid caveat still applies:
+  the `Nt=65536`, `tw=320 ps` continuation grid drops about 68% of the stored
+  spectral range.
+- MMF follow-up `M-mmfg8192` is alive and CPU-active on commit `738a98c`. It
+  has moved beyond package precompile into the GDD-regularized threshold
+  optimization at `Nt=8192`, `tw=96 ps`, with early logged objective values
+  `J=-17.37102 dB` and `J=-17.37495 dB`. No local artifacts are synced yet
+  because the remote job is still running.
+- Multivar remains closed with accepted/caveat outputs, and the deterministic
+  watchdog cron remains installed at the 15 minute cadence. No failure, source
+  patch, test run, commit, or relaunch was performed during this check.
