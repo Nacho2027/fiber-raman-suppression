@@ -12,15 +12,26 @@ If you are new to the repo but already know the research context, read in this
 order:
 
 1. [guides/installation.md](./guides/installation.md)
-2. [guides/configurable-experiments.md](./guides/configurable-experiments.md)
-3. [guides/research-extensions.md](./guides/research-extensions.md)
-4. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
-5. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
-6. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
-7. [architecture/output-format.md](./architecture/output-format.md)
+2. [guides/container.md](./guides/container.md)
+3. [guides/configurable-experiments.md](./guides/configurable-experiments.md)
+4. [guides/lab-readiness.md](./guides/lab-readiness.md)
+5. [guides/internal-lab-release-readiness.md](./guides/internal-lab-release-readiness.md)
+6. [guides/public-release-readiness.md](./guides/public-release-readiness.md)
+7. [guides/slm-replay.md](./guides/slm-replay.md)
+8. [guides/exploratory-physics-workflow.md](./guides/exploratory-physics-workflow.md)
+9. [guides/research-extensions.md](./guides/research-extensions.md)
+10. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
+11. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
+12. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
+13. [architecture/output-format.md](./architecture/output-format.md)
 
 If you are resuming work after time away, the synthesis and status sections are
 usually more useful than the onboarding sequence.
+
+The current end-of-exploration findings package is
+[reports/research-closure-2026-04-28/REPORT.md](./reports/research-closure-2026-04-28/REPORT.md).
+It records which lanes are done enough to summarize, which remain experimental,
+which are deferred, and which negative results should not be promoted.
 
 For quick run/campaign discovery after experiments have completed:
 
@@ -33,7 +44,13 @@ julia -t auto --project=. scripts/canonical/index_results.jl
 | Doc | Use it for |
 |-----|------------|
 | [guides/installation.md](./guides/installation.md) | Environment setup and troubleshooting on laptops and project VMs. |
+| [guides/container.md](./guides/container.md) | Reproducible Docker setup for headless Linux tests and canonical runs. |
 | [guides/configurable-experiments.md](./guides/configurable-experiments.md) | Running and modifying the configurable experiment front layer without editing optimizer internals. |
+| [guides/lab-readiness.md](./guides/lab-readiness.md) | Local, smoke, milestone, and promotion gates for honest lab readiness. |
+| [guides/internal-lab-release-readiness.md](./guides/internal-lab-release-readiness.md) | Rivera Lab internal handoff readiness, practical blockers, and first-user release sequence. |
+| [guides/public-release-readiness.md](./guides/public-release-readiness.md) | Public research-software release blockers, metadata gaps, and recommended preview-release sequence. |
+| [guides/slm-replay.md](./guides/slm-replay.md) | Device-agnostic SLM replay profiles and replay-bundle generation before vendor export. |
+| [guides/exploratory-physics-workflow.md](./guides/exploratory-physics-workflow.md) | Plain-English workflow for existing science, new objectives, new variables, graph selection, and plot defaults. |
 | [guides/research-extensions.md](./guides/research-extensions.md) | Adding new research objective contracts without reducing the system to a closed menu. |
 | [guides/quickstart-optimization.md](./guides/quickstart-optimization.md) | Running the maintained single-optimization workflow and checking the output. |
 | [guides/quickstart-sweep.md](./guides/quickstart-sweep.md) | Running a sweep on `fiber-raman-burst` and pulling results back correctly. |
@@ -64,6 +81,10 @@ These files are for re-entry and decision support, not first-time onboarding.
 | [synthesis/why-phase-31-changed-the-roadmap.md](./synthesis/why-phase-31-changed-the-roadmap.md) | Understanding why Phase 31 changed the project direction. |
 | [synthesis/why-phase-34-still-points-back-to-phase-31.md](./synthesis/why-phase-34-still-points-back-to-phase-31.md) | Understanding why the later trust-region work still points back to the Phase 31 conclusion. |
 | [status/lab-readiness-proposal-2026-04-23.md](./status/lab-readiness-proposal-2026-04-23.md) | Maintainer proposal for what the first honest lab-ready surface should be and what should wait. |
+| [status/longfiber-200m-closure-2026-04-28.md](./status/longfiber-200m-closure-2026-04-28.md) | Completed 200 m long-fiber result, visual inspection notes, and caveats. |
+| [status/multivar-amp-on-phase-positive-result-2026-04-24.md](./status/multivar-amp-on-phase-positive-result-2026-04-24.md) | Positive staged amplitude-on-phase result. |
+| [status/multivar-canonical-negative-result-2026-04-24.md](./status/multivar-canonical-negative-result-2026-04-24.md) | Negative direct-joint multivariable result. |
+| [status/mmf-window-validation-2026-04-27.md](./status/mmf-window-validation-2026-04-27.md) | MMF window-validation status and caveats. |
 | [status/multimode-baseline-status-2026-04-22.md](./status/multimode-baseline-status-2026-04-22.md) | Current state of the multimode baseline work. |
 | [status/phase-30-status.md](./status/phase-30-status.md) | What Phase 30 actually established. |
 | [status/phase-32-status.md](./status/phase-32-status.md) | What Phase 32 acceleration work did and did not establish. |

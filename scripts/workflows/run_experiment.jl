@@ -14,6 +14,7 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-variables
     julia --project=. -t auto scripts/canonical/run_experiment.jl --control-layout [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --artifact-plan [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --check [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-all
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
@@ -88,7 +89,8 @@ end
 function run_experiment_main(args=ARGS)
     if isempty(args)
         spec = load_experiment_spec()
-        result = run_supported_experiment(spec)
+        command = "./fiberlab run $(experiment_cli_spec_hint(spec))"
+        result = run_supported_experiment(spec; run_context=:run, run_command=command)
         render_experiment_completion_summary(result)
         return result
     end
@@ -149,6 +151,14 @@ function run_experiment_main(args=ARGS)
         return experiment_artifact_plan(spec)
     end
 
+    if args[1] == "--check"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --check [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        report = research_config_check_report(spec)
+        render_research_config_check(report)
+        return report
+    end
+
     if args[1] == "--validate-all"
         length(args) == 1 || error("usage: scripts/canonical/run_experiment.jl --validate-all")
         report = validate_all_experiment_configs()
@@ -200,7 +210,8 @@ function run_experiment_main(args=ARGS)
             return spec
         end
         if policy.action == :front_layer
-            result = run_supported_experiment(spec)
+            command = "./fiberlab explore run $(experiment_cli_spec_hint(spec)) --local-smoke"
+            result = run_supported_experiment(spec; run_context=:explore_local_smoke, run_command=command)
             render_experiment_completion_summary(result)
             return result
         end
@@ -230,7 +241,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --check [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)
@@ -244,7 +255,8 @@ function run_experiment_main(args=ARGS)
             "Inspect the plan with `julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(args[1])`, " *
             "then stage execution through the dedicated $(workflow_label) workflow.")
     end
-    result = run_supported_experiment(spec)
+    command = "./fiberlab run $(experiment_cli_spec_hint(spec))"
+    result = run_supported_experiment(spec; run_context=:run, run_command=command)
 
     render_experiment_completion_summary(result)
     return result

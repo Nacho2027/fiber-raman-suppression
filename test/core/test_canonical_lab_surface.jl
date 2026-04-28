@@ -73,8 +73,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     artifact = joinpath(run_dir, "opt_result.jld2")
     MultiModeNoise.save_run(artifact, payload)
     sidecar_path = joinpath(run_dir, "opt_result.json")
-    sidecar_text = read(sidecar_path, String)
-    write(sidecar_path, replace(sidecar_text, "{" => "{\"timestamp_utc\":\"2026-04-26T22:00:00Z\",", count=1))
+    sidecar_payload = copy(JSON3.read(read(sidecar_path, String), Dict{String,Any}))
+    sidecar_payload["timestamp_utc"] = "2026-04-26T22:00:00Z"
+    open(sidecar_path, "w") do io
+        JSON3.pretty(io, sidecar_payload)
+    end
     write(joinpath(run_dir, "opt_trust.md"), "# trust\n")
     write(joinpath(run_dir, "run_config.toml"), """
 id = "smf28_L2m_P0p2W"
@@ -91,6 +94,23 @@ kind = "raman_band"
 [solver]
 kind = "lbfgs"
 """)
+    run_manifest_path = joinpath(run_dir, "run_manifest.json")
+    open(run_manifest_path, "w") do io
+        JSON3.pretty(io, Dict(
+            "schema_version" => "run_manifest_v1",
+            "run_context" => "explore_local_smoke",
+            "command" => "./fiberlab explore run sample --local-smoke",
+            "execution" => Dict(
+                "compare_ready" => true,
+                "missing" => ["experimental_maturity", "no_manifest_update", "no_export_handoff"],
+            ),
+            "artifacts" => Dict(
+                "complete" => true,
+                "standard_images_complete" => true,
+                "variable_artifacts_complete" => true,
+            ),
+        ))
+    end
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
         write(joinpath(run_dir, "opt" * suffix), "")
     end
@@ -157,15 +177,24 @@ kind = "lbfgs"
     @test run_row.trust_report_present
     @test run_row.lab_ready
     @test run_row.readiness == "ready"
+    @test run_row.manifest_present
+    @test run_row.run_context == "explore_local_smoke"
+    @test occursin("explore run sample", run_row.manifest_command)
+    @test run_row.manifest_compare_ready
+    @test occursin("experimental_maturity", run_row.manifest_missing)
+    @test run_row.manifest_path == run_manifest_path
     rendered_index = render_results_index(index)
     @test occursin("# Results Index", rendered_index)
     @test occursin("SMF-28", rendered_index)
     @test occursin("sample_sweep", rendered_index)
+    @test occursin("Run Context", rendered_index)
+    @test occursin("explore_local_smoke", rendered_index)
     run_only_index = filter_results_index(index; kind=:run, fiber="SMF-28", complete_images=true)
     @test run_only_index.total == 1
     @test only(run_only_index.rows).kind == :run
     @test filter_results_index(index; kind=:sweep).total == 1
     @test filter_results_index(index; contains="sample_sweep").total == 1
+    @test filter_results_index(index; contains="explore_local_smoke").total == 1
     @test filter_results_index(index; config_id="smf28_L2m_P0p2W").total == 1
     @test filter_results_index(index; objective="raman_band", regime="single_mode").total == 1
     @test filter_results_index(index; solver="lbfgs", lab_ready=true).total == 1
@@ -175,9 +204,9 @@ kind = "lbfgs"
     @test only(comparison.rows).lab_ready
     rendered_comparison = render_results_comparison(comparison)
     @test occursin("# Results Comparison", rendered_comparison)
-    @test occursin("| 1 | true | ready | smf28_L2m_P0p2W | raman_band | phase |", rendered_comparison)
+    @test occursin("| 1 | true | ready | explore_local_smoke | true | experimental_maturity,no_export_handoff | smf28_L2m_P0p2W | raman_band | phase |", rendered_comparison)
     comparison_csv = render_results_comparison_csv(comparison)
-    @test startswith(comparison_csv, "rank,lab_ready,readiness,config_id,objective_kind")
+    @test startswith(comparison_csv, "rank,lab_ready,readiness,run_context,manifest_compare_ready,manifest_missing,config_id,objective_kind")
     sweep_comparison = compare_sweep_summaries(index)
     @test sweep_comparison.total == 1
     sweep_row = only(sweep_comparison.rows)
@@ -195,8 +224,8 @@ kind = "lbfgs"
     sweep_comparison_csv = render_sweep_comparison_csv(sweep_comparison)
     @test startswith(sweep_comparison_csv, "rank,id,cases,complete,failed,skipped")
     csv_index = render_results_index_csv(run_only_index)
-    @test startswith(csv_index, "kind,id,config_id,regime,objective_kind,variables,solver_kind,timestamp_utc")
-    @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,", csv_index)
+    @test startswith(csv_index, "kind,id,config_id,regime,objective_kind,variables,solver_kind,timestamp_utc,run_context")
+    @test occursin("run,run,smf28_L2m_P0p2W,single_mode,raman_band,phase,lbfgs,2026-04-26T22:00:00Z,explore_local_smoke", csv_index)
     @test occursin("variable_artifacts_complete", csv_index)
     @test occursin(",SMF-28,2.0,0.2,-20.0,-40.0,-20.0,GOOD,true,12,true,true", csv_index)
     @test !occursin("sample_sweep", csv_index)
@@ -215,6 +244,8 @@ kind = "lbfgs"
     write(joinpath(mv_dir, "opt_amplitude_mask.png"), "")
     write(joinpath(mv_dir, "opt_energy_metrics.json"), "{\"schema_version\":\"multivar_energy_metrics_v1\"}\n")
     write(joinpath(mv_dir, "opt_pulse_metrics.json"), "{\"schema_version\":\"multivar_pulse_metrics_v1\"}\n")
+    write(joinpath(mv_dir, "opt_explore_summary.json"), "{\"schema_version\":\"exploratory_artifacts_v1\"}\n")
+    write(joinpath(mv_dir, "opt_explore_overview.png"), "")
 
     mv_index = build_results_index([mv_tmp])
     @test mv_index.total == 1

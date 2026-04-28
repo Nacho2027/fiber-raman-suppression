@@ -49,6 +49,10 @@ Start with these configs:
   dispatch checks.
 - `research_engine_gain_tilt_smoke`: experimental phase plus one-parameter
   gain-tilt smoke run for non-standard variable dispatch and artifacts.
+- `research_engine_gain_tilt_scalar_search_smoke`: experimental
+  derivative-free bounded scalar search over gain tilt only. This is the first
+  low-dimensional playground backend: useful for scalar controls where a full
+  adjoint-gradient path would be unnecessary or premature.
 - `grin50_mmf_phase_sum_poc`: experimental GRIN-50 multimode planning surface;
   dry-run/validation only on local machines.
 - `smf28_longfiber_phase_poc`: experimental long-fiber planning surface;
@@ -83,6 +87,7 @@ For intentional playground work, use `explore`:
 ```bash
 ./fiberlab explore list
 ./fiberlab explore plan research_engine_gain_tilt_smoke
+./fiberlab check config research_engine_gain_tilt_smoke
 ./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
 ./fiberlab explore plan grin50_mmf_phase_sum_poc
 ./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
@@ -94,6 +99,26 @@ promotion stage, blockers, and compute guidance before any risky path. Local
 experimental runs require `--local-smoke`; heavy/dedicated workflows require
 `--heavy-ok`. `explore compare` uses the shared result index so exploratory
 runs can be ranked, filtered, and inspected from CLI or notebook workflows.
+
+Use `check config` when you are unsure where a config sits. It does not launch
+optimization. It reports the run path, whether the artifact plan is implemented,
+whether outputs will be comparison-ready, and the concrete missing pieces.
+
+New front-layer runs save `run_manifest.json` beside the result files. This is
+the per-run provenance record for CLI and notebook users: command, config hash,
+regime, variables, objective, run context, artifact status, key metrics, and
+git state. It is intentionally metadata only; it does not hide or replace the
+physics outputs. `explore compare` reads the manifest when available and
+surfaces `Run Context`, `Compare Ready`, and `Manifest Missing` columns so a
+researcher can tell which runs were exploratory smokes, ordinary supported runs,
+or incomplete handoffs without opening every folder.
+
+Executable exploratory configs also get two generic fallback artifacts:
+`{tag}_explore_summary.json` and `{tag}_explore_overview.png`. The overview is a
+first-inspection plot with input/shaped spectra, a zoomed temporal pulse,
+objective trace when stored, and a compact control summary. This is the safety
+net for novel objectives or variables; specialized diagnostics should still be
+added as explicit artifact hooks when the physics demands them.
 
 To inspect how the optimizer vector and output plots will be assembled:
 
@@ -182,7 +207,9 @@ Current executable variable support is intentionally narrow:
 - `amplitude`: experimental single-mode multivariable control.
 - `energy`: experimental single-mode multivariable control.
 - `gain_tilt`: experimental one-parameter bounded spectral transmission slope
-  coupled to phase; smoke-tested, not lab-promoted science.
+  either coupled to phase through the multivariable path or optimized alone
+  through `solver.kind = "bounded_scalar"`; smoke-tested, not lab-promoted
+  science.
 - `phase` for `long_fiber` and `multimode`: planning/dry-run surfaces until
   those regimes are promoted.
 
@@ -206,6 +233,23 @@ The dry-run should answer:
 - which objective backend will run
 - whether export is requested and supported
 - which artifact and verification policies are active
+
+For low-dimensional derivative-free exploration, the current executable smoke
+shape is:
+
+```toml
+[controls]
+variables = ["gain_tilt"]
+
+[solver]
+kind = "bounded_scalar"
+scalar_lower = -0.09
+scalar_upper = 0.09
+scalar_x_tol = 1.0e-3
+```
+
+This backend is deliberately narrow. It is for scalar controls such as the
+current gain-tilt smoke, not for full-grid phase or amplitude controls.
 
 If validation fails here, fix the config before launching compute.
 
@@ -398,10 +442,11 @@ julia -t auto --project=. scripts/canonical/lab_ready.jl --run results/raman/<ru
 
 The gate checks the result artifact, JSON sidecar, copied config, trust report,
 standard image set, variable-specific artifacts requested by the artifact plan,
-convergence flag, and objective metric. Trust reports are required only for
-run modes whose artifact plan includes a trust-report hook; experimental
-phase/amplitude/energy runs instead require their amplitude, energy, and pulse
-metric artifacts. With `--require-export`, it also requires a complete
+generic exploratory artifacts requested by the artifact plan, convergence flag,
+and objective metric. Trust reports are required only for run modes whose
+artifact plan includes a trust-report hook; experimental phase/amplitude/energy
+runs instead require their amplitude, energy, pulse metric, and exploratory
+fallback artifacts. With `--require-export`, it also requires a complete
 `export_handoff/` bundle.
 
 ## 8. Check Outputs

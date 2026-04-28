@@ -12,6 +12,7 @@ from fiber_research_engine.cli import (
     SCAFFOLD_VARIABLE,
     artifact_plan,
     capabilities,
+    check_config,
     compute_plan,
     control_layout,
     dry_run_amp_on_phase_refinement,
@@ -286,6 +287,17 @@ class FiberResearchEngineCliTests(unittest.TestCase):
 
         self.assertIn("Compute plan", result.stdout)
         self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--compute-plan", "my_config"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_check_config_uses_research_config_check_backend(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Research Config Check\n"
+        run_mock.return_value.stderr = ""
+
+        result = check_config("my_config", repo_root=Path("/tmp/repo"))
+
+        self.assertIn("Research Config Check", result.stdout)
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--check", "my_config"))
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_scaffold_objective_delegates_to_canonical_cli(self, run_mock):

@@ -73,6 +73,7 @@ supported lab workflow.
 ```bash
 ./fiberlab explore list
 ./fiberlab explore plan my_config
+./fiberlab check config my_config
 ./fiberlab explore run my_config --local-smoke --dry-run
 ./fiberlab explore run my_config --local-smoke
 ./fiberlab explore compare results/raman --top 10
@@ -84,8 +85,12 @@ Rules:
 - `fiberlab explore list` is the starting index of configs worth inspecting.
 - `fiberlab explore plan` is always the first inspection step for experimental
   work.
+- `fiberlab check config` explains whether the config can be inspected, how it
+  should be run, whether artifacts/metadata are enough for comparison, and what
+  is still missing.
 - `fiberlab explore run --local-smoke` allows executable experimental local
-  smoke configs such as small multivariable or gain-tilt runs.
+  smoke configs such as small multivariable, gain-tilt, or bounded scalar-search
+  runs.
 - `fiberlab explore run --heavy-ok --dry-run` prints the dedicated workflow plan
   for heavy MMF, long-fiber, or staged multivar work.
 - `fiberlab explore compare` ranks and filters completed exploratory runs using
@@ -103,6 +108,45 @@ explore = experimental playground path with explicit guardrails
 
 The goal is not to prevent research. The goal is to prevent experimental runs
 from being confused with lab-ready workflows.
+
+The first derivative-free playground backend is intentionally small:
+
+```toml
+[controls]
+variables = ["gain_tilt"]
+
+[solver]
+kind = "bounded_scalar"
+scalar_lower = -0.09
+scalar_upper = 0.09
+scalar_x_tol = 1.0e-3
+```
+
+Use this pattern for one-parameter exploratory controls where finite/bounded
+search is scientifically honest and easy to inspect. Do not use it as a generic
+escape hatch for full-grid phase, amplitude, or unknown lab-extension controls.
+Those still need explicit implementation, validation, and artifact semantics.
+
+Every new front-layer run writes a `run_manifest.json` file into the output
+directory. Treat it as the simulation lab-notebook entry. It records the command
+used, config identity/hash, regime, variables, objective, run context, artifact
+completion, key metrics, pre-run missing pieces, and lightweight git provenance.
+That makes exploratory folders easier to reopen, compare, and audit later.
+`fiberlab explore compare` reads the manifest and displays the run context,
+compare-ready flag, and missing handoff items beside the physics metrics.
+
+Executable exploratory runs also write a generic fallback artifact pair:
+
+```text
+{tag}_explore_summary.json
+{tag}_explore_overview.png
+```
+
+The overview plot shows input/shaped spectra, a zoomed temporal pulse, the
+stored objective trace when available, and a compact summary of active controls.
+This is deliberately a first-inspection surface. It keeps novel objectives and
+variables usable before a researcher has written custom diagnostics, but it
+does not replace variable- or objective-specific plots when those are needed.
 
 For deeper inspection:
 
@@ -229,6 +273,9 @@ Examples:
 - Phase plots default to meaningful spectral support and show wrapped,
   unwrapped, and group-delay views.
 - Raman plots mark the Raman band and use normalized spectra.
+- Generic exploratory plots show input/shaped spectra, zoom temporal power by
+  stored energy support, plot the objective trace if it exists, and summarize
+  active control values or ranges.
 - Temporal pulse plots should center around the pulse peak and include the
   high-energy region plus margin.
 - Mode plots should show all modes for small mode counts, otherwise top/worst

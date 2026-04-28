@@ -161,6 +161,10 @@ end
             "variables = [\"phase\"]" => "variables = [\"amplitude\"]")
         _expect_rejected("research_engine_smoke", "solver `adam` is not supported",
             "kind = \"lbfgs\"" => "kind = \"adam\"")
+        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "solver.scalar_lower must be less than solver.scalar_upper",
+            "scalar_lower = -0.09" => "scalar_lower = 0.09")
+        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"]",
+            "variables = [\"gain_tilt\"]" => "variables = [\"phase\", \"gain_tilt\"]")
         _expect_rejected("research_engine_smoke", "grid_policy `mystery_grid` is not supported",
             "grid_policy = \"auto_if_undersized\"" => "grid_policy = \"mystery_grid\"")
         _expect_rejected("research_engine_smoke", "phase-only execution currently requires the full standard artifact bundle",

@@ -26,6 +26,7 @@ const OBJECTIVE_CONTRACTS = (
         maturity = "supported",
         supported_variables = (
             (:phase,),
+            (:gain_tilt,),
             (:phase, :gain_tilt),
             (:phase, :amplitude),
             (:phase, :energy),

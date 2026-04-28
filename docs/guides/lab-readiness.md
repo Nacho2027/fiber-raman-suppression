@@ -118,6 +118,24 @@ approved sweep TOML files and validate the expanded case set:
 - planning-only bases such as long-fiber remain inspectable, but sweep
   execution records skipped cases instead of launching hidden heavy compute
 
+## SLM Replay Gate
+
+Neutral export is not the same thing as SLM readiness. Before a mask is treated
+as a hardware candidate, generate a replay bundle with
+`scripts/canonical/replay_slm_mask.jl` and an explicit profile from
+`configs/slm_profiles/`.
+
+For first-pass handoff, the replay bundle should show:
+
+- the exact generic SLM profile used
+- active spectral window and pixel count
+- wrapped/quantized pixel phase
+- reconstructed replayed phase on the simulation grid
+- optional forward replay evaluation with acceptable replay loss
+
+Vendor-specific files should be generated from the replay bundle, not directly
+from the ideal optimizer artifact.
+
 ## Real Smoke Gate
 
 Run this when you need proof that a checkout can execute the smallest supported

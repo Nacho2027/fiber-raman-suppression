@@ -24,6 +24,7 @@ end
 
     objective = objective_contract(:raman_band, :single_mode)
     @test (:phase, :gain_tilt) in objective.supported_variables
+    @test (:gain_tilt,) in objective.supported_variables
 
     spec = load_experiment_spec("research_engine_gain_tilt_smoke")
     @test spec.id == "smf28_phase_gain_tilt_smoke"
@@ -43,6 +44,8 @@ end
     @test :standard_image_set in hooks
     @test :gain_tilt_profile in hooks
     @test :energy_throughput in hooks
+    @test :exploratory_summary in hooks
+    @test :exploratory_overview in hooks
     @test plan.implemented
 
     kwargs = supported_experiment_run_kwargs(spec)
@@ -78,4 +81,14 @@ end
     physical = mv_physical_amplitude(unpacked, cfg, sim, 16, 1)
     @test physical.slope == physical_slope
     @test physical.A == A_tilt
+
+    scalar_spec = load_experiment_spec("research_engine_gain_tilt_scalar_search_smoke")
+    @test scalar_spec.controls.variables == (:gain_tilt,)
+    @test scalar_spec.solver.kind == :bounded_scalar
+    @test experiment_execution_mode(scalar_spec) == :scalar_search
+    @test validate_experiment_spec(scalar_spec) isa NamedTuple
+    scalar_kwargs = supported_experiment_run_kwargs(scalar_spec)
+    @test scalar_kwargs.scalar_lower == -0.09
+    @test scalar_kwargs.scalar_upper == 0.09
+    @test scalar_kwargs.scalar_x_tol == 1.0e-3
 end

@@ -102,9 +102,24 @@ Run an experimental playground config intentionally:
 
 ```bash
 ./fiberlab explore plan research_engine_gain_tilt_smoke
+./fiberlab check config research_engine_gain_tilt_smoke
 ./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
 ./fiberlab explore compare results/raman/smoke --top 10
 ```
+
+`check config` is the no-compute completeness check. It reports the correct run
+path, artifact coverage, comparison metadata readiness, and missing pieces
+before anyone launches optimization.
+
+New front-layer runs write `run_manifest.json` in the output directory. This is
+the durable per-run provenance record for later comparison and notebook work:
+command, config hash, variables, objective, run context, artifact completion,
+metrics, and git state.
+
+Executable exploratory configs also write generic fallback artifacts:
+`{tag}_explore_summary.json` and `{tag}_explore_overview.png`. These give novel
+objectives or variables a baseline spectrum, temporal pulse, objective trace,
+and control summary before custom diagnostics exist.
 
 Inspect heavy/dedicated playground workflows without launching them:
 
@@ -127,7 +142,8 @@ Print provider-neutral compute guidance without launching anything:
 
 After a run, the front layer validates the basic artifact contract before
 returning control: copied config, JLD2 payload, JSON sidecar, standard image
-set, and the phase-only trust report when required.
+set, exploratory fallback artifacts when requested, variable-specific artifacts
+when requested, and the phase-only trust report when required.
 
 The CLI completion summary prints the output directory, result artifact,
 artifact-validation status, and standard-image status so the next inspection
@@ -144,6 +160,10 @@ step is obvious.
   the experimental peak-bin Raman objective.
 - `research_engine_gain_tilt_smoke.toml` is the tiny phase plus gain-tilt
   smoke surface for experimental non-standard variable execution.
+- `research_engine_gain_tilt_scalar_search_smoke.toml` is the tiny
+  derivative-free bounded scalar-search surface for a gain-tilt-only control.
+  It is useful for testing low-dimensional playground UX without requiring a
+  full-grid phase gradient.
 - `grin50_mmf_phase_sum_poc.toml` is the experimental GRIN-50 multimode
   planning surface. Use it for dry-run and compute planning, not local
   front-layer execution.
@@ -160,7 +180,9 @@ Use `research_engine_poc.toml` for baseline lab runs. Use
 `research_engine_export_smoke.toml` when checking the run-to-handoff path. Use
 `research_engine_peak_smoke.toml` only when testing objective dispatch. Use
 `research_engine_gain_tilt_smoke.toml` only when testing non-standard variable
-dispatch and variable-specific artifacts. Use the
+dispatch and variable-specific artifacts. Use
+`research_engine_gain_tilt_scalar_search_smoke.toml` when testing
+bounded one-parameter search. Use the
 MMF and long-fiber configs only to inspect the front-layer plan before staging
 their dedicated heavy workflows. Use direct-joint multivariable configs only
 when deliberately testing naive joint controls. Use `amp_on_phase` configs for

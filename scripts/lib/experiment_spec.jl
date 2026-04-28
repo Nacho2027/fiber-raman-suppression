@@ -191,6 +191,9 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             reltol = Float64(get(solver, "reltol", 1e-8)),
             f_abstol = _normalize_auto_float(get(solver, "f_abstol", "auto")),
             g_abstol = _normalize_auto_float(get(solver, "g_abstol", "auto")),
+            scalar_lower = _normalize_auto_float(get(solver, "scalar_lower", "auto")),
+            scalar_upper = _normalize_auto_float(get(solver, "scalar_upper", "auto")),
+            scalar_x_tol = _normalize_auto_float(get(solver, "scalar_x_tol", 1e-3)),
         ),
         artifacts = (
             bundle = _normalize_symbol(get(artifacts, "bundle", "standard")),
@@ -271,6 +274,9 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             reltol = Float64(run_spec.kwargs.solver_reltol),
             f_abstol = :auto,
             g_abstol = :auto,
+            scalar_lower = :auto,
+            scalar_upper = :auto,
+            scalar_x_tol = :auto,
         ),
         artifacts = (
             bundle = :standard,
@@ -323,13 +329,14 @@ function experiment_capability_profile(regime::Symbol)
         return (
             variables = (
                 (:phase,),
+                (:gain_tilt,),
                 (:phase, :gain_tilt),
                 (:phase, :amplitude),
                 (:phase, :energy),
                 (:phase, :amplitude, :energy),
             ),
             objectives = registered_objective_kinds(regime),
-            solvers = (:lbfgs,),
+            solvers = (:lbfgs, :bounded_scalar),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
             policies = (:direct, :amp_on_phase),
@@ -377,6 +384,9 @@ function experiment_execution_mode(spec)
         if spec.controls.variables == (:phase,)
             return :phase_only
         end
+        if spec.controls.variables == (:gain_tilt,) && spec.solver.kind == :bounded_scalar
+            return :scalar_search
+        end
         return :multivar
     elseif spec.problem.regime == :long_fiber
         spec.controls.variables == (:phase,) || throw(ArgumentError(
@@ -407,12 +417,12 @@ function experiment_promotion_status(spec)
     spec.maturity == "supported" || _push_blocker!(blockers, :experimental_maturity)
     spec.verification.mode == :burst_required && _push_blocker!(blockers, :burst_required)
 
-    front_layer_executable = mode in (:phase_only, :multivar)
+    front_layer_executable = mode in (:phase_only, :multivar, :scalar_search)
     if !front_layer_executable
         _push_blocker!(blockers, mode == :amp_on_phase ? :dedicated_workflow_only : :front_layer_execution_blocked)
     end
 
-    if mode == :multivar
+    if mode == :multivar || mode == :scalar_search
         spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
         spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
@@ -429,7 +439,7 @@ function experiment_promotion_status(spec)
     stage =
         mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase) ? :planning :
         mode == :phase_only && spec.maturity == "supported" && artifact_plan.implemented ? :lab_ready :
-        mode in (:phase_only, :multivar) && artifact_plan.implemented ? :smoke :
+        mode in (:phase_only, :multivar, :scalar_search) && artifact_plan.implemented ? :smoke :
         :planning
 
     requirements = stage == :lab_ready ? Symbol[] : Symbol[
@@ -511,6 +521,129 @@ function render_explore_run_policy(spec; local_smoke::Bool=false, heavy_ok::Bool
     println(io, "  blockers=", _symbol_tuple_summary(policy.blockers))
     println(io, "  warnings=", _symbol_tuple_summary(policy.warnings))
     return policy
+end
+
+function _push_unique_symbol!(items::Vector{Symbol}, item::Symbol)
+    item in items || push!(items, item)
+    return items
+end
+
+function _research_run_path(spec, mode::Symbol, status)
+    spec_hint = experiment_cli_spec_hint(spec)
+    if mode == :phase_only && spec.maturity == "supported" && status.stage == :lab_ready
+        return (
+            kind = :run,
+            command = "./fiberlab run $(spec_hint)",
+        )
+    elseif mode in (:phase_only, :multivar, :scalar_search) && status.local_execution_allowed
+        return (
+            kind = :explore_local_smoke,
+            command = "./fiberlab explore run $(spec_hint) --local-smoke",
+        )
+    end
+    return (
+        kind = :explore_heavy_dry_run,
+        command = "./fiberlab explore run $(spec_hint) --heavy-ok --dry-run",
+    )
+end
+
+function research_config_check_report(spec)
+    missing = Symbol[]
+    validation_ok = true
+    validation_error = ""
+    mode = :unknown
+    status = nothing
+    artifact_plan = nothing
+
+    try
+        validate_experiment_spec(spec)
+        mode = experiment_execution_mode(spec)
+        status = experiment_promotion_status(spec)
+        artifact_plan = experiment_artifact_plan(spec)
+    catch err
+        validation_ok = false
+        validation_error = sprint(showerror, err)
+        _push_unique_symbol!(missing, :config_validation_failed)
+    end
+
+    if validation_ok
+        for blocker in status.blockers
+            _push_unique_symbol!(missing, blocker)
+        end
+        artifact_plan.implemented || _push_unique_symbol!(missing, :artifact_plan_not_implemented)
+        spec.verification.artifact_validation || _push_unique_symbol!(missing, :artifact_validation_disabled)
+        spec.verification.block_on_failed_checks || _push_unique_symbol!(missing, :failed_checks_do_not_block)
+        spec.artifacts.save_payload || _push_unique_symbol!(missing, :payload_disabled)
+        spec.artifacts.save_sidecar || _push_unique_symbol!(missing, :json_sidecar_disabled)
+        mode in (:phase_only, :multivar, :scalar_search) || _push_unique_symbol!(missing, :requires_dedicated_workflow)
+    end
+
+    compare_ready = validation_ok &&
+        spec.artifacts.save_payload &&
+        spec.artifacts.save_sidecar &&
+        spec.artifacts.update_manifest
+    run_path = validation_ok ?
+        _research_run_path(spec, mode, status) :
+        (kind = :blocked, command = "fix config validation errors before running")
+    hooks = validation_ok ? Tuple(request.hook for request in artifact_plan.hooks) : Symbol[]
+    stage = validation_ok ? status.stage : :invalid
+    inspect_command = validation_ok ?
+        "./fiberlab explore plan $(experiment_cli_spec_hint(spec))" :
+        "fix config validation errors before inspection"
+    compare_command = validation_ok ?
+        "./fiberlab explore compare $(spec.output_root) --contains $(spec.output_tag)" :
+        "fix config validation errors before comparison"
+
+    return (
+        kind = :config,
+        target = validation_ok ? spec.id : "invalid",
+        config_path = spec.config_path,
+        validation_ok = validation_ok,
+        validation_error = validation_error,
+        stage = stage,
+        mode = mode,
+        regime = spec.problem.regime,
+        maturity = spec.maturity,
+        variables = spec.controls.variables,
+        objective = spec.objective.kind,
+        artifact_plan_implemented = validation_ok ? artifact_plan.implemented : false,
+        artifact_hooks = Tuple(hooks),
+        compare_ready = compare_ready,
+        run_path = run_path.kind,
+        run_command = run_path.command,
+        inspect_command = inspect_command,
+        compare_command = compare_command,
+        missing = Tuple(missing),
+        pass = validation_ok && isempty(missing),
+    )
+end
+
+research_config_check_report(spec::AbstractString) =
+    research_config_check_report(load_experiment_spec(spec))
+
+function render_research_config_check(report; io::IO=stdout)
+    println(io, "# Research Config Check")
+    println(io)
+    println(io, "- Scope: `", report.kind, "`")
+    println(io, "- Target: `", report.target, "`")
+    println(io, "- Status: `", report.pass ? "PASS" : "NEEDS_WORK", "`")
+    println(io, "- Current confidence: `", report.stage, "`")
+    println(io, "- Mode: `", report.mode, "`")
+    println(io, "- Regime: `", report.regime, "`")
+    println(io, "- Variables: `", join(string.(report.variables), ","), "`")
+    println(io, "- Objective: `", report.objective, "`")
+    println(io, "- Config validation: `", report.validation_ok, "`")
+    if !report.validation_ok
+        println(io, "- Validation error: `", report.validation_error, "`")
+    end
+    println(io, "- Artifact plan implemented: `", report.artifact_plan_implemented, "`")
+    println(io, "- Artifact hooks: `", isempty(report.artifact_hooks) ? "none" : join(string.(report.artifact_hooks), ","), "`")
+    println(io, "- Compare-ready metadata: `", report.compare_ready, "`")
+    println(io, "- Run path: `", report.run_command, "`")
+    println(io, "- Inspect first: `", report.inspect_command, "`")
+    println(io, "- Compare after runs: `", report.compare_command, "`")
+    println(io, "- Missing pieces: `", isempty(report.missing) ? "none" : join(string.(report.missing), ","), "`")
+    return nothing
 end
 
 function _require_positive_finite(value, label::AbstractString)
@@ -595,9 +728,27 @@ function validate_experiment_spec(spec)
     _require_positive_finite(spec.solver.reltol, "solver.reltol")
     _require_auto_or_positive_finite(spec.solver.f_abstol, "solver.f_abstol")
     _require_auto_or_positive_finite(spec.solver.g_abstol, "solver.g_abstol")
+    _require_auto_or_positive_finite(spec.solver.scalar_x_tol, "solver.scalar_x_tol")
     _validate_objective_regularizers(spec, objective_contract)
 
     mode = experiment_execution_mode(spec)
+    if spec.solver.kind == :bounded_scalar
+        spec.controls.variables == (:gain_tilt,) || throw(ArgumentError(
+            "bounded_scalar currently supports controls.variables=[\"gain_tilt\"]"))
+        spec.solver.scalar_lower === :auto && throw(ArgumentError(
+            "bounded_scalar requires numeric solver.scalar_lower"))
+        spec.solver.scalar_upper === :auto && throw(ArgumentError(
+            "bounded_scalar requires numeric solver.scalar_upper"))
+        isfinite(Float64(spec.solver.scalar_lower)) || throw(ArgumentError(
+            "solver.scalar_lower must be finite"))
+        isfinite(Float64(spec.solver.scalar_upper)) || throw(ArgumentError(
+            "solver.scalar_upper must be finite"))
+        Float64(spec.solver.scalar_lower) < Float64(spec.solver.scalar_upper) || throw(ArgumentError(
+            "solver.scalar_lower must be less than solver.scalar_upper"))
+    else
+        (spec.solver.scalar_lower === :auto && spec.solver.scalar_upper === :auto) || throw(ArgumentError(
+            "solver.scalar_lower/scalar_upper are only valid for solver.kind=\"bounded_scalar\""))
+    end
     for contract in variable_contracts
         spec.controls.parameterization in contract.parameterizations || throw(ArgumentError(
             "variable `$(contract.kind)` does not support parameterization `$(spec.controls.parameterization)`; supported parameterizations: $(collect(contract.parameterizations))"))
@@ -612,7 +763,7 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "phase-only execution currently requires the full standard artifact bundle"))
         end
-    elseif mode == :multivar || mode == :amp_on_phase
+    elseif mode == :multivar || mode == :scalar_search || mode == :amp_on_phase
         if !(spec.artifacts.bundle == :experimental_multivar &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
              spec.artifacts.write_standard_images)
@@ -695,6 +846,10 @@ function experiment_plan_lines(spec)
     end
     policy_option_summary = isempty(policy_option_parts) ? "none" : join(policy_option_parts, ", ")
 
+    scalar_solver_suffix = spec.solver.kind == :bounded_scalar ?
+        " scalar_lower=$(spec.solver.scalar_lower) scalar_upper=$(spec.solver.scalar_upper) scalar_x_tol=$(spec.solver.scalar_x_tol)" :
+        ""
+
     return [
         "Experiment spec: $(spec.id)",
         "Description: $(spec.description)",
@@ -708,7 +863,7 @@ function experiment_plan_lines(spec)
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization) policy=$(spec.controls.policy) policy_options=$(policy_option_summary)",
         "Control layout: optimizer_length=$(layout.total_length) blocks=$(layout_summary)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
-        "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)",
+        "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)$(scalar_solver_suffix)",
         "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(export_contract.profile)",
         "Artifact plan: implemented_now=$(artifact_plan.implemented) hooks=$(artifact_hook_summary)",
         "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",

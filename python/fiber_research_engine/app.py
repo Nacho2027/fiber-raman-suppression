@@ -93,6 +93,26 @@ def _ready(args: argparse.Namespace) -> int:
     raise ValueError(f"Unknown ready command: {args.ready_command}")
 
 
+def _check(args: argparse.Namespace) -> int:
+    if args.check_command == "config":
+        return _call(args, engine.check_config, args.spec)
+    if args.check_command == "latest":
+        result = engine.lab_ready_latest(
+            args.spec,
+            require_export=args.require_export,
+            **_common_kwargs(args),
+        )
+        return _emit(result)
+    if args.check_command == "run":
+        result = engine.lab_ready_run(
+            args.path,
+            require_export=args.require_export,
+            **_common_kwargs(args),
+        )
+        return _emit(result)
+    raise ValueError(f"Unknown check command: {args.check_command}")
+
+
 def _sweep(args: argparse.Namespace) -> int:
     if args.sweep_command == "list":
         return _call(args, engine.list_sweeps)
@@ -256,6 +276,17 @@ def build_parser() -> argparse.ArgumentParser:
     ready_run = ready_sub.add_parser("run", help="Check a completed run directory or artifact path.")
     ready_run.add_argument("path")
     ready_run.add_argument("--require-export", action="store_true")
+
+    check = add_command("check", _check, "Check config or run completeness without launching optimization.")
+    check_sub = check.add_subparsers(dest="check_command", required=True)
+    check_config = check_sub.add_parser("config", help="Check whether a config is inspectable, runnable, and comparable.")
+    check_config.add_argument("spec")
+    check_latest = check_sub.add_parser("latest", help="Check the latest completed run for a config.")
+    check_latest.add_argument("spec")
+    check_latest.add_argument("--require-export", action="store_true")
+    check_run = check_sub.add_parser("run", help="Check a completed run directory or artifact path.")
+    check_run.add_argument("path")
+    check_run.add_argument("--require-export", action="store_true")
 
     sweep = add_command("sweep", _sweep, "Plan, run, or inspect experiment sweeps.")
     sweep_sub = sweep.add_subparsers(dest="sweep_command", required=True)

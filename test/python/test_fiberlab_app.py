@@ -54,6 +54,18 @@ class FiberlabAppTests(unittest.TestCase):
         self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--compute-plan", "smf28_longfiber_phase_poc"))
 
     @patch("fiber_research_engine.cli.subprocess.run")
+    def test_check_config_command_delegates_to_research_check_backend(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "Research Config Check\n"
+        run_mock.return_value.stderr = ""
+
+        status, stdout, _ = self._run_app(["check", "config", "research_engine_gain_tilt_smoke"])
+
+        self.assertEqual(status, 0)
+        self.assertEqual(stdout, "Research Config Check\n")
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--check", "research_engine_gain_tilt_smoke"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
     def test_explore_commands_route_to_playground_backend(self, run_mock):
         run_mock.return_value.returncode = 0
         run_mock.return_value.stdout = "explore\n"

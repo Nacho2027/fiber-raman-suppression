@@ -123,6 +123,74 @@ function _export_handoff_complete(dir::AbstractString)
     return (complete = complete, path = complete ? abspath(export_dir) : "")
 end
 
+function _missing_manifest_metadata(; present::Bool=false, path::AbstractString="")
+    return (
+        present = present,
+        path = String(path),
+        schema_version = "",
+        run_context = "",
+        command = "",
+        compare_ready = missing,
+        missing = "",
+        artifacts_complete = missing,
+        standard_images_complete = missing,
+        variable_artifacts_complete = missing,
+    )
+end
+
+function _manifest_bool(object, name::Symbol)
+    hasproperty(object, name) || return missing
+    value = getproperty(object, name)
+    ismissing(value) && return missing
+    isnothing(value) && return missing
+    return Bool(value)
+end
+
+function _manifest_string(object, name::Symbol)
+    hasproperty(object, name) || return ""
+    value = getproperty(object, name)
+    isnothing(value) && return ""
+    ismissing(value) && return ""
+    return string(value)
+end
+
+function _post_run_manifest_missing(items)
+    return [item for item in string.(collect(items)) if item != "no_manifest_update"]
+end
+
+function _run_manifest_metadata(dir::AbstractString)
+    path = joinpath(dir, "run_manifest.json")
+    isfile(path) || return _missing_manifest_metadata()
+    manifest_path = abspath(path)
+
+    try
+        parsed = JSON3.read(read(path, String))
+        execution = hasproperty(parsed, :execution) ? parsed.execution : nothing
+        artifacts = hasproperty(parsed, :artifacts) ? parsed.artifacts : nothing
+        missing_items = if execution !== nothing && hasproperty(execution, :missing)
+            join(_post_run_manifest_missing(execution.missing), ",")
+        else
+            ""
+        end
+
+        return (
+            present = true,
+            path = manifest_path,
+            schema_version = _manifest_string(parsed, :schema_version),
+            run_context = _manifest_string(parsed, :run_context),
+            command = _manifest_string(parsed, :command),
+            compare_ready = execution === nothing ? missing : _manifest_bool(execution, :compare_ready),
+            missing = missing_items,
+            artifacts_complete = artifacts === nothing ? missing : _manifest_bool(artifacts, :complete),
+            standard_images_complete = artifacts === nothing ? missing : _manifest_bool(artifacts, :standard_images_complete),
+            variable_artifacts_complete = artifacts === nothing ? missing : _manifest_bool(artifacts, :variable_artifacts_complete),
+        )
+    catch err
+        return (; _missing_manifest_metadata(present=true, path=manifest_path)...,
+            missing = string("manifest_error:", sprint(showerror, err)))
+    end
+end
+
 function _index_experiment_spec(run_config_path::AbstractString)
     isempty(run_config_path) && return nothing
     isfile(run_config_path) || return nothing
@@ -300,6 +368,7 @@ function _safe_run_index_row(path::AbstractString)
         trust_report_path = _trust_report_path(summary.artifact_dir)
         extra_artifacts = _index_extra_artifact_status(index_spec, String(summary.artifact))
         export_handoff = _export_handoff_complete(summary.artifact_dir)
+        manifest = _run_manifest_metadata(summary.artifact_dir)
         readiness = _lab_readiness_status(
             converged=summary.converged,
             standard_images_complete=images.complete,
@@ -316,6 +385,13 @@ function _safe_run_index_row(path::AbstractString)
             variables = meta.variables,
             solver_kind = meta.solver_kind,
             timestamp_utc = sidecar.timestamp_utc,
+            manifest_present = manifest.present,
+            manifest_schema_version = manifest.schema_version,
+            run_context = manifest.run_context,
+            manifest_command = manifest.command,
+            manifest_compare_ready = manifest.compare_ready,
+            manifest_missing = manifest.missing,
+            manifest_path = manifest.path,
             fiber = summary.fiber_name,
             L_m = summary.L_m,
             P_cont_W = summary.P_cont_W,
@@ -358,6 +434,13 @@ function _safe_run_index_row(path::AbstractString)
             variables = "",
             solver_kind = "",
             timestamp_utc = "",
+            manifest_present = false,
+            manifest_schema_version = "",
+            run_context = "",
+            manifest_command = "",
+            manifest_compare_ready = missing,
+            manifest_missing = "",
+            manifest_path = "",
             fiber = "",
             L_m = NaN,
             P_cont_W = NaN,
@@ -396,6 +479,13 @@ function _sweep_index_row(path::AbstractString)
         variables = "",
         solver_kind = "",
         timestamp_utc = "",
+        manifest_present = false,
+        manifest_schema_version = "",
+        run_context = "",
+        manifest_command = "",
+        manifest_compare_ready = missing,
+        manifest_missing = "",
+        manifest_path = "",
         fiber = "",
         L_m = NaN,
         P_cont_W = NaN,
@@ -473,6 +563,10 @@ function _row_contains(row, needle::AbstractString)
         row.variables,
         row.solver_kind,
         row.timestamp_utc,
+        row.run_context,
+        row.manifest_command,
+        row.manifest_missing,
+        row.manifest_path,
         row.fiber,
         row.quality,
         row.readiness,

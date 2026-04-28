@@ -277,6 +277,14 @@ This is the bridge between configurability and lab usability. The engine should
 not guess graphs. Instead, contracts request named artifact hooks, each with a
 default view rule and a future config override key.
 
+There is one deliberate fallback for exploratory execution: executable
+experimental configs request `exploratory_summary` and `exploratory_overview`.
+Those produce `{tag}_explore_summary.json` and `{tag}_explore_overview.png`
+with a first-pass spectrum, temporal pulse, objective trace, and control
+summary. This is not abstraction theater; it is a minimum lab-notebook surface
+so novel objectives and variables remain inspectable before custom diagnostics
+are promoted.
+
 ### CLI Owns
 
 - command-line entry points
@@ -336,6 +344,7 @@ Implemented first CLI shape:
 ./fiberlab run research_engine_export_smoke
 ./fiberlab explore list
 ./fiberlab explore plan smf28_phase_amplitude_energy_poc
+./fiberlab check config smf28_phase_amplitude_energy_poc
 ./fiberlab explore run smf28_phase_amplitude_energy_poc --local-smoke
 ./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
 ./fiberlab explore compare results/raman --top 10
@@ -348,10 +357,23 @@ experimental and must include config, provenance, warnings, metrics, artifacts,
 and validation status.
 
 The first implementation supports `explore list`, `explore plan`, guarded
-`explore run`, and `explore compare`. Executable experimental front-layer
-configs require `--local-smoke`. Dedicated/heavy MMF, long-fiber, and staged
-multivar workflows require `--heavy-ok`; the initial slice prints the compute
-plan under `--dry-run` instead of auto-launching heavy jobs.
+`explore run`, `explore compare`, and `check config`. Executable experimental
+front-layer configs require `--local-smoke`. Dedicated/heavy MMF, long-fiber,
+and staged multivar workflows require `--heavy-ok`; the initial slice prints
+the compute plan under `--dry-run` instead of auto-launching heavy jobs.
+
+`check config` is intentionally not a bureaucracy layer. It is the
+simulation-free completeness check a researcher runs before compute: validation,
+run path, artifact plan, comparison metadata, and missing pieces.
+
+New front-layer runs write a `run_manifest.json` file as the lightweight local
+tracking layer. This borrows the useful part of experiment-tracking tools
+without introducing a database: command, config hash, regime, variables,
+objective, run context, missing pieces, artifact completion, key metrics, and
+git provenance live beside the result artifact. The result index reads this
+manifest when present, so `explore compare` can show whether a run came from
+`run` or `explore`, whether the manifest considered it comparison-ready, and
+what handoff pieces were still missing.
 
 ### Playground Design References
 
@@ -399,22 +421,24 @@ borrow the objective/adjoint UX ideas.
 
 ### Concrete Playground Slices
 
-1. Add `promote check` to report missing tests/artifacts/docs for an exploratory
-   workflow.
-2. Make staged multivar callable through `explore run` instead of only printing
+1. Make staged multivar callable through `explore run` instead of only printing
    a command.
-3. Make MMF and long-fiber exploratory dispatch explicit: if direct front-layer
+2. Make MMF and long-fiber exploratory dispatch explicit: if direct front-layer
    execution is not implemented, generate and optionally launch the dedicated
    workflow only under `--heavy-ok`.
-4. Add a generic exploratory run manifest with status, warnings, promotion
-   blockers, config hash, git state, params, metrics, artifacts, and command.
-5. Add a low-dimensional derivative-free exploratory backend for variables like
+3. Make `explore compare` prefer/display `run_manifest.json` when available.
+   This is implemented for run context, compare-ready status, and missing
+   handoff items in Markdown and CSV comparison output.
+4. Add a low-dimensional derivative-free exploratory backend for variables like
    gain tilt, energy scale, mode weights, launch parameters, and fiber/pulse
-   scalars. Do not apply it blindly to full-grid phase controls.
-6. Add generic fallback plots for exploratory runs: input/output spectra,
+   scalars. First slice implemented as `solver.kind = "bounded_scalar"` for
+   the `gain_tilt`-only smoke config. Do not apply it blindly to full-grid
+   phase controls.
+5. Add generic fallback plots for exploratory runs: input/output spectra,
    time-domain pulse, objective trace, variable values, and regime-specific
-   summaries when available.
-7. Keep notebooks as orchestration/analysis front doors over the same backend,
+   summaries when available. Implemented for executable experimental
+   front-layer configs via `exploratory_summary` and `exploratory_overview`.
+6. Keep notebooks as orchestration/analysis front doors over the same backend,
     not separate science implementations.
 
 ## Decision

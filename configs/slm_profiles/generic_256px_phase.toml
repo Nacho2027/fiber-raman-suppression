@@ -1,0 +1,31 @@
+profile_id = "generic_256px_phase"
+kind = "spectral_phase_slm"
+vendor = "generic"
+device_model = "abstract"
+
+[pixel_grid]
+axis = "frequency"
+n_pixels = 256
+active_min_THz = -20.0
+active_max_THz = 10.0
+interpolation = "linear"
+outside_active_policy = "zero_phase"
+
+[phase]
+units = "rad"
+range = "0_to_2pi"
+wrap = true
+bit_depth = 10
+quantize = true
+
+[calibration]
+wavelength_to_pixel = "none"
+phase_lut = "none"
+wavefront_correction = "none"
+polarization = "assumed_aligned"
+
+[replay]
+smoothing_kernel_pixels = 0
+crosstalk_kernel = "none"
+require_replay_simulation = true
+max_allowed_replay_loss_dB = 6.0

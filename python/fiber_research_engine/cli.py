@@ -124,6 +124,12 @@ def compute_plan(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
     return run_julia_cli(RUN_EXPERIMENT, "--compute-plan", spec, **kwargs)
 
 
+def check_config(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    """Check whether a config is inspectable, runnable, and comparison-ready."""
+
+    return run_julia_cli(RUN_EXPERIMENT, "--check", spec, **kwargs)
+
+
 def scaffold_objective(
     kind: str,
     *,

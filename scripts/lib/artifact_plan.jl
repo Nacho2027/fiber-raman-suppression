@@ -111,6 +111,20 @@ const ARTIFACT_HOOK_SPECS = Dict{Symbol,Any}(
         override_key = "plots.temporal_pulse",
         implemented = true,
     ),
+    :exploratory_summary => (
+        kind = :metric,
+        filename_hint = "{tag}_explore_summary.json",
+        default_view = "generic per-run summary for exploratory configs: variables, objective, metrics, zoom window, and available traces",
+        override_key = "plots.explore",
+        implemented = true,
+    ),
+    :exploratory_overview => (
+        kind = :plot,
+        filename_hint = "{tag}_explore_overview.png",
+        default_view = "generic spectrum, temporal pulse, objective trace, and variable summary for novel exploratory work",
+        override_key = "plots.explore",
+        implemented = true,
+    ),
     :mode_resolved_spectra => (
         kind = :plot,
         filename_hint = "{tag}_mode_resolved_spectra.png",
@@ -252,6 +266,13 @@ function regime_artifact_hooks(spec)
     return Symbol[]
 end
 
+function exploratory_artifact_hooks(spec)
+    spec.maturity == "supported" && return Symbol[]
+    spec.artifacts.bundle in (:standard, :experimental_multivar) ||
+        return Symbol[]
+    return (:exploratory_summary, :exploratory_overview)
+end
+
 function experiment_artifact_plan(spec)
     requests = NamedTuple[]
     for hook in regime_artifact_hooks(spec)
@@ -268,6 +289,10 @@ function experiment_artifact_plan(spec)
         for hook in contract.artifact_hooks
             push!(requests, _artifact_request(hook, :variable, variable))
         end
+    end
+
+    for hook in exploratory_artifact_hooks(spec)
+        push!(requests, _artifact_request(hook, :explore, :generic))
     end
 
     deduped = NamedTuple[]

@@ -17,6 +17,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test "smf28_longfiber_phase_poc" in approved_experiment_config_ids()
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
     @test "smf28_amp_on_phase_refinement_poc" in approved_experiment_config_ids()
+    @test "research_engine_gain_tilt_scalar_search_smoke" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
     @test spec.id == "smf28_phase_lbfgs_poc"
@@ -133,6 +134,143 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     rendered_lab_ready_config = sprint(io -> render_lab_ready_report(lab_ready_config; io=io))
     @test occursin("Lab Readiness Gate", rendered_lab_ready_config)
     @test occursin("Status: `PASS`", rendered_lab_ready_config)
+
+    supported_check = research_config_check_report("research_engine_smoke")
+    @test supported_check.pass
+    @test supported_check.run_path == :run
+    @test supported_check.compare_ready
+    rendered_supported_check = sprint(io -> render_research_config_check(supported_check; io=io))
+    @test occursin("Research Config Check", rendered_supported_check)
+    @test occursin("Run path: `./fiberlab run research_engine_smoke`", rendered_supported_check)
+    @test occursin("Missing pieces: `none`", rendered_supported_check)
+    cli_supported_check = run_experiment_main(["--check", "research_engine_smoke"])
+    @test cli_supported_check.pass
+
+    gain_tilt_check = research_config_check_report("research_engine_gain_tilt_smoke")
+    @test !gain_tilt_check.pass
+    @test gain_tilt_check.run_path == :explore_local_smoke
+    @test :experimental_maturity in gain_tilt_check.missing
+    @test :no_export_handoff in gain_tilt_check.missing
+    rendered_gain_tilt_check = sprint(io -> render_research_config_check(gain_tilt_check; io=io))
+    @test occursin("Run path: `./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke`", rendered_gain_tilt_check)
+    @test occursin("Compare-ready metadata: `false`", rendered_gain_tilt_check)
+
+    scalar_search_spec = load_experiment_spec("research_engine_gain_tilt_scalar_search_smoke")
+    @test scalar_search_spec.id == "smf28_gain_tilt_scalar_search_smoke"
+    @test scalar_search_spec.controls.variables == (:gain_tilt,)
+    @test scalar_search_spec.solver.kind == :bounded_scalar
+    @test scalar_search_spec.solver.scalar_lower == -0.09
+    @test scalar_search_spec.solver.scalar_upper == 0.09
+    @test experiment_execution_mode(scalar_search_spec) == :scalar_search
+    @test validate_experiment_spec(scalar_search_spec) isa NamedTuple
+    @test (:gain_tilt,) in objective_contract(:raman_band, :single_mode).supported_variables
+    @test (:gain_tilt,) in validate_experiment_spec(scalar_search_spec).variables
+    scalar_search_kwargs = supported_experiment_run_kwargs(scalar_search_spec)
+    @test scalar_search_kwargs.variables == (:gain_tilt,)
+    @test scalar_search_kwargs.scalar_lower == -0.09
+    @test scalar_search_kwargs.scalar_upper == 0.09
+    @test scalar_search_kwargs.δ_bound == 0.10
+    scalar_search_plan = experiment_artifact_plan(scalar_search_spec)
+    scalar_search_hooks = Tuple(request.hook for request in scalar_search_plan.hooks)
+    @test :gain_tilt_profile in scalar_search_hooks
+    @test :exploratory_summary in scalar_search_hooks
+    @test scalar_search_plan.implemented
+    rendered_scalar_search = render_experiment_plan(scalar_search_spec)
+    @test occursin("Execution: mode=scalar_search", rendered_scalar_search)
+    @test occursin("Solver: kind=bounded_scalar", rendered_scalar_search)
+
+    mmf_check = research_config_check_report("grin50_mmf_phase_sum_poc")
+    @test !mmf_check.pass
+    @test mmf_check.run_path == :explore_heavy_dry_run
+    @test :requires_dedicated_workflow in mmf_check.missing
+    @test :artifact_plan_not_implemented in mmf_check.missing
+    rendered_mmf_check = sprint(io -> render_research_config_check(mmf_check; io=io))
+    @test occursin("Run path: `./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run`", rendered_mmf_check)
+
+    exploratory_spec = load_experiment_spec("research_engine_gain_tilt_smoke")
+    exploratory_plan = experiment_artifact_plan(exploratory_spec)
+    exploratory_hooks = Tuple(request.hook for request in exploratory_plan.hooks)
+    @test :exploratory_summary in exploratory_hooks
+    @test :exploratory_overview in exploratory_hooks
+    rendered_exploratory_plan = sprint(io -> render_experiment_artifact_plan(exploratory_spec; io=io))
+    @test occursin("exploratory_summary", rendered_exploratory_plan)
+    @test occursin("plots.explore", rendered_exploratory_plan)
+
+    generic_dir = mktempdir()
+    generic_spec = load_experiment_spec("research_engine_temporal_width_smoke")
+    Nt_generic = 32
+    generic_uω0 = reshape(ComplexF64.(range(1.0, stop=2.0, length=Nt_generic)), Nt_generic, 1)
+    generic_phi = reshape(collect(range(-0.2, stop=0.2, length=Nt_generic)), Nt_generic, 1)
+    generic_bundle = (
+        spec = generic_spec,
+        output_dir = generic_dir,
+        save_prefix = joinpath(generic_dir, "opt"),
+        artifact_path = joinpath(generic_dir, "opt_result.jld2"),
+        result = (
+            phi_opt = generic_phi,
+            convergence_history = [-12.0, -18.0, -21.0],
+            J_before = 1e-2,
+            J_after = 1e-4,
+            iterations = 3,
+        ),
+        uω0 = generic_uω0,
+        sim = Dict{String,Any}("Nt" => Nt_generic, "M" => 1, "Δt" => 0.01, "f0" => 193.4),
+    )
+    generic_artifacts = write_exploratory_artifacts(generic_spec, generic_bundle)
+    @test generic_artifacts.complete
+    @test isfile(generic_artifacts.paths[:exploratory_summary])
+    @test isfile(generic_artifacts.paths[:exploratory_overview])
+    generic_summary = JSON3.read(read(generic_artifacts.paths[:exploratory_summary], String))
+    @test generic_summary.schema_version == "exploratory_artifacts_v1"
+    @test generic_summary.config.id == "smf28_phase_temporal_width_smoke"
+    @test "phase" in collect(generic_summary.controls.variables)
+    @test generic_summary.objective.kind == "temporal_width"
+    @test generic_summary.zoom.time_window_samples >= 1
+    centered_temporal = reshape(ComplexF64.(exp.(-((collect(1:Nt_generic) .- (Nt_generic ÷ 2 + 1)) ./ 5) .^ 2)), Nt_generic, 1)
+    centered_spectrum = fft(centered_temporal, 1)
+    centered_power = _explore_temporal_power(centered_spectrum)
+    @test abs(argmax(centered_power) - (Nt_generic ÷ 2 + 1)) <= 1
+
+    manifest_dir = mktempdir()
+    manifest_artifact = joinpath(manifest_dir, "opt_result.jld2")
+    manifest_config = joinpath(manifest_dir, "run_config.toml")
+    write(manifest_artifact, "placeholder")
+    write(manifest_config, "placeholder")
+    manifest_bundle = (
+        spec = load_experiment_spec("research_engine_gain_tilt_smoke"),
+        output_dir = manifest_dir,
+        save_prefix = joinpath(manifest_dir, "opt"),
+        config_copy = manifest_config,
+        artifact_path = manifest_artifact,
+        sidecar_path = joinpath(manifest_dir, "opt_result.json"),
+        artifact_validation = (
+            complete = true,
+            checked = String[manifest_artifact, manifest_config],
+            missing = String[],
+            standard_images = (complete = true, present = String["_phase_profile.png"], missing = String[]),
+            extra_artifacts = (complete = true, hooks = (:gain_tilt_profile,), checked = String[], missing = String[]),
+        ),
+    )
+    manifest_data = experiment_run_manifest_data(
+        manifest_bundle;
+        run_context=:explore_local_smoke,
+        run_command="./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke",
+    )
+    @test manifest_data["schema_version"] == "run_manifest_v1"
+    @test manifest_data["run_context"] == "explore_local_smoke"
+    @test manifest_data["config"]["id"] == "smf28_phase_gain_tilt_smoke"
+    @test manifest_data["artifacts"]["complete"] == true
+    @test manifest_data["pre_run_check"]["compare_ready"] == false
+    manifest_path = write_experiment_run_manifest(
+        manifest_bundle;
+        run_context=:explore_local_smoke,
+        run_command="./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke",
+    )
+    @test basename(manifest_path) == "run_manifest.json"
+    @test isfile(manifest_path)
+    parsed_manifest = JSON3.read(read(manifest_path, String))
+    @test parsed_manifest.schema_version == "run_manifest_v1"
+    @test parsed_manifest.config.id == "smf28_phase_gain_tilt_smoke"
 
     scaffold_dir = mktempdir()
     scaffold = scaffold_objective_extension(
@@ -581,6 +719,10 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test isfile(mv_variable_artifacts.paths[:energy_throughput])
     @test isfile(mv_variable_artifacts.paths[:energy_scale])
     @test isfile(mv_variable_artifacts.paths[:peak_power])
+    mv_exploratory_artifacts = write_exploratory_artifacts(mv_spec, artifact_bundle)
+    @test mv_exploratory_artifacts.complete
+    @test isfile(mv_exploratory_artifacts.paths[:exploratory_summary])
+    @test isfile(mv_exploratory_artifacts.paths[:exploratory_overview])
     energy_metrics = JSON3.read(read(mv_variable_artifacts.paths[:energy_scale], String))
     @test energy_metrics.schema_version == "multivar_energy_metrics_v1"
     @test energy_metrics.E_opt_over_E_ref == 2.0
@@ -611,6 +753,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test :amplitude_mask in mv_artifact_report.extra_artifacts.hooks
     @test :energy_scale in mv_artifact_report.extra_artifacts.hooks
     @test :peak_power in mv_artifact_report.extra_artifacts.hooks
+    @test :exploratory_summary in mv_artifact_report.extra_artifacts.hooks
+    @test :exploratory_overview in mv_artifact_report.extra_artifacts.hooks
     rm(mv_variable_artifacts.paths[:peak_power])
     broken_mv_artifact_report = validate_experiment_artifacts(mv_validation_bundle; throw_on_error=false)
     @test !broken_mv_artifact_report.complete
