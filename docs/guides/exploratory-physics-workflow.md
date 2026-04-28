@@ -65,6 +65,45 @@ The dry-run now reports:
 - artifact hooks requested by the regime/objective/variables
 - whether the artifact plan is already implemented
 
+## Playground Mode
+
+Use `fiberlab explore` when the goal is research exploration rather than a
+supported lab workflow.
+
+```bash
+./fiberlab explore list
+./fiberlab explore plan my_config
+./fiberlab explore run my_config --local-smoke --dry-run
+./fiberlab explore run my_config --local-smoke
+./fiberlab explore compare results/raman --top 10
+```
+
+Rules:
+
+- `fiberlab run` remains conservative and is for supported/default workflows.
+- `fiberlab explore list` is the starting index of configs worth inspecting.
+- `fiberlab explore plan` is always the first inspection step for experimental
+  work.
+- `fiberlab explore run --local-smoke` allows executable experimental local
+  smoke configs such as small multivariable or gain-tilt runs.
+- `fiberlab explore run --heavy-ok --dry-run` prints the dedicated workflow plan
+  for heavy MMF, long-fiber, or staged multivar work.
+- `fiberlab explore compare` ranks and filters completed exploratory runs using
+  the same result metadata consumed by lab-readiness checks and notebooks.
+- Heavy dedicated workflows are not launched automatically by the first explore
+  slice; the compute plan remains the source of the command to run on a
+  workstation, cluster, cloud VM, or Rivera Lab burst setup.
+
+This is the core playground distinction:
+
+```text
+run     = supported/lab-facing path
+explore = experimental playground path with explicit guardrails
+```
+
+The goal is not to prevent research. The goal is to prevent experimental runs
+from being confused with lab-ready workflows.
+
 For deeper inspection:
 
 ```bash

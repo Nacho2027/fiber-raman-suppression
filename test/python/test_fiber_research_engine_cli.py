@@ -16,6 +16,10 @@ from fiber_research_engine.cli import (
     control_layout,
     dry_run_amp_on_phase_refinement,
     dry_run_experiment,
+    explore_compare,
+    explore_list,
+    explore_plan,
+    explore_run,
     dry_run_sweep,
     execute_sweep,
     index_results,
@@ -65,6 +69,62 @@ class FiberResearchEngineCliTests(unittest.TestCase):
         called_args = run_mock.call_args.args[0]
         self.assertEqual(called_args[-3:], (RUN_EXPERIMENT, "--dry-run", "my_config"))
         self.assertEqual(run_mock.call_args.kwargs["cwd"], Path("/tmp/repo"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_explore_plan_and_run_delegate_to_explore_backend(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "explore\n"
+        run_mock.return_value.stderr = ""
+
+        plan = explore_plan("smf28_phase_amplitude_energy_poc", repo_root=Path("/tmp/repo"))
+        self.assertEqual(plan.stdout, "explore\n")
+        self.assertEqual(
+            run_mock.call_args.args[0][-3:],
+            (RUN_EXPERIMENT, "--explore-plan", "smf28_phase_amplitude_energy_poc"),
+        )
+
+        explore_run(
+            "research_engine_gain_tilt_smoke",
+            local_smoke=True,
+            dry_run=True,
+            repo_root=Path("/tmp/repo"),
+        )
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], RUN_EXPERIMENT)
+        self.assertIn("--explore-run", called_args)
+        self.assertIn("--local-smoke", called_args)
+        self.assertIn("--dry-run", called_args)
+        self.assertIn("research_engine_gain_tilt_smoke", called_args)
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_explore_list_and_compare_route_to_playground_discovery(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "explore list\n"
+        run_mock.return_value.stderr = ""
+
+        listing = explore_list(repo_root=Path("/tmp/repo"))
+        self.assertEqual(listing.stdout, "explore list\n")
+        self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--list"))
+
+        explore_compare(
+            "results/raman/smoke",
+            top=5,
+            objective="gain_tilt",
+            contains="smoke",
+            complete_images=True,
+            repo_root=Path("/tmp/repo"),
+        )
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], INDEX_RESULTS)
+        self.assertIn("--compare", called_args)
+        self.assertIn("--top", called_args)
+        self.assertIn("5", called_args)
+        self.assertIn("--objective", called_args)
+        self.assertIn("gain_tilt", called_args)
+        self.assertIn("--contains", called_args)
+        self.assertIn("smoke", called_args)
+        self.assertIn("--complete-images", called_args)
+        self.assertIn("results/raman/smoke", called_args)
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_dry_run_sweep_delegates_to_sweep_cli(self, run_mock):

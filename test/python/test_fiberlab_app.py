@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from fiber_research_engine import app
 from fiber_research_engine.cli import (
+    INDEX_RESULTS,
     LAB_READY,
     RUN_EXPERIMENT,
     RUN_EXPERIMENT_SWEEP,
@@ -51,6 +52,56 @@ class FiberlabAppTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(stdout, "Compute plan\n")
         self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--compute-plan", "smf28_longfiber_phase_poc"))
+
+    @patch("fiber_research_engine.cli.subprocess.run")
+    def test_explore_commands_route_to_playground_backend(self, run_mock):
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "explore\n"
+        run_mock.return_value.stderr = ""
+
+        status, stdout, _ = self._run_app(["explore", "list"])
+        self.assertEqual(status, 0)
+        self.assertEqual(stdout, "explore\n")
+        self.assertEqual(run_mock.call_args.args[0][-2:], (RUN_EXPERIMENT, "--list"))
+
+        status, stdout, _ = self._run_app(["explore", "plan", "grin50_mmf_phase_sum_poc"])
+        self.assertEqual(status, 0)
+        self.assertEqual(stdout, "explore\n")
+        self.assertEqual(run_mock.call_args.args[0][-3:], (RUN_EXPERIMENT, "--explore-plan", "grin50_mmf_phase_sum_poc"))
+
+        status, stdout, _ = self._run_app(
+            ["explore", "run", "research_engine_gain_tilt_smoke", "--local-smoke", "--dry-run"]
+        )
+        self.assertEqual(status, 0)
+        called_args = run_mock.call_args.args[0]
+        self.assertEqual(called_args[4], RUN_EXPERIMENT)
+        self.assertIn("--explore-run", called_args)
+        self.assertIn("--local-smoke", called_args)
+        self.assertIn("--dry-run", called_args)
+        self.assertIn("research_engine_gain_tilt_smoke", called_args)
+
+        status, stdout, _ = self._run_app(
+            [
+                "explore",
+                "compare",
+                "results/raman/smoke",
+                "--top",
+                "3",
+                "--objective",
+                "gain_tilt",
+                "--complete-images",
+            ]
+        )
+        self.assertEqual(status, 0)
+        compare_args = run_mock.call_args.args[0]
+        self.assertEqual(compare_args[4], INDEX_RESULTS)
+        self.assertIn("--compare", compare_args)
+        self.assertIn("--top", compare_args)
+        self.assertIn("3", compare_args)
+        self.assertIn("--objective", compare_args)
+        self.assertIn("gain_tilt", compare_args)
+        self.assertIn("--complete-images", compare_args)
+        self.assertIn("results/raman/smoke", compare_args)
 
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_run_and_latest_commands_route_to_same_experiment_backend(self, run_mock):

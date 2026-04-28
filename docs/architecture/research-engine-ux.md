@@ -322,13 +322,100 @@ Design every new feature against this checklist:
 
 ## Near-Term Priorities
 
-1. Add trust-status/date filters once saved artifacts expose those fields
-   consistently.
-2. Add optional refinement planning to the notebook wrapper without making it
-   a default lab workflow.
-3. Add promotion guides for objective and variable extensions.
-5. Promote one heavy regime into front-layer execution after the current
-   dedicated workflow remains stable.
+The next priority is a playground pivot, not another round of status-only
+gating. The repo should have two honest lanes:
+
+- `lab-ready`: safe default workflows another researcher can run without hidden
+  context.
+- `explore`: experimental workflows for novel fiber inverse-design ideas, with
+  warnings, provenance, artifact checks, and clear promotion blockers.
+
+Implemented first CLI shape:
+
+```bash
+./fiberlab run research_engine_export_smoke
+./fiberlab explore list
+./fiberlab explore plan smf28_phase_amplitude_energy_poc
+./fiberlab explore run smf28_phase_amplitude_energy_poc --local-smoke
+./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
+./fiberlab explore compare results/raman --top 10
+```
+
+In this model, `run` remains conservative. `explore` is where researchers can
+run semi-promoted MMF, long-fiber, multivariable, and custom-objective work
+without pretending it is lab-ready. The output must be loudly labeled
+experimental and must include config, provenance, warnings, metrics, artifacts,
+and validation status.
+
+The first implementation supports `explore list`, `explore plan`, guarded
+`explore run`, and `explore compare`. Executable experimental front-layer
+configs require `--local-smoke`. Dedicated/heavy MMF, long-fiber, and staged
+multivar workflows require `--heavy-ok`; the initial slice prints the compute
+plan under `--dry-run` instead of auto-launching heavy jobs.
+
+### Playground Design References
+
+The external tools worth learning from are patterns, not dependencies:
+
+- Tidy3D inverse design frames workflows around a base simulation, design
+  region/variables, metrics, and optimizer hyperparameters. That maps well to
+  `problem`, `controls`, `objective`, `solver`, and `artifacts`.
+- Meep's adjoint workflow is the right mental model for "objective over
+  simulation outputs plus gradients when available." It is not currently the
+  right dependency for this GNLSE fiber codebase.
+- Hydra-style config composition and multirun UX is a good target for future
+  config overlays and sweeps.
+- MLflow-style tracking is a good model for params, metrics, artifacts, and
+  provenance. The repo can implement a lightweight local version without adding
+  MLflow immediately.
+- Optuna's define-by-run idea is useful for exploratory low-dimensional search
+  spaces. For high-dimensional phase/amplitude controls, the repo still needs
+  explicit gradients or carefully limited derivative-free runs.
+
+### Meep Decision
+
+Do not use Meep as a dependency for the current playground.
+
+Reasoning:
+
+- Meep is an FDTD electromagnetic simulator. This repo's core physics is
+  nonlinear fiber propagation/GNLSE-style modeling.
+- Replacing the propagation backend with Meep would be a major scientific and
+  software project, not a UX improvement.
+- The useful Meep lesson is architectural: expose objectives as functions of
+  simulation outputs, verify gradients with Taylor/finite-difference checks, and
+  keep adjoint behavior explicit.
+
+When Meep could make sense later:
+
+- if the group wants chip/free-space photonic inverse design alongside fiber
+  propagation;
+- if a future module needs FDTD geometry/design-region optimization;
+- if the repo becomes a multi-backend photonics playground with a shared
+  experiment/provenance layer.
+
+For the near-term fiber playground, keep the existing Julia fiber solver and
+borrow the objective/adjoint UX ideas.
+
+### Concrete Playground Slices
+
+1. Add `promote check` to report missing tests/artifacts/docs for an exploratory
+   workflow.
+2. Make staged multivar callable through `explore run` instead of only printing
+   a command.
+3. Make MMF and long-fiber exploratory dispatch explicit: if direct front-layer
+   execution is not implemented, generate and optionally launch the dedicated
+   workflow only under `--heavy-ok`.
+4. Add a generic exploratory run manifest with status, warnings, promotion
+   blockers, config hash, git state, params, metrics, artifacts, and command.
+5. Add a low-dimensional derivative-free exploratory backend for variables like
+   gain tilt, energy scale, mode weights, launch parameters, and fiber/pulse
+   scalars. Do not apply it blindly to full-grid phase controls.
+6. Add generic fallback plots for exploratory runs: input/output spectra,
+   time-domain pulse, objective trace, variable values, and regime-specific
+   summaries when available.
+7. Keep notebooks as orchestration/analysis front doors over the same backend,
+    not separate science implementations.
 
 ## Decision
 

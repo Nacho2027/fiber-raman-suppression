@@ -56,6 +56,38 @@ end
     @test occursin("Promotion stage: planning", render_experiment_plan(mmf_spec))
     @test occursin("Promotion blockers:", render_experiment_plan(mmf_spec))
 
+    mv_default_policy = experiment_explore_run_policy(mv_spec)
+    @test !mv_default_policy.allowed
+    @test mv_default_policy.action == :front_layer
+    @test :requires_local_smoke in mv_default_policy.blockers
+    mv_smoke_policy = experiment_explore_run_policy(mv_spec; local_smoke=true)
+    @test mv_smoke_policy.allowed
+    @test mv_smoke_policy.action == :front_layer
+    @test :experimental_run in mv_smoke_policy.warnings
+
+    staged_default_policy = experiment_explore_run_policy(staged_mv_spec; local_smoke=true)
+    @test !staged_default_policy.allowed
+    @test staged_default_policy.action == :dedicated_workflow
+    @test :requires_heavy_ok in staged_default_policy.blockers
+    staged_heavy_policy = experiment_explore_run_policy(staged_mv_spec; heavy_ok=true)
+    @test staged_heavy_policy.allowed
+    @test staged_heavy_policy.action == :dedicated_workflow
+
+    mmf_default_policy = experiment_explore_run_policy(mmf_spec; local_smoke=true)
+    @test !mmf_default_policy.allowed
+    @test mmf_default_policy.action == :dedicated_workflow
+    @test :requires_heavy_ok in mmf_default_policy.blockers
+    mmf_heavy_policy = experiment_explore_run_policy(mmf_spec; heavy_ok=true)
+    @test mmf_heavy_policy.allowed
+    @test :heavy_compute in mmf_heavy_policy.warnings
+
+    long_default_policy = experiment_explore_run_policy(long_spec)
+    @test !long_default_policy.allowed
+    @test :requires_heavy_ok in long_default_policy.blockers
+    long_heavy_policy = experiment_explore_run_policy(long_spec; heavy_ok=true)
+    @test long_heavy_policy.allowed
+    @test long_heavy_policy.action == :dedicated_workflow
+
     capabilities = sprint(io -> render_experiment_capabilities(; io=io))
     @test occursin("promotion_stages=planning, smoke, validated, lab_ready", capabilities)
     @test occursin("current_stage=", capabilities)

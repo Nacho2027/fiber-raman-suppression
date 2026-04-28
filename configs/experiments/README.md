@@ -18,6 +18,7 @@ List available experiment configs:
 
 ```bash
 ./fiberlab configs
+./fiberlab explore list
 ```
 
 Dry-run a config without launching optimization:
@@ -95,6 +96,21 @@ Run a validated config:
 
 ```bash
 ./fiberlab run research_engine_poc
+```
+
+Run an experimental playground config intentionally:
+
+```bash
+./fiberlab explore plan research_engine_gain_tilt_smoke
+./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
+./fiberlab explore compare results/raman/smoke --top 10
+```
+
+Inspect heavy/dedicated playground workflows without launching them:
+
+```bash
+./fiberlab explore plan grin50_mmf_phase_sum_poc
+./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
 ```
 
 Inspect the latest completed run for a config:

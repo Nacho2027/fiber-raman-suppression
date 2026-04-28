@@ -1,20 +1,21 @@
 """
-Multi-Variable Spectral Pulse-Shaping Optimizer (Session A)
+Experimental multi-variable spectral pulse-shaping optimizer.
 
 Jointly optimizes any subset of {spectral phase φ(ω), spectral amplitude A(ω),
 pulse energy E} for Raman suppression, through a SINGLE forward-adjoint solve
 per iteration. Mode coefficients {c_m} are stubbed in the API for future
-(Session C) extension — they are stripped + warned at runtime.
+extension — they are stripped + warned at runtime.
 
 Complements — does NOT replace — the existing single-variable paths:
-  - `scripts/raman_optimization.jl :: optimize_spectral_phase`   (phase-only)
-  - `scripts/amplitude_optimization.jl :: optimize_spectral_amplitude`  (amp-only)
+  - `scripts/lib/raman_optimization.jl :: optimize_spectral_phase`   (phase-only)
+  - `scripts/lib/amplitude_optimization.jl :: optimize_spectral_amplitude`  (amp-only)
 
-Both remain usable for A/B comparison. Zero modifications to shared files.
+Both remain usable for A/B comparison.
 
-Math: see `.planning/notes/multivar-gradient-derivations.md`
-Schema: see `.planning/notes/multivar-output-schema.md`
-Decisions: see `.planning/sessions/A-multivar-decisions.md`
+Status: see `agent-docs/current-agent-context/MULTIVAR.md`
+Historical derivations and schema notes: see
+`docs/planning-history/notes/multivar-gradient-derivations.md` and
+`docs/planning-history/notes/multivar-output-schema.md`
 
 Entry points:
   - `cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg)`

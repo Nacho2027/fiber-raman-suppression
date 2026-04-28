@@ -17,6 +17,8 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --validate-all
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-plan [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --latest [spec]
 
 The current implementation is intentionally narrow:
@@ -51,6 +53,36 @@ end
 
 function _load_or_default_experiment(args)
     return isempty(args) ? DEFAULT_EXPERIMENT_SPEC : args[1]
+end
+
+function _parse_explore_run_args(args)
+    local_smoke = false
+    heavy_ok = false
+    dry_run = false
+    specs = String[]
+
+    for arg in args
+        if arg == "--local-smoke"
+            local_smoke = true
+        elseif arg == "--heavy-ok"
+            heavy_ok = true
+        elseif arg == "--dry-run"
+            dry_run = true
+        elseif startswith(arg, "--")
+            error("unknown --explore-run option `$arg`")
+        else
+            push!(specs, arg)
+        end
+    end
+
+    length(specs) == 1 || error(
+        "usage: scripts/canonical/run_experiment.jl --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec")
+    return (
+        spec = only(specs),
+        local_smoke = local_smoke,
+        heavy_ok = heavy_ok,
+        dry_run = dry_run,
+    )
 end
 
 function run_experiment_main(args=ARGS)
@@ -140,6 +172,44 @@ function run_experiment_main(args=ARGS)
         return spec
     end
 
+    if args[1] == "--explore-plan"
+        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --explore-plan [spec]")
+        spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
+        validate_experiment_spec(spec)
+        println(render_experiment_plan(spec))
+        render_explore_run_policy(spec)
+        return spec
+    end
+
+    if args[1] == "--explore-run"
+        parsed = _parse_explore_run_args(args[2:end])
+        spec = load_experiment_spec(parsed.spec)
+        validate_experiment_spec(spec)
+        policy = render_explore_run_policy(
+            spec;
+            local_smoke=parsed.local_smoke,
+            heavy_ok=parsed.heavy_ok,
+        )
+        if !policy.allowed
+            error(
+                "explore run refused; blockers: $(join(string.(policy.blockers), ", ")). " *
+                "Use --local-smoke for executable experimental local smoke configs or --heavy-ok for dedicated heavy workflows.")
+        end
+        if parsed.dry_run
+            println(render_experiment_compute_plan(spec))
+            return spec
+        end
+        if policy.action == :front_layer
+            result = run_supported_experiment(spec)
+            render_experiment_completion_summary(result)
+            return result
+        end
+        println(render_experiment_compute_plan(spec))
+        error(
+            "explore run for dedicated workflow `$(policy.mode)` is not launched automatically yet; " *
+            "run the command from the compute plan on appropriate compute.")
+    end
+
     if args[1] == "--latest"
         length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment.jl --latest [spec]")
         spec = load_experiment_spec(_load_or_default_experiment(args[2:end]))
@@ -160,7 +230,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)

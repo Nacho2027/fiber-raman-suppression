@@ -381,6 +381,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("Provider-neutral path", mmf_compute_plan)
     @test occursin("Optional Rivera Lab burst helper", mmf_compute_plan)
     @test occursin("scripts/research/mmf/baseline.jl", mmf_compute_plan)
+    explore_plan_spec = run_experiment_main(["--explore-plan", "grin50_mmf_phase_sum_poc"])
+    @test explore_plan_spec.id == mmf_spec.id
+    @test_throws ErrorException run_experiment_main(["--explore-run", "--local-smoke", "grin50_mmf_phase_sum_poc"])
+    explore_heavy_dry_spec = run_experiment_main(["--explore-run", "--heavy-ok", "--dry-run", "grin50_mmf_phase_sum_poc"])
+    @test explore_heavy_dry_spec.id == mmf_spec.id
     @test_throws ArgumentError run_supported_experiment(mmf_spec; timestamp="test")
     @test_throws ErrorException run_experiment_main(["grin50_mmf_phase_sum_poc"])
 
@@ -430,6 +435,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("Staged multivar command", staged_mv_compute_plan)
     @test occursin("scripts/canonical/refine_amp_on_phase.jl", staged_mv_compute_plan)
     @test occursin("--delta-bound 0.1", staged_mv_compute_plan)
+    @test_throws ErrorException run_experiment_main(["--explore-run", "--local-smoke", "smf28_amp_on_phase_refinement_poc"])
+    staged_mv_explore_dry = run_experiment_main(["--explore-run", "--heavy-ok", "--dry-run", "smf28_amp_on_phase_refinement_poc"])
+    @test staged_mv_explore_dry.id == staged_mv_spec.id
     @test_throws ArgumentError run_supported_experiment(staged_mv_spec; timestamp="test")
 
     mv_kwargs = supported_experiment_run_kwargs(mv_spec)
@@ -437,6 +445,10 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test mv_kwargs.max_iter == 30
     @test mv_kwargs.fiber_preset == :SMF28
     @test mv_kwargs.validate == false
+
+    @test_throws ErrorException run_experiment_main(["--explore-run", "research_engine_gain_tilt_smoke"])
+    gain_tilt_explore_dry = run_experiment_main(["--explore-run", "--local-smoke", "--dry-run", "research_engine_gain_tilt_smoke"])
+    @test gain_tilt_explore_dry.id == "smf28_phase_gain_tilt_smoke"
 
     adapted = load_experiment_spec("smf28_L2m_P0p2W")
     @test adapted.schema == :canonical_run_adapter

@@ -457,6 +457,62 @@ function _promotion_blocker_summary(status)
     return join(string.(status.blockers), ", ")
 end
 
+function _symbol_tuple_summary(items)
+    isempty(items) && return "none"
+    return join(string.(items), ", ")
+end
+
+function experiment_explore_run_policy(spec; local_smoke::Bool=false, heavy_ok::Bool=false)
+    validate_experiment_spec(spec)
+    mode = experiment_execution_mode(spec)
+    status = experiment_promotion_status(spec)
+    blockers = Symbol[]
+    warnings = Symbol[]
+
+    action =
+        mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase) ?
+            :dedicated_workflow :
+            :front_layer
+
+    spec.maturity != "supported" && _push_blocker!(warnings, :experimental_run)
+    status.stage != :lab_ready && _push_blocker!(warnings, Symbol(string("stage_", status.stage)))
+
+    if action == :front_layer
+        if spec.maturity != "supported" && !local_smoke
+            _push_blocker!(blockers, :requires_local_smoke)
+        end
+    else
+        if !heavy_ok
+            _push_blocker!(blockers, :requires_heavy_ok)
+        end
+        _push_blocker!(warnings, :heavy_compute)
+        mode == :amp_on_phase && _push_blocker!(warnings, :dedicated_staged_multivar_workflow)
+        mode == :long_fiber_phase && _push_blocker!(warnings, :dedicated_long_fiber_workflow)
+        mode == :multimode_phase && _push_blocker!(warnings, :dedicated_multimode_workflow)
+    end
+
+    return (
+        allowed = isempty(blockers),
+        action = action,
+        mode = mode,
+        stage = status.stage,
+        blockers = Tuple(blockers),
+        warnings = Tuple(warnings),
+    )
+end
+
+function render_explore_run_policy(spec; local_smoke::Bool=false, heavy_ok::Bool=false, io::IO=stdout)
+    policy = experiment_explore_run_policy(spec; local_smoke=local_smoke, heavy_ok=heavy_ok)
+    println(io, "Explore run policy:")
+    println(io, "  allowed=", policy.allowed)
+    println(io, "  action=", policy.action)
+    println(io, "  mode=", policy.mode)
+    println(io, "  promotion_stage=", policy.stage)
+    println(io, "  blockers=", _symbol_tuple_summary(policy.blockers))
+    println(io, "  warnings=", _symbol_tuple_summary(policy.warnings))
+    return policy
+end
+
 function _require_positive_finite(value, label::AbstractString)
     numeric = Float64(value)
     isfinite(numeric) && numeric > 0 || throw(ArgumentError("$label must be positive and finite"))
@@ -682,6 +738,7 @@ function render_experiment_capabilities(; io::IO=stdout)
     println(io, "Execution notes:")
     println(io, "  single_mode phase-only is the supported local execution path.")
     println(io, "  single_mode multivariable controls are experimental.")
+    println(io, "  use `fiberlab explore` for intentional experimental playground runs.")
     println(io, "  long_fiber and multimode are planning/dry-run surfaces until their dedicated workflows are promoted.")
     println(io, "  Configs select from these contracts; new physics and new controls still belong in code first.")
     return nothing

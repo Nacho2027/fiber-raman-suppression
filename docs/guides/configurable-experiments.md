@@ -75,8 +75,25 @@ Every plan also reports a promotion stage:
 Use the `Promotion blockers` line in `./fiberlab plan <id>` or
 `./fiberlab compute-plan <id>` as the authoritative explanation of why a config
 is not yet lab-ready. For example, MMF and long-fiber currently report planning
-status because local front-layer execution is blocked, heavy compute is required,
-and some regime-specific artifact hooks are still planned.
+status because they require dedicated heavy workflows and some regime-specific
+artifact hooks are still planned.
+
+For intentional playground work, use `explore`:
+
+```bash
+./fiberlab explore list
+./fiberlab explore plan research_engine_gain_tilt_smoke
+./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
+./fiberlab explore plan grin50_mmf_phase_sum_poc
+./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
+./fiberlab explore compare results/raman --top 10
+```
+
+`run` is conservative. `explore` is explicit research mode: it prints warnings,
+promotion stage, blockers, and compute guidance before any risky path. Local
+experimental runs require `--local-smoke`; heavy/dedicated workflows require
+`--heavy-ok`. `explore compare` uses the shared result index so exploratory
+runs can be ranked, filtered, and inspected from CLI or notebook workflows.
 
 To inspect how the optimizer vector and output plots will be assembled:
 
@@ -275,16 +292,18 @@ For the complete mechanical acceptance procedure, including the strict
 `--require-export` gate, run `make golden-smoke` or see
 [golden-smoke-run.md](./golden-smoke-run.md).
 
-For long-fiber planning, dry-run only on local machines:
+For long-fiber playground planning:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run smf28_longfiber_phase_poc
+./fiberlab explore plan smf28_longfiber_phase_poc
+./fiberlab explore run smf28_longfiber_phase_poc --heavy-ok --dry-run
 ```
 
-For multimode planning, dry-run only on local machines:
+For multimode playground planning:
 
 ```bash
-julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run grin50_mmf_phase_sum_poc
+./fiberlab explore plan grin50_mmf_phase_sum_poc
+./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run
 ```
 
 Long-fiber execution remains burst territory and should use the dedicated

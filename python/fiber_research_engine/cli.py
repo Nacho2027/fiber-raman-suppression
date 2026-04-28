@@ -196,6 +196,76 @@ def dry_run_experiment(spec: str = "research_engine_poc", **kwargs) -> CommandRe
     return run_julia_cli(RUN_EXPERIMENT, "--dry-run", spec, **kwargs)
 
 
+def explore_plan(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
+    """Inspect an experiment as an exploratory playground candidate."""
+
+    return run_julia_cli(RUN_EXPERIMENT, "--explore-plan", spec, **kwargs)
+
+
+def explore_list(**kwargs) -> CommandResult:
+    """List configs available to inspect from the exploratory playground."""
+
+    return list_experiments(**kwargs)
+
+
+def explore_run(
+    spec: str,
+    *,
+    local_smoke: bool = False,
+    heavy_ok: bool = False,
+    dry_run: bool = False,
+    **kwargs,
+) -> CommandResult:
+    """Run or dry-run an explicitly experimental playground workflow."""
+
+    args: list[str] = ["--explore-run"]
+    if local_smoke:
+        args.append("--local-smoke")
+    if heavy_ok:
+        args.append("--heavy-ok")
+    if dry_run:
+        args.append("--dry-run")
+    args.append(spec)
+    return run_julia_cli(RUN_EXPERIMENT, *args, **kwargs)
+
+
+def explore_compare(
+    *roots: str,
+    csv: bool = False,
+    kind: str | None = None,
+    config_id: str | None = None,
+    regime: str | None = None,
+    objective: str | None = None,
+    solver: str | None = None,
+    fiber: str | None = None,
+    complete_images: bool = False,
+    lab_ready: bool = False,
+    export_ready: bool = False,
+    contains: str | None = None,
+    top: int | None = None,
+    **kwargs,
+) -> CommandResult:
+    """Compare exploratory outputs through the shared results index."""
+
+    return index_results(
+        *roots,
+        compare=True,
+        csv=csv,
+        kind=kind,
+        config_id=config_id,
+        regime=regime,
+        objective=objective,
+        solver=solver,
+        fiber=fiber,
+        complete_images=complete_images,
+        lab_ready=lab_ready,
+        export_ready=export_ready,
+        contains=contains,
+        top=top,
+        **kwargs,
+    )
+
+
 def latest_experiment(spec: str = "research_engine_poc", **kwargs) -> CommandResult:
     """Inspect the latest completed run for one experiment config."""
 

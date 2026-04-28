@@ -107,6 +107,41 @@ def _sweep(args: argparse.Namespace) -> int:
     raise ValueError(f"Unknown sweep command: {args.sweep_command}")
 
 
+def _explore(args: argparse.Namespace) -> int:
+    if args.explore_command == "list":
+        return _call(args, engine.explore_list)
+    if args.explore_command == "plan":
+        return _call(args, engine.explore_plan, args.spec)
+    if args.explore_command == "run":
+        result = engine.explore_run(
+            args.spec,
+            local_smoke=args.local_smoke,
+            heavy_ok=args.heavy_ok,
+            dry_run=args.dry_run,
+            **_common_kwargs(args),
+        )
+        return _emit(result)
+    if args.explore_command == "compare":
+        result = engine.explore_compare(
+            *args.roots,
+            csv=args.csv,
+            kind=args.kind,
+            config_id=args.config_id,
+            regime=args.regime,
+            objective=args.objective,
+            solver=args.solver,
+            fiber=args.fiber,
+            complete_images=args.complete_images,
+            lab_ready=args.lab_ready,
+            export_ready=args.export_ready,
+            contains=args.contains,
+            top=args.top,
+            **_common_kwargs(args),
+        )
+        return _emit(result)
+    raise ValueError(f"Unknown explore command: {args.explore_command}")
+
+
 def _scaffold(args: argparse.Namespace) -> int:
     if args.scaffold_command == "objective":
         result = engine.scaffold_objective(
@@ -233,6 +268,31 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         sweep_command = sweep_sub.add_parser(name, help=help_text)
         sweep_command.add_argument("spec")
+
+    explore = add_command("explore", _explore, "Plan or run explicitly experimental playground workflows.")
+    explore_sub = explore.add_subparsers(dest="explore_command", required=True)
+    explore_sub.add_parser("list", help="List configs available for exploratory planning.")
+    explore_plan = explore_sub.add_parser("plan", help="Inspect one config as an exploratory playground candidate.")
+    explore_plan.add_argument("spec")
+    explore_run = explore_sub.add_parser("run", help="Run or dry-run an explicitly experimental workflow.")
+    explore_run.add_argument("spec")
+    explore_run.add_argument("--local-smoke", action="store_true", help="Allow executable experimental local smoke configs.")
+    explore_run.add_argument("--heavy-ok", action="store_true", help="Allow heavy/dedicated exploratory workflows.")
+    explore_run.add_argument("--dry-run", action="store_true", help="Show explore policy and plan without launching compute.")
+    explore_compare = explore_sub.add_parser("compare", help="Compare exploratory result runs.")
+    explore_compare.add_argument("roots", nargs="*")
+    explore_compare.add_argument("--csv", action="store_true")
+    explore_compare.add_argument("--kind")
+    explore_compare.add_argument("--config-id")
+    explore_compare.add_argument("--regime")
+    explore_compare.add_argument("--objective")
+    explore_compare.add_argument("--solver")
+    explore_compare.add_argument("--fiber")
+    explore_compare.add_argument("--complete-images", action="store_true")
+    explore_compare.add_argument("--lab-ready", action="store_true")
+    explore_compare.add_argument("--export-ready", action="store_true")
+    explore_compare.add_argument("--contains")
+    explore_compare.add_argument("--top", type=int)
 
     scaffold = add_command("scaffold", _scaffold, "Create planning-only objective or variable extension files.")
     scaffold_sub = scaffold.add_subparsers(dest="scaffold_command", required=True)
