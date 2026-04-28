@@ -23,6 +23,28 @@ using Test
         @test isdir(joinpath(scripts_root, dir))
     end
 
+    active_roots = [
+        "configs",
+        "lab_extensions",
+        "python",
+        "scripts",
+        "src",
+        "test",
+    ]
+    source_sync_conflicts = String[]
+    for root_name in active_roots
+        root_path = joinpath(project_root, root_name)
+        isdir(root_path) || continue
+        for (root, _, files) in walkdir(root_path)
+            for file in files
+                if occursin("sync-conflict", file)
+                    push!(source_sync_conflicts, relpath(joinpath(root, file), project_root))
+                end
+            end
+        end
+    end
+    @test isempty(sort!(source_sync_conflicts))
+
     active_phase_prefixed = String[]
     research_root = joinpath(scripts_root, "research")
     for (root, _, files) in walkdir(research_root)

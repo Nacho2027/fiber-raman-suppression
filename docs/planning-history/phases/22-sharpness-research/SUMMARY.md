@@ -20,7 +20,7 @@
 
 ## Pareto Plot
 
-![Phase 22 Pareto](phase22_pareto.png)
+![Phase 22 Pareto](../../../figures/phase22_pareto.png)
 
 ## Hessian Indefiniteness Table
 

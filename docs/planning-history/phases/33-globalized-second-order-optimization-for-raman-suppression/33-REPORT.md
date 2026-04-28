@@ -43,7 +43,7 @@ Plan 03 added `scripts/benchmark_synthesis.jl`, three synthesis PNGs, `SYNTHESIS
 
 ## What Was Found
 
-Full details: [`results/raman/phase33/SYNTHESIS.md`](../../../results/raman/phase33/SYNTHESIS.md). Reproduced headline here:
+Full details: [`results/raman/phase33/SYNTHESIS.md`](../../../../results/raman/phase33/SYNTHESIS.md). Reproduced headline here:
 
 ### Exit-code distribution (9 slots)
 

@@ -57,7 +57,7 @@ log-scale cost formulation referenced throughout the codebase.
 
 Previous bug (Key Bug #1, fixed 2026-03-26): the optimizer was fed log J but
 the gradient was linear-scale. Hybrid scale corrupted the Hessian. See
-[`../.planning/STATE.md`](../.planning/STATE.md) "Key Bugs Fixed" #1.
+[`../planning-history/STATE.md`](../planning-history/STATE.md) "Key Bugs Fixed" #1.
 
 ## How we get gradients: the adjoint method
 
@@ -99,7 +99,7 @@ the mask merely has to enclose the Raman gain spectrum.
 - [`../reference/companion_explainer.pdf`](../reference/companion_explainer.pdf) — longer mathematical walkthrough
 - [`../reference/verification_document.pdf`](../reference/verification_document.pdf) — equation-by-equation code verification
 - [`../reference/physics_verification.pdf`](../reference/physics_verification.pdf) — physics verification notes
-- [`../results/RESULTS_SUMMARY.md`](../results/RESULTS_SUMMARY.md) — plain-language results summary
+- [`../../results/RESULTS_SUMMARY.md`](../../results/RESULTS_SUMMARY.md) — plain-language results summary
 - `results/raman/MATHEMATICAL_FORMULATION.md` — equations keyed to code line numbers
 
 ## See also

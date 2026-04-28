@@ -33,7 +33,7 @@ Do not run all three heavy lanes on the permanent burst VM.
 
 Use these prompt files directly:
 
-- [COMMON-SUPERVISION-RULES.md](/home/ignaciojlizama/fiber-raman-suppression/agent-docs/parallel-research-campaign/COMMON-SUPERVISION-RULES.md)
-- [MMF-AGENT-PROMPT.md](/home/ignaciojlizama/fiber-raman-suppression/agent-docs/parallel-research-campaign/MMF-AGENT-PROMPT.md)
-- [MULTIVAR-AGENT-PROMPT.md](/home/ignaciojlizama/fiber-raman-suppression/agent-docs/parallel-research-campaign/MULTIVAR-AGENT-PROMPT.md)
-- [LONGFIBER-AGENT-PROMPT.md](/home/ignaciojlizama/fiber-raman-suppression/agent-docs/parallel-research-campaign/LONGFIBER-AGENT-PROMPT.md)
+- [COMMON-SUPERVISION-RULES.md](COMMON-SUPERVISION-RULES.md)
+- [MMF-AGENT-PROMPT.md](MMF-AGENT-PROMPT.md)
+- [MULTIVAR-AGENT-PROMPT.md](MULTIVAR-AGENT-PROMPT.md)
+- [LONGFIBER-AGENT-PROMPT.md](LONGFIBER-AGENT-PROMPT.md)

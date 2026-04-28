@@ -16,9 +16,9 @@ polling surface uniform across permanent and ephemeral machines.
 
 Operational helpers added:
 
-- [parallel_research_campaign.sh](/home/ignaciojlizama/fiber-raman-suppression/scripts/ops/parallel_research_campaign.sh)
-- [parallel_research_lane.sh](/home/ignaciojlizama/fiber-raman-suppression/scripts/ops/parallel_research_lane.sh)
-- [parallel_research_poll.sh](/home/ignaciojlizama/fiber-raman-suppression/scripts/ops/parallel_research_poll.sh)
+- [parallel_research_campaign.sh](../../scripts/ops/parallel_research_campaign.sh)
+- [parallel_research_lane.sh](../../scripts/ops/parallel_research_lane.sh)
+- [parallel_research_poll.sh](../../scripts/ops/parallel_research_poll.sh)
 
 ## Recommended Compute Split
 
