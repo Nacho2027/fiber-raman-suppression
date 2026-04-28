@@ -55,4 +55,20 @@ using Test
         cmd = `$(Base.julia_cmd()) --project=$(project_root) -e $(include_expr)`
         @test success(pipeline(cmd, stdout=devnull, stderr=devnull))
     end
+
+    telemetry_wrapper = joinpath(scripts_root, "ops", "run_with_telemetry.sh")
+    @test isfile(telemetry_wrapper)
+    @test success(pipeline(`bash -n $telemetry_wrapper`, stdout=devnull, stderr=devnull))
+
+    telemetry_dir = mktempdir()
+    telemetry_cmd = `$telemetry_wrapper --label test-telemetry --out-dir $telemetry_dir --sample-interval 0.05 -- bash -c "sleep 0.1"`
+    @test success(pipeline(telemetry_cmd, stdout=devnull, stderr=devnull))
+    @test isfile(joinpath(telemetry_dir, "telemetry.json"))
+    @test isfile(joinpath(telemetry_dir, "resource_samples.csv"))
+    telemetry_json = read(joinpath(telemetry_dir, "telemetry.json"), String)
+    @test occursin("\"schema\": \"fiber_run_telemetry_v1\"", telemetry_json)
+    @test occursin("\"return_code\": 0", telemetry_json)
+    samples = readlines(joinpath(telemetry_dir, "resource_samples.csv"))
+    @test startswith(first(samples), "timestamp_utc,elapsed_s,processes")
+    @test length(samples) >= 2
 end

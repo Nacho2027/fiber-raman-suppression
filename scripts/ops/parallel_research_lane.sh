@@ -72,6 +72,7 @@ build_bootstrap_cmd() {
 
     cat <<EOF
 set -euo pipefail
+RUN_TAG=$q_tag
 RUN_DIR="\$HOME/research-runs/$q_tag"
 mkdir -p "\$HOME/research-runs"
 cd "\$HOME/fiber-raman-suppression"
@@ -83,23 +84,24 @@ rm -rf "\$RUN_DIR/results"
 ln -s "\$HOME/fiber-raman-suppression/results" "\$RUN_DIR/results"
 cd "\$RUN_DIR"
 julia --project=. -e "using Pkg; Pkg.instantiate()"
-eval $q_cmd
+TELEMETRY_DIR="\$RUN_DIR/results/telemetry/\${RUN_TAG}_\$(date -u +%Y%m%dT%H%M%SZ)"
+scripts/ops/run_with_telemetry.sh --label "\$RUN_TAG" --out-dir "\$TELEMETRY_DIR" -- bash -lc $q_cmd
 EOF
 }
 
 ephemeral_pull_paths() {
     case "$lane" in
         longfiber)
-            echo "results/burst-logs results/raman/phase16 results/images"
+            echo "results/burst-logs results/raman/phase16 results/images results/telemetry"
             ;;
         multivar|multiparameter)
-            echo "results/burst-logs results/raman/multivar results/validation"
+            echo "results/burst-logs results/raman/multivar results/validation results/telemetry"
             ;;
         mmf|multimode)
-            echo "results/burst-logs results/raman/mmf results/raman/phase36 results/raman/phase36_window_validation* results/images"
+            echo "results/burst-logs results/raman/mmf results/raman/phase36 results/raman/phase36_window_validation* results/images results/telemetry"
             ;;
         *)
-            echo "results/burst-logs"
+            echo "results/burst-logs results/telemetry"
             ;;
     esac
 }

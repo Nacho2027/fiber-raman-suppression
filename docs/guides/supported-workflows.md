@@ -66,6 +66,12 @@ julia --project=. -t auto scripts/canonical/run_sweep.jl smf28_hnlf_default
 julia --project=. -t auto scripts/canonical/run_experiment_sweep.jl --latest smf28_power_micro_sweep
 ```
 
+For substantial runs, record compute telemetry so future lab users can estimate
+wall time and memory needs before launching similar work. See
+[compute-telemetry.md](./compute-telemetry.md). Burst research lanes launched
+through `scripts/ops/parallel_research_lane.sh` now record this automatically
+under `results/telemetry/`.
+
 ## Minimum Lab-Ready Gate
 
 A run is not lab-ready just because it produced a JLD2 file or PNGs. For the
