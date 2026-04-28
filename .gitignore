@@ -20,6 +20,16 @@ LocalPreferences.toml
 results/**/*.jld2
 results/**/*.png
 results/**/*.log
+results/**/*.npz
+results/**/*.lock
+results/**/run_config.toml
+results/**/run_manifest.json
+results/**/opt_result.json
+results/**/opt_trust.md
+results/**/phase_only_reference_trust.md
+results/**/export_handoff/
+results/burst-logs/
+results/raman/smoke/
 results/raman/sweeps/
 results/raman/phase10/
 results/raman/phase11/
