@@ -32,6 +32,27 @@ The run is intentionally tiny:
 - output root: `results/raman/smoke/`
 - export: `neutral_csv_v1`
 
+`make golden-smoke` does not delete the output it just produced. That is
+intentional: the standard images and export bundle must be inspected before the
+run can count as a valid handoff check.
+
+To keep the repo from accumulating routine smoke outputs, prune old
+golden-smoke directories explicitly:
+
+```bash
+make prune-smoke
+```
+
+By default this keeps the newest three `smf28_phase_export_smoke_*` directories
+and deletes older ones. Override the retention count with:
+
+```bash
+make prune-smoke SMOKE_KEEP=1
+```
+
+This only prunes routine golden-smoke run directories under
+`results/raman/smoke/`. It does not remove arbitrary research outputs.
+
 ## Acceptance Criteria
 
 A golden smoke run is mechanically valid only if all of these pass:

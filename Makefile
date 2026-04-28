@@ -11,10 +11,11 @@ PYTHON ?= python3
 DOCKER ?= docker
 DOCKER_IMAGE ?= fiber-raman-suppression:dev
 VENV ?= .venv
+SMOKE_KEEP ?= 3
 JL     = $(JULIA) --project=.
 VENV_PYTHON = $(VENV)/bin/python
 
-.PHONY: help check-tools check-python-venv install install-julia install-python test test-python test-slow test-full acceptance lab-ready doctor golden-smoke optimize sweep report docker-build docker-test clean
+.PHONY: help check-tools check-python-venv install install-julia install-python test test-python test-slow test-full acceptance lab-ready doctor golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
 
 .DEFAULT_GOAL := help
 
@@ -28,6 +29,7 @@ help:
 	@echo "  make lab-ready   Local lab-readiness gate for supported workflows"
 	@echo "  make doctor      Verify tools, Julia tests, and Python wrapper tests"
 	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"
+	@echo "  make prune-smoke Keep newest SMOKE_KEEP golden-smoke runs; delete older smoke outputs"
 	@echo "  make test-slow   Slow tier (~5 min; burst VM recommended)"
 	@echo "  make test-full   Full tier (~20 min; burst VM)"
 	@echo "  make optimize    Canonical SMF-28 optimization (~5 min)"
@@ -99,6 +101,22 @@ golden-smoke:
 	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_export_smoke
 	$(JL) -t auto scripts/canonical/run_experiment.jl research_engine_export_smoke
 	$(JL) -t auto scripts/canonical/lab_ready.jl --latest research_engine_export_smoke --require-export
+
+prune-smoke:
+	@keep="$(SMOKE_KEEP)"; \
+	case "$$keep" in ''|*[!0-9]*) echo "SMOKE_KEEP must be a nonnegative integer"; exit 1;; esac; \
+	if [ ! -d results/raman/smoke ]; then \
+		echo "No smoke result directory found."; \
+		exit 0; \
+	fi; \
+	old_runs="$$(ls -td results/raman/smoke/smf28_phase_export_smoke_* 2>/dev/null | tail -n +$$((keep + 1)))"; \
+	if [ -z "$$old_runs" ]; then \
+		echo "No golden-smoke runs to prune; keeping newest $$keep."; \
+	else \
+		printf '%s\n' "$$old_runs"; \
+		printf '%s\n' "$$old_runs" | xargs rm -rf; \
+		echo "Pruned older golden-smoke runs; kept newest $$keep."; \
+	fi
 
 optimize:
 	$(JL) -t auto scripts/canonical/optimize_raman.jl

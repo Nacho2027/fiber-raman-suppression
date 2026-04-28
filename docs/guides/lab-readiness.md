@@ -145,6 +145,13 @@ After it passes, inspect the generated standard images:
 Do not call a real generated run lab-ready until the standard images have been
 visually inspected. File existence alone is not enough.
 
+Golden-smoke outputs are retained so they can be inspected. After the demo or
+verification pass, prune older routine smoke runs with:
+
+```bash
+make prune-smoke
+```
+
 ## Demo-Week Checklist
 
 For a short live demo, do not start from the whole research history. Use this
