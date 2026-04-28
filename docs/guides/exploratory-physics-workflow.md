@@ -281,16 +281,33 @@ Examples:
 - Mode plots should show all modes for small mode counts, otherwise top/worst
   modes plus aggregate tables.
 
-Future configs may override plot views:
+Configs may override the exploratory overview view:
 
 ```toml
 [plots.spectrum]
 dynamic_range_dB = 60
-mark_bands = ["raman"]
 
 [plots.temporal_pulse]
-time_range_ps = [-2.0, 2.0]
+time_range = [-2.0, 2.0]
 normalize = true
+
+[plots.temporal_pulse]
+energy_low = 0.001
+energy_high = 0.999
+margin_fraction = 0.20
+```
+
+The current implemented overrides are:
+
+- `plots.temporal_pulse.time_range`: manual `[low, high]` time window in the
+  simulation time units shown by the overview.
+- `plots.temporal_pulse.normalize`: divide each displayed temporal trace by its
+  own peak for easier shape comparison.
+- `plots.temporal_pulse.energy_low`, `energy_high`, `margin_fraction`: tune the
+  automatic energy-window zoom when `time_range` is unset.
+- `plots.spectrum.dynamic_range_dB`: y-axis depth for the overview spectrum.
+
+Planned but not yet implemented:
 
 [plots.modes]
 modes = [1, 2, 5]

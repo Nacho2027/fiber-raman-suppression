@@ -120,6 +120,23 @@ objective trace when stored, and a compact control summary. This is the safety
 net for novel objectives or variables; specialized diagnostics should still be
 added as explicit artifact hooks when the physics demands them.
 
+Exploratory overview plots expose a small config surface for first-inspection
+views. These settings change only the generated overview artifact, not the
+simulation or objective:
+
+```toml
+[plots.temporal_pulse]
+time_range = [-0.75, 0.75]
+normalize = true
+
+[plots.spectrum]
+dynamic_range_dB = 55.0
+```
+
+Leave these unset for automatic energy-window zoom and a 70 dB spectral view.
+Use them when a pulse is too wide/narrow for the default view or when a meeting
+plot needs a tighter dynamic range without editing Julia plotting code.
+
 To inspect how the optimizer vector and output plots will be assembled:
 
 ```bash

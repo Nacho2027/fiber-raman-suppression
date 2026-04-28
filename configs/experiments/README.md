@@ -121,6 +121,21 @@ Executable exploratory configs also write generic fallback artifacts:
 objectives or variables a baseline spectrum, temporal pulse, objective trace,
 and control summary before custom diagnostics exist.
 
+Optional first-inspection plot overrides are allowed in executable exploratory
+configs:
+
+```toml
+[plots.temporal_pulse]
+time_range = [-0.75, 0.75]
+normalize = true
+
+[plots.spectrum]
+dynamic_range_dB = 55.0
+```
+
+These affect only `{tag}_explore_overview.png` and the metadata recorded in
+`{tag}_explore_summary.json`; they do not change the physics calculation.
+
 Inspect heavy/dedicated playground workflows without launching them:
 
 ```bash

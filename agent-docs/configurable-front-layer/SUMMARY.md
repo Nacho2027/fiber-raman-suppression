@@ -1170,3 +1170,23 @@ repaired the depot state and allowed the tests to pass.
   - `./fiberlab check run` correctly failed only on `not_converged`, which is
     expected for this experimental smoke and not an artifact-completeness
     failure.
+
+## 2026-04-28 Exploratory Plot Override Slice
+
+- Added a thin config-driven plotting contract for exploratory overview
+  artifacts:
+  - `[plots.temporal_pulse] time_range`, `normalize`, `energy_low`,
+    `energy_high`, and `margin_fraction`;
+  - `[plots.spectrum] dynamic_range_dB`.
+- The overrides affect only `{tag}_explore_overview.png` and the plot metadata
+  recorded in `{tag}_explore_summary.json`; they do not alter the simulation,
+  objective, or optimizer.
+- Added validation so unsafe plot config fails before compute, including
+  reversed manual temporal ranges.
+- Updated the gain-tilt scalar-search smoke config to demonstrate a manual
+  temporal range and 55 dB overview spectrum.
+- Verification:
+  - Red-first front-layer and adversarial tests failed until `spec.plots`,
+    plot validation, summary metadata, and overview rendering support existed.
+  - Experiment front-layer tests passed (`439/439`).
+  - Experiment config adversarial coverage passed (`196/196`).

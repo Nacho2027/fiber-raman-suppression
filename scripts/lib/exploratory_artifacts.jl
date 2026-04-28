@@ -103,23 +103,28 @@ function _explore_trace(result_bundle)
     return Float64[]
 end
 
-function _explore_energy_window(power::AbstractVector{<:Real}; margin_fraction::Float64=0.20)
+function _explore_energy_window(
+    power::AbstractVector{<:Real};
+    low_quantile::Float64=0.001,
+    high_quantile::Float64=0.999,
+    margin_fraction::Float64=0.20,
+)
     n = length(power)
-    n == 0 && return (lo = 1, hi = 1, width = 1)
+    n == 0 && return (lo = 1, hi = 1, width = 1, source = :empty, time_range = :auto)
     total = sum(power)
     if !(isfinite(total) && total > 0)
-        return (lo = 1, hi = n, width = n)
+        return (lo = 1, hi = n, width = n, source = :full_range, time_range = :auto)
     end
 
     cumulative = cumsum(Float64.(power)) ./ total
-    lo = findfirst(x -> x >= 0.001, cumulative)
-    hi = findfirst(x -> x >= 0.999, cumulative)
+    lo = findfirst(x -> x >= low_quantile, cumulative)
+    hi = findfirst(x -> x >= high_quantile, cumulative)
     lo === nothing && (lo = 1)
     hi === nothing && (hi = n)
     margin = max(2, round(Int, margin_fraction * max(1, hi - lo + 1)))
     lo = max(1, lo - margin)
     hi = min(n, hi + margin)
-    return (lo = lo, hi = hi, width = hi - lo + 1)
+    return (lo = lo, hi = hi, width = hi - lo + 1, source = :energy_window, time_range = :auto)
 end
 
 function _explore_axis(sim, n::Int)
@@ -149,6 +154,60 @@ end
 
 function _explore_temporal_power(field)
     return abs2.(ifft(field[:, 1]))
+end
+
+function _explore_plot_contract(spec)
+    if hasproperty(spec, :plots)
+        return spec.plots
+    end
+    return (
+        temporal_pulse = (
+            time_range = :auto,
+            normalize = false,
+            energy_low = 0.001,
+            energy_high = 0.999,
+            margin_fraction = 0.20,
+        ),
+        spectrum = (
+            dynamic_range_dB = 70.0,
+        ),
+    )
+end
+
+function _explore_temporal_zoom(spec, sim, power::AbstractVector{<:Real})
+    plots = _explore_plot_contract(spec)
+    temporal = plots.temporal_pulse
+    n = length(power)
+    if temporal.time_range !== :auto
+        t_axis = _explore_axis(sim, n)
+        lo_t, hi_t = temporal.time_range
+        indices = findall(t -> lo_t <= t <= hi_t, t_axis)
+        if !isempty(indices)
+            lo = first(indices)
+            hi = last(indices)
+            return (
+                lo = lo,
+                hi = hi,
+                width = hi - lo + 1,
+                source = :config_time_range,
+                time_range = (Float64(lo_t), Float64(hi_t)),
+            )
+        end
+    end
+    return _explore_energy_window(
+        power;
+        low_quantile = Float64(temporal.energy_low),
+        high_quantile = Float64(temporal.energy_high),
+        margin_fraction = Float64(temporal.margin_fraction),
+    )
+end
+
+function _explore_normalized_power(power::AbstractVector{<:Real}, normalize::Bool)
+    values = Float64.(power)
+    normalize || return values
+    ref = maximum(values)
+    isfinite(ref) && ref > 0 || return values
+    return values ./ ref
 end
 
 function _explore_variable_summary(spec, result_bundle)
@@ -230,6 +289,7 @@ end
 
 function _write_exploratory_summary(path::AbstractString, spec, result_bundle, zoom)
     trace = _explore_trace(result_bundle)
+    plots = _explore_plot_contract(spec)
     payload = Dict{String,Any}(
         "schema_version" => "exploratory_artifacts_v1",
         "config" => Dict{String,Any}(
@@ -267,6 +327,20 @@ function _write_exploratory_summary(path::AbstractString, spec, result_bundle, z
             "time_window_start_index" => zoom.lo,
             "time_window_end_index" => zoom.hi,
             "time_window_samples" => zoom.width,
+            "source" => String(zoom.source),
+            "time_range" => zoom.time_range === :auto ? "auto" : [zoom.time_range[1], zoom.time_range[2]],
+        ),
+        "plots" => Dict{String,Any}(
+            "temporal_pulse" => Dict{String,Any}(
+                "time_range" => plots.temporal_pulse.time_range === :auto ? "auto" : [plots.temporal_pulse.time_range[1], plots.temporal_pulse.time_range[2]],
+                "normalize" => plots.temporal_pulse.normalize,
+                "energy_low" => plots.temporal_pulse.energy_low,
+                "energy_high" => plots.temporal_pulse.energy_high,
+                "margin_fraction" => plots.temporal_pulse.margin_fraction,
+            ),
+            "spectrum" => Dict{String,Any}(
+                "dynamic_range_dB" => plots.spectrum.dynamic_range_dB,
+            ),
         ),
     )
     open(path, "w") do io
@@ -287,6 +361,8 @@ function _write_exploratory_overview(path::AbstractString, spec, result_bundle, 
     t_axis = _explore_axis(sim, n)
     trace = _explore_trace(result_bundle)
     variable_summary = _explore_variable_summary(spec, result_bundle)
+    plots = _explore_plot_contract(spec)
+    temporal_normalize = Bool(plots.temporal_pulse.normalize)
 
     fig, axs = subplots(2, 2, figsize=(12, 8))
 
@@ -295,16 +371,16 @@ function _write_exploratory_overview(path::AbstractString, spec, result_bundle, 
     axs[1, 1].set_title("Spectrum")
     axs[1, 1].set_xlabel(x_spec_label)
     axs[1, 1].set_ylabel("Power [dB rel.]")
-    axs[1, 1].set_ylim(-70, 5)
+    axs[1, 1].set_ylim(-Float64(plots.spectrum.dynamic_range_dB), 5)
     axs[1, 1].legend(fontsize=8)
     axs[1, 1].ticklabel_format(useOffset=false, style="plain", axis="x")
 
     zoom_range = zoom.lo:zoom.hi
-    axs[1, 2].plot(t_axis[zoom_range], unshaped_t[zoom_range], label="input", alpha=0.85)
-    axs[1, 2].plot(t_axis[zoom_range], shaped_t[zoom_range], label="shaped", alpha=0.85)
+    axs[1, 2].plot(t_axis[zoom_range], _explore_normalized_power(unshaped_t[zoom_range], temporal_normalize), label="input", alpha=0.85)
+    axs[1, 2].plot(t_axis[zoom_range], _explore_normalized_power(shaped_t[zoom_range], temporal_normalize), label="shaped", alpha=0.85)
     axs[1, 2].set_title("Temporal Pulse")
     axs[1, 2].set_xlabel("Time [simulation units]")
-    axs[1, 2].set_ylabel("Power [arb.]")
+    axs[1, 2].set_ylabel(temporal_normalize ? "Power [norm.]" : "Power [arb.]")
     axs[1, 2].legend(fontsize=8)
 
     if isempty(trace)
@@ -344,7 +420,8 @@ function write_exploratory_artifacts(spec, result_bundle)
     tag = _explore_tag(result_bundle.save_prefix)
     shaped = _explore_shaped_input(result_bundle)
     shaped_t = _explore_temporal_power(shaped)
-    zoom = _explore_energy_window(vec(shaped_t))
+    sim = _explore_get(result_bundle, :sim, Dict{String,Any}())
+    zoom = _explore_temporal_zoom(spec, sim, vec(shaped_t))
 
     paths = Dict{Symbol,String}()
     summary_path = joinpath(output_dir, "$(tag)_explore_summary.json")

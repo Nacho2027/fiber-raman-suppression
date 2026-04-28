@@ -285,6 +285,11 @@ summary. This is not abstraction theater; it is a minimum lab-notebook surface
 so novel objectives and variables remain inspectable before custom diagnostics
 are promoted.
 
+The first implemented plot override surface is intentionally narrow:
+`[plots.temporal_pulse]` controls exploratory overview time-window and
+normalization, while `[plots.spectrum]` controls overview dynamic range. These
+are view controls only, not physics controls.
+
 ### CLI Owns
 
 - command-line entry points
