@@ -30,6 +30,11 @@ results/**/phase_only_reference_trust.md
 results/**/export_handoff/
 results/burst-logs/
 results/raman/smoke/
+results/raman/multivar/
+results/raman/mmf_mode_coeff_preflight/
+results/raman/phase36_window_validation*/
+results/raman/hnlf_*_20*/
+results/raman/smf28_*_20*/
 results/raman/sweeps/
 results/raman/phase10/
 results/raman/phase11/
