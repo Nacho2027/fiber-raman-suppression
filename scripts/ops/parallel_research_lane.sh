@@ -96,7 +96,7 @@ ephemeral_pull_paths() {
             echo "results/burst-logs results/raman/multivar results/validation"
             ;;
         mmf|multimode)
-            echo "results/burst-logs results/raman/mmf results/raman/phase36 results/images"
+            echo "results/burst-logs results/raman/mmf results/raman/phase36 results/raman/phase36_window_validation* results/images"
             ;;
         *)
             echo "results/burst-logs"
