@@ -14,8 +14,8 @@ In a six-mode GRIN-50 simulation, boundary- and GDD-constrained spectral phase
 optimization reduces the Raman-band fraction by **31.7 dB** while passing raw
 temporal-edge diagnostics.
 
-Speaker note: call this a qualified simulation result, not an experimental
-claim.
+Speaker note: call this closed / exploring and a qualified simulation result,
+not an experimental claim.
 
 ## Slide 3 - Why MMF Is Subtle
 

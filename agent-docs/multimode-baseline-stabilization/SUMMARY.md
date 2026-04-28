@@ -161,8 +161,9 @@ launch-coefficient sensitivity are checked.
 
 ### Current Decision
 
-MMF status: **accepted as a current physical candidate, not an invalid-window
-result**.
+MMF status: **closed / exploring**. E5 is accepted as a current physical
+candidate, not an invalid-window result, but MMF should remain outside the
+supported front-layer execution path.
 
 The unregularized E2 optimum is still rejected, but the same threshold regime
 survived both the raw-edge boundary penalty and a GDD penalty. E5 is the best
