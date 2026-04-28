@@ -118,6 +118,17 @@ function _normalize_auto_float(x)
     return Float64(x)
 end
 
+function _normalize_auto_float_pair(x)
+    if x isa AbstractString
+        lower = lowercase(strip(String(x)))
+        lower == "auto" && return :auto
+        throw(ArgumentError("auto-or-pair field must be \"auto\" or a two-element numeric array"))
+    end
+    x isa AbstractVector || throw(ArgumentError("auto-or-pair field must be \"auto\" or a two-element numeric array"))
+    length(x) == 2 || throw(ArgumentError("auto-or-pair field must be \"auto\" or a two-element numeric array"))
+    return (Float64(x[1]), Float64(x[2]))
+end
+
 function _require_auto_or_positive_finite(x, label::AbstractString)
     x === :auto && return nothing
     _require_positive_finite(Float64(x), label)
@@ -131,6 +142,24 @@ function _regularizer_dict(entries)
         regs[name] = _normalize_lambda(entry["lambda"])
     end
     return regs
+end
+
+function _plot_contract_from_parsed(parsed)
+    plots = get(parsed, "plots", Dict{String,Any}())
+    temporal = get(plots, "temporal_pulse", Dict{String,Any}())
+    spectrum = get(plots, "spectrum", Dict{String,Any}())
+    return (
+        temporal_pulse = (
+            time_range = _normalize_auto_float_pair(get(temporal, "time_range", "auto")),
+            normalize = Bool(get(temporal, "normalize", false)),
+            energy_low = Float64(get(temporal, "energy_low", 0.001)),
+            energy_high = Float64(get(temporal, "energy_high", 0.999)),
+            margin_fraction = Float64(get(temporal, "margin_fraction", 0.20)),
+        ),
+        spectrum = (
+            dynamic_range_dB = Float64(get(spectrum, "dynamic_range_dB", 70.0)),
+        ),
+    )
 end
 
 function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::AbstractString)
@@ -218,6 +247,7 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             include_unwrapped_phase = Bool(get(export_cfg, "include_unwrapped_phase", true)),
             include_group_delay = Bool(get(export_cfg, "include_group_delay", true)),
         ),
+        plots = _plot_contract_from_parsed(parsed),
     )
 end
 
@@ -301,6 +331,7 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             include_unwrapped_phase = true,
             include_group_delay = true,
         ),
+        plots = _plot_contract_from_parsed(Dict{String,Any}()),
     )
 end
 
@@ -667,6 +698,22 @@ function _validate_objective_regularizers(spec, objective_contract)
     return nothing
 end
 
+function _validate_plot_contract(spec)
+    temporal = spec.plots.temporal_pulse
+    if temporal.time_range !== :auto
+        lo, hi = temporal.time_range
+        (isfinite(lo) && isfinite(hi) && lo < hi) || throw(ArgumentError(
+            "plots.temporal_pulse.time_range must be [low, high] with low < high"))
+    end
+    (isfinite(temporal.energy_low) && isfinite(temporal.energy_high) &&
+     0 <= temporal.energy_low < temporal.energy_high <= 1) || throw(ArgumentError(
+        "plots.temporal_pulse energy_low/energy_high must satisfy 0 <= low < high <= 1"))
+    isfinite(temporal.margin_fraction) && temporal.margin_fraction >= 0 || throw(ArgumentError(
+        "plots.temporal_pulse.margin_fraction must be nonnegative and finite"))
+    _require_positive_finite(spec.plots.spectrum.dynamic_range_dB, "plots.spectrum.dynamic_range_dB")
+    return nothing
+end
+
 function _reject_planning_variable_extensions(spec)
     for variable in spec.controls.variables
         variable in registered_variable_extension_kinds(spec.problem.regime) || continue
@@ -730,6 +777,7 @@ function validate_experiment_spec(spec)
     _require_auto_or_positive_finite(spec.solver.g_abstol, "solver.g_abstol")
     _require_auto_or_positive_finite(spec.solver.scalar_x_tol, "solver.scalar_x_tol")
     _validate_objective_regularizers(spec, objective_contract)
+    _validate_plot_contract(spec)
 
     mode = experiment_execution_mode(spec)
     if spec.solver.kind == :bounded_scalar

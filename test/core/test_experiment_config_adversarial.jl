@@ -165,6 +165,8 @@ end
             "scalar_lower = -0.09" => "scalar_lower = 0.09")
         _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"]",
             "variables = [\"gain_tilt\"]" => "variables = [\"phase\", \"gain_tilt\"]")
+        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "plots.temporal_pulse.time_range must be [low, high] with low < high",
+            "time_range = [-0.75, 0.75]" => "time_range = [0.75, -0.75]")
         _expect_rejected("research_engine_smoke", "grid_policy `mystery_grid` is not supported",
             "grid_policy = \"auto_if_undersized\"" => "grid_policy = \"mystery_grid\"")
         _expect_rejected("research_engine_smoke", "phase-only execution currently requires the full standard artifact bundle",

@@ -68,3 +68,10 @@ enabled = false
 profile = "neutral_csv_v1"
 include_unwrapped_phase = true
 include_group_delay = true
+
+[plots.temporal_pulse]
+time_range = [-0.75, 0.75]
+normalize = true
+
+[plots.spectrum]
+dynamic_range_dB = 55.0

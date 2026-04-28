@@ -161,6 +161,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test scalar_search_spec.solver.kind == :bounded_scalar
     @test scalar_search_spec.solver.scalar_lower == -0.09
     @test scalar_search_spec.solver.scalar_upper == 0.09
+    @test scalar_search_spec.plots.temporal_pulse.time_range == (-0.75, 0.75)
+    @test scalar_search_spec.plots.temporal_pulse.normalize
+    @test scalar_search_spec.plots.spectrum.dynamic_range_dB == 55.0
     @test experiment_execution_mode(scalar_search_spec) == :scalar_search
     @test validate_experiment_spec(scalar_search_spec) isa NamedTuple
     @test (:gain_tilt,) in objective_contract(:raman_band, :single_mode).supported_variables
@@ -226,6 +229,31 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test "phase" in collect(generic_summary.controls.variables)
     @test generic_summary.objective.kind == "temporal_width"
     @test generic_summary.zoom.time_window_samples >= 1
+    override_dir = mktempdir()
+    override_spec = load_experiment_spec("research_engine_gain_tilt_scalar_search_smoke")
+    override_t = collect(range(-1.0, stop=1.0, length=Nt_generic))
+    override_temporal = reshape(ComplexF64.(exp.(-(override_t ./ 0.12) .^ 2)), Nt_generic, 1)
+    override_bundle = (
+        spec = override_spec,
+        output_dir = override_dir,
+        save_prefix = joinpath(override_dir, "opt"),
+        artifact_path = joinpath(override_dir, "opt_result.jld2"),
+        result = (
+            phi_opt = zeros(Nt_generic, 1),
+            convergence_history = [-12.0, -13.0],
+            J_before = 1e-2,
+            J_after = 1e-3,
+            iterations = 2,
+        ),
+        uω0 = fft(override_temporal, 1),
+        sim = Dict{String,Any}("Nt" => Nt_generic, "M" => 1, "Δt" => 2.0 / (Nt_generic - 1), "f0" => 193.4),
+    )
+    override_artifacts = write_exploratory_artifacts(override_spec, override_bundle)
+    override_summary = JSON3.read(read(override_artifacts.paths[:exploratory_summary], String))
+    @test override_summary.zoom.source == "config_time_range"
+    @test override_summary.zoom.time_range == [-0.75, 0.75]
+    @test override_summary.plots.temporal_pulse.normalize == true
+    @test override_summary.plots.spectrum.dynamic_range_dB == 55.0
     centered_temporal = reshape(ComplexF64.(exp.(-((collect(1:Nt_generic) .- (Nt_generic ÷ 2 + 1)) ./ 5) .^ 2)), Nt_generic, 1)
     centered_spectrum = fft(centered_temporal, 1)
     centered_power = _explore_temporal_power(centered_spectrum)
