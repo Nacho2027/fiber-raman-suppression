@@ -1196,3 +1196,18 @@ single monolithic fragile run.
 - Long-fiber 200 m remains completed with the accepted 14:12 UTC caveats. The
   deterministic watchdog cron remains installed at the 15 minute cadence. No
   source patch, test run, commit, or relaunch was performed during this check.
+
+## 2026-04-28 23:16 UTC Supervisor Check
+
+- MMF `M-mmfg8192s44c2` remains alive and CPU-active in post-run diagnostics.
+  The threshold case has now logged the full baseline trust report after the
+  time-limit fallback: `J_sum=-17.37 -> -41.25 dB` (`Delta=23.88 dB`),
+  `J_fund=-41.00 dB`, `J_worst=-41.00 dB`, and boundary edge fraction
+  `3.59e-13`. This is a promising high-resolution MMF result, but it is not yet
+  acceptable as complete because the result files and mandatory standard image
+  set have not appeared under
+  `results/raman/phase36_window_validation_gdd_nt8192_final/`.
+- GCE state is otherwise unchanged: `C3_CPUS usage=44 limit=50`,
+  `fiber-raman-burst` is `TERMINATED`, long-fiber 200 m remains completed with
+  caveats, and no multivar VM is active. No source patch, test run, or relaunch
+  was performed during this check.
