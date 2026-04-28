@@ -1,0 +1,173 @@
+\documentclass[11pt]{article}
+\input{../_shared/preamble.tex}
+\input{../_shared/macros.tex}
+
+\title{NOTE TITLE}
+\author{Fiber Raman Suppression Project}
+\date{Evidence snapshot: YYYY-MM-DD}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+State the research question, the main conclusion, and the evidence status in
+4--6 sentences.  Keep this readable by an advanced undergraduate.  Do not use
+internal milestone labels.
+\end{abstract}
+
+\section*{Claim Status}
+\statusbox{established / provisional / exploratory}{One or two sentences
+explaining exactly what is supported and what is not yet supported.}
+
+\section{Question and Thesis}
+
+Define the narrow question this note answers.  Then state the thesis in plain
+language.  If there are multiple claims, separate the mature claim from the
+provisional claim.
+
+\section{Setup and Common Notation}
+
+Give only the setup needed for this lane: fiber, pulse, control variable,
+Raman band, grid family, and output metric.  Reuse notation from the rest of
+the note series.
+
+\section{Objective and Optimizer Coordinates}
+
+Write the full scalar objective:
+\[
+J(\theta)=
+\frac{\sum_{k\in\mathcal B} w_k |\hat u_k(L;\theta)|^2}
+{\sum_k w_k |\hat u_k(L;\theta)|^2}.
+\]
+If the plotted objective is dB-scaled, write
+\[
+J_{\mathrm{dB}}=10\log_{10}J.
+\]
+Then define the optimizer coordinate map, for example
+\[
+\hat u_k(0;\phi)=\hat u_{0,k}\exp(i\phi_k),
+\qquad
+\phi = Bc,
+\qquad
+a_k=A_k\exp(i\phi_k).
+\]
+Include regularizers, projections, bounds, clipping, or transformed variables
+if the code uses them.
+
+\paragraph{TL;DR.}
+Add a short public-facing explanation of what the objective and coordinates
+mean.  This should help a reader explain the section without copying private
+agent notes.
+
+\section{Math Delta}
+
+Include only the equations unique to this research direction: reduced-basis
+chain rules, sharpness penalties, trust-region model, multimode mode sums,
+amplitude chain rules, continuation maps, or transfer metrics.
+
+\subsection*{Intuition Check}
+
+Explain the math in words.  If no additional math is needed, say that this
+lane uses the common objective and skip this section in the real note.
+
+\section{Implementation Surface}
+
+\begin{center}
+\small
+\begin{tabular}{p{0.34\linewidth}p{0.56\linewidth}}
+\toprule
+\textbf{Component} & \textbf{Role} \\
+\midrule
+\texttt{script\_or\_module.jl} & What this file contributes to the result. \\
+\texttt{result\_summary.md} & Where the reported numbers come from. \\
+\texttt{standard\_images/} & Figure source for the note. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Experimental Strategy}
+
+Describe the comparison set: control, baseline, candidate method, transfer
+test, robustness probe, sweep, continuation ladder, or validation gate.  Say
+what was excluded and why.
+
+\section{Representative Results}
+
+Start with a compact result table.  Include units, convergence status, and
+whether each row is a control, native optimization, transfer evaluation, or
+rerun.
+
+\clearpage
+\section{No-Optimization Control}
+
+Include the no-shaping/no-optimization control page when the artifact exists.
+If there is no control artifact yet, leave a clear missing-evidence sentence
+instead of using a placeholder.
+
+\begin{figure}[H]
+\centering
+% \includegraphics[width=0.48\linewidth]{figures/control_phase_diagnostic.png}
+% \includegraphics[width=0.48\linewidth]{figures/control_evolution.png}
+\caption{Control/reference case. Explain what this baseline establishes.}
+\end{figure}
+
+\clearpage
+\section{Representative Figure Pair}
+
+Pair the phase diagnostic/profile with the corresponding evolution heat map on
+the same page.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}
+\centering
+% \includegraphics[width=\linewidth]{figures/main_phase_diagnostic.png}
+\captionof{figure}{Phase diagnostic/profile for the representative case.}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+\centering
+% \includegraphics[width=\linewidth]{figures/main_evolution.png}
+\captionof{figure}{Corresponding evolution heat map for the same case.}
+\end{minipage}
+\end{figure}
+
+\section{Result Provenance}
+
+List the local artifact sources for the reported numbers and figures.  Do not
+make readers reverse-engineer which run produced a table row.
+
+\section{Interpretation}
+
+Explain what the result means physically and numerically.  Separate mechanism,
+performance, robustness, and compute-cost claims.
+
+\section{Presentation Capsule}
+
+\begin{itemize}
+\item \textbf{Slide takeaway:} One sentence the audience should remember.
+\item \textbf{Use this figure:} Name the best figure pair or diagram for a
+  presentation slide.
+\item \textbf{Say out loud:} Two to four short points that explain the method,
+  result, limitation, and why it matters.
+\item \textbf{Do not overclaim:} One sentence naming the boundary of the
+  evidence.
+\end{itemize}
+
+\section{Limitations and Missing Evidence}
+
+List unresolved gaps directly: missing reruns, non-convergence, absent control
+artifacts, incomplete standard images, unverified gradients, or unsupported
+generalizations.
+
+\section{Reproduction Capsule}
+
+Give the command family, machine boundary, key parameters, expected outputs,
+and visual-inspection requirement.  If the exact command is still unstable,
+say what entry point must be stabilized before the note can become final.
+
+\section{Sources}
+
+Use external research sources for physics and numerical methods.  Use internal
+paths only for result provenance.
+
+\end{document}
