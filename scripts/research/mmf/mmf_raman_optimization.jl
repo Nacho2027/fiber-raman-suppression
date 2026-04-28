@@ -47,6 +47,18 @@ function Base.showerror(io::IO, err::MMFOptimizationLimit)
     print(io, "MMF optimization stopped by ", err.reason, " limit")
 end
 
+function _select_mmf_reported_optimum(
+    candidate_φ::AbstractVector{<:Real},
+    candidate_J::Real,
+    best_φ::AbstractVector{<:Real},
+    best_J::Real,
+)
+    if isfinite(best_J) && (!isfinite(candidate_J) || best_J < candidate_J)
+        return copy(best_φ), Float64(best_J), true
+    end
+    return copy(candidate_φ), Float64(candidate_J), false
+end
+
 include(joinpath(@__DIR__, "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "src", "mmf_cost.jl"))
 
@@ -380,11 +392,19 @@ function optimize_mmf_phase(
             ),
         )
 
-        φ_opt   = Optim.minimizer(result)
-        J_final = Optim.minimum(result)
+        φ_candidate = Optim.minimizer(result)
+        J_candidate = Optim.minimum(result)
+        φ_opt, J_final, used_best_observed = _select_mmf_reported_optimum(
+            φ_candidate, J_candidate, best_φ, best_J,
+        )
+        if verbose && used_best_observed
+            @info "MMF optimizer returned a worse/non-finite minimum; using best observed phase" J_candidate best_J evaluations=length(J_history)
+        end
     catch err
         if err isa MMFOptimizationLimit
             stopped_by = err.reason
+            J_final = best_J
+            φ_opt = best_φ
             if verbose
                 @info "MMF optimization stopped by driver-side limit; returning best observed phase" reason=stopped_by evaluations=length(J_history)
             end

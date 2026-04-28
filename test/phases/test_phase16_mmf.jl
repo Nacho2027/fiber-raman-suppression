@@ -138,6 +138,32 @@ end
     @test opt.result === nothing
 end
 
+@testset "Phase 16 — MMF optimizer reports best observed phase" begin
+    φ_candidate = [10.0, 20.0, 30.0]
+    φ_best = [1.0, 2.0, 3.0]
+
+    φ_opt, J_final, used_best = _select_mmf_reported_optimum(
+        φ_candidate, Inf, φ_best, -32.0,
+    )
+    @test φ_opt == φ_best
+    @test J_final == -32.0
+    @test used_best
+
+    φ_opt, J_final, used_best = _select_mmf_reported_optimum(
+        φ_candidate, -30.0, φ_best, -32.0,
+    )
+    @test φ_opt == φ_best
+    @test J_final == -32.0
+    @test used_best
+
+    φ_opt, J_final, used_best = _select_mmf_reported_optimum(
+        φ_candidate, -35.0, φ_best, -32.0,
+    )
+    @test φ_opt == φ_candidate
+    @test J_final == -35.0
+    @test !used_best
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Testset 3: finite-difference gradient check at M=6
 # ─────────────────────────────────────────────────────────────────────────────
