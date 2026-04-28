@@ -23,4 +23,11 @@ Most important follow-up:
 3. Use simple/replay-surviving masks as first lab candidates, not the deepest
    ideal full-grid masks.
 
-No tests were run; this was a documentation/audit-only pass.
+2026-04-28 implementation follow-up:
+
+- Added `scripts/lib/slm_replay.jl` as the device-agnostic replay library.
+- Added `configs/slm_profiles/generic_128px_phase.toml` and
+  `configs/slm_profiles/generic_256px_phase.toml`.
+- Added `scripts/canonical/replay_slm_mask.jl` with optional `--evaluate`.
+- Added `docs/guides/slm-replay.md`.
+- Added fast tests in `test/core/test_slm_replay.jl`.

@@ -252,7 +252,7 @@ MV_AMP_PHASE_AMP_ITER=60 julia -t auto --project=. scripts/research/multivar/mul
 ## Decision Rules For This Session
 
 - Do not relaunch unless the existing `V-multivar` lane has clearly failed.
-- If the demo completes, verify:
+- If the reference run completes, verify:
   - `phase_only_L2m_P0p3W_*` standard images
   - `mv_cold_L2m_P0p3W_*` standard images
   - `mv_warm_L2m_P0p3W_*` standard images

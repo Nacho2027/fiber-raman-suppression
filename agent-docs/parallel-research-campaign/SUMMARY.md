@@ -41,7 +41,7 @@ Operational helpers added:
   - amplitude-only warm start from phase-only optimum
   - two-stage amplitude-first then joint release
   - only then a wider regime map if positive
-- Current repo default command in the launcher is still the existing demo:
+- Current repo default command in the launcher is still the existing reference driver:
   - `julia -t auto --project=. scripts/research/multivar/multivar_demo.jl`
 - Expected wall time:
   - rescue/ablation pass: `2-8 h`

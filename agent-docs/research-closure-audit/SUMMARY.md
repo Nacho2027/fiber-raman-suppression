@@ -111,7 +111,7 @@ Current state:
 
 - Core implementation exists in
   `scripts/research/multivar/multivar_optimization.jl`.
-- Demo driver exists in `scripts/research/multivar/multivar_demo.jl`.
+- Reference driver exists in `scripts/research/multivar/multivar_demo.jl`.
 - Unit + gradient smoke tests exist and current-agent-context marks the helper
   and gradient infrastructure as verified.
 - Result artifacts exist under `results/raman/multivar/smf28_L2m_P030W/`.

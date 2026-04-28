@@ -42,3 +42,21 @@ follow-up work.
   point, each with summary, JLD2/SLM sidecar, and standard images.
 - Expected long-fiber outputs are `200m_overngt_opt_resume_result.jld2`,
   resumed checkpoints, and `standard_images_F_200m_overngt_resume/`.
+
+## 2026-04-28 Status Update
+
+- Long-fiber `L-200resume1` is still running on
+  `fiber-raman-temp-l-200resume1-20260427t165232z` (`c3-highcpu-8`). Latest
+  observed checkpoint was `ckpt_iter_1563.jld2`; the run is plateauing near
+  `J=-53.454 dB` but the Julia process is active.
+- The separate MMF agent VM
+  `fiber-raman-temp-m-mmfg8192-20260428t022858z` is also running. This note
+  does not supervise or mutate that VM.
+- Multivar front-layer organization was updated to encode the scientific
+  decision directly: `policy=direct` is the naive joint path, while
+  `policy=amp_on_phase` is the staged refinement path supported by the current
+  robustness results.
+- New staged config:
+  `configs/experiments/smf28_amp_on_phase_refinement_poc.toml`. Its compute
+  plan points to `scripts/canonical/refine_amp_on_phase.jl` and requires
+  standard-image inspection before closure.

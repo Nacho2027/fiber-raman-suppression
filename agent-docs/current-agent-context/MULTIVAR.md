@@ -24,7 +24,7 @@ with a warning.
 
 - Core implementation:
   `scripts/research/multivar/multivar_optimization.jl`
-- Demo driver:
+- Reference driver:
   `scripts/research/multivar/multivar_demo.jl`
 - Smoke tests:
   `scripts/dev/smoke/test_multivar_unit.jl`
@@ -48,7 +48,7 @@ with a warning.
 The main issue is optimizer behavior and hardware readiness in the expanded
 control space, not missing infrastructure.
 
-At the canonical demo point (`SMF-28`, `L = 2 m`, `P = 0.30 W`), the accepted
+At the canonical reference point (`SMF-28`, `L = 2 m`, `P = 0.30 W`), the accepted
 2026-04-24 joint-optimizer run showed:
 
 - phase-only: `J_after = -40.8 dB`

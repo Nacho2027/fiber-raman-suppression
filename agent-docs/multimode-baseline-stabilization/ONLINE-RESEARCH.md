@@ -84,7 +84,7 @@ Date: 2026-04-27
     periodic temporal domain when using pseudospectral methods. This directly
     supports the boundary/edge-fraction diagnostic used here and argues against
     accepting any result whose field reaches the temporal edge.
-- RP Fiber Power demo, "Stimulated Raman Scattering in a Multimode Fiber":
+- RP Fiber Power example, "Stimulated Raman Scattering in a Multimode Fiber":
   https://www.rp-photonics.com/rp_fiber_power_demos_srs_mm.html
   - Relevant note: even beam-propagation models that do not solve directly in a
     modal basis still report mode powers via overlap integrals. This reinforces

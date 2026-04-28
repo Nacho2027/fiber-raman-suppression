@@ -33,6 +33,8 @@ The front layer now supports:
 - config validation
 - dry-run planning
 - provider-neutral compute plans
+- control-layout inspection
+- artifact-plan inspection
 - supported single-mode phase-only execution
 - experimental single-mode multivariable execution
 - long-fiber planning-only configs
@@ -259,6 +261,41 @@ Minimum scope:
 - standard image inspection checklist
 - trust-report checklist
 - explicit notes for parameter regimes that are exploratory only
+
+### 9. Control And Artifact Planning
+
+Status: started.
+
+Purpose: make exploratory physics understandable before compute launches.
+
+Minimum scope:
+
+- report each optimized variable as a physical control block
+- show units, bounds, shape, and optimizer-vector length
+- combine regime/objective/variable artifact hooks into one output plan
+- show which requested plots/metrics are implemented now versus planned
+- document how automatic plot defaults and user overrides should work
+
+Current slice:
+
+- `scripts/lib/control_layout.jl` renders inspectable optimizer-vector blocks
+  for current variables
+- `scripts/lib/artifact_plan.jl` combines regime, objective, and variable
+  artifact hooks
+- `run_experiment.jl --control-layout <config>` prints the control layout
+- `run_experiment.jl --artifact-plan <config>` prints required plots/metrics,
+  default view rules, override keys, and implementation status
+- dry-runs now summarize control layout and artifact hooks
+- `docs/guides/exploratory-physics-workflow.md` explains the lab workflow in
+  plain language
+
+Next promotion:
+
+- wire remaining artifact hooks directly into post-run generation for future
+  controls/objectives such as mode weights and pulse compression
+- add plot override parsing under `[plots.*]`
+- require artifact-plan completeness before marking a non-smoke workflow
+  `supported`
 
 ## Operating Principle
 
