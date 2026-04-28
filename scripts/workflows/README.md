@@ -18,6 +18,7 @@ Typical examples:
 - sweep report generation
 - presentation-figure generation
 - result comparison workflows
+- compute telemetry indexing
 - lab-readiness gates
 - optional second-stage refinement workflows
 - standard-image regeneration

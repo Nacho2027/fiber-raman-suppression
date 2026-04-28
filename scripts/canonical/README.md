@@ -13,6 +13,7 @@ point readers toward first.
 - `inspect_run.jl` — inspect one saved run bundle
 - `lab_ready.jl` — run pass/fail lab-readiness gates for configs and completed runs
 - `export_run.jl` — export one saved run as an experiment-facing handoff bundle
+- `index_telemetry.jl` — summarize compute telemetry for runtime and memory planning
 - `refine_amp_on_phase.jl` — optional experimental second-stage amplitude-on-phase refinement
 - `generate_reports.jl` — regenerate sweep reports and presentation figures
 - `regenerate_standard_images.jl` — backfill the mandatory standard image set

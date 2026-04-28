@@ -71,4 +71,79 @@ using Test
     samples = readlines(joinpath(telemetry_dir, "resource_samples.csv"))
     @test startswith(first(samples), "timestamp_utc,elapsed_s,processes")
     @test length(samples) >= 2
+
+    include(joinpath(scripts_root, "lib", "telemetry_index.jl"))
+    index_telemetry_script = joinpath(scripts_root, "canonical", "index_telemetry.jl")
+    @test isfile(index_telemetry_script)
+
+    telemetry_root = mktempdir()
+    first_run = joinpath(telemetry_root, "smoke_a_20260428T010000Z")
+    second_run = joinpath(telemetry_root, "smoke_b_20260428T020000Z")
+    mkpath(first_run)
+    mkpath(second_run)
+    write(joinpath(first_run, "telemetry.json"), """
+{
+  "schema": "fiber_run_telemetry_v1",
+  "label": "smoke-a",
+  "command": "julia -t auto --project=. scripts/canonical/run_experiment.jl a",
+  "hostname": "lab-host",
+  "started_at_utc": "2026-04-28T01:00:00Z",
+  "finished_at_utc": "2026-04-28T01:01:40Z",
+  "elapsed_s": 100.0,
+  "return_code": 0,
+  "cpu_model": "test cpu",
+  "cpu_threads_online": "16",
+  "mem_total_kb": "33554432",
+  "julia_num_threads": "16",
+  "sampled_peak_cpu_percent_sum": 800.0,
+  "sampled_peak_mem_percent_sum": 12.5,
+  "sampled_peak_rss_kb_sum": 2097152,
+  "time_max_rss_kb": "2100000"
+}
+""")
+    write(joinpath(second_run, "telemetry.json"), """
+{
+  "schema": "fiber_run_telemetry_v1",
+  "label": "smoke-b",
+  "command": "julia -t auto --project=. scripts/canonical/run_experiment.jl b",
+  "hostname": "lab-host",
+  "started_at_utc": "2026-04-28T02:00:00Z",
+  "finished_at_utc": "2026-04-28T02:05:00Z",
+  "elapsed_s": 300.0,
+  "return_code": 1,
+  "cpu_model": "test cpu",
+  "cpu_threads_online": "16",
+  "mem_total_kb": "33554432",
+  "julia_num_threads": "16",
+  "sampled_peak_cpu_percent_sum": 1200.0,
+  "sampled_peak_mem_percent_sum": 25.0,
+  "sampled_peak_rss_kb_sum": 4194304,
+  "time_max_rss_kb": "4200000"
+}
+""")
+
+    telemetry_index = build_telemetry_index([telemetry_root])
+    @test telemetry_index.total == 2
+    @test telemetry_summary(telemetry_index).failed == 1
+    @test telemetry_format_duration(3661.2) == "1h01m01s"
+    failed_index = filter_telemetry_index(telemetry_index; failed=true)
+    @test length(failed_index.rows) == 1
+    @test only(failed_index.rows).label == "smoke-b"
+    slowest = top_telemetry_index(
+        sort_telemetry_index(telemetry_index; by=:elapsed, descending=true),
+        1,
+    )
+    @test only(slowest.rows).label == "smoke-b"
+    markdown = render_telemetry_index(slowest)
+    @test occursin("# Compute Telemetry Index", markdown)
+    @test occursin("smoke-b", markdown)
+    csv = render_telemetry_index_csv(telemetry_index)
+    @test startswith(csv, "id,label,started_at_utc")
+    @test occursin("smoke-a", csv)
+    cli_csv = read(
+        `$(Base.julia_cmd()) --project=$(project_root) $index_telemetry_script --csv --sort elapsed --desc --top 1 $telemetry_root`,
+        String,
+    )
+    @test occursin("smoke-b", cli_csv)
+    @test !occursin("smoke-a", cli_csv)
 end

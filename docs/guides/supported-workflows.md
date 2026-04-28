@@ -72,6 +72,12 @@ wall time and memory needs before launching similar work. See
 through `scripts/ops/parallel_research_lane.sh` now record this automatically
 under `results/telemetry/`.
 
+Summarize collected telemetry with:
+
+```bash
+julia -t auto --project=. scripts/canonical/index_telemetry.jl --sort elapsed --desc
+```
+
 ## Minimum Lab-Ready Gate
 
 A run is not lab-ready just because it produced a JLD2 file or PNGs. For the
