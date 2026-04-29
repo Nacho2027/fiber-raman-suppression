@@ -140,6 +140,23 @@ For phase-only perturbations the denominator is effectively fixed, but amplitude
 If someone asks why the amplitude derivative is different from the phase derivative, use the complex-plane picture. Phase pushes each spectral sample tangent to its circle, because $d(e^{i\phi})/d\phi=i e^{i\phi}$. Amplitude pushes it radially outward or inward. Energy pushes every sample radially together. The adjoint tells us which push would most reduce Raman leakage.
 
 \section{Implementation Surface}
+
+\subsection*{Provenance and Validation Status}
+
+The headline positive result is the staged amplitude-on-fixed-phase workflow,
+not the older broad joint optimizer. The table values are taken from saved run
+summaries and standard-image folders, then checked against the current code
+path and gradient smoke tests. A later audit found and fixed a boundary
+regularizer amplitude-chain-rule issue, so any older amplitude-enabled result
+with a nonzero boundary penalty should be treated as evidence for the strategy,
+not as a final publication table, unless it has been regenerated or explicitly
+matched by a post-fix run.
+
+That distinction matters for presentation: the durable finding is that bounded
+amplitude cleanup can improve a good phase solution. The exact last digit of an
+old amplitude run is less important than the repeated pattern across the bound
+sweep and local checks.
+
 \begingroup
 \footnotesize
 \begin{tabularx}{\linewidth}{@{}p{0.32\linewidth}X@{}}
@@ -176,71 +193,42 @@ The experiments followed four ladders:
 The canonical point is SMF-28, $L=2.0$ m, $P=0.30$ W, with the same pulse and Raman-band conventions as the surrounding project notes. Stronger local checks varied length and power near that point.
 
 \section{Representative Results}
-\subsection{Control Group}
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/no_shaping_control_profile.png}
-\caption*{No-shaping input: flat phase and unit amplitude.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/no_shaping_control_evolution.png}
-\caption*{No-shaping propagation heatmap.}
-\end{minipage}
-\caption{The control group is the reference for asking whether shaping is doing real work. It should not be confused with the phase-only reference, which is already optimized.}
+\includegraphics[height=0.50\textheight,keepaspectratio]{figures/no_shaping_control_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.32\textheight,keepaspectratio]{figures/no_shaping_control_evolution.png}
+\caption{No-shaping control group. The top diagnostic records
+\(\phi_k=0\), \(A_k=1\), and unit energy scale; the bottom heat map is the
+actual no-shaping propagation reference. This is different from the phase-only
+reference, which is already optimized.}
 \end{figure}
 
-\subsection{Phase-Only Reference}
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/phase_only_reference_phase_diagnostic.png}
-\caption*{Phase-only diagnostic.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/phase_only_reference_evolution.png}
-\caption*{Phase-only propagation heatmap.}
-\end{minipage}
+\includegraphics[height=0.50\textheight,keepaspectratio]{figures/phase_only_reference_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.32\textheight,keepaspectratio]{figures/phase_only_reference_evolution.png}
 \caption{The phase-only run is the baseline the multivariable methods must beat. At the canonical point it reached $J_{\mathrm{R}}=-40.79$ dB.}
 \end{figure}
 
-\subsection{Amplitude-On-Phase Refinement}
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/amplitude_refinement_phase_diagnostic.png}
-\caption*{Amplitude-refined diagnostic.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/amplitude_refinement_evolution.png}
-\caption*{Amplitude-refined propagation heatmap.}
-\end{minipage}
+\includegraphics[height=0.50\textheight,keepaspectratio]{figures/amplitude_refinement_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.32\textheight,keepaspectratio]{figures/amplitude_refinement_evolution.png}
 \caption{The strongest canonical amplitude-on-fixed-phase ablation reached $J_{\mathrm{R}}=-46.91$ dB, improving the phase-only reference by $6.12$ dB. This run hit the 50-iteration cap, so the value should be read as a strong simulated result rather than a fully converged final optimum.}
 \end{figure}
 
-\subsection{Energy-On-Phase Refinement}
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/energy_refinement_phase_diagnostic.png}
-\caption*{Energy-refined diagnostic.}
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{figures/energy_refinement_evolution.png}
-\caption*{Energy-refined propagation heatmap.}
-\end{minipage}
+\includegraphics[height=0.50\textheight,keepaspectratio]{figures/energy_refinement_phase_diagnostic.png}
+
+\vspace{0.5em}
+\includegraphics[height=0.32\textheight,keepaspectratio]{figures/energy_refinement_evolution.png}
 \caption{Energy-only refinement on the fixed phase improved the canonical phase-only result by $4.10$ dB in simulation. This is scientifically interesting but must be presented carefully because changing energy may not be a fair comparison to a fixed-power experiment.}
 \end{figure}
 
@@ -335,7 +323,7 @@ Cold joint phase+amplitude & $\phi,\Avar$ & about $-18.3$ & about $+22.5$ dB & 5
 \caption{Representative local check at $L=2.0$ m and $P=0.33$ W. The phase-only reference was $-43.56$ dB and the amplitude-refined result was $-54.24$ dB, a $10.68$ dB improvement.}
 \end{figure}
 
-\FloatBarrier
+\clearpage
 
 \section{Interpretation}
 The most important lesson is that dimensionality is not free. Adding amplitude and energy variables creates a much larger landscape, and the optimizer can waste effort undoing phase structure that already works. The staged method avoids that by preserving the phase-only solution and giving the second stage a smaller, more local job.

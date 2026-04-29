@@ -23,6 +23,16 @@ class FiberlabAppTests(unittest.TestCase):
             status = app.main(argv)
         return status, stdout.getvalue(), stderr.getvalue()
 
+    def test_playbook_command_prints_researcher_workflow_without_backend(self):
+        status, stdout, stderr = self._run_app(["playbook"])
+
+        self.assertEqual(status, 0)
+        self.assertEqual(stderr, "")
+        self.assertIn("Fiber Research Playground Playbook", stdout)
+        self.assertIn("./fiberlab explore list", stdout)
+        self.assertIn("docs/guides/researcher-playbook.md", stdout)
+        self.assertIn("config-only", stdout)
+
     @patch("fiber_research_engine.cli.subprocess.run")
     def test_plan_command_delegates_to_experiment_dry_run(self, run_mock):
         run_mock.return_value.returncode = 0

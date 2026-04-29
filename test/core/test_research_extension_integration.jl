@@ -57,6 +57,71 @@ end
         @test occursin("execution_planning_only", message)
     end
 
+    @testset "Scalar objective extension is promoted for bounded scalar search" begin
+        @test :temporal_peak_scalar in registered_objective_extension_kinds(:single_mode)
+        @test :temporal_peak_scalar in registered_objective_kinds(:single_mode)
+        contract = objective_contract(:temporal_peak_scalar, :single_mode)
+        @test contract.backend == :scalar_extension
+        @test contract.execution == :executable
+        @test contract.supported_variables == ((:gain_tilt,),)
+
+        row = validate_objective_extension_contract(contract)
+        @test row.valid
+        @test row.promotable
+        @test isempty(row.blockers)
+        @test isempty(row.errors)
+
+        spec = load_experiment_spec("research_engine_temporal_peak_scalar_smoke")
+        @test spec.objective.kind == :temporal_peak_scalar
+        @test spec.controls.variables == (:gain_tilt,)
+        @test experiment_execution_mode(spec) == :scalar_search
+        @test validate_experiment_spec(spec) isa NamedTuple
+    end
+
+    @testset "Scalar extension sidecar metadata is objective-specific" begin
+        mktempdir() do dir
+            result = Optim.optimize(x -> (x - 0.1)^2, -1.0, 1.0)
+            cfg = MVConfig(variables = (:gain_tilt,), log_cost = false, λ_energy = 0.0)
+            outcome = (
+                result = result,
+                cfg = cfg,
+                φ_opt = zeros(8, 1),
+                A_opt = ones(8, 1),
+                E_opt = 1.0,
+                E_ref = 1.0,
+                J_opt = 0.5,
+                g_norm = 0.0,
+                wall_time_s = 0.1,
+                iterations = 2,
+                gain_tilt_opt = 0.05,
+                gain_tilt_search = 0.05,
+            )
+            saved = save_multivar_result(joinpath(dir, "opt"), outcome; meta = Dict{Symbol,Any}(
+                :objective_kind => :temporal_peak_scalar,
+                :objective_backend => :scalar_extension,
+                :objective_label => "temporal peak scalar test objective",
+                :objective_base_term => "extension:temporal_peak_scalar",
+                :fiber_name => "unit-test",
+                :L_m => 1.0,
+                :P_cont_W => 0.1,
+                :lambda0_nm => 1550.0,
+                :fwhm_fs => 185.0,
+                :rep_rate_Hz => 80.5e6,
+                :gamma => 1.0e-3,
+                :time_window_ps => 1.0,
+                :J_before => 0.6,
+                :J_after_lin => 0.5,
+                :delta_J_dB => -0.79,
+            ))
+            sidecar = JSON3.read(read(saved.json, String), Dict{String,Any})
+            @test sidecar["cost_surface"]["objective_kind"] == "temporal_peak_scalar"
+            @test sidecar["cost_surface"]["objective_backend"] == "scalar_extension"
+            @test sidecar["cost_surface"]["objective_label"] == "temporal peak scalar test objective"
+            @test sidecar["cost_surface"]["surface"] == "extension:temporal_peak_scalar"
+            @test sidecar["generator"] == "scripts/research/multivar/multivar_optimization.jl"
+        end
+    end
+
     @testset "Non-standard variable extension is discoverable but gated" begin
         @test :gain_tilt_planning in registered_variable_extension_kinds(:single_mode)
         contract = variable_extension_contract(:gain_tilt_planning, :single_mode)
@@ -83,7 +148,7 @@ end
         objective_report = run_experiment_main(["--validate-objectives"])
         variable_report = run_experiment_main(["--validate-variables"])
         @test objective_report.invalid == 0
-        @test objective_report.promotable == 0
+        @test objective_report.promotable >= 1
         @test variable_report.invalid == 0
         @test variable_report.promotable == 0
         @test variable_report.total >= 2

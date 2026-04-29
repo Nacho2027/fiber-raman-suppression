@@ -101,20 +101,22 @@ Base.@kwdef mutable struct MVConfig
 end
 
 """
-    multivar_cost_surface_spec(cfg; objective_label="multivariable Raman spectral shaping optimization")
+    multivar_cost_surface_spec(cfg; objective_label="multivariable Raman spectral shaping optimization",
+                               base_term="J_physics")
 
 Machine-readable description of the scalar objective returned by
 `cost_and_gradient_multivar`.
 """
 function multivar_cost_surface_spec(
     cfg::MVConfig;
-    objective_label::AbstractString="multivariable Raman spectral shaping optimization")
+    objective_label::AbstractString="multivariable Raman spectral shaping optimization",
+    base_term::AbstractString="J_physics")
 
     return build_objective_surface_spec(;
         objective_label = objective_label,
         log_cost = cfg.log_cost,
         linear_terms = active_linear_terms(
-            ["J_physics"],
+            [String(base_term)],
             [
                 (cfg.λ_gdd > 0, "λ_gdd*R_gdd"),
                 (cfg.λ_boundary > 0, "λ_boundary*R_boundary"),
@@ -824,6 +826,15 @@ NamedTuple returned by `optimize_spectral_multivariable`.  `meta` can include
 run-level fields like `fiber_name`, `L_m`, `P_cont_W`, `lambda0_nm`, `fwhm_fs`,
 `gamma`, `betas`, `convergence_history`.
 """
+_json_safe_value(x) = x
+_json_safe_value(x::Bool) = x
+_json_safe_value(x::Integer) = x
+_json_safe_value(x::AbstractFloat) = isfinite(x) ? x : nothing
+_json_safe_value(x::Real) = isfinite(Float64(x)) ? Float64(x) : nothing
+_json_safe_value(x::AbstractVector) = [_json_safe_value(v) for v in x]
+_json_safe_value(x::Tuple) = [_json_safe_value(v) for v in x]
+_json_safe_value(x::AbstractDict) = Dict(string(k) => _json_safe_value(v) for (k, v) in x)
+
 function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{Symbol,Any}())
     jld2_path = "$(prefix)_result.jld2"
     json_path = "$(prefix)_slm.json"
@@ -832,7 +843,23 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     cfg = outcome.cfg
     Nt = size(outcome.φ_opt, 1)
     M  = size(outcome.φ_opt, 2)
-    objective_spec = multivar_cost_surface_spec(cfg)
+    objective_kind = string(get(meta, :objective_kind, "multivariable"))
+    objective_backend = string(get(meta, :objective_backend, "raman_optimization"))
+    objective_label = String(get(meta, :objective_label, "multivariable Raman spectral shaping optimization"))
+    objective_base_term = String(get(meta, :objective_base_term, "J_physics"))
+    objective_spec = multivar_cost_surface_spec(cfg;
+        objective_label = objective_label,
+        base_term = objective_base_term)
+    cost_surface_payload = Dict{String,Any}(
+        "objective_kind" => objective_kind,
+        "objective_backend" => objective_backend,
+        "objective_label" => objective_spec.objective_label,
+        "log_cost" => objective_spec.log_cost,
+        "scale" => objective_spec.scale,
+        "surface" => objective_spec.scalar_surface,
+        "pre_log_linear_surface" => objective_spec.pre_log_linear_surface,
+        "regularizers_chained_into_surface" => objective_spec.regularizers_chained_into_surface,
+    )
 
     # Baseline (unshaped) input energy
     E_ref = outcome.E_ref
@@ -855,6 +882,9 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         Nt = Nt,
         M = M,
         time_window_ps = Float64(get(meta, :time_window_ps, NaN)),
+        objective_kind = objective_kind,
+        objective_backend = objective_backend,
+        objective_label = objective_label,
         # shaping
         phi_opt = outcome.φ_opt,
         amp_opt = outcome.A_opt,
@@ -884,14 +914,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "lambda_tv"       => cfg.λ_tv,
             "lambda_flat"     => cfg.λ_flat,
         ),
-        cost_surface = Dict{String,Any}(
-            "objective_label" => objective_spec.objective_label,
-            "log_cost" => objective_spec.log_cost,
-            "scale" => objective_spec.scale,
-            "surface" => objective_spec.scalar_surface,
-            "pre_log_linear_surface" => objective_spec.pre_log_linear_surface,
-            "regularizers_chained_into_surface" => objective_spec.regularizers_chained_into_surface,
-        ),
+        cost_surface = cost_surface_payload,
         preconditioning_s = Dict{String,Float64}(
             "s_phi"       => cfg.s_φ,
             "s_amplitude" => cfg.s_A,
@@ -903,7 +926,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     # JSON sidecar
     json_payload = Dict{String,Any}(
         "schema_version" => "1.0",
-        "generator" => "scripts/multivar_optimization.jl (sessions/A-multivar)",
+        "generator" => "scripts/research/multivar/multivar_optimization.jl",
         "generated_at" => string(now()),
         "result_file" => basename(jld2_path),
         "fiber" => Dict(
@@ -928,14 +951,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             ),
         ),
         "variables_enabled" => [String(v) for v in cfg.variables],
-        "cost_surface" => Dict(
-            "objective_label" => objective_spec.objective_label,
-            "log_cost" => objective_spec.log_cost,
-            "scale" => objective_spec.scale,
-            "surface" => objective_spec.scalar_surface,
-            "pre_log_linear_surface" => objective_spec.pre_log_linear_surface,
-            "regularizers_chained_into_surface" => objective_spec.regularizers_chained_into_surface,
-        ),
+        "cost_surface" => cost_surface_payload,
         "shaped_input_formula" =>
             "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * c_m * uomega0(omega); " *
             "alpha = sqrt(E_opt / E_ref)",
@@ -963,7 +979,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         ),
     )
     open(json_path, "w") do io
-        JSON3.pretty(io, json_payload)
+        JSON3.pretty(io, _json_safe_value(json_payload))
     end
 
     @info "multivar: saved" jld2_path json_path

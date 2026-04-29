@@ -18,6 +18,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test "smf28_phase_amplitude_energy_poc" in approved_experiment_config_ids()
     @test "smf28_amp_on_phase_refinement_poc" in approved_experiment_config_ids()
     @test "research_engine_gain_tilt_scalar_search_smoke" in approved_experiment_config_ids()
+    @test "research_engine_temporal_peak_scalar_smoke" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
     @test spec.id == "smf28_phase_lbfgs_poc"
@@ -113,15 +114,23 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     objective_extension_report = validate_objective_extension_contracts()
     @test objective_extension_report.total >= 1
     @test objective_extension_report.valid == objective_extension_report.total
-    @test objective_extension_report.promotable == 0
+    @test objective_extension_report.promotable >= 1
     pulse_extension_row = only(filter(row -> row.kind == :pulse_compression_planning, objective_extension_report.rows))
     @test pulse_extension_row.valid
     @test !pulse_extension_row.promotable
     @test "execution_planning_only" in pulse_extension_row.blockers
     @test isempty(pulse_extension_row.errors)
+    scalar_extension_row = only(filter(row -> row.kind == :temporal_peak_scalar, objective_extension_report.rows))
+    @test scalar_extension_row.valid
+    @test scalar_extension_row.promotable
+    @test :temporal_peak_scalar in registered_objective_kinds(:single_mode)
+    scalar_contract = objective_contract(:temporal_peak_scalar, :single_mode)
+    @test scalar_contract.backend == :scalar_extension
+    @test scalar_contract.supported_variables == ((:gain_tilt,),)
     rendered_objective_extension_report = sprint(io -> render_objective_extension_validation_report(objective_extension_report; io=io))
     @test occursin("Objective extension validation", rendered_objective_extension_report)
     @test occursin("pulse_compression_planning", rendered_objective_extension_report)
+    @test occursin("temporal_peak_scalar", rendered_objective_extension_report)
     @test occursin("execution_planning_only", rendered_objective_extension_report)
     cli_objective_extension_report = run_experiment_main(["--validate-objectives"])
     @test cli_objective_extension_report.total == objective_extension_report.total

@@ -777,6 +777,10 @@ function validate_experiment_spec(spec)
     _require_auto_or_positive_finite(spec.solver.g_abstol, "solver.g_abstol")
     _require_auto_or_positive_finite(spec.solver.scalar_x_tol, "solver.scalar_x_tol")
     _validate_objective_regularizers(spec, objective_contract)
+    if objective_contract.backend == :scalar_extension && spec.objective.log_cost
+        throw(ArgumentError(
+            "scalar extension objective `$(spec.objective.kind)` must set objective.log_cost=false; extension costs own their scaling"))
+    end
     _validate_plot_contract(spec)
 
     mode = experiment_execution_mode(spec)

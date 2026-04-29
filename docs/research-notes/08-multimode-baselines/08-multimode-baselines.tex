@@ -15,18 +15,21 @@
 \begin{abstract}
 This note summarizes the current multimode-fiber Raman-suppression lane. The
 accepted result is a qualified simulation finding: in an idealized six-mode
-GRIN-50 model, one shared spectral phase can reduce the simulated Raman-band
-fraction by \(31.7\,\mathrm{dB}\) while passing corrected temporal-edge
-diagnostics. The most important part of the story is that an earlier large-gain
-solution was rejected after raw edge diagnostics exposed temporal-window
-contamination. The current result is therefore meaningful, but not a generic
-experimental claim about arbitrary multimode fibers.
+GRIN-50 model, one shared spectral phase reduced the simulated Raman-band
+fraction by \(23.9\,\mathrm{dB}\) on the final \(N_t=8192\) validation grid
+while passing corrected temporal-edge diagnostics. A lower-resolution
+regularized candidate reached \(31.7\,\mathrm{dB}\), but the conservative
+headline is the high-resolution validation. The most important part of the
+story is that an earlier large-gain solution was rejected after raw edge
+diagnostics exposed temporal-window contamination. The current result is
+therefore meaningful, but not a generic experimental claim about arbitrary
+multimode fibers.
 \end{abstract}
 
 \section*{Claim Status}
 \statusbox{qualified simulation result}{The MMF lane is closed/exploring. It is
-usable as a presentation-ready simulation result with clear claim boundaries:
-shared spectral phase shaping suppresses Raman-band generation in one idealized
+usable as qualified simulation evidence with clear claim boundaries: shared
+spectral phase shaping suppresses Raman-band generation in one idealized
 GRIN-50 setting under strict diagnostics. It is not yet a paper-grade or
 experiment-grade universal MMF result.}
 
@@ -42,11 +45,12 @@ where \(m\) indexes mode and \(k\) indexes frequency. The question is:
     \text{Can one shared spectral phase reduce Raman generation across a multimode field?}
 \]
 
-The current evidence says yes in a constrained simulation. The accepted case is
-GRIN-50 with six scalar modes, length \(L=2\,\mathrm{m}\), power
-\(P=0.20\,\mathrm{W}\), \(N_t=4096\), and a \(96\,\mathrm{ps}\) time window.
-The optimized shared phase reduces the summed Raman-band objective from
-\(-17.96\,\mathrm{dB}\) to \(-49.69\,\mathrm{dB}\).
+The current evidence says yes in a constrained simulation. The accepted
+high-resolution case is GRIN-50 with six scalar modes, length
+\(L=2\,\mathrm{m}\), power \(P=0.20\,\mathrm{W}\), \(N_t=8192\), and a
+\(96\,\mathrm{ps}\) time window. The optimized shared phase reduces the raw
+summed Raman-band metric from \(-17.37\,\mathrm{dB}\) to
+\(-41.25\,\mathrm{dB}\).
 
 \begin{figure}[H]
 \centering
@@ -207,11 +211,13 @@ standard image set, the mode-resolved spectra, and the validation summary. It
 was then visually inspected because the core risk in this lane is numerical
 trust, not just whether an optimizer prints a lower objective.
 
-The accepted run is intentionally modest: \(N_t=4096\), \(96\,\mathrm{ps}\),
-six scalar modes, and four optimizer iterations. Attempts to push the same
-case to \(N_t=8192\) were compute-limited and did not produce accepted standard
-artifacts. This is why the claim is a qualified simulation finding rather than
-a paper-grade MMF generalization.
+The accepted high-resolution run uses \(N_t=8192\), \(96\,\mathrm{ps}\), six
+scalar modes, and the same boundary+GDD penalties as the earlier accepted
+\(N_t=4096\) candidate. It stopped through the driver-side time limit, but the
+patched optimizer returned the best observed phase, wrote the standard image
+set, and passed raw-edge diagnostics. This is why the claim is now stronger
+than the earlier grid-limited result, while still remaining a qualified
+simulation finding rather than a broad MMF generalization.
 
 \subsection*{Code Path}
 
@@ -248,12 +254,13 @@ edge diagnostics among the tested candidates.}
 Unregularized & \(-45.07\) & \(27.12\,\mathrm{dB}\) & \(5.02\times10^{-2}\) & reject \\
 Boundary penalty & \(-45.04\) & \(27.09\,\mathrm{dB}\) & \(2.74\times10^{-7}\) & pass \\
 Boundary+GDD & \(-49.69\) & \(31.73\,\mathrm{dB}\) & \(2.07\times10^{-11}\) & accepted \\
+High-res boundary+GDD & \(-41.25\) & \(23.88\,\mathrm{dB}\) & \(3.59\times10^{-13}\) & accepted \\
 \bottomrule
 \end{tabular}
-\caption{All rows use \(L=2\,\mathrm{m}\), \(P=0.20\,\mathrm{W}\),
-\(N_t=4096\), and \(96\,\mathrm{ps}\). The unregularized row is scientifically
-useful because it explains what had to be fixed, but it is not accepted as a
-valid result.}
+\caption{All rows use \(L=2\,\mathrm{m}\), \(P=0.20\,\mathrm{W}\), and
+\(96\,\mathrm{ps}\). The first three rows use \(N_t=4096\); the high-resolution
+row uses \(N_t=8192\). The unregularized row is scientifically useful because
+it explains what had to be fixed, but it is not accepted as a valid result.}
 \end{table}
 
 \section{Representative Result Pages}
@@ -286,7 +293,7 @@ contamination.}
 
 \vspace{0.5em}
 \includegraphics[height=0.34\textheight,keepaspectratio]{figures/mmf_accepted_evolution.png}
-\caption{Accepted constrained MMF result: \(-17.96\rightarrow -49.69\,\mathrm{dB}\) under the mode-summed Raman objective, with raw edge fractions near \(2\times10^{-11}\).}
+\caption{Accepted constrained MMF result: the original \(N_t=4096\) candidate reached \(-17.96\rightarrow -49.69\,\mathrm{dB}\); the final \(N_t=8192\) refinement reached \(-17.37\rightarrow -41.25\,\mathrm{dB}\) with raw edge fractions below \(4\times10^{-13}\).}
 \end{figure}
 
 \begin{figure}[H]
@@ -335,7 +342,7 @@ still producing large Raman suppression.
 The result should be presented with discipline. It supports shared spectral
 phase as a possible control mechanism in an idealized GRIN-50 MMF model. It
 does not yet prove robustness to launch changes, random mode coupling, more
-modes, experimental wavefront shapers, or a larger \(N_t=8192\) grid.
+modes, or experimental wavefront shapers.
 
 \section{Presentation Capsule}
 
@@ -345,8 +352,8 @@ If this note becomes a presentation block, the clean message is:
     assumptions matter.
     \item The first large-gain result was rejected because the pulse touched
     the temporal window boundary.
-    \item The accepted constrained run still gives a \(31.7\,\mathrm{dB}\)
-    reduction and passes raw edge diagnostics.
+    \item The accepted constrained run still gives a \(23.9\,\mathrm{dB}\)
+    reduction at \(N_t=8192\) and passes raw edge diagnostics.
     \item The honest claim is an idealized six-mode GRIN-50 simulation result,
     not generic experimental MMF Raman suppression.
 \end{itemize}
@@ -362,8 +369,9 @@ If this note becomes a presentation block, the clean message is:
     launch compositions still need a matrix of checks.
     \item \textbf{Random coupling open.} The accepted result does not include a
     random or degenerate mode-coupling robustness sweep.
-    \item \textbf{Grid-refinement gate open.} The \(N_t=8192\), \(96\,\mathrm{ps}\)
-    refinement is currently blocked by memory/compute availability.
+    \item \textbf{Grid-refinement gate closed for this lane.} The \(N_t=8192\),
+    \(96\,\mathrm{ps}\) refinement completed with standard images and clean raw
+    edge diagnostics.
     \item \textbf{Phase realism open.} The accepted phase has sub-ps to roughly
     ps-scale group-delay structure and should be simplified before lab claims.
 \end{itemize}
@@ -378,13 +386,15 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl \
 
 Accepted constrained candidate, to run on burst or equivalent heavy compute:
 \begin{verbatim}
-MMF_VALIDATION_SAVE_DIR=results/raman/mmf_validation_gdd \
+MMF_VALIDATION_SAVE_DIR=results/raman/mmf_window_validation_gdd_nt8192_final \
 MMF_VALIDATION_CASES=threshold \
 MMF_VALIDATION_MAX_ITER=4 \
 MMF_VALIDATION_THRESHOLD_TW=96 \
-MMF_VALIDATION_THRESHOLD_NT=4096 \
+MMF_VALIDATION_THRESHOLD_NT=8192 \
 MMF_VALIDATION_LAMBDA_BOUNDARY=0.05 \
 MMF_VALIDATION_LAMBDA_GDD=1e-4 \
+MMF_VALIDATION_F_CALLS_LIMIT=80 \
+MMF_VALIDATION_TIME_LIMIT_SECONDS=10800 \
 julia -t auto --project=. scripts/research/mmf/mmf_window_validation.jl
 \end{verbatim}
 

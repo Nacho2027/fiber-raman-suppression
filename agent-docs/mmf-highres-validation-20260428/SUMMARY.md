@@ -51,9 +51,9 @@ julia -t auto --project=. scripts/research/mmf/mmf_window_validation.jl
   was created:
   `fiber-raman-burst-template-mmf-20260428`.
 
-## Active Run
+## Completed Run
 
-Status as of 2026-04-28 20:34 UTC: running.
+Status as of 2026-04-29 01:20 UTC: completed and synced.
 
 - Session: `M-mmfg8192s44c2`
 - Local supervisor: `tmux` session `mmf-highres-final-s44c2`
@@ -64,16 +64,49 @@ Status as of 2026-04-28 20:34 UTC: running.
   `results/burst-logs/validation/20260428/mmf-highres-final-s44c2.log`
 - Result path:
   `results/raman/phase36_window_validation_gdd_nt8192_final`
-- Latest observed optimizer line: `iter 4: J = -2.400931e+01 (dB)`
-- Latest observed memory: about 34 GB RSS, no swap, ample memory headroom.
+- Runtime: launched 2026-04-28 19:48 UTC; wrapper synced results at
+  2026-04-28 23:41 UTC.
+- The wrapper destroyed the ephemeral VM after syncing. Current VM inventory
+  shows only `fiber-raman-burst` in `TERMINATED` state.
+- Peak observed memory stayed safe: about 34-43 GB RSS on a 176 GB VM, no swap,
+  ample memory headroom.
 
-## Completion Criteria Still Pending
+## Result
 
-- Wait for the patched run to stop through `time_limit` or complete.
-- Confirm synced summary and artifacts under
-  `results/raman/phase36_window_validation_gdd_nt8192_final`.
-- Extract final `J_ref`, `J_opt`, improvement, edge diagnostics, and
-  `boundary_ok`.
-- Confirm the standard image set exists and visually inspect it before treating
-  the lane as validated.
-- Clean up the active VM and, if no longer needed, the temporary machine image.
+- Config: threshold-only `GRIN_50`, `L=2.0 m`, `P=0.20 W`, `Nt=8192`,
+  `time_window=96 ps`, `lambda_gdd=1e-4`, `lambda_boundary=0.05`.
+- Summary:
+  `results/raman/phase36_window_validation_gdd_nt8192_final/mmf_window_validation_summary.md`.
+- Accepted metric: `J_ref=-17.37 dB`, `J_opt=-41.25 dB`, improvement
+  `23.88 dB`.
+- Boundary diagnostics: max edge fraction `3.59e-13`; `boundary_ok=true`.
+- Per-mode summary from log: `J_fund=-41.00 dB`, `J_worst=-41.00 dB`.
+- The optimizer stopped through the driver-side time limit, but after the
+  run-control fix it returned the best observed phase instead of the initial
+  phase.
+
+## Artifacts Checked
+
+Required standard images exist and were visually inspected:
+
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_profile.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_phase_diagnostic.png`
+- `mmf_grin_50_l2m_p0p2w_seed42_evolution_unshaped.png`
+
+Additional summary plots exist:
+
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt8192_tw96_convergence.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt8192_tw96_total_spectrum.png`
+- `mmf_baseline_window_valid_threshold_l2m_p0.2w_nt8192_tw96_per_mode_spectrum.png`
+
+Visual inspection: the optimized standard images are readable and nonblank; the
+optimized spectrum suppresses the Raman-side feature relative to the unshaped
+evolution, and the boundary metric is clean. The phase/GD profile is structured
+and should still be treated as an optimized simulation waveform, not a simple
+SLM-ready actuator claim without additional smoothing/pixelization checks.
+
+## Remaining Cleanup
+
+- Delete the temporary machine image `fiber-raman-burst-template-mmf-20260428`
+  after confirming no further MMF reruns need that exact patched image.

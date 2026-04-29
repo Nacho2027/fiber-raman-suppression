@@ -134,7 +134,14 @@ function registered_objective_contracts(regime::Symbol)
 end
 
 function registered_objective_kinds(regime::Symbol)
-    return Tuple(contract.kind for contract in registered_objective_contracts(regime))
+    builtins = Symbol[contract.kind for contract in registered_objective_contracts(regime)]
+    for contract in registered_objective_extension_contracts(regime)
+        row = validate_objective_extension_contract(contract)
+        if row.promotable
+            push!(builtins, contract.kind)
+        end
+    end
+    return Tuple(unique(builtins))
 end
 
 function objective_contract(kind::Symbol, regime::Symbol)
@@ -148,7 +155,9 @@ function objective_contract(kind::Symbol, regime::Symbol)
             if contract.kind == kind
         )
         if !isempty(extension_matches)
-            row = validate_objective_extension_contract(only(extension_matches))
+            contract = only(extension_matches)
+            row = validate_objective_extension_contract(contract)
+            row.promotable && return contract
             blockers = isempty(row.blockers) ? "none" : join(row.blockers, ",")
             errors = isempty(row.errors) ? "none" : join(row.errors, ",")
             throw(ArgumentError(
@@ -260,7 +269,11 @@ function validate_objective_extension_contract(contract)
     contract.execution == :planning_only && push!(blockers, "execution_planning_only")
     contract.execution == :executable || contract.execution == :planning_only ||
         push!(errors, "unknown_execution")
+    contract.backend in (:lab_extension, :scalar_extension) || push!(errors, "unknown_backend")
     contract.backend == :lab_extension && push!(blockers, "backend_not_promoted")
+    if contract.backend == :scalar_extension && contract.execution != :executable
+        push!(blockers, "scalar_extension_not_executable")
+    end
     contract.maturity in ("supported", "experimental") || push!(blockers, "maturity_$(contract.maturity)")
     isempty(contract.validation) || occursin("Requires", contract.validation) &&
         push!(blockers, "validation_requirements_unmet")

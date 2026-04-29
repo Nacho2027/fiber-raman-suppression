@@ -14,6 +14,8 @@ from typing import Callable, Iterable
 
 from . import cli as engine
 
+PLAYBOOK_RELATIVE_PATH = Path("docs/guides/researcher-playbook.md")
+
 
 def _split_csv(value: str | None) -> tuple[str, ...] | None:
     if value is None:
@@ -35,6 +37,40 @@ def _emit(result: engine.CommandResult) -> int:
     if result.stderr:
         print(result.stderr, end="", file=sys.stderr)
     return result.returncode
+
+
+def _playbook(args: argparse.Namespace) -> int:
+    doc_path = Path(args.repo_root) / PLAYBOOK_RELATIVE_PATH
+    print("# Fiber Research Playground Playbook")
+    print()
+    print("Start here when you have a research idea and do not know which command to run.")
+    print()
+    print("1. Discover what exists:")
+    print("   ./fiberlab explore list")
+    print("   ./fiberlab capabilities")
+    print()
+    print("2. Inspect before compute:")
+    print("   ./fiberlab explore plan <config>")
+    print("   ./fiberlab check config <config>")
+    print("   ./fiberlab layout <config>")
+    print("   ./fiberlab artifacts <config>")
+    print()
+    print("3. Pick the right path:")
+    print("   config-only: edit an existing TOML when the regime, variable, and objective already exist.")
+    print("   local explore: ./fiberlab explore run <config> --local-smoke")
+    print("   heavy explore: ./fiberlab explore run <config> --heavy-ok --dry-run")
+    print("   new physics: scaffold the objective or variable, then promote it with implementation and checks.")
+    print()
+    print("4. Compare outputs:")
+    print("   ./fiberlab explore compare results/raman --top 10")
+    print()
+    print("5. Read the one-page workflow:")
+    print(f"   {PLAYBOOK_RELATIVE_PATH}")
+    if not doc_path.is_file():
+        print()
+        print(f"Warning: playbook doc not found at {doc_path}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _call(args: argparse.Namespace, func: Callable[..., engine.CommandResult], *values: object) -> int:
@@ -239,6 +275,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_command("configs", lambda args: _call(args, engine.list_experiments), "List approved experiment configs.")
     add_command("capabilities", lambda args: _call(args, engine.capabilities), "Show supported regimes, variables, objectives, and artifacts.")
+    add_command("playbook", _playbook, "Show the researcher workflow for using the playground.")
     add_command("validate", _validate, "Validate experiment, sweep, objective, and variable contracts without compute.")
     add_command("extensions", _extensions, "Validate objective and variable research-extension contracts.")
 

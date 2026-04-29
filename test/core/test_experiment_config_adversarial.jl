@@ -150,6 +150,11 @@ end
             "lambda = 1.0" => "lambda = -1.0")
         _expect_rejected("research_engine_peak_smoke", "regularizer `energy`",
             "name = \"boundary\"" => "name = \"energy\"")
+        _expect_rejected("research_engine_temporal_peak_scalar_smoke",
+            "scalar extension objective `temporal_peak_scalar` must set objective.log_cost=false",
+            "log_cost = false" => "log_cost = true")
+        _expect_rejected("research_engine_temporal_peak_scalar_smoke", "regularizer `boundary`",
+            "name = \"energy\"" => "name = \"boundary\"")
     end
 
     @testset "Unsupported front-layer combinations fail closed" begin

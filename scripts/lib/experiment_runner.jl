@@ -552,7 +552,90 @@ function _gain_tilt_search_coordinate(physical_slope::Real, δ_bound::Real)
     return atanh(ratio)
 end
 
+function _load_scalar_extension_cost(contract)
+    contract.backend == :scalar_extension || throw(ArgumentError(
+        "objective `$(contract.kind)` is not a scalar extension objective"))
+    source_path = _extension_source_path(contract)
+    isfile(source_path) || throw(ArgumentError("objective extension source not found: $source_path"))
+    Base.include(Main, source_path)
+    fn = Symbol(contract.function_name)
+    Base.invokelatest(isdefined, Main, fn) || throw(ArgumentError(
+        "objective extension function `$(contract.function_name)` was not defined by `$source_path`"))
+    return (; ext_module = Main, function_name = fn)
+end
+
+function _call_scalar_extension_cost(handle, context)
+    fn = Base.invokelatest(getfield, handle.ext_module, handle.function_name)
+    return Float64(Base.invokelatest(fn, context))
+end
+
+function _scalar_extension_output(uω0, physical_A, fiber, sim)
+    u_shaped = physical_A .* uω0
+    sol = MultiModeNoise.solve_disp_mmf(u_shaped, fiber, sim)
+    L = fiber["L"]
+    Dω = fiber["Dω"]
+    ũω_L = sol["ode_sol"](L)
+    uωf = similar(uω0)
+    @. uωf = cis(Dω * L) * ũω_L
+    return u_shaped, uωf, sol
+end
+
+function _scalar_extension_context(;
+    spec,
+    uω0,
+    u_shaped,
+    uωf,
+    sol,
+    fiber,
+    sim,
+    physical_A,
+    physical_slope,
+)
+    return (
+        spec = spec,
+        uω0 = uω0,
+        u_shaped = u_shaped,
+        uωf = uωf,
+        sol = sol,
+        fiber = fiber,
+        sim = sim,
+        amplitude = physical_A,
+        gain_tilt = physical_slope,
+        variables = spec.controls.variables,
+    )
+end
+
+function _scalar_extension_regularizer_cost(uω0, u_shaped, cfg::MVConfig)
+    J_reg = 0.0
+    breakdown = Dict{Symbol,Any}()
+    if cfg.λ_energy > 0
+        E_ref = sum(abs2, uω0)
+        E_shaped = sum(abs2, u_shaped)
+        E_ref > 0 || throw(ArgumentError("scalar extension energy regularizer requires nonzero reference energy"))
+        ratio = E_shaped / E_ref
+        J_energy = cfg.λ_energy * (ratio - 1.0)^2
+        J_reg += J_energy
+        breakdown[:J_energy] = Float64(J_energy)
+        breakdown[:energy_ratio] = Float64(ratio)
+    end
+    return Float64(J_reg), breakdown
+end
+
+function _scalar_extension_cost_with_regularizers(handle, context, cfg::MVConfig)
+    J_extension = _call_scalar_extension_cost(handle, context)
+    J_regularizer, regularizer_breakdown =
+        _scalar_extension_regularizer_cost(context.uω0, context.u_shaped, cfg)
+    return J_extension + J_regularizer, merge(
+        Dict{Symbol,Any}(
+            :J_extension => J_extension,
+            :J_regularizer => J_regularizer,
+        ),
+        regularizer_breakdown,
+    )
+end
+
 function run_scalar_gain_tilt_search(;
+    spec=nothing,
     save_prefix::AbstractString,
     variables=(:gain_tilt,),
     fiber_name::AbstractString="Custom",
@@ -578,8 +661,12 @@ function run_scalar_gain_tilt_search(;
     _ = (validate, solver_reltol, solver_f_abstol, solver_g_abstol)
     variables == (:gain_tilt,) || throw(ArgumentError(
         "bounded scalar search currently supports variables=(:gain_tilt,)"))
-    objective_kind == :raman_band || throw(ArgumentError(
-        "bounded scalar search currently supports objective_kind=:raman_band"))
+    objective_contract = spec === nothing ? objective_contract(objective_kind, :single_mode) : experiment_objective_contract(spec)
+    custom_cost = objective_contract.backend == :scalar_extension ?
+        _load_scalar_extension_cost(objective_contract) :
+        nothing
+    objective_contract.backend in (:raman_optimization, :scalar_extension) || throw(ArgumentError(
+        "bounded scalar search does not support objective backend `$(objective_contract.backend)`"))
     Float64(scalar_lower) < Float64(scalar_upper) || throw(ArgumentError(
         "scalar_lower must be less than scalar_upper"))
     max_abs = Float64(δ_bound)
@@ -608,7 +695,31 @@ function run_scalar_gain_tilt_search(;
     function objective_for_slope(slope)
         search = _gain_tilt_search_coordinate(slope, δ_bound)
         x = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg, Nt, M; gain_tilt=search)
-        J, _, diag = cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+        J, diag = if custom_cost === nothing
+            J_local, _, diag_local = cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+            J_local, diag_local
+        else
+            parts = mv_unpack(x, cfg, Nt, M, E_ref)
+            physical = mv_physical_amplitude(parts, cfg, sim, Nt, M)
+            u_shaped, uωf, sol = _scalar_extension_output(uω0, physical.A, fiber, sim)
+            context = _scalar_extension_context(;
+                spec = spec,
+                uω0 = uω0,
+                u_shaped = u_shaped,
+                uωf = uωf,
+                sol = sol,
+                fiber = fiber,
+                sim = sim,
+                physical_A = physical.A,
+                physical_slope = Float64(slope),
+            )
+            J_custom, regularizer_diag = _scalar_extension_cost_with_regularizers(custom_cost, context, cfg)
+            J_custom, merge(Dict{Symbol,Any}(
+                :objective_backend => objective_contract.backend,
+                :objective_kind => objective_contract.kind,
+                :gain_tilt => Float64(slope),
+            ), regularizer_diag)
+        end
         evals[] += 1
         last_diag[] = diag
         push!(trace, Float64(J))
@@ -628,15 +739,57 @@ function run_scalar_gain_tilt_search(;
     physical_slope = Float64(Optim.minimizer(result))
     search_opt = _gain_tilt_search_coordinate(physical_slope, δ_bound)
     x_opt = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg, Nt, M; gain_tilt=search_opt)
-    J_opt, _, diag_opt = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
     parts = mv_unpack(x_opt, cfg, Nt, M, E_ref)
     physical = mv_physical_amplitude(parts, cfg, sim, Nt, M)
+    J_opt, diag_opt = if custom_cost === nothing
+        J_local, _, diag_local = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+        J_local, diag_local
+    else
+        u_shaped, uωf, sol = _scalar_extension_output(uω0, physical.A, fiber, sim)
+        context = _scalar_extension_context(;
+            spec = spec,
+            uω0 = uω0,
+            u_shaped = u_shaped,
+            uωf = uωf,
+            sol = sol,
+            fiber = fiber,
+            sim = sim,
+            physical_A = physical.A,
+            physical_slope = physical_slope,
+        )
+        J_custom, regularizer_diag = _scalar_extension_cost_with_regularizers(custom_cost, context, cfg)
+        J_custom, merge(Dict{Symbol,Any}(
+            :objective_backend => objective_contract.backend,
+            :objective_kind => objective_contract.kind,
+            :gain_tilt => physical_slope,
+        ), regularizer_diag)
+    end
 
     cfg_linear = deepcopy(cfg)
     cfg_linear.log_cost = false
     x_zero = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg_linear, Nt, M; gain_tilt=0.0)
-    J_before, _, _ = cost_and_gradient_multivar(x_zero, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
-    J_after_lin, _, _ = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
+    J_before, J_after_lin = if custom_cost === nothing
+        J0, _, _ = cost_and_gradient_multivar(x_zero, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
+        J1, _, _ = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
+        J0, J1
+    else
+        baseline_parts = mv_unpack(x_zero, cfg_linear, Nt, M, E_ref)
+        baseline_physical = mv_physical_amplitude(baseline_parts, cfg_linear, sim, Nt, M)
+        u_shaped0, uωf0, sol0 = _scalar_extension_output(uω0, baseline_physical.A, fiber, sim)
+        context0 = _scalar_extension_context(;
+            spec = spec,
+            uω0 = uω0,
+            u_shaped = u_shaped0,
+            uωf = uωf0,
+            sol = sol0,
+            fiber = fiber,
+            sim = sim,
+            physical_A = baseline_physical.A,
+            physical_slope = 0.0,
+        )
+        J0_custom, _ = _scalar_extension_cost_with_regularizers(custom_cost, context0, cfg_linear)
+        J0_custom, Float64(J_opt)
+    end
     ΔJ_dB = MultiModeNoise.lin_to_dB(J_after_lin) - MultiModeNoise.lin_to_dB(J_before)
 
     outcome = (
@@ -677,6 +830,14 @@ function run_scalar_gain_tilt_search(;
         :J_before => J_before,
         :J_after_lin => J_after_lin,
         :delta_J_dB => ΔJ_dB,
+        :objective_kind => objective_contract.kind,
+        :objective_backend => objective_contract.backend,
+        :objective_label => objective_contract.description,
+        :objective_base_term => objective_contract.backend == :scalar_extension ?
+            "extension:$(objective_contract.kind)" :
+            "J_physics",
+        :git_branch => get(_git_manifest_summary(), "branch", "unknown"),
+        :git_commit => get(_git_manifest_summary(), "head", "unknown"),
         :band_mask => band_mask,
         :uomega0 => uω0,
         :convergence_history => trace,
@@ -762,6 +923,7 @@ function run_supported_experiment(spec;
     if mode == :scalar_search
         scalar_run = run_scalar_gain_tilt_search(;
             kwargs...,
+            spec=spec,
             save_prefix=save_prefix,
         )
         scalar_bundle = (; scalar_run..., save_prefix=save_prefix, output_dir=output_dir)
