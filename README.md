@@ -11,6 +11,13 @@ Multimode, long-fiber, amplitude-control, and Newton/preconditioner work is in
 the repo too. Treat it as research material with caveats, not as the default
 way to use the project.
 
+The longer-term shape is broader than Raman. `./fiberlab` is a small research
+bench for fiber-optic optimization: configs choose a regime, objective, control
+variable, solver, and output bundle; Julia code supplies the actual physics.
+Raman suppression is the first case with enough evidence to hand to someone
+else. New objectives such as temporal metrics or new controls such as gain tilt
+belong in the same machinery once their formulas, checks, and plots exist.
+
 ## Start
 
 ```bash
@@ -41,7 +48,8 @@ make docker-test
 | Area | Status | Read |
 |---|---|---|
 | SMF-28 phase-mask run | Main working example | [supported workflows](docs/guides/supported-workflows.md) |
-| TOML-driven runs | Same machinery, easier to change settings | [configurable experiments](docs/guides/configurable-experiments.md) |
+| TOML-driven experiments | Change regime/objective/control without editing run scripts | [configurable experiments](docs/guides/configurable-experiments.md) |
+| New objective or control ideas | Scaffold, implement in Julia, then run checks | [researcher playbook](docs/guides/researcher-playbook.md) |
 | Staged `amp_on_phase` refinement | Research follow-up after a phase solution | [amp-on-phase guide](docs/guides/amp-on-phase-refinement.md) |
 | Long-fiber 200 m result | Completed result, not optimizer-converged | [status note](docs/status/longfiber-200m-closure-2026-04-28.md) |
 | Multimode fiber work | Qualified simulation candidate | [MMF report](docs/reports/mmf-raman-readiness-2026-04-28/REPORT.md) |

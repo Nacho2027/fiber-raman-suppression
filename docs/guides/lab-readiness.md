@@ -42,7 +42,7 @@ For the shortest new-user path, start with
 
 ## Current Research Closure State
 
-The supported handoff surface is single-mode phase-only Raman suppression.
+The checked handoff run is single-mode phase-only Raman suppression.
 Staged `amp_on_phase` remains an experimental refinement. MMF is a qualified
 simulation candidate after the high-resolution validation, but it is not a
 routine local workflow. Long-fiber and broad multivariable workflows remain

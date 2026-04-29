@@ -8,6 +8,12 @@ Start here when a config change is not enough.
 smoke cases, and compare saved results. It cannot create new physics from a
 TOML name. If the metric or control is new, implement it in Julia first.
 
+That is the intended abstraction: a researcher should be able to try a new
+fiber-optic optimization question without rewriting the command runner every
+time. The reusable pieces are configs, objective contracts, variable contracts,
+manifests, plots, and comparison tables. The non-reusable piece is the physics;
+that still has to be written and tested.
+
 ## 0. Start Here
 
 Run:

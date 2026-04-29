@@ -3,6 +3,10 @@
 Run `./fiberlab` to inspect or launch a TOML-defined experiment
 without editing optimizer code.
 
+The config runner is meant to outgrow one Raman script. A config can select the
+fiber regime, objective, optimized control, solver, and artifact bundle. It only
+works for physics that exists in Julia: TOML is selection, not implementation.
+
 ## List configs
 
 ```bash
@@ -19,6 +23,7 @@ Good starting points:
 | `research_engine_export_smoke` | supported smoke | export handoff check |
 | `research_engine_gain_tilt_smoke` | experimental | phase plus gain-tilt smoke |
 | `research_engine_gain_tilt_scalar_search_smoke` | experimental | one-parameter scalar search |
+| `research_engine_temporal_peak_scalar_smoke` | experimental | non-Raman temporal-peak scalar smoke |
 | `grin50_mmf_phase_sum_poc` | planning | MMF dry-run only |
 | `smf28_longfiber_phase_poc` | planning | long-fiber dry-run only |
 | `smf28_phase_amplitude_energy_poc` | experimental | direct multivariable research |
@@ -57,7 +62,9 @@ flags such as `--local-smoke` or `--heavy-ok` when a path is risky.
 ```
 
 Do not create a new objective or variable by only editing TOML. Add the formula,
-gradient or fallback, validation, plots, and tests in code first.
+gradient or fallback, validation, plots, and tests in code first. The point is
+to make new fiber-optic questions runnable after they have real code behind
+them.
 
 ## Sweeps
 
