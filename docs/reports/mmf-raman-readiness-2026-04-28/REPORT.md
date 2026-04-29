@@ -11,8 +11,8 @@ suppression.
 ## Accepted current candidate
 
 - Corrected high-resolution GRIN-50 run with boundary and GDD regularization.
-- Summary: `results/raman/mmf_window_validation_gdd_nt8192_final/mmf_window_validation_summary.md`
-  (public alias for the accepted high-resolution validation artifact).
+- Summary: `docs/artifacts/mmf-highres-2026-04-28/mmf_window_validation_summary.md`
+  (curated copy of the accepted high-resolution validation artifact).
 - Reported raw Raman metrics: `J_ref = -17.37 dB`, `J_opt = -41.25 dB`, improvement `23.88 dB`.
 - Best regularized objective observed by the optimizer: about `-32.29 dB`.
 - Edge diagnostic passed with max edge fraction `3.59e-13`.

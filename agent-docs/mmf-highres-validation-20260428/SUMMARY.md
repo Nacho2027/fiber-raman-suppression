@@ -110,3 +110,19 @@ SLM-ready actuator claim without additional smoothing/pixelization checks.
 
 - Delete the temporary machine image `fiber-raman-burst-template-mmf-20260428`
   after confirming no further MMF reruns need that exact patched image.
+
+Curated docs artifacts were copied to:
+
+```text
+docs/artifacts/mmf-highres-2026-04-28/
+```
+
+## Decision
+
+The high-resolution MMF run closes the Phase 36 window-refinement question:
+the corrected, boundary+GDD-regularized MMF gain survives at `Nt=8192` and
+`TW=96 ps`.
+
+The lane remains a qualified simulation candidate, not a supported lab
+workflow. Launch/coupling robustness and phase-actuator realism remain parked
+paper gates.

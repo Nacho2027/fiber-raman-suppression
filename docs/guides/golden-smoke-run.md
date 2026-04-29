@@ -3,6 +3,12 @@
 The golden smoke run checks that install, run, inspect, and export still work
 together.
 
+Clean-clone rehearsal on 2026-04-28 validated the smoke path with run
+`smf28_phase_export_smoke_20260428_1611741`.
+
+Finalizer rehearsal on 2026-04-28 also validated the smoke path with run
+`smf28_phase_export_smoke_20260429_0156419`.
+
 ```bash
 make golden-smoke
 ```

@@ -7,6 +7,7 @@ Shortest path for a new user.
 ```bash
 make install
 make doctor
+make lab-ready
 ```
 
 ## 2. See available configs
@@ -36,7 +37,19 @@ Open the standard images under the newest result directory. If the images look
 blank, cropped, or inconsistent with the reported metric, do not use the result
 until the issue is understood.
 
-## 6. Next reading
+The neutral handoff bundle is under `export_handoff/` in the generated run
+directory.
+
+## 6. Notebook Pattern
+
+Notebook work should read committed interfaces and generated artifacts:
+
+- run a supported config from the shell;
+- read `opt_result.json` for metrics;
+- read `export_handoff/phase_profile.csv` for a neutral phase profile;
+- embed the standard PNGs for visual review.
+
+## 7. Next reading
 
 - [supported workflows](supported-workflows.md)
 - [configurable experiments](configurable-experiments.md)

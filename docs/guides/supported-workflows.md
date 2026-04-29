@@ -3,6 +3,9 @@
 Most of the repo is research code. Start with the small set of commands below;
 they are the ones that are wired up, documented, and checked.
 
+For a step-by-step first-user handoff, start with
+`first-lab-user-walkthrough.md`.
+
 ## Supported
 
 - Single-mode phase-only Raman optimization:

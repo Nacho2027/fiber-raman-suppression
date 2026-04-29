@@ -10,9 +10,10 @@ separately so they do not read like current instructions.
 2. [Supported workflows](guides/supported-workflows.md)
 3. [Researcher playbook](guides/researcher-playbook.md)
 4. [Configurable experiments](guides/configurable-experiments.md)
-5. [Quickstart optimization](guides/quickstart-optimization.md)
-6. [Interpreting plots](guides/interpreting-plots.md)
-7. [Output format](architecture/output-format.md)
+5. [Internal lab release readiness](guides/internal-lab-release-readiness.md)
+6. [Quickstart optimization](guides/quickstart-optimization.md)
+7. [Interpreting plots](guides/interpreting-plots.md)
+8. [Output format](architecture/output-format.md)
 
 If you are returning to the project after a break, start with the
 [research closure report](reports/research-closure-2026-04-28/REPORT.md).
@@ -30,6 +31,7 @@ If you are returning to the project after a break, start with the
 | [quickstart sweep](guides/quickstart-sweep.md) | burst-machine sweep recipe |
 | [golden smoke run](guides/golden-smoke-run.md) | end-to-end handoff smoke |
 | [lab readiness](guides/lab-readiness.md) | checks before another lab user runs it |
+| [internal lab release readiness](guides/internal-lab-release-readiness.md) | final internal handoff checklist and supported-scope reminder |
 | [SLM replay](guides/slm-replay.md) | export and replay of phase masks |
 | [adding a fiber preset](guides/adding-a-fiber-preset.md) | adding a new preset safely |
 | [adding an optimization variable](guides/adding-an-optimization-variable.md) | extending the control vector |

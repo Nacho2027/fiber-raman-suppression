@@ -19,7 +19,9 @@ files.
 
 ## Supported lab rollout
 
-Use the single-mode phase commands:
+## Lab Rollout Decision
+
+Use the single-mode phase front layer:
 
 ```bash
 make lab-ready
@@ -37,14 +39,21 @@ Default configs:
 | Lane | Evidence | Status |
 |---|---|---|
 | Long fiber | `results/raman/phase16/200m_overngt_opt_resume_result.jld2` and standard images | completed milestone |
-| MMF | `results/raman/phase36_window_validation_gdd/mmf_window_validation_summary.md` and plots | qualified simulation |
+| MMF | `docs/artifacts/mmf-highres-2026-04-28/mmf_window_validation_summary.md` and plots | qualified simulation |
 | Multivar | `results/raman/multivar/variable_ablation_overnight_*_20260427/` | staged positive, direct joint negative |
 | Supported smoke | latest `results/raman/smoke/smf28_phase_export_smoke_*` | export path checked |
+
+## Verification Record
+
+The supported rollout gate is `make lab-ready` followed by `make golden-smoke`
+and visual inspection of the standard image set. The MMF high-resolution
+candidate was separately verified from the curated artifacts under
+`docs/artifacts/mmf-highres-2026-04-28/`.
 
 ## Numbers to keep
 
 - Long fiber: `L = 200 m`, `P = 0.05 W`, `Nt = 65536`, `J_final = -55.1648 dB`, `converged = false`.
-- MMF candidate: corrected 4096-grid boundary+GDD run, `J_ref = -17.96 dB`, `J_opt = -49.69 dB`, improvement `31.73 dB`.
+- MMF candidate: corrected 8192-grid boundary+GDD run, `J_ref = -17.37 dB`, `J_opt = -41.25 dB`, improvement `23.88 dB`, `boundary_ok=true`.
 - Staged multivar at SMF-28, `L = 2.0 m`, `P = 0.30 W`: phase-only `-40.79 dB`; amplitude on fixed phase `-46.91 dB`; direct warm `phase+amplitude+energy` `-31.04 dB`.
 
 ## Claims to avoid
