@@ -1,4 +1,3 @@
-# Multivariable Optimization Research
+# multivar
 
-Multivariable optimization experiments and reference runs live here. Keep reusable
-library logic in `src/` when it becomes stable.
+This directory contains phase/amplitude/energy research drivers. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

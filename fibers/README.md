@@ -1,7 +1,7 @@
-# Fiber Caches
+# Fiber Data
 
-This directory contains cached fiber/mode data used by multimode simulations.
+This directory holds fiber-related data that is not code. Keep units and source
+provenance with any added file.
 
-The `.npz` files are generated or reused by research workflows. Treat them as
-data caches, not source code. Add new cache files only when they are necessary
-for reproducibility or tests.
+Most named presets used by workflows are registered in code/config, not inferred
+from this directory.

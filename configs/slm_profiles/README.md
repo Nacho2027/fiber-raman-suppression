@@ -1,14 +1,6 @@
-# Generic SLM Replay Profiles
+# SLM Profiles
 
-These TOML files describe device-agnostic replay profiles. They are not vendor
-exports. They define how an ideal simulation phase is cropped, resampled,
-wrapped, quantized, and reconstructed before rerunning or handing off to a
-vendor-specific adapter.
+These are device-neutral replay profiles for phase-mask export tests. They are
+not vendor calibration files.
 
-The first profiles are intentionally generic:
-
-- `generic_128px_phase.toml`
-- `generic_256px_phase.toml`
-
-Replace the calibration fields with real lab files when the SLM, 4f axis, LUT,
-polarization convention, and correction assets are measured.
+Use with `scripts/canonical/replay_slm_mask.jl` after exporting a saved run.

@@ -1,15 +1,21 @@
 # Tests
 
-The public test entrypoints stay small and stable:
+Run the fast tier:
 
-- `runtests.jl` — dispatcher keyed by `TEST_TIER`
-- `tier_fast.jl`
-- `tier_slow.jl`
-- `tier_full.jl`
+```bash
+make test
+```
 
-Grouped tests live under:
+Python CLI tests:
 
-- `core/` — repo structure, determinism, continuation, acceleration
-- `cost_audit/` — cost-audit unit/integration/analyzer coverage
-- `phases/` — phase-numbered regressions and milestone tests
-- `trust_region/` — trust-region and PCG unit/integration coverage
+```bash
+make test-python
+```
+
+Slow and full tiers are for broader numerical checks and should run on suitable
+compute:
+
+```bash
+make test-slow
+make test-full
+```

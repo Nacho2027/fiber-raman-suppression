@@ -1,5 +1,3 @@
-# Benchmark Research Scripts
+# benchmarks
 
-Benchmark and performance-modeling drivers live here. These scripts are useful
-for methodology and performance audits, but they are not part of the maintained
-public command-line workflow.
+This directory contains runtime and scaling checks. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

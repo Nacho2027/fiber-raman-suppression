@@ -1,7 +1,5 @@
 # Data
 
-Small reference datasets used by exploratory analysis live here.
-
-Do not place routine simulation outputs in this directory. Generated run
-artifacts belong under `results/`; curated documentation artifacts belong under
-`docs/artifacts/`.
+Store small, intentional input data here. Generated results belong in
+`results/`, and large external datasets should have clear provenance before they
+are added to git.

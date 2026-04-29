@@ -1,10 +1,4 @@
-# Cost Audit Shell Helpers
+# Archived Cost Audit Scripts
 
-These shell scripts belong to the historical cost-audit execution workflow.
-
-They were moved out of the `scripts/` root because they are phase-specific,
-machine-oriented orchestration glue rather than part of the supported public
-interface.
-
-The live scientific logic for that work remains in the Julia drivers and tests.
-These wrappers are retained for historical reproducibility only.
+Historical cost-audit scripts. Prefer current research or canonical entry points
+when rerunning analyses.

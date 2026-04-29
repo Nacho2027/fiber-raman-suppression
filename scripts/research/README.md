@@ -1,47 +1,7 @@
 # Research Scripts
 
-This directory is reserved for active experimental workflows that are still
-scientifically useful but are not part of the small supported command-line
-surface exposed in `scripts/canonical/`.
+Scripts here are for active research outside the supported workflow surface.
+They may be useful, but they are not automatically lab-ready.
 
-Typical contents belong to one of these categories:
-
-- continuation and warm-start experiments
-- trust-region / second-order optimization research
-- multimode and long-fiber investigations
-- benchmark and diagnostic runs that inform current roadmap work
-
-When a research workflow becomes stable and broadly supported, prefer promoting
-its reusable logic into `src/` and exposing only a thin canonical entry point.
-
-## Navigation rule
-
-Treat this tree as intentionally local unless a boundary has already been
-promoted into `scripts/lib/` or `src/`.
-
-That means:
-
-- research scripts should stay readable as experiment definitions
-- local manifest or include patterns are acceptable when they are genuinely
-  study-local
-- do not generalize a research-local pattern into shared infrastructure unless
-  repeated maintained use justifies it
-
-For the broader authority map, see
-[`../../docs/architecture/repo-navigation.md`](../../docs/architecture/repo-navigation.md).
-
-Current grouped areas include:
-
-- [`mmf/`](./mmf/README.md) — multimode Raman optimization and analysis tooling
-- [`longfiber/`](./longfiber/README.md) — long-fiber Raman workflows and validation helpers
-- [`sweep_simple/`](./sweep_simple/README.md) — reduced-parameter sweep and continuation tooling
-- [`simple_profile/`](./simple_profile/README.md) — simple-profile analysis and synthesis workflow
-- [`cost_audit/`](./cost_audit/README.md) — methodology audit comparing objective variants
-- [`recovery/`](./recovery/README.md) — honest-grid recovery and validation workflows
-- [`sharpness/`](./sharpness/README.md) — sharpness-focused research drivers and analyses
-- [`phases/`](./phases/README.md) — phase-numbered historical and active research workflows
-- [`analysis/`](./analysis/README.md) — continuation, acceleration, and numerical-trust helpers
-- [`trust_region/`](./trust_region/README.md) — trust-region and preconditioned-CG research utilities
-- [`benchmarks/`](./benchmarks/README.md) — benchmarking and performance-modeling drivers
-- [`multivar/`](./multivar/README.md) — multivariable optimization experiments
-- [`propagation/`](./propagation/README.md) — propagation and reach-analysis experiments
+Before promoting a research path, move reusable code into `src/` or
+`scripts/lib/`, add tests, add artifacts, and document the claim boundary.

@@ -1,7 +1,3 @@
-# Recovery Research Scripts
+# recovery
 
-This directory contains Phase 21 recovery and honest-grid validation workflows.
-
-These scripts are useful for checking historical results against stricter grid
-and reporting standards, but they are not part of the maintained public
-command-line surface.
+This directory contains recovery and validation studies. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

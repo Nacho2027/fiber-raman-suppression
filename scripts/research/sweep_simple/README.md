@@ -1,4 +1,3 @@
-# Sweep Simple Research Scripts
+# sweep_simple
 
-This directory contains the reduced-parameter sweep and continuation tooling
-used for lower-dimensional Raman phase studies.
+This directory contains simple parameter sweeps. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

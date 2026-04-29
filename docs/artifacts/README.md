@@ -1,7 +1,7 @@
 # Artifacts
 
-Durable presentation and meeting artifacts live here so they do not clutter the
-repository root.
+This directory is for selected durable artifacts used by docs or reports. It is
+not a mirror of `results/`.
 
-Generated scratch outputs should stay in `results/`; only curated artifacts
-that are useful for communication should be kept here.
+Add an artifact here only when it is intentionally curated for a report,
+presentation, fixture, or long-lived reference.

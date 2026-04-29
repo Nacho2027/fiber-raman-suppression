@@ -1,112 +1,64 @@
 # Documentation
 
-This index covers the human-facing docs in `docs/`. It is written for Rivera
-Lab users running the maintained workflows, interpreting results, or modifying
-the codebase.
+This is the map for human-facing docs. It keeps current runbooks separate from
+old planning records.
 
-See also: [../README.md](../README.md) for the project-level overview.
+## Read first
 
-## Start here
+1. [Installation](guides/installation.md)
+2. [Supported workflows](guides/supported-workflows.md)
+3. [Researcher playbook](guides/researcher-playbook.md)
+4. [Configurable experiments](guides/configurable-experiments.md)
+5. [Quickstart optimization](guides/quickstart-optimization.md)
+6. [Interpreting plots](guides/interpreting-plots.md)
+7. [Output format](architecture/output-format.md)
 
-If you are new to the repo but already know the research context, read in this
-order:
-
-1. [guides/installation.md](./guides/installation.md)
-2. [guides/container.md](./guides/container.md)
-3. [guides/configurable-experiments.md](./guides/configurable-experiments.md)
-4. [guides/lab-readiness.md](./guides/lab-readiness.md)
-5. [guides/internal-lab-release-readiness.md](./guides/internal-lab-release-readiness.md)
-6. [guides/public-release-readiness.md](./guides/public-release-readiness.md)
-7. [guides/slm-replay.md](./guides/slm-replay.md)
-8. [guides/exploratory-physics-workflow.md](./guides/exploratory-physics-workflow.md)
-9. [guides/research-extensions.md](./guides/research-extensions.md)
-10. [guides/quickstart-optimization.md](./guides/quickstart-optimization.md)
-11. [guides/interpreting-plots.md](./guides/interpreting-plots.md)
-12. [architecture/repo-navigation.md](./architecture/repo-navigation.md)
-13. [architecture/output-format.md](./architecture/output-format.md)
-
-If you are resuming work after time away, the synthesis and status sections are
-usually more useful than the onboarding sequence.
-
-The current end-of-exploration findings package is
-[reports/research-closure-2026-04-28/REPORT.md](./reports/research-closure-2026-04-28/REPORT.md).
-It records which lanes are done enough to summarize, which remain experimental,
-which are deferred, and which negative results should not be promoted.
-
-For quick run/campaign discovery after experiments have completed:
-
-```bash
-julia -t auto --project=. scripts/canonical/index_results.jl
-```
+If you are returning to the project after a break, start with the
+[research closure report](reports/research-closure-2026-04-28/REPORT.md).
 
 ## Guides
 
 | Doc | Use it for |
-|-----|------------|
-| [guides/installation.md](./guides/installation.md) | Environment setup and troubleshooting on laptops and project VMs. |
-| [guides/container.md](./guides/container.md) | Reproducible Docker setup for headless Linux tests and canonical runs. |
-| [guides/configurable-experiments.md](./guides/configurable-experiments.md) | Running and modifying the configurable experiment front layer without editing optimizer internals. |
-| [guides/lab-readiness.md](./guides/lab-readiness.md) | Local, smoke, milestone, and promotion gates for honest lab readiness. |
-| [guides/internal-lab-release-readiness.md](./guides/internal-lab-release-readiness.md) | Rivera Lab internal handoff readiness, practical blockers, and first-user release sequence. |
-| [guides/public-release-readiness.md](./guides/public-release-readiness.md) | Public research-software release blockers, metadata gaps, and recommended preview-release sequence. |
-| [guides/slm-replay.md](./guides/slm-replay.md) | Device-agnostic SLM replay profiles and replay-bundle generation before vendor export. |
-| [guides/exploratory-physics-workflow.md](./guides/exploratory-physics-workflow.md) | Plain-English workflow for existing science, new objectives, new variables, graph selection, and plot defaults. |
-| [guides/research-extensions.md](./guides/research-extensions.md) | Adding new research objective contracts without reducing the system to a closed menu. |
-| [guides/quickstart-optimization.md](./guides/quickstart-optimization.md) | Running the maintained single-optimization workflow and checking the output. |
-| [guides/quickstart-sweep.md](./guides/quickstart-sweep.md) | Running a sweep on `fiber-raman-burst` and pulling results back correctly. |
-| [guides/supported-workflows.md](./guides/supported-workflows.md) | The explicit boundary between the supported lab-facing surface and still-experimental research workflows. |
-| [guides/interpreting-plots.md](./guides/interpreting-plots.md) | Reading standard plots, convergence curves, and sweep heatmaps. |
-| [guides/adding-a-fiber-preset.md](./guides/adding-a-fiber-preset.md) | Adding or auditing a fiber preset in the shared setup layer. |
-| [guides/adding-an-optimization-variable.md](./guides/adding-an-optimization-variable.md) | Extending the optimization variable beyond spectral phase. |
+|---|---|
+| [installation](guides/installation.md) | local setup and health checks |
+| [container](guides/container.md) | Docker setup |
+| [supported workflows](guides/supported-workflows.md) | what is maintained and what is experimental |
+| [researcher playbook](guides/researcher-playbook.md) | what to do when starting a new research idea |
+| [configurable experiments](guides/configurable-experiments.md) | running TOML-driven experiments through `./fiberlab` |
+| [quickstart optimization](guides/quickstart-optimization.md) | single SMF-28 optimization |
+| [quickstart sweep](guides/quickstart-sweep.md) | burst-machine sweep recipe |
+| [golden smoke run](guides/golden-smoke-run.md) | end-to-end handoff smoke |
+| [lab readiness](guides/lab-readiness.md) | promotion gates for lab use |
+| [SLM replay](guides/slm-replay.md) | export and replay of phase masks |
+| [adding a fiber preset](guides/adding-a-fiber-preset.md) | adding a new preset safely |
+| [adding an optimization variable](guides/adding-an-optimization-variable.md) | extending the control vector |
+| [research extensions](guides/research-extensions.md) | planning new objectives or variables |
+| [compute telemetry](guides/compute-telemetry.md) | reading run timing and failure records |
 
-## Architecture and reference
-
-| Doc | Use it for |
-|-----|------------|
-| [architecture/repo-navigation.md](./architecture/repo-navigation.md) | Deciding where code should live and which layer is authoritative. |
-| [architecture/codebase-visual-map.md](./architecture/codebase-visual-map.md) | Visual companion to the repo navigation guide. |
-| [architecture/configurable-front-layer.md](./architecture/configurable-front-layer.md) | Proposal for a thin configurable research-engine front layer above the current workflows. |
-| [architecture/research-engine-ux.md](./architecture/research-engine-ux.md) | UX architecture for CLI, notebooks, sweeps, extensions, and campaign summaries over one backend. |
-| [architecture/output-format.md](./architecture/output-format.md) | Understanding saved JLD2 and JSON run artifacts. |
-| [architecture/cost-convention.md](./architecture/cost-convention.md) | Cost-sign and dB-reporting conventions. |
-| [architecture/cost-function-physics.md](./architecture/cost-function-physics.md) | Physics rationale and the adjoint/cost-function framing used here. |
-
-## Status and synthesis
-
-These files are for re-entry and decision support, not first-time onboarding.
+## Architecture
 
 | Doc | Use it for |
-|-----|------------|
-| [synthesis/recent-phase-synthesis-29-34.md](./synthesis/recent-phase-synthesis-29-34.md) | Recovering the main conclusions from recent phases without rereading the full planning history. |
-| [synthesis/why-phase-31-changed-the-roadmap.md](./synthesis/why-phase-31-changed-the-roadmap.md) | Understanding why Phase 31 changed the project direction. |
-| [synthesis/why-phase-34-still-points-back-to-phase-31.md](./synthesis/why-phase-34-still-points-back-to-phase-31.md) | Understanding why the later trust-region work still points back to the Phase 31 conclusion. |
-| [status/lab-readiness-proposal-2026-04-23.md](./status/lab-readiness-proposal-2026-04-23.md) | Maintainer proposal for what the first honest lab-ready surface should be and what should wait. |
-| [status/longfiber-200m-closure-2026-04-28.md](./status/longfiber-200m-closure-2026-04-28.md) | Completed 200 m long-fiber result, visual inspection notes, and caveats. |
-| [status/multivar-amp-on-phase-positive-result-2026-04-24.md](./status/multivar-amp-on-phase-positive-result-2026-04-24.md) | Positive staged amplitude-on-phase result. |
-| [status/multivar-canonical-negative-result-2026-04-24.md](./status/multivar-canonical-negative-result-2026-04-24.md) | Negative direct-joint multivariable result. |
-| [status/mmf-window-validation-2026-04-27.md](./status/mmf-window-validation-2026-04-27.md) | MMF window-validation status and caveats. |
-| [status/multimode-baseline-status-2026-04-22.md](./status/multimode-baseline-status-2026-04-22.md) | Current state of the multimode baseline work. |
-| [status/phase-30-status.md](./status/phase-30-status.md) | What Phase 30 actually established. |
-| [status/phase-32-status.md](./status/phase-32-status.md) | What Phase 32 acceleration work did and did not establish. |
-| [status/phase-34-preconditioning-caveat.md](./status/phase-34-preconditioning-caveat.md) | Caveat for interpreting the current preconditioning comparisons. |
-| [status/phase-34-bounded-rerun-status.md](./status/phase-34-bounded-rerun-status.md) | Summary of the bounded reruns after the Phase 34 fix. |
-| [status/phase-34-dispersion-closure.md](./status/phase-34-dispersion-closure.md) | Formal decision record closing dispersion preconditioning as an active Raman-suppression branch. |
+|---|---|
+| [repo navigation](architecture/repo-navigation.md) | deciding where code belongs |
+| [codebase visual map](architecture/codebase-visual-map.md) | quick directory/data-flow map |
+| [output format](architecture/output-format.md) | saved JLD2, JSON, manifest, and image files |
+| [cost convention](architecture/cost-convention.md) | sign and dB conventions |
+| [cost-function physics](architecture/cost-function-physics.md) | objective and adjoint framing |
+| [configurable front layer](architecture/configurable-front-layer.md) | front-layer design notes |
+| [research engine UX](architecture/research-engine-ux.md) | CLI/notebook UX notes |
 
-## Reference PDFs and artifacts
+## Reports and status
 
 | Doc | Use it for |
-|-----|------------|
-| [reference/companion_explainer.pdf](./reference/companion_explainer.pdf) | Longer mathematical walkthrough of the forward and adjoint setup. |
-| [reference/verification_document.pdf](./reference/verification_document.pdf) | Formal verification notes keyed to implementation details. |
-| [reference/physics_verification.pdf](./reference/physics_verification.pdf) | Physics-verification notes and supporting derivations. |
-| [artifacts/README.md](./artifacts/README.md) | Durable figures and report artifacts intentionally kept under `docs/`. |
-| [reports/README.md](./reports/README.md) | Human-facing report outputs kept alongside the docs tree. |
+|---|---|
+| [research closure](reports/research-closure-2026-04-28/REPORT.md) | current project-state summary |
+| [MMF readiness](reports/mmf-raman-readiness-2026-04-28/REPORT.md) | multimode claim boundary |
+| [lab physics validity](reports/lab-physics-validity-2026-04-28/REPORT.md) | what the lab surface can and cannot prove |
+| [status notes](status/) | short records for individual lanes |
+| [research notes](research-notes/README.md) | paper/presentation note series |
 
-## Planning history
+## Archive
 
-The `planning-history/` subtree is retained as project history. It is useful
-when you need provenance on why a phase was opened, what was claimed at the
-time, or how an implementation decision evolved.
-
-The current operational interpretation of that history usually lives in the
-status and synthesis docs above.
+`planning-history/` is retained for provenance. Do not use it as onboarding.
+Current decisions should be summarized in `status/`, `reports/`, or
+`architecture/`.

@@ -1,4 +1,3 @@
-# Propagation Research Scripts
+# propagation
 
-Propagation reach, z-resolved validation, and matched-quadratic exploratory
-drivers live here.
+This directory contains propagation reach studies. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

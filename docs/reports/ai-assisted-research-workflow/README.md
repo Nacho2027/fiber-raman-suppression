@@ -1,23 +1,8 @@
-# AI-Assisted Research Workflow Presentation Note
+# Automation Workflow Note
 
-This directory contains a small LaTeX companion note for explaining how AI
-coding agents were used in the Raman-suppression project.
+This note is for process reflection, not user onboarding.
 
-## Files
-
-- `ai-assisted-research-workflow.tex`
-- `ai-assisted-research-workflow.pdf`
-- `figures/`
-
-## Intended Use
-
-Use this as a source for a short presentation section. The boxed personal
-commentary areas should be edited by Ignacio before presenting, because the
-most important part is his actual experience: what worked, what failed, and how
-he learned to steer agents responsibly.
-
-## Figure Credits
-
-The two Steinberger images were downloaded from `steipete.me` posts and are
-credited in the PDF captions. The other diagrams are generated specifically for
-this project.
+The useful lesson is simple: automation helped move many small code and docs
+changes, but the scientific claims still needed explicit checks, saved evidence,
+and human-readable summaries. Do not cite an agent transcript as evidence for a
+physics result. Cite code, commands, artifacts, and inspected figures.

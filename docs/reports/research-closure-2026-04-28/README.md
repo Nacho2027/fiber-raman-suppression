@@ -1,6 +1,6 @@
-# Research Closure 2026-04-28
+# Research Closure Package
 
-This report records the end-of-exploration status for the major research lanes
-before the project shifts to codebase hardening and presentation packaging.
+Read [REPORT.md](REPORT.md) for the current project-state summary.
 
-- [Research Closure Report](REPORT.md)
+This package freezes the April 2026 research interpretation so the repo can
+focus on packaging, lab handoff, and selected presentation material.

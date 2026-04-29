@@ -1,6 +1,3 @@
-# Trust-Region Research Utilities
+# trust_region
 
-Trust-region, telemetry, and preconditioned-CG helpers live here.
-
-These files support second-order optimization research and phase benchmarks.
-Promote stable pieces into `src/` before exposing them as public APIs.
+This directory contains trust-region and preconditioning research. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

@@ -1,36 +1,14 @@
 # Canonical Scripts
 
-This directory is the supported command-line surface for the repository.
+Maintained command-line entry points.
 
-These scripts are the ones that `README.md`, `docs/`, and `Makefile` should
-point readers toward first.
+Useful commands:
 
-## Canonical entry points
+```bash
+julia -t auto --project=. scripts/canonical/optimize_raman.jl --list
+julia -t auto --project=. scripts/canonical/run_experiment.jl --list
+julia -t auto --project=. scripts/canonical/run_sweep.jl --list
+julia --project=. scripts/canonical/inspect_run.jl results/raman/<run_id>/
+```
 
-- `optimize_raman.jl` — run one approved canonical single-mode Raman optimization
-- `run_experiment.jl` — run one front-layer experiment config (single-mode phase-only slice currently implemented)
-- `run_sweep.jl` — run one approved sweep workflow
-- `inspect_run.jl` — inspect one saved run bundle
-- `lab_ready.jl` — run pass/fail lab-readiness gates for configs and completed runs
-- `export_run.jl` — export one saved run as an experiment-facing handoff bundle
-- `replay_slm_mask.jl` — replay an ideal phase through a generic SLM profile
-  before vendor-specific export
-- `index_telemetry.jl` — summarize compute telemetry for runtime and memory planning
-- `refine_amp_on_phase.jl` — optional experimental second-stage amplitude-on-phase refinement
-- `generate_reports.jl` — regenerate sweep reports and presentation figures
-- `regenerate_standard_images.jl` — backfill the mandatory standard image set
-- `validate_results.jl` — run result-validation checks
-
-Approved run and sweep definitions live in `configs/runs/*.toml` and
-`configs/sweeps/*.toml`. Use `--list` on `optimize_raman.jl` or `run_sweep.jl`
-to see the maintained ids.
-
-## Implementation note
-
-These entry points are thin wrappers over implementation files in
-`scripts/workflows/` and shared helpers in `scripts/lib/`.
-
-If you are deciding where to edit behavior, prefer changing the implementation
-layers rather than growing logic directly in this directory. See
-[`../../docs/architecture/repo-navigation.md`](../../docs/architecture/repo-navigation.md) for the full
-boundary map.
+Keep wrappers thin. Put shared behavior in `scripts/lib/` or `src/`.

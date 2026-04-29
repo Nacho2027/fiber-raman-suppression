@@ -1,4 +1,3 @@
-# Simple Profile Research Scripts
+# simple_profile
 
-This directory contains the simple-profile analysis workflow and its synthesis,
-metrics, rendering, and standard-image helpers.
+This directory contains simple phase-profile studies. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.

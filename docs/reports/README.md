@@ -1,15 +1,11 @@
 # Reports
 
-Curated report sources and PDFs live here.
+Reports are polished project summaries. They should be short enough to read and
+specific enough to cite.
 
-Do not commit LaTeX build byproducts (`*.aux`, `*.log`, `*.out`, `*.toc`);
-they are ignored globally and should be regenerated locally as needed.
-
-## Current Reports
-
-- [`research-closure-2026-04-28`](research-closure-2026-04-28/README.md) -
-  end-of-exploration findings and codebase packaging priorities.
-- [`lab-physics-validity-2026-04-28`](lab-physics-validity-2026-04-28/REPORT.md) -
-  audit of what current simulations can and cannot claim for real lab use.
-- [`mmf-raman-readiness-2026-04-28`](mmf-raman-readiness-2026-04-28/README.md) -
-  qualified multimode Raman suppression readiness report.
+| Report | Use |
+|---|---|
+| [research closure](research-closure-2026-04-28/REPORT.md) | current project-state summary |
+| [MMF readiness](mmf-raman-readiness-2026-04-28/REPORT.md) | multimode claim boundary |
+| [lab physics validity](lab-physics-validity-2026-04-28/REPORT.md) | what the lab workflow proves |
+| [automation workflow note](ai-assisted-research-workflow/README.md) | short process note on automation use |
