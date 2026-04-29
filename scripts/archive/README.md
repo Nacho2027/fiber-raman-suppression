@@ -1,4 +1,5 @@
 # Script Archive
 
-Old scripts kept for provenance. Do not build new workflows here, and do not
-send users here for current commands.
+Historical executable archive scripts were removed from the working tree to
+reduce stale code. Use git history for provenance, and use `scripts/canonical/`
+or active `scripts/research/` lanes for runnable entry points.
