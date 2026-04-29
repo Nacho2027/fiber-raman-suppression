@@ -847,6 +847,10 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     objective_backend = string(get(meta, :objective_backend, "raman_optimization"))
     objective_label = String(get(meta, :objective_label, "multivariable Raman spectral shaping optimization"))
     objective_base_term = String(get(meta, :objective_base_term, "J_physics"))
+    control_scalars = Dict{String,Float64}(
+        String(key) => Float64(value)
+        for (key, value) in get(meta, :control_scalars, Dict{String,Float64}())
+    )
     objective_spec = multivar_cost_surface_spec(cfg;
         objective_label = objective_label,
         base_term = objective_base_term)
@@ -885,6 +889,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         objective_kind = objective_kind,
         objective_backend = objective_backend,
         objective_label = objective_label,
+        control_scalars = control_scalars,
         # shaping
         phi_opt = outcome.φ_opt,
         amp_opt = outcome.A_opt,
@@ -951,6 +956,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             ),
         ),
         "variables_enabled" => [String(v) for v in cfg.variables],
+        "scalar_controls" => control_scalars,
         "cost_surface" => cost_surface_payload,
         "shaped_input_formula" =>
             "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * c_m * uomega0(omega); " *
@@ -959,6 +965,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "phase"     => Dict("storage_key" => "phi_opt", "shape" => [Nt, M], "units" => "rad"),
             "amplitude" => Dict("storage_key" => "amp_opt", "shape" => [Nt, M], "units" => "dimensionless"),
             "gain_tilt" => Dict("storage_key" => "gain_tilt_opt", "units" => "dimensionless bounded slope"),
+            "scalar_controls" => Dict("storage_key" => "control_scalars", "units" => "variable-specific"),
             "energy_E"  => Dict("storage_key" => "E_opt", "units" => "arb."),
             "energy_reference" => Dict("storage_key" => "E_ref", "units" => "arb."),
             "mode_coeffs" => Dict("storage_key" => "c_opt", "shape" => [M], "units" => "dimensionless complex"),

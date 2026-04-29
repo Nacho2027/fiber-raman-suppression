@@ -569,8 +569,8 @@ function _call_scalar_extension_cost(handle, context)
     return Float64(Base.invokelatest(fn, context))
 end
 
-function _scalar_extension_output(uω0, physical_A, fiber, sim)
-    u_shaped = physical_A .* uω0
+function _scalar_extension_output(uω0, physical_A, φ, fiber, sim)
+    u_shaped = @. physical_A * cis(φ) * uω0
     sol = MultiModeNoise.solve_disp_mmf(u_shaped, fiber, sim)
     L = fiber["L"]
     Dω = fiber["Dω"]
@@ -590,6 +590,10 @@ function _scalar_extension_context(;
     sim,
     physical_A,
     physical_slope,
+    phase,
+    scalar_variable,
+    scalar_value,
+    scalar_controls,
 )
     return (
         spec = spec,
@@ -600,9 +604,71 @@ function _scalar_extension_context(;
         fiber = fiber,
         sim = sim,
         amplitude = physical_A,
+        phase = phase,
         gain_tilt = physical_slope,
+        scalar_variable = scalar_variable,
+        scalar_value = scalar_value,
+        scalar_controls = scalar_controls,
         variables = spec.controls.variables,
     )
+end
+
+function _normalized_quadratic_phase_basis(sim, Nt::Int, M::Int)
+    frequency = FFTW.fftfreq(Nt, 1 / sim["Δt"])
+    denom = max(maximum(abs.(frequency)), eps(Float64))
+    basis = (frequency ./ denom) .^ 2
+    basis .-= sum(basis) / length(basis)
+    basis ./= max(maximum(abs.(basis)), eps(Float64))
+    return repeat(reshape(basis, Nt, 1), 1, M)
+end
+
+function _scalar_control_state(
+    variable::Symbol,
+    scalar_value::Real,
+    δ_bound::Real,
+    uω0,
+    E_ref::Real,
+    cfg::MVConfig,
+    sim,
+    Nt::Int,
+    M::Int,
+)
+    if variable == :gain_tilt
+        search = _gain_tilt_search_coordinate(scalar_value, δ_bound)
+        x = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg, Nt, M; gain_tilt=search)
+        parts = mv_unpack(x, cfg, Nt, M, E_ref)
+        physical = mv_physical_amplitude(parts, cfg, sim, Nt, M)
+        controls = Dict{String,Float64}("gain_tilt" => Float64(scalar_value))
+        return (
+            x = x,
+            φ = zeros(Nt, M),
+            A = physical.A,
+            gain_tilt = Float64(scalar_value),
+            search_value = search,
+            scalar_controls = controls,
+            diagnostics = Dict{Symbol,Any}(
+                :gain_tilt => Float64(scalar_value),
+                :gain_tilt_search => search,
+            ),
+        )
+    elseif variable == :quadratic_phase
+        basis = _normalized_quadratic_phase_basis(sim, Nt, M)
+        q = Float64(scalar_value)
+        controls = Dict{String,Float64}("quadratic_phase" => q)
+        return (
+            x = [q],
+            φ = q .* basis,
+            A = ones(Nt, M),
+            gain_tilt = 0.0,
+            search_value = q,
+            scalar_controls = controls,
+            diagnostics = Dict{Symbol,Any}(
+                :quadratic_phase => q,
+                :quadratic_phase_basis_max_abs => Float64(maximum(abs.(basis))),
+            ),
+        )
+    end
+    throw(ArgumentError("bounded scalar search does not implement variable `$variable`"))
 end
 
 function _scalar_extension_regularizer_cost(uω0, u_shaped, cfg::MVConfig)
@@ -659,8 +725,9 @@ function run_scalar_gain_tilt_search(;
     kwargs...,
 )
     _ = (validate, solver_reltol, solver_f_abstol, solver_g_abstol)
-    variables == (:gain_tilt,) || throw(ArgumentError(
-        "bounded scalar search currently supports variables=(:gain_tilt,)"))
+    variables in ((:gain_tilt,), (:quadratic_phase,)) || throw(ArgumentError(
+        "bounded scalar search currently supports variables=(:gain_tilt,) or variables=(:quadratic_phase,)"))
+    scalar_variable = only(variables)
     objective_contract = spec === nothing ? objective_contract(objective_kind, :single_mode) : experiment_objective_contract(spec)
     custom_cost = objective_contract.backend == :scalar_extension ?
         _load_scalar_extension_cost(objective_contract) :
@@ -670,7 +737,8 @@ function run_scalar_gain_tilt_search(;
     Float64(scalar_lower) < Float64(scalar_upper) || throw(ArgumentError(
         "scalar_lower must be less than scalar_upper"))
     max_abs = Float64(δ_bound)
-    abs(Float64(scalar_lower)) < max_abs && abs(Float64(scalar_upper)) < max_abs ||
+    scalar_variable != :gain_tilt ||
+        abs(Float64(scalar_lower)) < max_abs && abs(Float64(scalar_upper)) < max_abs ||
         throw(ArgumentError("gain-tilt scalar bounds must lie inside (-δ_bound, δ_bound)"))
 
     t0 = time()
@@ -678,7 +746,7 @@ function run_scalar_gain_tilt_search(;
     Nt, M = sim["Nt"], sim["M"]
     E_ref = sum(abs2, uω0)
     cfg = MVConfig(
-        variables = (:gain_tilt,),
+        variables = variables,
         δ_bound = Float64(δ_bound),
         log_cost = log_cost,
         λ_gdd = Float64(λ_gdd),
@@ -692,16 +760,15 @@ function run_scalar_gain_tilt_search(;
     trace = Float64[]
     evals = Ref(0)
     last_diag = Ref{Any}(nothing)
-    function objective_for_slope(slope)
-        search = _gain_tilt_search_coordinate(slope, δ_bound)
-        x = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg, Nt, M; gain_tilt=search)
+    function objective_for_scalar(scalar_value)
+        state = _scalar_control_state(scalar_variable, scalar_value, δ_bound, uω0, E_ref, cfg, sim, Nt, M)
         J, diag = if custom_cost === nothing
-            J_local, _, diag_local = cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+            scalar_variable == :gain_tilt || throw(ArgumentError(
+                "built-in Raman bounded scalar search currently supports only gain_tilt; use a scalar_extension objective for `$scalar_variable`"))
+            J_local, _, diag_local = cost_and_gradient_multivar(state.x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
             J_local, diag_local
         else
-            parts = mv_unpack(x, cfg, Nt, M, E_ref)
-            physical = mv_physical_amplitude(parts, cfg, sim, Nt, M)
-            u_shaped, uωf, sol = _scalar_extension_output(uω0, physical.A, fiber, sim)
+            u_shaped, uωf, sol = _scalar_extension_output(uω0, state.A, state.φ, fiber, sim)
             context = _scalar_extension_context(;
                 spec = spec,
                 uω0 = uω0,
@@ -710,15 +777,18 @@ function run_scalar_gain_tilt_search(;
                 sol = sol,
                 fiber = fiber,
                 sim = sim,
-                physical_A = physical.A,
-                physical_slope = Float64(slope),
+                physical_A = state.A,
+                physical_slope = state.gain_tilt,
+                phase = state.φ,
+                scalar_variable = scalar_variable,
+                scalar_value = Float64(scalar_value),
+                scalar_controls = state.scalar_controls,
             )
             J_custom, regularizer_diag = _scalar_extension_cost_with_regularizers(custom_cost, context, cfg)
             J_custom, merge(Dict{Symbol,Any}(
                 :objective_backend => objective_contract.backend,
                 :objective_kind => objective_contract.kind,
-                :gain_tilt => Float64(slope),
-            ), regularizer_diag)
+            ), merge(state.diagnostics, regularizer_diag))
         end
         evals[] += 1
         last_diag[] = diag
@@ -727,7 +797,7 @@ function run_scalar_gain_tilt_search(;
     end
 
     result = Optim.optimize(
-        objective_for_slope,
+        objective_for_scalar,
         Float64(scalar_lower),
         Float64(scalar_upper),
         Optim.Brent();
@@ -736,16 +806,15 @@ function run_scalar_gain_tilt_search(;
         store_trace = false,
     )
 
-    physical_slope = Float64(Optim.minimizer(result))
-    search_opt = _gain_tilt_search_coordinate(physical_slope, δ_bound)
-    x_opt = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg, Nt, M; gain_tilt=search_opt)
-    parts = mv_unpack(x_opt, cfg, Nt, M, E_ref)
-    physical = mv_physical_amplitude(parts, cfg, sim, Nt, M)
+    physical_scalar = Float64(Optim.minimizer(result))
+    state_opt = _scalar_control_state(scalar_variable, physical_scalar, δ_bound, uω0, E_ref, cfg, sim, Nt, M)
     J_opt, diag_opt = if custom_cost === nothing
-        J_local, _, diag_local = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
+        scalar_variable == :gain_tilt || throw(ArgumentError(
+            "built-in Raman bounded scalar search currently supports only gain_tilt; use a scalar_extension objective for `$scalar_variable`"))
+        J_local, _, diag_local = cost_and_gradient_multivar(state_opt.x, uω0, fiber, sim, band_mask, cfg; E_ref=E_ref)
         J_local, diag_local
     else
-        u_shaped, uωf, sol = _scalar_extension_output(uω0, physical.A, fiber, sim)
+        u_shaped, uωf, sol = _scalar_extension_output(uω0, state_opt.A, state_opt.φ, fiber, sim)
         context = _scalar_extension_context(;
             spec = spec,
             uω0 = uω0,
@@ -754,28 +823,29 @@ function run_scalar_gain_tilt_search(;
             sol = sol,
             fiber = fiber,
             sim = sim,
-            physical_A = physical.A,
-            physical_slope = physical_slope,
+            physical_A = state_opt.A,
+            physical_slope = state_opt.gain_tilt,
+            phase = state_opt.φ,
+            scalar_variable = scalar_variable,
+            scalar_value = physical_scalar,
+            scalar_controls = state_opt.scalar_controls,
         )
         J_custom, regularizer_diag = _scalar_extension_cost_with_regularizers(custom_cost, context, cfg)
         J_custom, merge(Dict{Symbol,Any}(
             :objective_backend => objective_contract.backend,
             :objective_kind => objective_contract.kind,
-            :gain_tilt => physical_slope,
-        ), regularizer_diag)
+        ), merge(state_opt.diagnostics, regularizer_diag))
     end
 
     cfg_linear = deepcopy(cfg)
     cfg_linear.log_cost = false
-    x_zero = mv_pack(zeros(Nt, M), ones(Nt, M), E_ref, cfg_linear, Nt, M; gain_tilt=0.0)
+    state_zero = _scalar_control_state(scalar_variable, 0.0, δ_bound, uω0, E_ref, cfg_linear, sim, Nt, M)
     J_before, J_after_lin = if custom_cost === nothing
-        J0, _, _ = cost_and_gradient_multivar(x_zero, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
-        J1, _, _ = cost_and_gradient_multivar(x_opt, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
+        J0, _, _ = cost_and_gradient_multivar(state_zero.x, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
+        J1, _, _ = cost_and_gradient_multivar(state_opt.x, uω0, fiber, sim, band_mask, cfg_linear; E_ref=E_ref)
         J0, J1
     else
-        baseline_parts = mv_unpack(x_zero, cfg_linear, Nt, M, E_ref)
-        baseline_physical = mv_physical_amplitude(baseline_parts, cfg_linear, sim, Nt, M)
-        u_shaped0, uωf0, sol0 = _scalar_extension_output(uω0, baseline_physical.A, fiber, sim)
+        u_shaped0, uωf0, sol0 = _scalar_extension_output(uω0, state_zero.A, state_zero.φ, fiber, sim)
         context0 = _scalar_extension_context(;
             spec = spec,
             uω0 = uω0,
@@ -784,8 +854,12 @@ function run_scalar_gain_tilt_search(;
             sol = sol0,
             fiber = fiber,
             sim = sim,
-            physical_A = baseline_physical.A,
-            physical_slope = 0.0,
+            physical_A = state_zero.A,
+            physical_slope = state_zero.gain_tilt,
+            phase = state_zero.φ,
+            scalar_variable = scalar_variable,
+            scalar_value = 0.0,
+            scalar_controls = state_zero.scalar_controls,
         )
         J0_custom, _ = _scalar_extension_cost_with_regularizers(custom_cost, context0, cfg_linear)
         J0_custom, Float64(J_opt)
@@ -796,16 +870,21 @@ function run_scalar_gain_tilt_search(;
         result = result,
         cfg = cfg,
         scale = ones(1),
-        x_opt = x_opt,
-        φ_opt = zeros(Nt, M),
-        A_opt = physical.A,
+        x_opt = state_opt.x,
+        φ_opt = state_opt.φ,
+        A_opt = state_opt.A,
         E_opt = E_ref,
-        gain_tilt_opt = physical_slope,
-        gain_tilt_search = search_opt,
+        gain_tilt_opt = state_opt.gain_tilt,
+        gain_tilt_search = get(state_opt.diagnostics, :gain_tilt_search, 0.0),
+        control_scalars = state_opt.scalar_controls,
         E_ref = E_ref,
         J_opt = Float64(J_opt),
-        g_norm = NaN,
-        diagnostics = merge(Dict{Symbol,Any}(:alpha => 1.0, :A_extrema => extrema(physical.A)), diag_opt),
+        g_norm = 0.0,
+        diagnostics = merge(Dict{Symbol,Any}(
+            :alpha => 1.0,
+            :A_extrema => extrema(state_opt.A),
+            :scalar_variable => scalar_variable,
+        ), diag_opt),
         wall_time_s = time() - t0,
         iterations = result.iterations,
     )
@@ -836,6 +915,7 @@ function run_scalar_gain_tilt_search(;
         :objective_base_term => objective_contract.backend == :scalar_extension ?
             "extension:$(objective_contract.kind)" :
             "J_physics",
+        :control_scalars => state_opt.scalar_controls,
         :git_branch => get(_git_manifest_summary(), "branch", "unknown"),
         :git_commit => get(_git_manifest_summary(), "head", "unknown"),
         :band_mask => band_mask,

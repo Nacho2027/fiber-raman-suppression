@@ -361,6 +361,7 @@ function experiment_capability_profile(regime::Symbol)
             variables = (
                 (:phase,),
                 (:gain_tilt,),
+                (:quadratic_phase,),
                 (:phase, :gain_tilt),
                 (:phase, :amplitude),
                 (:phase, :energy),
@@ -415,7 +416,7 @@ function experiment_execution_mode(spec)
         if spec.controls.variables == (:phase,)
             return :phase_only
         end
-        if spec.controls.variables == (:gain_tilt,) && spec.solver.kind == :bounded_scalar
+        if spec.controls.variables in ((:gain_tilt,), (:quadratic_phase,)) && spec.solver.kind == :bounded_scalar
             return :scalar_search
         end
         return :multivar
@@ -785,8 +786,8 @@ function validate_experiment_spec(spec)
 
     mode = experiment_execution_mode(spec)
     if spec.solver.kind == :bounded_scalar
-        spec.controls.variables == (:gain_tilt,) || throw(ArgumentError(
-            "bounded_scalar currently supports controls.variables=[\"gain_tilt\"]"))
+        spec.controls.variables in ((:gain_tilt,), (:quadratic_phase,)) || throw(ArgumentError(
+            "bounded_scalar currently supports controls.variables=[\"gain_tilt\"] or [\"quadratic_phase\"]"))
         spec.solver.scalar_lower === :auto && throw(ArgumentError(
             "bounded_scalar requires numeric solver.scalar_lower"))
         spec.solver.scalar_upper === :auto && throw(ArgumentError(

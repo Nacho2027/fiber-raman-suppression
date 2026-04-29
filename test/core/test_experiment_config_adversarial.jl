@@ -168,7 +168,7 @@ end
             "kind = \"lbfgs\"" => "kind = \"adam\"")
         _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "solver.scalar_lower must be less than solver.scalar_upper",
             "scalar_lower = -0.09" => "scalar_lower = 0.09")
-        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"]",
+        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"] or [\"quadratic_phase\"]",
             "variables = [\"gain_tilt\"]" => "variables = [\"phase\", \"gain_tilt\"]")
         _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "plots.temporal_pulse.time_range must be [low, high] with low < high",
             "time_range = [-0.75, 0.75]" => "time_range = [0.75, -0.75]")

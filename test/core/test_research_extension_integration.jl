@@ -63,7 +63,8 @@ end
         contract = objective_contract(:temporal_peak_scalar, :single_mode)
         @test contract.backend == :scalar_extension
         @test contract.execution == :executable
-        @test contract.supported_variables == ((:gain_tilt,),)
+        @test (:gain_tilt,) in contract.supported_variables
+        @test (:quadratic_phase,) in contract.supported_variables
 
         row = validate_objective_extension_contract(contract)
         @test row.valid
@@ -76,6 +77,12 @@ end
         @test spec.controls.variables == (:gain_tilt,)
         @test experiment_execution_mode(spec) == :scalar_search
         @test validate_experiment_spec(spec) isa NamedTuple
+
+        quadratic_spec = load_experiment_spec("research_engine_temporal_peak_quadratic_phase_smoke")
+        @test quadratic_spec.objective.kind == :temporal_peak_scalar
+        @test quadratic_spec.controls.variables == (:quadratic_phase,)
+        @test experiment_execution_mode(quadratic_spec) == :scalar_search
+        @test validate_experiment_spec(quadratic_spec) isa NamedTuple
     end
 
     @testset "Scalar extension sidecar metadata is objective-specific" begin

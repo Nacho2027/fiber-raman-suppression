@@ -1,0 +1,69 @@
+id = "smf28_temporal_peak_quadratic_phase_smoke"
+description = "Smoke front-layer config: executable custom scalar objective over one quadratic phase control."
+maturity = "experimental"
+output_root = "results/raman/smoke"
+output_tag = "smf28_temporal_peak_quadratic_phase_smoke"
+save_prefix_basename = "opt"
+
+[problem]
+regime = "single_mode"
+preset = "SMF28"
+L_fiber = 0.2
+P_cont = 0.001
+beta_order = 3
+Nt = 1024
+time_window = 5.0
+grid_policy = "auto_if_undersized"
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0
+
+[controls]
+variables = ["quadratic_phase"]
+parameterization = "full_grid"
+initialization = "zero"
+policy = "direct"
+
+[objective]
+kind = "temporal_peak_scalar"
+log_cost = false
+
+[solver]
+kind = "bounded_scalar"
+max_iter = 8
+validate_gradient = false
+store_trace = true
+scalar_lower = -4.0
+scalar_upper = 4.0
+scalar_x_tol = 1.0e-2
+
+[artifacts]
+bundle = "experimental_multivar"
+save_payload = true
+save_sidecar = true
+update_manifest = false
+write_trust_report = false
+write_standard_images = true
+export_phase_handoff = false
+
+[verification]
+mode = "standard"
+block_on_failed_checks = true
+gradient_check = false
+taylor_check = false
+exact_grid_replay = false
+artifact_validation = true
+
+[export]
+enabled = false
+profile = "neutral_csv_v1"
+include_unwrapped_phase = true
+include_group_delay = true
+
+[plots.temporal_pulse]
+time_range = [-0.75, 0.75]
+normalize = true
+
+[plots.spectrum]
+dynamic_range_dB = 70.0

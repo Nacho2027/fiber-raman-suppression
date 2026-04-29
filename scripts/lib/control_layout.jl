@@ -20,7 +20,7 @@ function _control_mode_count_hint(spec)
 end
 
 function _control_shape_hint(spec, variable::Symbol)
-    if variable == :energy || variable == :gain_tilt
+    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase
         return "scalar"
     elseif variable == :mode_weights || variable == :mode_coeffs
         return "mode_count"
@@ -29,7 +29,7 @@ function _control_shape_hint(spec, variable::Symbol)
 end
 
 function _control_length_hint(spec, variable::Symbol)
-    if variable == :energy || variable == :gain_tilt
+    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase
         return "1"
     elseif variable == :mode_weights || variable == :mode_coeffs
         return "mode_count"

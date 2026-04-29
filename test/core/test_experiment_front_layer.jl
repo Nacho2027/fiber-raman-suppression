@@ -19,6 +19,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test "smf28_amp_on_phase_refinement_poc" in approved_experiment_config_ids()
     @test "research_engine_gain_tilt_scalar_search_smoke" in approved_experiment_config_ids()
     @test "research_engine_temporal_peak_scalar_smoke" in approved_experiment_config_ids()
+    @test "research_engine_temporal_peak_quadratic_phase_smoke" in approved_experiment_config_ids()
 
     spec = load_experiment_spec("research_engine_poc")
     @test spec.id == "smf28_phase_lbfgs_poc"
@@ -126,7 +127,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test :temporal_peak_scalar in registered_objective_kinds(:single_mode)
     scalar_contract = objective_contract(:temporal_peak_scalar, :single_mode)
     @test scalar_contract.backend == :scalar_extension
-    @test scalar_contract.supported_variables == ((:gain_tilt,),)
+    @test (:gain_tilt,) in scalar_contract.supported_variables
+    @test (:quadratic_phase,) in scalar_contract.supported_variables
     rendered_objective_extension_report = sprint(io -> render_objective_extension_validation_report(objective_extension_report; io=io))
     @test occursin("Objective extension validation", rendered_objective_extension_report)
     @test occursin("pulse_compression_planning", rendered_objective_extension_report)
@@ -190,6 +192,23 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     rendered_scalar_search = render_experiment_plan(scalar_search_spec)
     @test occursin("Execution: mode=scalar_search", rendered_scalar_search)
     @test occursin("Solver: kind=bounded_scalar", rendered_scalar_search)
+
+    quadratic_scalar_spec = load_experiment_spec("research_engine_temporal_peak_quadratic_phase_smoke")
+    @test quadratic_scalar_spec.id == "smf28_temporal_peak_quadratic_phase_smoke"
+    @test quadratic_scalar_spec.objective.kind == :temporal_peak_scalar
+    @test quadratic_scalar_spec.controls.variables == (:quadratic_phase,)
+    @test quadratic_scalar_spec.solver.kind == :bounded_scalar
+    @test quadratic_scalar_spec.solver.scalar_lower == -4.0
+    @test quadratic_scalar_spec.solver.scalar_upper == 4.0
+    @test experiment_execution_mode(quadratic_scalar_spec) == :scalar_search
+    @test validate_experiment_spec(quadratic_scalar_spec) isa NamedTuple
+    @test (:quadratic_phase,) in validate_experiment_spec(quadratic_scalar_spec).variables
+    quadratic_kwargs = supported_experiment_run_kwargs(quadratic_scalar_spec)
+    @test quadratic_kwargs.variables == (:quadratic_phase,)
+    @test quadratic_kwargs.objective_kind == :temporal_peak_scalar
+    rendered_quadratic_scalar = render_experiment_plan(quadratic_scalar_spec)
+    @test occursin("Execution: mode=scalar_search", rendered_quadratic_scalar)
+    @test occursin("variables=[:quadratic_phase]", rendered_quadratic_scalar)
 
     mmf_check = research_config_check_report("grin50_mmf_phase_sum_poc")
     @test !mmf_check.pass

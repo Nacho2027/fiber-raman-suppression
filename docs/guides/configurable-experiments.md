@@ -24,6 +24,7 @@ Good starting points:
 | `research_engine_gain_tilt_smoke` | experimental | phase plus gain-tilt smoke |
 | `research_engine_gain_tilt_scalar_search_smoke` | experimental | one-parameter scalar search |
 | `research_engine_temporal_peak_scalar_smoke` | experimental | non-Raman temporal-peak scalar smoke |
+| `research_engine_temporal_peak_quadratic_phase_smoke` | experimental | temporal-peak scalar search over quadratic phase |
 | `grin50_mmf_phase_sum_poc` | planning | MMF dry-run only |
 | `smf28_longfiber_phase_poc` | planning | long-fiber dry-run only |
 | `smf28_phase_amplitude_energy_poc` | experimental | direct multivariable research |

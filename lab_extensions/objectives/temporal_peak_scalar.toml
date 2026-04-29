@@ -1,14 +1,14 @@
 kind = "temporal_peak_scalar"
 regime = "single_mode"
 backend = "scalar_extension"
-description = "Executable demo objective: maximize normalized output temporal peak power for bounded scalar gain-tilt exploration."
+description = "Executable demo objective: maximize normalized output temporal peak power for bounded scalar exploratory controls."
 maturity = "experimental"
 execution = "executable"
 source = "lab_extensions/objectives/temporal_peak_scalar.jl"
 function = "temporal_peak_scalar_cost"
 gradient = "temporal_peak_scalar_gradient"
 validation = "Validated by bounded-scalar smoke tests and exploratory artifact checks."
-supported_variables = [["gain_tilt"]]
+supported_variables = [["gain_tilt"], ["quadratic_phase"]]
 metrics = ["temporal_peak_fraction"]
 artifact_hooks = ["exploratory_summary", "exploratory_overview"]
 allowed_regularizers = ["energy"]
