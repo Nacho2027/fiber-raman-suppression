@@ -1,6 +1,6 @@
 # Internal Lab Release Readiness
 
-Use this checklist before telling another Rivera Lab user to run the repo.
+Run this checklist before telling another Rivera Lab user to run the repo.
 
 ## Required
 

@@ -1,3 +1,3 @@
 # benchmarks
 
-This directory contains runtime and scaling checks. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.
+runtime and scaling checks. Start from `scripts/canonical/` unless you are rerunning this study.

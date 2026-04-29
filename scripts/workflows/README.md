@@ -1,4 +1,4 @@
 # Workflows
 
-Workflow implementations called by canonical wrappers. Users should normally
-start from `scripts/canonical/` or `./fiberlab`, not from this directory.
+Implementation called by canonical wrappers. Start from `scripts/canonical/` or
+`./fiberlab`.

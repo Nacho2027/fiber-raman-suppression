@@ -1,6 +1,7 @@
 # Golden Smoke Run
 
-This is the shortest real run that proves the lab handoff path still works.
+The golden smoke run checks that install, run, inspect, and export still work
+together.
 
 ```bash
 make golden-smoke

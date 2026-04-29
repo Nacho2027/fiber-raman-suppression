@@ -1,6 +1,6 @@
 # Repo Navigation
 
-Use this before moving code.
+Read this before moving code.
 
 ## Main directories
 
@@ -9,7 +9,7 @@ Use this before moving code.
 | `src/` | reusable Julia package code |
 | `scripts/lib/` | shared implementation for scripts |
 | `scripts/canonical/` | maintained CLI wrappers |
-| `scripts/workflows/` | workflow bodies called by wrappers |
+| `scripts/workflows/` | implementation called by wrappers |
 | `scripts/research/` | active research drivers that still need context |
 | `configs/` | run, sweep, experiment, and SLM specs |
 | `docs/` | human-facing docs |

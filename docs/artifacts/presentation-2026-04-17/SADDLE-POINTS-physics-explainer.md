@@ -1,6 +1,6 @@
 # Saddle points in the Raman-suppression landscape — what they are, whether they're physically interesting, and what creates them
 
-This is the physics story for your meeting. I'm going to build it from first principles because I think several things are actually interesting (and some claims in the briefing were under-explained).
+Physics notes for the meeting, starting from the minimum background needed to explain the saddle-point figures.
 
 ---
 

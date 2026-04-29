@@ -15,6 +15,6 @@ passes.
 
 ## Reasonable first release
 
-A narrow preview release around the single-mode phase workflow is realistic.
+A narrow preview release around the single-mode phase command is realistic.
 MMF, long-fiber, and multivariable research should remain marked experimental
 unless their gates are closed separately.

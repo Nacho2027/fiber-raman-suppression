@@ -1,6 +1,6 @@
 # Installation
 
-Use this for a local checkout. Heavy sweeps still belong on the burst machine.
+Install a local checkout here. Heavy sweeps still belong on the burst machine.
 
 ## Requirements
 

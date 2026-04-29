@@ -1,6 +1,6 @@
 # SLM Replay
 
-Use this when a saved phase mask needs a device-neutral handoff bundle.
+Export a saved phase mask into a device-neutral replay bundle.
 
 ## Export a run
 

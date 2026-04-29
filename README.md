@@ -36,7 +36,7 @@ make docker-build
 make docker-test
 ```
 
-## What is worth using today
+## Run these first
 
 | Area | Status | Read |
 |---|---|---|

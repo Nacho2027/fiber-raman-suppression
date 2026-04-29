@@ -1,7 +1,7 @@
 # Research Notes
 
-These notes are the presentation/paper-facing summary layer. They should be
-short, sourced by artifacts, and clear about claim boundaries.
+These notes collect the figures, commands, and result paths behind the claims
+we might show in a talk or paper.
 
 ## Series map
 

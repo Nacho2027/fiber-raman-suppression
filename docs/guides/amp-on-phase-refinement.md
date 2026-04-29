@@ -1,7 +1,7 @@
 # Amp-on-Phase Refinement
 
 `amp_on_phase` means: first solve phase, then optimize amplitude on that fixed
-phase. It is not the default lab workflow.
+phase. It is not the first lab command to run.
 
 ## When to use it
 

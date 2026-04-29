@@ -1,7 +1,7 @@
 # Research Scripts
 
-Scripts here are for active research. They may be useful, but they are not
-automatically ready for another lab user.
+Active research scripts. They may need local assumptions, result
+paths, or machine-specific setup.
 
-Before promoting a research path, move reusable code into `src/` or
-`scripts/lib/`, add tests, add artifacts, and document the claim boundary.
+Before telling someone else to use one, move reusable code into `src/` or
+`scripts/lib/`, add tests, add plots, and write down what the run proves.

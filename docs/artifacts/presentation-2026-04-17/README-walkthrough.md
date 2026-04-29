@@ -1,6 +1,6 @@
 # Walkthrough — what each figure means
 
-This is a plain-English guide written for you (not the professor). Read it before the meeting so you know what story each figure tells. All images live in this folder.
+Read this before the meeting so each figure has a clear job. All images live in this folder.
 
 ---
 

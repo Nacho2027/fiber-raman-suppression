@@ -22,7 +22,7 @@ julia -t auto --project=. scripts/canonical/scaffold_variable.jl mode_weights   
 - validation tests added;
 - artifact plan implemented;
 - smoke run inspected;
-- docs updated with the claim boundary.
+- docs updated with what the run proves and what it does not.
 
 Planning contracts should be easy to discover and hard to mistake for supported
 science.

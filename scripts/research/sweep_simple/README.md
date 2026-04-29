@@ -1,3 +1,3 @@
 # sweep_simple
 
-This directory contains simple parameter sweeps. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.
+simple parameter sweeps. Start from `scripts/canonical/` unless you are rerunning this study.

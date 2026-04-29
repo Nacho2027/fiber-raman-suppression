@@ -1,7 +1,8 @@
 # Documentation
 
-This is the map for human-facing docs. It keeps current runbooks separate from
-old planning records.
+Docs for installing the repo, running the Raman examples, checking the plots,
+and understanding what each saved result means. Old planning records are kept
+separately so they do not read like current instructions.
 
 ## Read first
 
@@ -22,13 +23,13 @@ If you are returning to the project after a break, start with the
 |---|---|
 | [installation](guides/installation.md) | local setup and health checks |
 | [container](guides/container.md) | Docker setup |
-| [supported workflows](guides/supported-workflows.md) | what is maintained and what is experimental |
-| [researcher playbook](guides/researcher-playbook.md) | what to do when starting a new research idea |
+| [supported workflows](guides/supported-workflows.md) | which commands to run first |
+| [researcher playbook](guides/researcher-playbook.md) | turning a research idea into a checked config |
 | [configurable experiments](guides/configurable-experiments.md) | running TOML-driven experiments through `./fiberlab` |
 | [quickstart optimization](guides/quickstart-optimization.md) | single SMF-28 optimization |
 | [quickstart sweep](guides/quickstart-sweep.md) | burst-machine sweep recipe |
 | [golden smoke run](guides/golden-smoke-run.md) | end-to-end handoff smoke |
-| [lab readiness](guides/lab-readiness.md) | promotion gates for lab use |
+| [lab readiness](guides/lab-readiness.md) | checks before another lab user runs it |
 | [SLM replay](guides/slm-replay.md) | export and replay of phase masks |
 | [adding a fiber preset](guides/adding-a-fiber-preset.md) | adding a new preset safely |
 | [adding an optimization variable](guides/adding-an-optimization-variable.md) | extending the control vector |
@@ -44,7 +45,7 @@ If you are returning to the project after a break, start with the
 | [output format](architecture/output-format.md) | saved JLD2, JSON, manifest, and image files |
 | [cost convention](architecture/cost-convention.md) | sign and dB conventions |
 | [cost-function physics](architecture/cost-function-physics.md) | objective and adjoint framing |
-| [config runner design](architecture/configurable-front-layer.md) | TOML experiment runner design notes |
+| [config runner design](architecture/configurable-front-layer.md) | how TOML experiment configs reach Julia code |
 | [research engine UX](architecture/research-engine-ux.md) | CLI/notebook UX notes |
 
 ## Reports and status
@@ -52,8 +53,8 @@ If you are returning to the project after a break, start with the
 | Doc | Use it for |
 |---|---|
 | [research closure](reports/research-closure-2026-04-28/REPORT.md) | current project-state summary |
-| [MMF readiness](reports/mmf-raman-readiness-2026-04-28/REPORT.md) | multimode claim boundary |
-| [lab physics validity](reports/lab-physics-validity-2026-04-28/REPORT.md) | what the current lab-ready run does and does not prove |
+| [MMF readiness](reports/mmf-raman-readiness-2026-04-28/REPORT.md) | what the current MMF result does and does not show |
+| [lab physics validity](reports/lab-physics-validity-2026-04-28/REPORT.md) | what the checked lab run does and does not prove |
 | [status notes](status/) | short records for individual lanes |
 | [research notes](research-notes/README.md) | paper/presentation note series |
 

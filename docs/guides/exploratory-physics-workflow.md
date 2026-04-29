@@ -1,6 +1,6 @@
 # Exploratory Physics Workflow
 
-Use this path when the question is not the SMF-28 phase-mask baseline.
+Follow this path when the question is not the SMF-28 phase-mask baseline.
 
 ## Pattern
 

@@ -1,7 +1,6 @@
-# Configurable Front Layer
+# Config Runner Design
 
-This design lets users change approved experiment settings without editing
-optimizer internals.
+Approved experiment settings go in TOML. The physics stays in Julia.
 
 ## Boundary
 
@@ -14,7 +13,7 @@ behavior, validation, and artifacts.
 configs/experiments/<id>.toml
         -> config loader and validators
         -> run/explore command
-        -> workflow implementation
+        -> run implementation
         -> result payload, manifest, images, optional export
 ```
 
@@ -24,8 +23,7 @@ configs/experiments/<id>.toml
   planning-only.
 - Planning-only configs may validate and print compute plans, but should not run
   as if they are supported workflows.
-- New objectives and variables need code, tests, and artifact hooks before they
-  are promoted.
+- New objectives and variables need code, tests, and plots before they can run.
 - The same result indexer should work for supported and exploratory runs, while
   preserving the run status.
 

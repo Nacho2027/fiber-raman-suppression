@@ -12,4 +12,4 @@ Bounded reruns clarified behavior but did not change the roadmap back toward New
 
 ## Decision
 
-Closed as research context.
+Keep as a research note.

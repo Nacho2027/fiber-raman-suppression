@@ -1,6 +1,6 @@
 # Lab Readiness
 
-A lab-ready workflow is one another person can install, run, inspect, and export
+A lab-ready run is one another person can install, run, inspect, and export
 without needing private context.
 
 ## Local gate

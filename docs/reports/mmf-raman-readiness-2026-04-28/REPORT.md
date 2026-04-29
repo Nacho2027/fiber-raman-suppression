@@ -4,7 +4,7 @@ Date: 2026-04-28
 
 ## Bottom line
 
-The MMF result is a qualified simulation candidate. It is not ready to claim
+The MMF evidence is one corrected, regularized simulation. It does not show
 launch-robust, coupling-robust, or experimentally validated multimode Raman
 suppression.
 
@@ -21,10 +21,10 @@ suppression.
 ## Open gates
 
 - Launch and coupling robustness are not established.
-- Artifact hooks are still less mature than the single-mode path.
+- MMF plotting and validation still need more code than the single-mode run.
 - Phase-actuator realism is not established; the optimized phase remains a
   simulation waveform, not a hardware-ready SLM mask.
-- The result needs careful framing as simulation evidence only.
+- Present it as simulation evidence only.
 
 ## Safe claim
 

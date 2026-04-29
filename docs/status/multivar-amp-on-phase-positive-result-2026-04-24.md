@@ -12,4 +12,4 @@ Amplitude refinement on a fixed phase solution improved the tested single-mode c
 
 ## Decision
 
-Keep as experimental refinement, not default workflow.
+Keep as a research refinement, not the first command people run.

@@ -8,7 +8,7 @@ Preconditioning comparisons are not enough to promote a new optimizer path.
 
 - Treat numbers as diagnostic evidence.
 - Keep trust-region/Newton work in research notes.
-- Do not present as production-ready.
+- Do not present as ready for routine runs.
 
 ## Decision
 

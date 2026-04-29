@@ -1,3 +1,3 @@
 # multivar
 
-This directory contains phase/amplitude/energy research drivers. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.
+phase/amplitude/energy drivers. Start from `scripts/canonical/` unless you are rerunning this study.

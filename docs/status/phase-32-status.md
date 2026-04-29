@@ -2,7 +2,8 @@
 
 ## Bottom line
 
-Acceleration/extrapolation ideas remain research support, not a front-door workflow.
+Acceleration/extrapolation ideas remain research tools, not the main command
+path.
 
 ## Facts
 

@@ -1,11 +1,12 @@
 # Research Engine UX
 
-The CLI should make the safe path easy and the risky path explicit.
+The CLI should show what will run, where it will write files, and why a config
+is blocked.
 
 ## Lanes
 
 - `run`: supported or conservative execution.
-- `explore`: experimental execution with blockers and compute warnings visible.
+- `explore`: experimental execution with blockers and compute warnings.
 - `check`: inspection without running optimization.
 - `ready`: readiness checks for configs or completed runs.
 - `sweep`: planned parameter expansion and sweep status.
@@ -23,6 +24,5 @@ The CLI should make the safe path easy and the risky path explicit.
 
 ## UX rule
 
-A command should never make an experimental path look more supported than it is.
-Print the status, blockers, compute expectation, and artifact plan before work
-starts.
+A command should print the status, blockers, compute expectation, and artifact
+plan before work starts.

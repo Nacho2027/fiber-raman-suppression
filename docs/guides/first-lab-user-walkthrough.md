@@ -1,6 +1,6 @@
 # First Lab User Walkthrough
 
-This is the shortest path for a new user.
+Shortest path for a new user.
 
 ## 1. Install
 

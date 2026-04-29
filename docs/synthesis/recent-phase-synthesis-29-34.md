@@ -1,6 +1,6 @@
 # Recent Phase Synthesis: 29-34
 
-The recent phases did not replace the main workflow. They narrowed the project.
+Recent phases narrowed what the project should present first.
 
 ## Keep
 
@@ -12,7 +12,7 @@ The recent phases did not replace the main workflow. They narrowed the project.
 ## Do not promote
 
 - direct joint multivariable optimization;
-- Newton/preconditioning as the production optimizer;
+- Newton/preconditioning as the optimizer to run first;
 - continuation schedules as the default path.
 
 The practical result is a smaller set of commands that another person can run

@@ -4,9 +4,9 @@ Date: 2026-04-28
 
 ## Bottom line
 
-The current lab-ready run demonstrates one thing: single-mode phase optimization
-with inspectable output and a handoff bundle. It does not validate every
-research claim in the repo.
+The checked lab run covers one case: single-mode phase optimization with
+inspectable output and an export bundle. It does not validate every research
+claim in the repo.
 
 ## Valid for
 

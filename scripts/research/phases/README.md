@@ -1,3 +1,3 @@
 # phases
 
-This directory contains legacy phase-oriented scripts. Treat these as research scripts unless a wrapper in `scripts/canonical/` says otherwise.
+legacy phase-oriented scripts. Start from `scripts/canonical/` unless you are rerunning this study.

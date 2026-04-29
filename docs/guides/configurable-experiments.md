@@ -1,6 +1,6 @@
 # Configurable Experiments
 
-Use `./fiberlab` when you want to run or inspect a TOML-defined experiment
+Run `./fiberlab` to inspect or launch a TOML-defined experiment
 without editing optimizer code.
 
 ## List configs
@@ -57,7 +57,7 @@ flags such as `--local-smoke` or `--heavy-ok` when a path is risky.
 ```
 
 Do not create a new objective or variable by only editing TOML. Add the formula,
-gradient or fallback, validation, artifact hooks, and tests in code first.
+gradient or fallback, validation, plots, and tests in code first.
 
 ## Sweeps
 
@@ -72,7 +72,7 @@ Large sweeps should run through the burst workflow.
 
 ## Artifacts
 
-Front-layer runs write `run_manifest.json` beside the result payload. Exploratory
+Config-runner commands write `run_manifest.json` beside the result payload. Exploratory
 runs also write a generic summary JSON and overview PNG when specialized plots
 are not available.
 
