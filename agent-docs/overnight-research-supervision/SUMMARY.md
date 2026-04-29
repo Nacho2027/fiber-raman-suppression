@@ -1211,3 +1211,33 @@ single monolithic fragile run.
   `fiber-raman-burst` is `TERMINATED`, long-fiber 200 m remains completed with
   caveats, and no multivar VM is active. No source patch, test run, or relaunch
   was performed during this check.
+
+## 2026-04-29 00:18 UTC Supervisor Check
+
+- Active GCE inventory is back within the idle research footprint:
+  `C3_CPUS usage=0 limit=50`; `fiber-raman-burst` is `TERMINATED`, and no
+  MMF, long-fiber, or multivar research VM is running. The unrelated
+  `instance-20260416-150007` E2 instance remains running.
+- MMF `M-mmfg8192s44c2` completed, synced results locally, and the ephemeral
+  VM `fiber-raman-temp-m-mmfg8192s44c2-20260428t194709z` was destroyed by the
+  launcher. The final `Nt=8192`, `tw=96 ps` threshold validation wrote
+  `results/raman/phase36_window_validation_gdd_nt8192_final/` and the full
+  standard image set for `mmf_grin_50_l2m_p0p2w_seed42`.
+- The accepted MMF high-resolution validation report is
+  `J_ref=-17.37 dB`, `J_opt=-41.25 dB`, `Delta=23.88 dB`, with
+  `boundary_ok=true` and max edge fraction `3.59e-13`. The run hit the
+  driver-side time limit after 28 objective evaluations and used the fixed
+  best-observed fallback (`J_final=-32.28527 dB` regularized), so treat this
+  as an accepted window-validation result rather than an optimizer-converged
+  optimum.
+- Visually inspected all four standard images. The spectral profile and
+  optimized evolution show real Raman suppression at the high-resolution
+  window, the unshaped evolution provides the expected broad Raman growth
+  contrast, and the phase diagnostic is complete but rough/high-curvature.
+  This keeps MMF active for follow-up cost and mode-launch checks rather than
+  closing Phase 36 as a window artifact.
+- Long-fiber 200 m remains completed with the accepted 14:12 UTC caveats.
+  Multivar remains closed by accepted results/caveats, and no multivar
+  ephemeral was launched. The deterministic watchdog cron remains installed at
+  the 15 minute cadence. No source patch, test run, or relaunch was performed
+  during this check.
