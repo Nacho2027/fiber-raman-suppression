@@ -18,7 +18,7 @@ clear workflows, selected figures, honest status notes, and fewer orphaned docs.
 
 ## Supported lab rollout
 
-Use the single-mode phase front layer:
+Use the single-mode phase commands:
 
 ```bash
 make lab-ready

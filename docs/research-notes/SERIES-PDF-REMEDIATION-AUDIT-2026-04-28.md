@@ -1,3 +1,3 @@
 # Series PDF Remediation Audit
 
-Use this only to track whether PDFs still need rebuilding. The source Markdown/TeX and selected figures are the important review surface.
+Use this only to track whether PDFs still need rebuilding. Review the source Markdown/TeX and selected figures, not just the compiled PDFs.

@@ -7,7 +7,7 @@ Bounded reruns clarified behavior but did not change the roadmap back toward New
 ## Facts
 
 - Use as a methods note if needed.
-- Main workflow remains phase-only front layer.
+- Main workflow remains the phase-only command path.
 - No new default optimizer came out of this lane.
 
 ## Decision

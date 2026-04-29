@@ -1,6 +1,6 @@
 # Golden Smoke Run
 
-This is the short end-to-end handoff check for the supported lab surface.
+This is the shortest real run that proves the lab handoff path still works.
 
 ```bash
 make golden-smoke

@@ -1,6 +1,6 @@
 # Configurable Front Layer
 
-The front layer lets users change approved experiment settings without editing
+This design lets users change approved experiment settings without editing
 optimizer internals.
 
 ## Boundary

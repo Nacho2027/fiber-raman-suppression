@@ -1,11 +1,15 @@
 # Fiber Raman Suppression
 
-Simulation and optimization code for suppressing Raman-shifted spectral energy
-in nonlinear fiber propagation.
+This repo is about one problem in nonlinear fiber propagation: shaping the
+input pulse so less energy ends up in the Raman-shifted band.
 
-The maintained path is single-mode spectral-phase optimization. Other work in
-this repo is useful research history, but it is not the first workflow to hand
-to a new lab user.
+Start with the SMF-28 phase-mask experiment. It optimizes the input spectral
+phase, saves the optimized mask, and writes the before/after propagation plots
+needed to judge the run.
+
+Multimode, long-fiber, amplitude-control, and Newton/preconditioner work is in
+the repo too. Treat it as research material with caveats, not as the default
+way to use the project.
 
 ## Start
 
@@ -32,16 +36,16 @@ make docker-build
 make docker-test
 ```
 
-## What is supported
+## What is worth using today
 
 | Area | Status | Read |
 |---|---|---|
-| Single-mode phase optimization | Maintained workflow | [supported workflows](docs/guides/supported-workflows.md) |
-| Config-driven experiments | Maintained front layer, narrow supported surface | [configurable experiments](docs/guides/configurable-experiments.md) |
-| Staged `amp_on_phase` refinement | Experimental, useful after a phase solution | [amp-on-phase guide](docs/guides/amp-on-phase-refinement.md) |
+| SMF-28 phase-mask run | Main working example | [supported workflows](docs/guides/supported-workflows.md) |
+| TOML-driven runs | Same machinery, easier to change settings | [configurable experiments](docs/guides/configurable-experiments.md) |
+| Staged `amp_on_phase` refinement | Research follow-up after a phase solution | [amp-on-phase guide](docs/guides/amp-on-phase-refinement.md) |
 | Long-fiber 200 m result | Completed result, not optimizer-converged | [status note](docs/status/longfiber-200m-closure-2026-04-28.md) |
 | Multimode fiber work | Qualified simulation candidate | [MMF report](docs/reports/mmf-raman-readiness-2026-04-28/REPORT.md) |
-| Newton and preconditioning | Deferred research direction | [research notes](docs/research-notes/README.md) |
+| Newton and preconditioning | Notes only for now | [research notes](docs/research-notes/README.md) |
 
 The shortest project-state summary is
 [docs/reports/research-closure-2026-04-28/REPORT.md](docs/reports/research-closure-2026-04-28/REPORT.md).
@@ -65,7 +69,7 @@ Use `./fiberlab explore ...` for explicitly experimental configs:
 ./fiberlab explore compare results/raman --top 10
 ```
 
-Use Julia entry points directly when you need the lower-level script surface:
+Use Julia entry points directly when you need the lower-level commands:
 
 ```bash
 julia -t auto --project=. scripts/canonical/optimize_raman.jl --list

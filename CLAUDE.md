@@ -81,8 +81,7 @@ Common units:
 - `src/` holds reusable Julia package code.
 - `scripts/lib/` holds shared script implementation.
 - `scripts/canonical/` holds maintained command-line wrappers.
-- `scripts/research/` holds active research drivers outside the supported
-  surface.
+- `scripts/research/` holds active research drivers that still need context.
 - `configs/` holds approved run, sweep, experiment, and SLM profile specs.
 - `docs/` holds human-facing documentation.
 - `agent-docs/` holds continuity notes for agents.

@@ -15,4 +15,5 @@ The recent phases did not replace the main workflow. They narrowed the project.
 - Newton/preconditioning as the production optimizer;
 - continuation schedules as the default path.
 
-The practical result is a smaller, clearer lab surface.
+The practical result is a smaller set of commands that another person can run
+without inheriting the whole research history.

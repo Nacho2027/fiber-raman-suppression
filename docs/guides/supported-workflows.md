@@ -1,6 +1,7 @@
 # Supported Workflows
 
-The supported surface is intentionally small.
+Most of the repo is research code. Start with the small set of commands below;
+they are the ones that are wired up, documented, and checked.
 
 ## Supported
 

@@ -16,8 +16,8 @@ configs/experiments/*.toml
 results/raman/<run>/  JLD2, JSON, PNGs
 ```
 
-Research drivers in `scripts/research/` may call the same lower layers, but they
-are not automatically part of the supported CLI surface.
+Research drivers in `scripts/research/` may call the same lower layers, but a
+normal user should not start there.
 
 Docs should point new users to `./fiberlab`, `scripts/canonical/`, and the
 supported configs first.

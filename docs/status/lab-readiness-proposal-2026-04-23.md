@@ -2,7 +2,7 @@
 
 ## Bottom line
 
-The first lab-ready surface should be narrow: install, run, inspect, export.
+The first lab-ready path should be narrow: install, run, inspect, export.
 
 ## Facts
 

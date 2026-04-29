@@ -44,7 +44,7 @@ If you are returning to the project after a break, start with the
 | [output format](architecture/output-format.md) | saved JLD2, JSON, manifest, and image files |
 | [cost convention](architecture/cost-convention.md) | sign and dB conventions |
 | [cost-function physics](architecture/cost-function-physics.md) | objective and adjoint framing |
-| [configurable front layer](architecture/configurable-front-layer.md) | front-layer design notes |
+| [config runner design](architecture/configurable-front-layer.md) | TOML experiment runner design notes |
 | [research engine UX](architecture/research-engine-ux.md) | CLI/notebook UX notes |
 
 ## Reports and status
@@ -53,7 +53,7 @@ If you are returning to the project after a break, start with the
 |---|---|
 | [research closure](reports/research-closure-2026-04-28/REPORT.md) | current project-state summary |
 | [MMF readiness](reports/mmf-raman-readiness-2026-04-28/REPORT.md) | multimode claim boundary |
-| [lab physics validity](reports/lab-physics-validity-2026-04-28/REPORT.md) | what the lab surface can and cannot prove |
+| [lab physics validity](reports/lab-physics-validity-2026-04-28/REPORT.md) | what the current lab-ready run does and does not prove |
 | [status notes](status/) | short records for individual lanes |
 | [research notes](research-notes/README.md) | paper/presentation note series |
 

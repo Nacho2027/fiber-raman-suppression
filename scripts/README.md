@@ -1,7 +1,7 @@
 # Scripts
 
-Use `scripts/canonical/` for maintained commands. Use `scripts/research/` for
-active research drivers that are not part of the supported surface.
+Use `scripts/canonical/` for commands a normal user should run. Use
+`scripts/research/` for experiments that still need context.
 
 | Path | Purpose |
 |---|---|

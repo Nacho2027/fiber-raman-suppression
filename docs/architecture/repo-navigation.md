@@ -10,7 +10,7 @@ Use this before moving code.
 | `scripts/lib/` | shared implementation for scripts |
 | `scripts/canonical/` | maintained CLI wrappers |
 | `scripts/workflows/` | workflow bodies called by wrappers |
-| `scripts/research/` | active research drivers outside the supported surface |
+| `scripts/research/` | active research drivers that still need context |
 | `configs/` | run, sweep, experiment, and SLM specs |
 | `docs/` | human-facing docs |
 | `agent-docs/` | agent continuity notes |
