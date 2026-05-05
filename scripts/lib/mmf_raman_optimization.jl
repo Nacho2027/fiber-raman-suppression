@@ -6,8 +6,8 @@ Mirror of `scripts/raman_optimization.jl` for the multimode (M>1) case:
   pulse shaper): φ::Vector{Float64} of length Nt, broadcast to (Nt, M) inside
   `cost_and_gradient_mmf`.
 - Input mode coefficients `c_m` are passed as a separate argument and held
-  FIXED in Phase 16 plan 01. Phase 17 will optimize them jointly — see
-  `.planning/seeds/mmf-joint-phase-mode-optimization.md`.
+  fixed in the current multimode phase path. Joint mode-coefficient work should
+  be promoted through the FiberLab API or an explicit extension contract.
 - Uses the existing `FiberLab.solve_disp_mmf` /
   `solve_adjoint_disp_mmf` machinery unchanged.
 

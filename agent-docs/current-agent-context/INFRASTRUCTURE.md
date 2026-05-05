@@ -2,10 +2,7 @@
 
 This file preserves the durable parts of the old GCP setup and provisioning notes without dragging forward GSD-era workflow assumptions.
 
-Source artifacts:
-
-- `.planning/quick/260416-gcp-setup/SUMMARY.md`
-- `.planning/todos/pending/provision-gcp-vm.md`
+Source artifacts were archived outside the active repo during the repo diet.
 
 ## What still matters
 
@@ -26,7 +23,9 @@ Source artifacts:
 ## What became historical
 
 - The original provisioning checklist is no longer active runbook material.
-- One-time setup details such as package installation, OAuth bootstrap, and initial `.planning` sync mechanics are preserved only as history.
+- One-time setup details such as package installation, OAuth bootstrap, and
+  initial planning-sync mechanics are preserved only as history outside the
+  active repo.
 
 ## Agent guidance
 

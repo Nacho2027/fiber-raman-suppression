@@ -4,9 +4,7 @@ This file captures durable experimental-method facts migrated from the old quick
 
 ## Sweep window sizing
 
-Source artifacts:
-
-- `.planning/quick/260331-gh0-fix-sweep-methodology-time-window-formul/*`
+Source artifacts were archived outside the active repo during the repo diet.
 
 ### What remains important
 
@@ -23,9 +21,7 @@ Source artifacts:
 
 ## Threading and parallelism
 
-Source artifacts:
-
-- `.planning/quick/260415-u4s-benchmark-threading-opportunities-across/*`
+Source artifacts were archived outside the active repo during the repo diet.
 
 ### Durable findings
 

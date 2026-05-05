@@ -66,4 +66,19 @@ using Test
     telemetry_wrapper = joinpath(scripts_root, "ops", "run_with_telemetry.sh")
     @test isfile(telemetry_wrapper)
     @test success(pipeline(`bash -n $telemetry_wrapper`, stdout=devnull, stderr=devnull))
+
+    missing_canonical_includes = String[]
+    for name in readdir(joinpath(scripts_root, "canonical"))
+        endswith(name, ".jl") || continue
+        path = joinpath(scripts_root, "canonical", name)
+        text = read(path, String)
+        for match in eachmatch(
+            r"include\(joinpath\(@__DIR__, \"\.\.\", \"([^\"]+)\", \"([^\"]+)\"\)\)",
+            text,
+        )
+            target = joinpath(scripts_root, String(match.captures[1]), String(match.captures[2]))
+            isfile(target) || push!(missing_canonical_includes, relpath(target, project_root))
+        end
+    end
+    @test isempty(sort!(missing_canonical_includes))
 end

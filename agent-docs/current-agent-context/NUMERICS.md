@@ -2,10 +2,7 @@
 
 This file distills what remains agent-relevant from the April 20 numerics audit and same-day follow-up fixes.
 
-Source artifacts:
-
-- `.planning/quick/260420-oyg-independent-numerics-audit-of-fiber-rama/*`
-- `.planning/quick/260420-rqo-fix-numerics-audit-bugs-pre-attenuator-e/*`
+Source artifacts were archived outside the active repo during the repo diet.
 
 ## Issues that were identified and then fixed
 
@@ -15,7 +12,7 @@ The following were surfaced by the independent numerics audit and then fixed imm
 - `cost_and_gradient(...; log_cost=true)` now applies the optional dB transform after the full regularized scalar objective is assembled, so the returned gradient matches the scalar objective seen by the optimizer
 - `chirp_sensitivity` now returns linear `J`, so plotting converts to dB exactly once
 
-Regression coverage for these fixes lives in `test/test_phase27_numerics_regressions.jl`.
+Regression coverage for these fixes now lives in the fast Julia tier.
 
 ## Findings still worth keeping in active context
 
