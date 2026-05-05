@@ -170,7 +170,7 @@ function scaffold_variable_main(args=ARGS)
         execution=(parsed.executable_scalar_phase || parsed.executable_vector_phase || parsed.executable_vector_control) ?
             :executable : :planning_only,
         validation=(parsed.executable_scalar_phase || parsed.executable_vector_phase || parsed.executable_vector_control) ?
-            "Runtime-checked by playground doctor; replace template physics and add science validation before promotion." :
+            "Runtime-checked by exploration doctor; replace template physics and add science validation before promotion." :
             "Requires units, bounds/projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution.",
         dimension=parsed.executable_scalar_phase ? 1 : parsed.dimension,
         force=parsed.force,

@@ -111,6 +111,59 @@ function _check_public_readme_surface!(errors::Vector{String}, root::AbstractStr
         push!(errors, "`README.md` first screen should not center the inherited backend name")
 end
 
+function _check_retired_public_vocabulary!(errors::Vector{String}, root::AbstractString)
+    retired_backend = "Multi" * "Mode" * "Noise"
+    retired_experiment_word = "play" * "ground"
+    retired_terms = [
+        retired_backend,
+        "using " * retired_backend,
+        retired_experiment_word,
+        uppercasefirst(retired_experiment_word),
+        uppercase(retired_experiment_word),
+    ]
+    relroots = [
+        "README.md",
+        "AGENTS.md",
+        "llms.txt",
+        "docs",
+        "agent-docs",
+        "scripts",
+        "src",
+        "test",
+        "Makefile",
+        "fiberlab",
+        "Project.toml",
+        "Manifest.toml",
+    ]
+
+    files = String[]
+    for relroot in relroots
+        path = joinpath(root, relroot)
+        if isfile(path)
+            push!(files, relroot)
+        elseif isdir(path)
+            for (dir, _, names) in walkdir(path)
+                for name in names
+                    relpath = _rel(root, joinpath(dir, name))
+                    if endswith(name, ".md") || endswith(name, ".jl") ||
+                       endswith(name, ".toml") || endswith(name, ".txt") ||
+                       name == "Makefile" || name == "fiberlab"
+                        push!(files, relpath)
+                    end
+                end
+            end
+        end
+    end
+
+    for relpath in sort(unique(files))
+        text = _read(root, relpath)
+        for term in retired_terms
+            occursin(term, text) || continue
+            push!(errors, "`$relpath` contains retired public vocabulary `$term`; use FiberLab/exploration wording")
+        end
+    end
+end
+
 function _check_agent_doc_registry!(errors::Vector{String}, root::AbstractString)
     readme = _read(root, "agent-docs/README.md")
     agent_root = joinpath(root, "agent-docs")
@@ -166,6 +219,7 @@ function check_agent_docs(; root::AbstractString=DEFAULT_ROOT)
     isempty(errors) || return errors
     _check_short_agents!(errors, root)
     _check_public_readme_surface!(errors, root)
+    _check_retired_public_vocabulary!(errors, root)
     _check_agent_doc_registry!(errors, root)
     _check_current_context_index!(errors, root)
     _check_no_wikilinks_or_conflicts!(errors, root)

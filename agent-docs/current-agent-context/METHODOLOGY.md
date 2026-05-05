@@ -46,4 +46,4 @@ Source artifacts:
 
 ### Already reflected elsewhere
 
-The most important operational conclusions from this benchmark are already encoded in `CLAUDE.md`. This file exists so agents can see the rationale and historical provenance without reading old GSD quick-task files.
+The most important operational conclusions from this benchmark are already encoded in `AGENTS.md`. This file exists so agents can see the rationale and historical provenance without reading old GSD quick-task files.

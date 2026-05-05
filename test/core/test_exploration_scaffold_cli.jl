@@ -1,6 +1,6 @@
 using Test
 
-const _PLAYGROUND_SCAFFOLD_ROOT = isdefined(Main, :_ROOT) ?
+const _EXPLORATION_SCAFFOLD_ROOT = isdefined(Main, :_ROOT) ?
     getfield(Main, :_ROOT) :
     normpath(joinpath(@__DIR__, "..", ".."))
 
@@ -9,15 +9,15 @@ function _julia_binary()
     return joinpath(Sys.BINDIR, exe)
 end
 
-@testset "Playground scaffold CLI" begin
+@testset "Exploration scaffold CLI" begin
     mktempdir() do tmp
         objective_dir = joinpath(tmp, "objectives")
         variable_dir = joinpath(tmp, "variables")
         config_dir = joinpath(tmp, "configs")
         config_path = joinpath(config_dir, "demo_scaffold_experiment.toml")
 
-        run(Cmd(`$(_julia_binary()) --project=$(_PLAYGROUND_SCAFFOLD_ROOT) scripts/canonical/scaffold_playground.jl demo_scaffold --mode control --dimension 3 --initial 0,0,0 --lower -1,-1,-1 --upper 1,1,1 --max-iter 1 --objective-dir $objective_dir --variable-dir $variable_dir --config-dir $config_dir --force`;
-            dir=_PLAYGROUND_SCAFFOLD_ROOT))
+        run(Cmd(`$(_julia_binary()) --project=$(_EXPLORATION_SCAFFOLD_ROOT) scripts/canonical/scaffold_exploration.jl demo_scaffold --mode control --dimension 3 --initial 0,0,0 --lower -1,-1,-1 --upper 1,1,1 --max-iter 1 --objective-dir $objective_dir --variable-dir $variable_dir --config-dir $config_dir --force`;
+            dir=_EXPLORATION_SCAFFOLD_ROOT))
 
         @test isfile(joinpath(objective_dir, "demo_scaffold_objective.toml"))
         @test isfile(joinpath(objective_dir, "demo_scaffold_objective.jl"))
@@ -30,8 +30,8 @@ end
         @test occursin("variables = [\"demo_scaffold_control\"]", config_text)
         @test occursin("kind = \"nelder_mead\"", config_text)
 
-        check_cmd = Cmd(`$(_julia_binary()) --project=$(_PLAYGROUND_SCAFFOLD_ROOT) scripts/canonical/run_experiment.jl --playground-check $config_path --local-smoke`;
-            dir=_PLAYGROUND_SCAFFOLD_ROOT)
+        check_cmd = Cmd(`$(_julia_binary()) --project=$(_EXPLORATION_SCAFFOLD_ROOT) scripts/canonical/run_experiment.jl --exploration-check $config_path --local-smoke`;
+            dir=_EXPLORATION_SCAFFOLD_ROOT)
         output = read(
             setenv(
                 check_cmd,

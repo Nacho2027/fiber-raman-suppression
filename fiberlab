@@ -30,7 +30,7 @@ Common commands:
   inspect run PATH                Inspect a completed run
   sweep list|validate|plan|run|latest [SPEC]
   explore list|plan|run|compare ...
-  scaffold objective|variable|scalar-config|vector-config ...
+  scaffold objective|variable|exploration|scalar-config|vector-config ...
   index [OPTIONS] [ROOT...]
 EOF
 }
@@ -175,12 +175,12 @@ EOF
       *) echo "usage: ./fiberlab explore list|plan|run|compare ..." >&2; exit 2 ;;
     esac
     ;;
-  playground)
+  exploration)
     sub="${1:-}"; shift || true
     case "$sub" in
-      new) run_julia scripts/canonical/scaffold_playground.jl "$@" ;;
-      check) run_julia scripts/canonical/run_experiment.jl --playground-check "$@" ;;
-      *) echo "usage: ./fiberlab playground new|check ..." >&2; exit 2 ;;
+      new) run_julia scripts/canonical/scaffold_exploration.jl "$@" ;;
+      check) run_julia scripts/canonical/run_experiment.jl --exploration-check "$@" ;;
+      *) echo "usage: ./fiberlab exploration new|check ..." >&2; exit 2 ;;
     esac
     ;;
   scaffold)
@@ -188,9 +188,10 @@ EOF
     case "$sub" in
       objective) run_julia scripts/canonical/scaffold_objective.jl "$@" ;;
       variable) run_julia scripts/canonical/scaffold_variable.jl "$@" ;;
+      exploration) run_julia scripts/canonical/scaffold_exploration.jl "$@" ;;
       scalar-config) run_julia scripts/canonical/scaffold_scalar_config.jl "$@" ;;
       vector-config) run_julia scripts/canonical/scaffold_vector_config.jl "$@" ;;
-      *) echo "usage: ./fiberlab scaffold objective|variable|scalar-config|vector-config ..." >&2; exit 2 ;;
+      *) echo "usage: ./fiberlab scaffold objective|variable|exploration|scalar-config|vector-config ..." >&2; exit 2 ;;
     esac
     ;;
   index)

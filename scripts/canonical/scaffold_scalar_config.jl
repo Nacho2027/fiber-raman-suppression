@@ -1,5 +1,5 @@
 """
-Create a runnable bounded-scalar playground experiment config.
+Create a runnable bounded-scalar exploration experiment config.
 
 This is intentionally a file generator, not a physics backend. The generated
 config still goes through the normal experiment preflight and runtime doctor.
@@ -111,7 +111,7 @@ function _scalar_config_text(p)
     preset = _toml_escape(p.preset)
     return """
 id = "$id"
-description = "Notebook playground scalar experiment: $id"
+description = "Notebook exploration scalar experiment: $id"
 maturity = "experimental"
 output_root = "results/raman/smoke"
 output_tag = "$id"
@@ -195,11 +195,11 @@ function scaffold_scalar_config_main(args=ARGS)
         throw(ArgumentError("config already exists: $path; pass --force to overwrite"))
     end
     write(path, _scalar_config_text(parsed))
-    println("Scalar playground config created:")
+    println("Scalar exploration config created:")
     println("  config: ", abspath(path))
     println()
     println("Next checks:")
-    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --playground-check ", abspath(path), " --local-smoke")
+    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --exploration-check ", abspath(path), " --local-smoke")
     println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --explore-run ", abspath(path), " --local-smoke")
     return abspath(path)
 end

@@ -525,7 +525,7 @@ function optimize_spectral_phase_sharp(prob, phi0;
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mandatory standard-image emit for sharp drivers (CLAUDE.md project rule).
+# Mandatory standard-image emit for sharp drivers (AGENTS.md project rule).
 # Drivers that call `optimize_spectral_phase_sharp(prob, phi0)` MUST follow up
 # with this helper so the four canonical PNGs land on disk.
 # ─────────────────────────────────────────────────────────────────────────────

@@ -868,7 +868,7 @@ function validate_experiment_spec(spec)
         variable.backend in (:vector_phase_extension, :vector_control_extension) || throw(ArgumentError(
             "nelder_mead currently supports one promoted vector_phase_extension or vector_control_extension variable"))
         objective_contract.backend == :scalar_extension || throw(ArgumentError(
-            "nelder_mead playground execution currently requires a scalar_extension objective"))
+            "nelder_mead exploration execution currently requires a scalar_extension objective"))
         dim = get(variable, :dimension, 0)
         spec.solver.vector_initial === :auto && throw(ArgumentError(
             "nelder_mead requires numeric solver.vector_initial"))
@@ -1058,7 +1058,7 @@ function render_experiment_capabilities(; io::IO=stdout)
     println(io, "Execution notes:")
     println(io, "  single_mode phase-only is the supported local execution path.")
     println(io, "  single_mode multivariable controls are experimental.")
-    println(io, "  use `fiberlab explore` for intentional experimental playground runs.")
+    println(io, "  use `fiberlab explore` for intentional experimental exploration runs.")
     println(io, "  multimode shared-phase smoke configs can execute through the front layer.")
     println(io, "  long_fiber should converge toward the core single-mode path with explicit length-scaling checks.")
     println(io, "  Configs select from these contracts; new physics and new controls still belong in code first.")

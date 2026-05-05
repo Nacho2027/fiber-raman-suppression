@@ -30,6 +30,6 @@ Source artifacts:
 
 ## Agent guidance
 
-- Treat `CLAUDE.md` as the authoritative live compute-discipline document.
+- Treat `AGENTS.md` as the authoritative live compute-discipline document.
 - Use this file only for context on why the split-machine setup exists and what classes of helper scripts/hosts are expected to be present.
-- If host specs, IPs, or helper commands drift, update `CLAUDE.md` first and then update this note if needed.
+- If host specs, IPs, or helper commands drift, update `AGENTS.md` first and then update this note if needed.

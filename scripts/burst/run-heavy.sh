@@ -11,7 +11,7 @@
 #   burst-ssh "cd fiber-raman-suppression && scripts/burst/run-heavy.sh \
 #              F-longfiber 'julia -t auto --project=. scripts/canonical/run_experiment.jl --heavy-ok smf28_longfiber_phase_poc'"
 #
-# session-tag convention: <Letter>-<short-name>, matching CLAUDE.md Rule P6.
+# session-tag convention: <Letter>-<short-name>, matching AGENTS.md Rule P6.
 # Examples: A-multivar, E-sweep2, F-longfiber-T5, H-cost-audit, etc.
 #
 # The lock is a file /tmp/burst-heavy-lock containing:

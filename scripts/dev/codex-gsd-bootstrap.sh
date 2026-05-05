@@ -116,7 +116,7 @@ echo
 
 cd "$REPO_ROOT"
 
-# Always pull before working — multi-machine discipline (CLAUDE.md).
+# Always pull before working — multi-machine discipline (AGENTS.md).
 git fetch origin --quiet || true
 if git status --porcelain | grep -q .; then
   echo "[codex-gsd] working tree has uncommitted changes — leaving them as-is."

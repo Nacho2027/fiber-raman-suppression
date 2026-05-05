@@ -16,7 +16,7 @@ if !isdefined(Main, :mv_block_offsets)
     include(joinpath(_GAIN_TILT_ROOT, "scripts", "lib", "multivar_optimization.jl"))
 end
 
-@testset "Scalar quadratic-phase playground variable integration" begin
+@testset "Scalar quadratic-phase exploration variable integration" begin
     @test :quadratic_phase in registered_variable_kinds(:single_mode)
     contract = variable_contract(:quadratic_phase, :single_mode)
     @test contract.maturity == "experimental"

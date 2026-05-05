@@ -12,7 +12,7 @@ DOCKER_IMAGE ?= fiber-raman-suppression:dev
 SMOKE_KEEP ?= 3
 JL     = $(JULIA) --project=.
 
-.PHONY: help check-tools docs-check install install-julia test test-slow test-full acceptance lab-ready doctor playground-smoke mmf-frontlayer-smoke longfiber-frontlayer-smoke golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
+.PHONY: help check-tools docs-check install install-julia test test-slow test-full acceptance lab-ready doctor exploration-smoke mmf-frontlayer-smoke longfiber-frontlayer-smoke golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
 
 .DEFAULT_GOAL := help
 
@@ -25,7 +25,7 @@ help:
 	@echo "  make acceptance  Research-engine acceptance harness"
 	@echo "  make lab-ready   Local lab-readiness gate for supported workflows"
 	@echo "  make doctor      Verify tools, docs, and fast Julia tests"
-	@echo "  make playground-smoke Run generated playground bundle end-to-end"
+	@echo "  make exploration-smoke Run generated exploration bundle end-to-end"
 	@echo "  make mmf-frontlayer-smoke Run executable MMF front-layer smoke"
 	@echo "  make longfiber-frontlayer-smoke Run executable long-fiber front-layer smoke"
 	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"
@@ -71,18 +71,18 @@ lab-ready: check-tools acceptance
 	$(JL) -t auto scripts/canonical/run_experiment_sweep.jl --validate-all
 	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_export_smoke
 	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_experiment_front_layer.jl")'
-	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_playground_contract_runner.jl")'
+	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_exploration_contract_runner.jl")'
 	TEST_TIER=fast $(JL) -t auto test/runtests.jl
 	@echo ""
 	@echo "Local lab-readiness gate passed for the supported front-layer surface."
-	@echo "Generated playground bundle smoke passed."
+	@echo "Generated exploration bundle smoke passed."
 	@echo "For a real export handoff artifact check, also run: make golden-smoke"
 	@echo "For milestone physics/numerics closure on suitable compute, run: make test-slow or make test-full"
 
 doctor: check-tools docs-check test
 
-playground-smoke:
-	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_playground_contract_runner.jl")'
+exploration-smoke:
+	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_exploration_contract_runner.jl")'
 
 mmf-frontlayer-smoke:
 	$(JL) -t auto scripts/canonical/run_experiment.jl --dry-run grin50_mmf_phase_sum_poc

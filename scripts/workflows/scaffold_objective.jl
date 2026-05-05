@@ -119,7 +119,7 @@ function scaffold_objective_main(args=ARGS)
         maturity=parsed.executable_scalar ? "experimental" : "research",
         execution=parsed.executable_scalar ? :executable : :planning_only,
         validation=parsed.executable_scalar ?
-            "Runtime-checked by playground doctor; replace template physics and add science validation before promotion." :
+            "Runtime-checked by exploration doctor; replace template physics and add science validation before promotion." :
             "Requires units, gradient check, artifact metrics, and a promoted backend before execution.",
         force=parsed.force,
     )

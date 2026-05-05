@@ -1,5 +1,5 @@
 """
-Generic executable playground contract runner.
+Generic executable exploration contract runner.
 
 This is the freeform escape hatch for notebook/API research. A contract bundle
 can define any optimizer variables and any physics, as long as it exposes:
@@ -12,8 +12,8 @@ backend. This runner intentionally does not force variables into predefined
 phase/amplitude choices.
 """
 
-if !(@isdefined _PLAYGROUND_CONTRACT_RUNNER_JL_LOADED)
-const _PLAYGROUND_CONTRACT_RUNNER_JL_LOADED = true
+if !(@isdefined _EXPLORATION_CONTRACT_RUNNER_JL_LOADED)
+const _EXPLORATION_CONTRACT_RUNNER_JL_LOADED = true
 
 ENV["MPLBACKEND"] = get(ENV, "MPLBACKEND", "Agg")
 
@@ -27,22 +27,22 @@ using Printf
 using PyPlot
 using SHA
 
-function _playground_manifest_path(path::AbstractString)
+function _exploration_manifest_path(path::AbstractString)
     candidate = abspath(path)
     if isdir(candidate)
         candidate = joinpath(candidate, "contract.json")
     end
-    isfile(candidate) || throw(ArgumentError("playground contract manifest not found: $candidate"))
+    isfile(candidate) || throw(ArgumentError("exploration contract manifest not found: $candidate"))
     return candidate
 end
 
-function _playground_read_manifest(path::AbstractString)
-    manifest_path = _playground_manifest_path(path)
+function _exploration_read_manifest(path::AbstractString)
+    manifest_path = _exploration_manifest_path(path)
     manifest = JSON3.read(read(manifest_path, String), Dict{String,Any})
     return manifest_path, manifest
 end
 
-function _playground_get(dict, key::AbstractString, default=nothing)
+function _exploration_get(dict, key::AbstractString, default=nothing)
     dict === nothing && return default
     haskey(dict, key) && return dict[key]
     sym = Symbol(key)
@@ -50,24 +50,24 @@ function _playground_get(dict, key::AbstractString, default=nothing)
     return default
 end
 
-function _playground_vector(value, label::AbstractString)
-    value === nothing && throw(ArgumentError("missing playground contract field `$label`"))
-    value isa AbstractVector || throw(ArgumentError("playground contract field `$label` must be a vector"))
+function _exploration_vector(value, label::AbstractString)
+    value === nothing && throw(ArgumentError("missing exploration contract field `$label`"))
+    value isa AbstractVector || throw(ArgumentError("exploration contract field `$label` must be a vector"))
     values = Float64.(collect(value))
-    isempty(values) && throw(ArgumentError("playground contract field `$label` cannot be empty"))
-    all(isfinite, values) || throw(ArgumentError("playground contract field `$label` contains non-finite values"))
+    isempty(values) && throw(ArgumentError("exploration contract field `$label` cannot be empty"))
+    all(isfinite, values) || throw(ArgumentError("exploration contract field `$label` contains non-finite values"))
     return values
 end
 
-function _playground_optional_vector(value, label::AbstractString, n::Int)
+function _exploration_optional_vector(value, label::AbstractString, n::Int)
     value === nothing && return nothing
-    values = _playground_vector(value, label)
+    values = _exploration_vector(value, label)
     length(values) == n || throw(ArgumentError(
-        "playground contract field `$label` length $(length(values)) does not match initial length $n"))
+        "exploration contract field `$label` length $(length(values)) does not match initial length $n"))
     return values
 end
 
-function _playground_parameter_names(value, n::Int)
+function _exploration_parameter_names(value, n::Int)
     value === nothing && return Tuple("x$i" for i in 1:n)
     value isa AbstractVector || throw(ArgumentError("execution.parameter_names must be a vector"))
     names = Tuple(String(name) for name in value)
@@ -80,11 +80,11 @@ function _playground_parameter_names(value, n::Int)
     return names
 end
 
-function _playground_named_values(names, values)
+function _exploration_named_values(names, values)
     return Dict(String(name) => Float64(value) for (name, value) in zip(names, values))
 end
 
-function _playground_parameter_metadata(value, names)
+function _exploration_parameter_metadata(value, names)
     value === nothing && return Dict{String,Any}()
     value isa AbstractDict || throw(ArgumentError("execution.parameter_metadata must be a dictionary"))
     allowed = Set(String.(names))
@@ -103,7 +103,7 @@ function _playground_parameter_metadata(value, names)
     return metadata
 end
 
-function _playground_parameter_dict(x, context)
+function _exploration_parameter_dict(x, context)
     names = if hasproperty(context, :parameter_names)
         getproperty(context, :parameter_names)
     elseif context isa AbstractDict && haskey(context, "parameter_names")
@@ -113,10 +113,10 @@ function _playground_parameter_dict(x, context)
     else
         Tuple("x$i" for i in eachindex(x))
     end
-    return _playground_named_values(names, x)
+    return _exploration_named_values(names, x)
 end
 
-function _playground_attach_parameter_context(context, names, metadata, lower, upper)
+function _exploration_attach_parameter_context(context, names, metadata, lower, upper)
     bounds = Dict(
         String(name) => Dict(
             "lower" => lower === nothing ? nothing : Float64(lower[i]),
@@ -149,48 +149,48 @@ function _playground_attach_parameter_context(context, names, metadata, lower, u
     end
 end
 
-function _playground_load_module(root::AbstractString, execution)
-    mod = Module(gensym(:PlaygroundContract))
+function _exploration_load_module(root::AbstractString, execution)
+    mod = Module(gensym(:ExplorationContract))
     Core.eval(mod, :(using LinearAlgebra))
     Core.eval(mod, :(using Optim))
     Core.eval(mod, :(using JLD2))
     Core.eval(mod, :(using JSON3))
-    Core.eval(mod, :(playground_parameter_dict(x, context) = Main._playground_parameter_dict(x, context)))
+    Core.eval(mod, :(exploration_parameter_dict(x, context) = Main._exploration_parameter_dict(x, context)))
 
     for filename in ("problem.jl", "variable.jl", "objective.jl")
         path = joinpath(root, filename)
         isfile(path) && Base.include(mod, path)
     end
 
-    source_path = String(_playground_get(execution, "source_path", "execution.jl"))
+    source_path = String(_exploration_get(execution, "source_path", "execution.jl"))
     source_abs = isabspath(source_path) ? source_path : joinpath(root, source_path)
-    isfile(source_abs) || throw(ArgumentError("playground execution source not found: $source_abs"))
+    isfile(source_abs) || throw(ArgumentError("exploration execution source not found: $source_abs"))
     Base.include(mod, source_abs)
     return mod, source_abs
 end
 
-function _playground_required_function(mod::Module, name, label::AbstractString)
-    name === nothing && throw(ArgumentError("missing playground function `$label`"))
+function _exploration_required_function(mod::Module, name, label::AbstractString)
+    name === nothing && throw(ArgumentError("missing exploration function `$label`"))
     symbol = Symbol(String(name))
     isdefined(mod, symbol) || throw(ArgumentError(
-        "playground function `$symbol` was not defined by the contract source"))
+        "exploration function `$symbol` was not defined by the contract source"))
     fn = Base.invokelatest(() -> getfield(mod, symbol))
-    fn isa Function || throw(ArgumentError("playground field `$symbol` is not callable"))
+    fn isa Function || throw(ArgumentError("exploration field `$symbol` is not callable"))
     return fn
 end
 
-function _playground_optional_function(mod::Module, name)
+function _exploration_optional_function(mod::Module, name)
     name === nothing && return nothing
     name_str = String(name)
     isempty(strip(name_str)) && return nothing
     symbol = Symbol(name_str)
     isdefined(mod, symbol) || return nothing
     fn = Base.invokelatest(() -> getfield(mod, symbol))
-    fn isa Function || throw(ArgumentError("playground field `$symbol` is not callable"))
+    fn isa Function || throw(ArgumentError("exploration field `$symbol` is not callable"))
     return fn
 end
 
-function _playground_normalize_eval(result, n::Int; parameter_names=nothing)
+function _exploration_normalize_eval(result, n::Int; parameter_names=nothing)
     if result isa NamedTuple
         haskey(result, :cost) || throw(ArgumentError("loss_gradient NamedTuple must contain `cost`"))
         haskey(result, :gradient) || throw(ArgumentError("loss_gradient NamedTuple must contain `gradient`"))
@@ -215,7 +215,7 @@ function _playground_normalize_eval(result, n::Int; parameter_names=nothing)
     return J, grad, diagnostics
 end
 
-function _playground_json_safe(value)
+function _exploration_json_safe(value)
     value === nothing && return nothing
     value isa Missing && return nothing
     value isa Symbol && return String(value)
@@ -225,18 +225,18 @@ function _playground_json_safe(value)
     value isa AbstractFloat && return isfinite(value) ? Float64(value) : string(value)
     value isa Complex && return Dict("real" => real(value), "imag" => imag(value))
     if value isa NamedTuple
-        return Dict(String(k) => _playground_json_safe(v) for (k, v) in pairs(value))
+        return Dict(String(k) => _exploration_json_safe(v) for (k, v) in pairs(value))
     end
     if value isa AbstractDict
-        return Dict(String(k) => _playground_json_safe(v) for (k, v) in pairs(value))
+        return Dict(String(k) => _exploration_json_safe(v) for (k, v) in pairs(value))
     end
     if value isa AbstractArray
-        return _playground_json_safe.(collect(value))
+        return _exploration_json_safe.(collect(value))
     end
     return string(value)
 end
 
-function _playground_slug(value)
+function _exploration_slug(value)
     value === nothing && return nothing
     raw = lowercase(String(value))
     chars = Char[]
@@ -256,14 +256,14 @@ function _playground_slug(value)
     return isempty(slug) ? nothing : slug
 end
 
-function _playground_source_snapshot(source_abs::AbstractString, output_dir::AbstractString)
+function _exploration_source_snapshot(source_abs::AbstractString, output_dir::AbstractString)
     snapshot = joinpath(output_dir, "execution_source.jl")
     cp(source_abs, snapshot; force=true)
     digest = bytes2hex(sha256(read(source_abs)))
     return snapshot, digest
 end
 
-function _playground_write_parameter_summary(path, names, x0, x_opt, lower, upper, metadata)
+function _exploration_write_parameter_summary(path, names, x0, x_opt, lower, upper, metadata)
     open(path, "w") do io
         println(io, "name,initial,optimum,lower,upper,unit,scale,group,description")
         for (i, name) in enumerate(names)
@@ -285,20 +285,20 @@ function _playground_write_parameter_summary(path, names, x0, x_opt, lower, uppe
                 string(group),
                 string(description),
             )
-            println(io, join((_playground_csv_escape(field) for field in fields), ","))
+            println(io, join((_exploration_csv_escape(field) for field in fields), ","))
         end
     end
     return path
 end
 
-function _playground_csv_escape(value)
+function _exploration_csv_escape(value)
     text = String(value)
     needs_quotes = occursin(",", text) || occursin("\"", text) || occursin("\n", text)
     escaped = replace(text, "\"" => "\"\"")
     return needs_quotes ? string("\"", escaped, "\"") : escaped
 end
 
-function _playground_write_trace_csv(path::AbstractString, trace)
+function _exploration_write_trace_csv(path::AbstractString, trace)
     open(path, "w") do io
         println(io, "evaluation,cost,grad_norm")
         for row in trace
@@ -308,21 +308,21 @@ function _playground_write_trace_csv(path::AbstractString, trace)
     return path
 end
 
-function _playground_plot_title(manifest, artifacts, suffix::AbstractString)
-    name = String(_playground_get(manifest, "name", "playground_contract"))
-    tag = _playground_get(artifacts, "run_tag", nothing)
+function _exploration_plot_title(manifest, artifacts, suffix::AbstractString)
+    name = String(_exploration_get(manifest, "name", "exploration_contract"))
+    tag = _exploration_get(artifacts, "run_tag", nothing)
     tag_text = tag === nothing ? "" : " [$(String(tag))]"
     return string(name, tag_text, "\n", suffix)
 end
 
-function _playground_short_number(value)
+function _exploration_short_number(value)
     value isa Real || return string(value)
     x = Float64(value)
     isfinite(x) || return string(x)
     return string(round(x; sigdigits=4))
 end
 
-function _playground_write_trace_plot(path::AbstractString, trace, manifest, artifacts)
+function _exploration_write_trace_plot(path::AbstractString, trace, manifest, artifacts)
     try
         fig, ax = PyPlot.subplots(figsize=(6, 4))
         xs = [row.evaluation for row in trace]
@@ -330,8 +330,8 @@ function _playground_write_trace_plot(path::AbstractString, trace, manifest, art
         ax.plot(xs, ys, marker="o", linewidth=1.5)
         ax.set_xlabel("loss/gradient evaluation")
         ax.set_ylabel("cost")
-        final = isempty(ys) ? "n/a" : _playground_short_number(ys[end])
-        ax.set_title(_playground_plot_title(manifest, artifacts, "objective trace, final cost = $final"))
+        final = isempty(ys) ? "n/a" : _exploration_short_number(ys[end])
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "objective trace, final cost = $final"))
         ax.grid(true, alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=160)
@@ -345,7 +345,7 @@ function _playground_write_trace_plot(path::AbstractString, trace, manifest, art
     end
 end
 
-function _playground_write_gradient_trace_plot(path::AbstractString, trace, manifest, artifacts)
+function _exploration_write_gradient_trace_plot(path::AbstractString, trace, manifest, artifacts)
     try
         fig, ax = PyPlot.subplots(figsize=(6, 4))
         xs = [row.evaluation for row in trace]
@@ -356,8 +356,8 @@ function _playground_write_gradient_trace_plot(path::AbstractString, trace, mani
         if all(y -> y > 0 && isfinite(y), ys)
             ax.set_yscale("log")
         end
-        final = isempty(ys) ? "n/a" : _playground_short_number(ys[end])
-        ax.set_title(_playground_plot_title(manifest, artifacts, "gradient norm trace, final = $final"))
+        final = isempty(ys) ? "n/a" : _exploration_short_number(ys[end])
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "gradient norm trace, final = $final"))
         ax.grid(true, alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=160)
@@ -371,27 +371,27 @@ function _playground_write_gradient_trace_plot(path::AbstractString, trace, mani
     end
 end
 
-function _playground_write_parameter_plot(path, names, x0, x_opt, metadata, manifest, artifacts)
+function _exploration_write_parameter_plot(path, names, x0, x_opt, metadata, manifest, artifacts)
     try
         n = length(names)
         height = max(4.0, min(14.0, 0.32 * n + 2.2))
         fig, ax = PyPlot.subplots(figsize=(8, height))
         y = collect(1:n)
-        labels = _playground_parameter_labels(names, metadata)
+        labels = _exploration_parameter_labels(names, metadata)
         deltas = Float64.(x_opt .- x0)
         ax.hlines(y, x0, x_opt, color="0.72", linewidth=1.5)
         ax.scatter(x0, y, label="initial", color="tab:gray", s=22)
         ax.scatter(x_opt, y, label="optimum", color="tab:blue", s=24)
         for (yi, xi, delta) in zip(y, x_opt, deltas)
-            ax.text(xi, yi, string("  Δ=", _playground_short_number(delta)), va="center", fontsize=7)
+            ax.text(xi, yi, string("  Δ=", _exploration_short_number(delta)), va="center", fontsize=7)
         end
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=n > 20 ? 6 : 8)
         ax.invert_yaxis()
         ax.set_xlabel("optimizer coordinate value")
-        ax.set_title(_playground_plot_title(manifest, artifacts, "parameter before/after"))
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "parameter before/after"))
         ax.legend(loc="best", fontsize=8)
-        _playground_add_group_separators!(ax, names, metadata)
+        _exploration_add_group_separators!(ax, names, metadata)
         ax.grid(true, axis="x", alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=170)
@@ -405,7 +405,7 @@ function _playground_write_parameter_plot(path, names, x0, x_opt, metadata, mani
     end
 end
 
-function _playground_parameter_labels(names, metadata)
+function _exploration_parameter_labels(names, metadata)
     return [begin
         entry = get(metadata, String(name), Dict{String,Any}())
         unit = get(entry, "unit", "")
@@ -416,12 +416,12 @@ function _playground_parameter_labels(names, metadata)
     end for name in names]
 end
 
-function _playground_parameter_groups(names, metadata)
+function _exploration_parameter_groups(names, metadata)
     return [String(get(get(metadata, String(name), Dict{String,Any}()), "group", "")) for name in names]
 end
 
-function _playground_add_group_separators!(ax, names, metadata)
-    groups = _playground_parameter_groups(names, metadata)
+function _exploration_add_group_separators!(ax, names, metadata)
+    groups = _exploration_parameter_groups(names, metadata)
     length(groups) <= 1 && return nothing
     for i in 2:length(groups)
         if groups[i] != groups[i - 1]
@@ -431,7 +431,7 @@ function _playground_add_group_separators!(ax, names, metadata)
     return nothing
 end
 
-function _playground_parameter_scale(name, i::Int, x0, x_opt, lower, upper, metadata)
+function _exploration_parameter_scale(name, i::Int, x0, x_opt, lower, upper, metadata)
     entry = get(metadata, String(name), Dict{String,Any}())
     if haskey(entry, "scale")
         scale = abs(Float64(entry["scale"]))
@@ -444,30 +444,30 @@ function _playground_parameter_scale(name, i::Int, x0, x_opt, lower, upper, meta
     return max(abs(Float64(x0[i])), abs(Float64(x_opt[i])), 1.0)
 end
 
-function _playground_write_parameter_delta_plot(path, names, x0, x_opt, lower, upper, metadata, manifest, artifacts)
+function _exploration_write_parameter_delta_plot(path, names, x0, x_opt, lower, upper, metadata, manifest, artifacts)
     try
         n = length(names)
         height = max(4.0, min(14.0, 0.32 * n + 2.2))
         fig, ax = PyPlot.subplots(figsize=(8, height))
         y = collect(1:n)
-        labels = _playground_parameter_labels(names, metadata)
+        labels = _exploration_parameter_labels(names, metadata)
         scaled_deltas = [
             (Float64(x_opt[i]) - Float64(x0[i])) /
-            _playground_parameter_scale(name, i, x0, x_opt, lower, upper, metadata)
+            _exploration_parameter_scale(name, i, x0, x_opt, lower, upper, metadata)
             for (i, name) in enumerate(names)
         ]
         colors = [delta >= 0 ? "tab:blue" : "tab:red" for delta in scaled_deltas]
         ax.barh(y, scaled_deltas, color=colors, alpha=0.82)
         ax.axvline(0.0, color="0.25", linewidth=0.9)
         for (yi, delta) in zip(y, scaled_deltas)
-            ax.text(delta, yi, string("  ", _playground_short_number(delta)), va="center", fontsize=7)
+            ax.text(delta, yi, string("  ", _exploration_short_number(delta)), va="center", fontsize=7)
         end
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=n > 20 ? 6 : 8)
         ax.invert_yaxis()
         ax.set_xlabel("normalized parameter change, Δ / scale")
-        ax.set_title(_playground_plot_title(manifest, artifacts, "normalized parameter changes"))
-        _playground_add_group_separators!(ax, names, metadata)
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "normalized parameter changes"))
+        _exploration_add_group_separators!(ax, names, metadata)
         ax.grid(true, axis="x", alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=170)
@@ -481,17 +481,17 @@ function _playground_write_parameter_delta_plot(path, names, x0, x_opt, lower, u
     end
 end
 
-function _playground_numeric_diagnostics(value; prefix="")
+function _exploration_numeric_diagnostics(value; prefix="")
     rows = Pair{String,Float64}[]
     value === nothing && return rows
     value isa Missing && return rows
     if value isa NamedTuple
         for (k, v) in pairs(value)
-            append!(rows, _playground_numeric_diagnostics(v; prefix=isempty(prefix) ? String(k) : string(prefix, ".", k)))
+            append!(rows, _exploration_numeric_diagnostics(v; prefix=isempty(prefix) ? String(k) : string(prefix, ".", k)))
         end
     elseif value isa AbstractDict
         for (k, v) in pairs(value)
-            append!(rows, _playground_numeric_diagnostics(v; prefix=isempty(prefix) ? String(k) : string(prefix, ".", k)))
+            append!(rows, _exploration_numeric_diagnostics(v; prefix=isempty(prefix) ? String(k) : string(prefix, ".", k)))
         end
     elseif value isa Real && isfinite(Float64(value)) && !isempty(prefix)
         push!(rows, prefix => Float64(value))
@@ -499,8 +499,8 @@ function _playground_numeric_diagnostics(value; prefix="")
     return rows
 end
 
-function _playground_write_diagnostics_plot(path, diagnostics, manifest, artifacts)
-    rows = _playground_numeric_diagnostics(diagnostics)
+function _exploration_write_diagnostics_plot(path, diagnostics, manifest, artifacts)
+    rows = _exploration_numeric_diagnostics(diagnostics)
     isempty(rows) && return nothing
     try
         labels = first.(rows)
@@ -511,13 +511,13 @@ function _playground_write_diagnostics_plot(path, diagnostics, manifest, artifac
         y = collect(1:n)
         ax.barh(y, values, color="tab:green", alpha=0.82)
         for (yi, value) in zip(y, values)
-            ax.text(value, yi, string("  ", _playground_short_number(value)), va="center", fontsize=8)
+            ax.text(value, yi, string("  ", _exploration_short_number(value)), va="center", fontsize=8)
         end
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=n > 20 ? 6 : 8)
         ax.invert_yaxis()
         ax.set_xlabel("diagnostic value")
-        ax.set_title(_playground_plot_title(manifest, artifacts, "final numeric diagnostics"))
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "final numeric diagnostics"))
         ax.grid(true, axis="x", alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=170)
@@ -531,15 +531,15 @@ function _playground_write_diagnostics_plot(path, diagnostics, manifest, artifac
     end
 end
 
-function _playground_diagnostics_dict(diagnostics)
-    return Dict(String(k) => Float64(v) for (k, v) in _playground_numeric_diagnostics(diagnostics))
+function _exploration_diagnostics_dict(diagnostics)
+    return Dict(String(k) => Float64(v) for (k, v) in _exploration_numeric_diagnostics(diagnostics))
 end
 
-function _playground_diagnostic_names(trace)
+function _exploration_diagnostic_names(trace)
     names = String[]
     seen = Set{String}()
     for row in trace
-        for name in keys(_playground_diagnostics_dict(row.diagnostics))
+        for name in keys(_exploration_diagnostics_dict(row.diagnostics))
             if !(name in seen)
                 push!(names, name)
                 push!(seen, name)
@@ -549,24 +549,24 @@ function _playground_diagnostic_names(trace)
     return names
 end
 
-function _playground_write_diagnostics_trace_csv(path, trace)
-    names = _playground_diagnostic_names(trace)
+function _exploration_write_diagnostics_trace_csv(path, trace)
+    names = _exploration_diagnostic_names(trace)
     isempty(names) && return nothing
     open(path, "w") do io
         println(io, join(["evaluation"; names], ","))
         for row in trace
-            values = _playground_diagnostics_dict(row.diagnostics)
+            values = _exploration_diagnostics_dict(row.diagnostics)
             fields = [string(row.evaluation)]
             append!(fields, [haskey(values, name) ? string(values[name]) : "" for name in names])
-            println(io, join((_playground_csv_escape(field) for field in fields), ","))
+            println(io, join((_exploration_csv_escape(field) for field in fields), ","))
         end
     end
     return path
 end
 
-function _playground_write_diagnostics_delta_csv(path, diagnostics_initial, diagnostics_final)
-    initial = _playground_diagnostics_dict(diagnostics_initial)
-    final = _playground_diagnostics_dict(diagnostics_final)
+function _exploration_write_diagnostics_delta_csv(path, diagnostics_initial, diagnostics_final)
+    initial = _exploration_diagnostics_dict(diagnostics_initial)
+    final = _exploration_diagnostics_dict(diagnostics_final)
     names = sort!(collect(union(Set(keys(initial)), Set(keys(final)))))
     isempty(names) && return nothing
     open(path, "w") do io
@@ -593,19 +593,19 @@ function _playground_write_diagnostics_delta_csv(path, diagnostics_initial, diag
                 isfinite(delta) ? string(delta) : "",
                 status,
             )
-            println(io, join((_playground_csv_escape(field) for field in fields), ","))
+            println(io, join((_exploration_csv_escape(field) for field in fields), ","))
         end
     end
     return path
 end
 
-function _playground_top_diagnostic_names(trace, max_count::Int=12)
-    names = _playground_diagnostic_names(trace)
+function _exploration_top_diagnostic_names(trace, max_count::Int=12)
+    names = _exploration_diagnostic_names(trace)
     length(names) <= max_count && return names
     first_values = Dict{String,Float64}()
     last_values = Dict{String,Float64}()
     for row in trace
-        values = _playground_diagnostics_dict(row.diagnostics)
+        values = _exploration_diagnostics_dict(row.diagnostics)
         for (name, value) in values
             haskey(first_values, name) || (first_values[name] = value)
             last_values[name] = value
@@ -619,22 +619,22 @@ function _playground_top_diagnostic_names(trace, max_count::Int=12)
     return [row.name for row in scored[1:max_count]]
 end
 
-function _playground_write_diagnostics_trace_plot(path, trace, manifest, artifacts)
-    names = _playground_top_diagnostic_names(trace)
+function _exploration_write_diagnostics_trace_plot(path, trace, manifest, artifacts)
+    names = _exploration_top_diagnostic_names(trace)
     isempty(names) && return nothing
     try
         fig, ax = PyPlot.subplots(figsize=(8, 5))
         xs = [row.evaluation for row in trace]
         for name in names
-            ys = [get(_playground_diagnostics_dict(row.diagnostics), name, NaN) for row in trace]
+            ys = [get(_exploration_diagnostics_dict(row.diagnostics), name, NaN) for row in trace]
             ax.plot(xs, ys, marker="o", linewidth=1.3, label=name)
         end
         ax.set_xlabel("loss/gradient evaluation")
         ax.set_ylabel("diagnostic value")
-        suffix = length(_playground_diagnostic_names(trace)) > length(names) ?
+        suffix = length(_exploration_diagnostic_names(trace)) > length(names) ?
             "diagnostic traces, top changed terms" :
             "diagnostic traces"
-        ax.set_title(_playground_plot_title(manifest, artifacts, suffix))
+        ax.set_title(_exploration_plot_title(manifest, artifacts, suffix))
         ax.legend(loc="best", fontsize=7)
         ax.grid(true, alpha=0.25)
         fig.tight_layout()
@@ -649,9 +649,9 @@ function _playground_write_diagnostics_trace_plot(path, trace, manifest, artifac
     end
 end
 
-function _playground_write_diagnostics_delta_plot(path, diagnostics_initial, diagnostics_final, manifest, artifacts)
-    initial = _playground_diagnostics_dict(diagnostics_initial)
-    final = _playground_diagnostics_dict(diagnostics_final)
+function _exploration_write_diagnostics_delta_plot(path, diagnostics_initial, diagnostics_final, manifest, artifacts)
+    initial = _exploration_diagnostics_dict(diagnostics_initial)
+    final = _exploration_diagnostics_dict(diagnostics_final)
     names = sort!(collect(intersect(Set(keys(initial)), Set(keys(final)))))
     isempty(names) && return nothing
     deltas = [final[name] - initial[name] for name in names]
@@ -669,13 +669,13 @@ function _playground_write_diagnostics_delta_plot(path, diagnostics_initial, dia
         ax.barh(y, deltas, color=colors, alpha=0.82)
         ax.axvline(0.0, color="0.25", linewidth=0.9)
         for (yi, delta) in zip(y, deltas)
-            ax.text(delta, yi, string("  Δ=", _playground_short_number(delta)), va="center", fontsize=7)
+            ax.text(delta, yi, string("  Δ=", _exploration_short_number(delta)), va="center", fontsize=7)
         end
         ax.set_yticks(y)
         ax.set_yticklabels(names, fontsize=n > 20 ? 6 : 8)
         ax.invert_yaxis()
         ax.set_xlabel("final - initial diagnostic value")
-        ax.set_title(_playground_plot_title(manifest, artifacts, "diagnostic initial/final deltas"))
+        ax.set_title(_exploration_plot_title(manifest, artifacts, "diagnostic initial/final deltas"))
         ax.grid(true, axis="x", alpha=0.25)
         fig.tight_layout()
         fig.savefig(path, dpi=170)
@@ -689,63 +689,63 @@ function _playground_write_diagnostics_delta_plot(path, diagnostics_initial, dia
     end
 end
 
-function _playground_artifact_error_path(output_dir::AbstractString, message::AbstractString)
+function _exploration_artifact_error_path(output_dir::AbstractString, message::AbstractString)
     path = joinpath(output_dir, "artifact_error.txt")
     open(path, "w") do io
-        println(io, "playground_artifacts failed after optimization completed.")
+        println(io, "exploration_artifacts failed after optimization completed.")
         println(io)
         println(io, message)
         println(io)
-        println(io, "Fix playground_artifacts(...) or disable it, then rerun if you need the custom artifact.")
+        println(io, "Fix exploration_artifacts(...) or disable it, then rerun if you need the custom artifact.")
         println(io, "The optimizer result, manifest, trace, source snapshot, and parameter summary were still saved.")
     end
     return path
 end
 
-function _playground_append_run_index(output_root::AbstractString, manifest_out, manifest_json::AbstractString)
+function _exploration_append_run_index(output_root::AbstractString, manifest_out, manifest_json::AbstractString)
     mkpath(output_root)
-    index_path = joinpath(output_root, "playground_runs.jsonl")
+    index_path = joinpath(output_root, "exploration_runs.jsonl")
     row = Dict{String,Any}(
         "created_at_utc" => string(Dates.format(now(UTC), "yyyy-mm-ddTHH:MM:SS"), "Z"),
-        "contract_name" => _playground_get(manifest_out, "contract_name", ""),
-        "run_tag" => _playground_get(manifest_out, "run_tag", nothing),
-        "run_note" => _playground_get(manifest_out, "run_note", nothing),
-        "output_dir" => _playground_get(manifest_out, "output_dir", ""),
+        "contract_name" => _exploration_get(manifest_out, "contract_name", ""),
+        "run_tag" => _exploration_get(manifest_out, "run_tag", nothing),
+        "run_note" => _exploration_get(manifest_out, "run_note", nothing),
+        "output_dir" => _exploration_get(manifest_out, "output_dir", ""),
         "manifest_json" => manifest_json,
-        "cost_final" => _playground_get(manifest_out, "cost_final", nothing),
-        "converged" => _playground_get(manifest_out, "converged", nothing),
-        "source_sha256" => _playground_get(manifest_out, "source_sha256", nothing),
-        "artifact_error" => _playground_get(manifest_out, "artifact_error", nothing),
-        "parameters_opt" => _playground_get(manifest_out, "parameters_opt", Dict{String,Any}()),
+        "cost_final" => _exploration_get(manifest_out, "cost_final", nothing),
+        "converged" => _exploration_get(manifest_out, "converged", nothing),
+        "source_sha256" => _exploration_get(manifest_out, "source_sha256", nothing),
+        "artifact_error" => _exploration_get(manifest_out, "artifact_error", nothing),
+        "parameters_opt" => _exploration_get(manifest_out, "parameters_opt", Dict{String,Any}()),
     )
     open(index_path, "a") do io
-        JSON3.write(io, _playground_json_safe(row))
+        JSON3.write(io, _exploration_json_safe(row))
         println(io)
     end
     return index_path
 end
 
-function check_playground_contract_bundle(path::AbstractString)
-    manifest_path, manifest = _playground_read_manifest(path)
+function check_exploration_contract_bundle(path::AbstractString)
+    manifest_path, manifest = _exploration_read_manifest(path)
     root = dirname(manifest_path)
-    execution = _playground_get(manifest, "execution")
+    execution = _exploration_get(manifest, "execution")
     execution === nothing && throw(ArgumentError("contract manifest has no executable `execution` section"))
-    mod, source_abs = _playground_load_module(root, execution)
-    x0 = _playground_vector(_playground_get(execution, "initial"), "execution.initial")
-    lower = _playground_optional_vector(_playground_get(execution, "lower"), "execution.lower", length(x0))
-    upper = _playground_optional_vector(_playground_get(execution, "upper"), "execution.upper", length(x0))
-    parameter_names = _playground_parameter_names(_playground_get(execution, "parameter_names"), length(x0))
-    parameter_metadata = _playground_parameter_metadata(_playground_get(execution, "parameter_metadata"), parameter_names)
+    mod, source_abs = _exploration_load_module(root, execution)
+    x0 = _exploration_vector(_exploration_get(execution, "initial"), "execution.initial")
+    lower = _exploration_optional_vector(_exploration_get(execution, "lower"), "execution.lower", length(x0))
+    upper = _exploration_optional_vector(_exploration_get(execution, "upper"), "execution.upper", length(x0))
+    parameter_names = _exploration_parameter_names(_exploration_get(execution, "parameter_names"), length(x0))
+    parameter_metadata = _exploration_parameter_metadata(_exploration_get(execution, "parameter_metadata"), parameter_names)
     if lower !== nothing || upper !== nothing
         lower !== nothing && upper !== nothing || throw(ArgumentError("execution.lower and execution.upper must be supplied together"))
         all(lower .<= x0 .<= upper) || throw(ArgumentError("execution.initial is outside execution bounds"))
     end
 
-    context_fn = _playground_optional_function(mod, _playground_get(execution, "context_function", "playground_context"))
+    context_fn = _exploration_optional_function(mod, _exploration_get(execution, "context_function", "exploration_context"))
     context = context_fn === nothing ? (;) : Base.invokelatest(context_fn)
-    context = _playground_attach_parameter_context(context, parameter_names, parameter_metadata, lower, upper)
-    loss_gradient = _playground_required_function(mod, _playground_get(execution, "loss_gradient"), "execution.loss_gradient")
-    J0, grad0, diagnostics0 = _playground_normalize_eval(
+    context = _exploration_attach_parameter_context(context, parameter_names, parameter_metadata, lower, upper)
+    loss_gradient = _exploration_required_function(mod, _exploration_get(execution, "loss_gradient"), "execution.loss_gradient")
+    J0, grad0, diagnostics0 = _exploration_normalize_eval(
         Base.invokelatest(loss_gradient, copy(x0), context),
         length(x0),
         parameter_names=parameter_names,
@@ -764,62 +764,62 @@ function check_playground_contract_bundle(path::AbstractString)
             )
             for (i, name) in enumerate(parameter_names)
         ),
-        parameters_initial = _playground_named_values(parameter_names, x0),
+        parameters_initial = _exploration_named_values(parameter_names, x0),
         initial_cost = J0,
         initial_grad_norm = norm(grad0),
         diagnostics = diagnostics0,
     )
 end
 
-function _playground_output_dir(manifest, artifacts, execution; output_root=nothing, timestamp=nothing)
+function _exploration_output_dir(manifest, artifacts, execution; output_root=nothing, timestamp=nothing)
     root = output_root === nothing ?
-        String(_playground_get(artifacts, "output_root", joinpath("results", "playground"))) :
+        String(_exploration_get(artifacts, "output_root", joinpath("results", "exploration"))) :
         String(output_root)
-    name = String(_playground_get(manifest, "name", "playground_contract"))
+    name = String(_exploration_get(manifest, "name", "exploration_contract"))
     stamp = timestamp === nothing ? Dates.format(now(UTC), "yyyymmdd_HHMMss") : String(timestamp)
-    run_tag = _playground_slug(_playground_get(artifacts, "run_tag", nothing))
+    run_tag = _exploration_slug(_exploration_get(artifacts, "run_tag", nothing))
     suffix = run_tag === nothing ? stamp : string(stamp, "_", run_tag)
     dir = joinpath(root, string(name, "_", suffix))
     mkpath(dir)
     return dir
 end
 
-function run_playground_contract_bundle(
+function run_exploration_contract_bundle(
     path::AbstractString;
     output_root=nothing,
     max_iter=nothing,
     dry_run::Bool=false,
     timestamp=nothing,
 )
-    manifest_path, manifest = _playground_read_manifest(path)
+    manifest_path, manifest = _exploration_read_manifest(path)
     root = dirname(manifest_path)
-    execution = _playground_get(manifest, "execution")
+    execution = _exploration_get(manifest, "execution")
     execution === nothing && throw(ArgumentError("contract manifest has no executable `execution` section"))
-    solver = _playground_get(manifest, "solver", Dict{String,Any}())
-    artifacts = _playground_get(manifest, "artifacts", Dict{String,Any}())
+    solver = _exploration_get(manifest, "solver", Dict{String,Any}())
+    artifacts = _exploration_get(manifest, "artifacts", Dict{String,Any}())
 
-    check = check_playground_contract_bundle(path)
+    check = check_exploration_contract_bundle(path)
     dry_run && return (; dry_run = true, check...)
 
-    mod, _ = _playground_load_module(root, execution)
-    x0 = _playground_vector(_playground_get(execution, "initial"), "execution.initial")
+    mod, _ = _exploration_load_module(root, execution)
+    x0 = _exploration_vector(_exploration_get(execution, "initial"), "execution.initial")
     n = length(x0)
-    lower = _playground_optional_vector(_playground_get(execution, "lower"), "execution.lower", n)
-    upper = _playground_optional_vector(_playground_get(execution, "upper"), "execution.upper", n)
-    parameter_names = _playground_parameter_names(_playground_get(execution, "parameter_names"), n)
-    parameter_metadata = _playground_parameter_metadata(_playground_get(execution, "parameter_metadata"), parameter_names)
-    loss_gradient = _playground_required_function(mod, _playground_get(execution, "loss_gradient"), "execution.loss_gradient")
-    context_fn = _playground_optional_function(mod, _playground_get(execution, "context_function", "playground_context"))
-    artifact_fn = _playground_optional_function(mod, _playground_get(execution, "artifact_function", "playground_artifacts"))
+    lower = _exploration_optional_vector(_exploration_get(execution, "lower"), "execution.lower", n)
+    upper = _exploration_optional_vector(_exploration_get(execution, "upper"), "execution.upper", n)
+    parameter_names = _exploration_parameter_names(_exploration_get(execution, "parameter_names"), n)
+    parameter_metadata = _exploration_parameter_metadata(_exploration_get(execution, "parameter_metadata"), parameter_names)
+    loss_gradient = _exploration_required_function(mod, _exploration_get(execution, "loss_gradient"), "execution.loss_gradient")
+    context_fn = _exploration_optional_function(mod, _exploration_get(execution, "context_function", "exploration_context"))
+    artifact_fn = _exploration_optional_function(mod, _exploration_get(execution, "artifact_function", "exploration_artifacts"))
     context = context_fn === nothing ? (;) : Base.invokelatest(context_fn)
-    context = _playground_attach_parameter_context(context, parameter_names, parameter_metadata, lower, upper)
-    iterations = max_iter === nothing ? Int(_playground_get(solver, "max_iter", 20)) : Int(max_iter)
+    context = _exploration_attach_parameter_context(context, parameter_names, parameter_metadata, lower, upper)
+    iterations = max_iter === nothing ? Int(_exploration_get(solver, "max_iter", 20)) : Int(max_iter)
     iterations > 0 || throw(ArgumentError("solver.max_iter must be positive"))
 
     trace = NamedTuple[]
     last_diagnostics = Ref{Any}((;))
     fg! = Optim.only_fg!() do F, G, x
-        J, grad, diagnostics = _playground_normalize_eval(
+        J, grad, diagnostics = _exploration_normalize_eval(
             Base.invokelatest(loss_gradient, copy(Float64.(x)), context),
             n,
             parameter_names=parameter_names,
@@ -839,7 +839,7 @@ function run_playground_contract_bundle(
     end
 
     x_opt = Float64.(Optim.minimizer(result))
-    J_final, grad_final, diagnostics_final = _playground_normalize_eval(
+    J_final, grad_final, diagnostics_final = _exploration_normalize_eval(
         Base.invokelatest(loss_gradient, copy(x_opt), context),
         n,
         parameter_names=parameter_names,
@@ -851,12 +851,12 @@ function run_playground_contract_bundle(
         grad_norm = norm(grad_final),
         diagnostics = diagnostics_final,
     ))
-    output_dir = _playground_output_dir(manifest, artifacts, execution; output_root=output_root, timestamp=timestamp)
+    output_dir = _exploration_output_dir(manifest, artifacts, execution; output_root=output_root, timestamp=timestamp)
     source_path = check.source_path
-    source_snapshot, source_sha256 = _playground_source_snapshot(source_path, output_dir)
-    trace_csv = _playground_write_trace_csv(joinpath(output_dir, "objective_trace.csv"), trace_out)
-    trace_png = _playground_write_trace_plot(joinpath(output_dir, "objective_trace.png"), trace_out, manifest, artifacts)
-    gradient_trace_png = _playground_write_gradient_trace_plot(joinpath(output_dir, "gradient_norm_trace.png"), trace_out, manifest, artifacts)
+    source_snapshot, source_sha256 = _exploration_source_snapshot(source_path, output_dir)
+    trace_csv = _exploration_write_trace_csv(joinpath(output_dir, "objective_trace.csv"), trace_out)
+    trace_png = _exploration_write_trace_plot(joinpath(output_dir, "objective_trace.png"), trace_out, manifest, artifacts)
+    gradient_trace_png = _exploration_write_gradient_trace_plot(joinpath(output_dir, "gradient_norm_trace.png"), trace_out, manifest, artifacts)
     parameter_bounds = Dict(
         String(name) => Dict(
             "lower" => lower === nothing ? nothing : Float64(lower[i]),
@@ -864,7 +864,7 @@ function run_playground_contract_bundle(
         )
         for (i, name) in enumerate(parameter_names)
     )
-    parameter_summary_csv = _playground_write_parameter_summary(
+    parameter_summary_csv = _exploration_write_parameter_summary(
         joinpath(output_dir, "parameter_summary.csv"),
         parameter_names,
         x0,
@@ -873,7 +873,7 @@ function run_playground_contract_bundle(
         upper,
         parameter_metadata,
     )
-    parameter_before_after_png = _playground_write_parameter_plot(
+    parameter_before_after_png = _exploration_write_parameter_plot(
         joinpath(output_dir, "parameter_before_after.png"),
         parameter_names,
         x0,
@@ -882,35 +882,35 @@ function run_playground_contract_bundle(
         manifest,
         artifacts,
     )
-    diagnostics_final_png = _playground_write_diagnostics_plot(
+    diagnostics_final_png = _exploration_write_diagnostics_plot(
         joinpath(output_dir, "diagnostics_final.png"),
         diagnostics_final,
         manifest,
         artifacts,
     )
-    diagnostics_trace_csv = _playground_write_diagnostics_trace_csv(
+    diagnostics_trace_csv = _exploration_write_diagnostics_trace_csv(
         joinpath(output_dir, "diagnostics_trace.csv"),
         trace_out,
     )
-    diagnostics_trace_png = _playground_write_diagnostics_trace_plot(
+    diagnostics_trace_png = _exploration_write_diagnostics_trace_plot(
         joinpath(output_dir, "diagnostics_trace.png"),
         trace_out,
         manifest,
         artifacts,
     )
-    diagnostics_delta_csv = _playground_write_diagnostics_delta_csv(
+    diagnostics_delta_csv = _exploration_write_diagnostics_delta_csv(
         joinpath(output_dir, "diagnostics_delta.csv"),
         check.diagnostics,
         diagnostics_final,
     )
-    diagnostics_delta_png = _playground_write_diagnostics_delta_plot(
+    diagnostics_delta_png = _exploration_write_diagnostics_delta_plot(
         joinpath(output_dir, "diagnostics_delta.png"),
         check.diagnostics,
         diagnostics_final,
         manifest,
         artifacts,
     )
-    parameter_delta_png = _playground_write_parameter_delta_plot(
+    parameter_delta_png = _exploration_write_parameter_delta_plot(
         joinpath(output_dir, "parameter_delta_normalized.png"),
         parameter_names,
         x0,
@@ -934,8 +934,8 @@ function run_playground_contract_bundle(
                     parameter_names = parameter_names,
                     parameter_metadata = parameter_metadata,
                     parameter_bounds = parameter_bounds,
-                    parameters_initial = _playground_named_values(parameter_names, x0),
-                    parameters_opt = _playground_named_values(parameter_names, x_opt),
+                    parameters_initial = _exploration_named_values(parameter_names, x0),
+                    parameters_opt = _exploration_named_values(parameter_names, x_opt),
                     cost_final = J_final,
                     gradient_final = grad_final,
                     trace = trace_out,
@@ -949,9 +949,9 @@ function run_playground_contract_bundle(
                 output_dir,
             )
         catch err
-            message = "playground_artifacts failed: $(sprint(showerror, err))"
+            message = "exploration_artifacts failed: $(sprint(showerror, err))"
             artifact_error = message
-            artifact_error_path = _playground_artifact_error_path(output_dir, message)
+            artifact_error_path = _exploration_artifact_error_path(output_dir, message)
             nothing
         end
         if produced isa AbstractDict
@@ -962,16 +962,16 @@ function run_playground_contract_bundle(
     end
 
     payload = (
-        schema = "fiber_playground_freeform_result_v1",
+        schema = "fiber_exploration_freeform_result_v1",
         contract_manifest = manifest_path,
-        contract_name = String(_playground_get(manifest, "name", "playground_contract")),
+        contract_name = String(_exploration_get(manifest, "name", "exploration_contract")),
         x0 = x0,
         x_opt = x_opt,
         parameter_names = parameter_names,
         parameter_metadata = parameter_metadata,
         parameter_bounds = parameter_bounds,
-        parameters_initial = _playground_named_values(parameter_names, x0),
-        parameters_opt = _playground_named_values(parameter_names, x_opt),
+        parameters_initial = _exploration_named_values(parameter_names, x0),
+        parameters_opt = _exploration_named_values(parameter_names, x_opt),
         cost_initial = check.initial_cost,
         cost_final = J_final,
         gradient_final = grad_final,
@@ -998,11 +998,11 @@ function run_playground_contract_bundle(
     write_jld2_file(artifact_path; payload...)
 
     manifest_out = Dict{String,Any}(
-        "schema" => "fiber_playground_freeform_manifest_v1",
+        "schema" => "fiber_exploration_freeform_manifest_v1",
         "contract_manifest" => manifest_path,
         "contract_name" => payload.contract_name,
-        "run_tag" => _playground_get(artifacts, "run_tag", nothing),
-        "run_note" => _playground_get(artifacts, "run_note", nothing),
+        "run_tag" => _exploration_get(artifacts, "run_tag", nothing),
+        "run_note" => _exploration_get(artifacts, "run_note", nothing),
         "artifact_path" => artifact_path,
         "output_dir" => output_dir,
         "cost_initial" => payload.cost_initial,
@@ -1031,11 +1031,11 @@ function run_playground_contract_bundle(
         "custom_artifacts" => artifact_paths,
         "artifact_error" => artifact_error,
         "artifact_error_path" => artifact_error_path,
-        "diagnostics_final" => _playground_json_safe(diagnostics_final),
+        "diagnostics_final" => _exploration_json_safe(diagnostics_final),
     )
     manifest_json = joinpath(output_dir, "run_manifest.json")
-    write_json_file(manifest_json, _playground_json_safe(manifest_out))
-    run_index = _playground_append_run_index(dirname(output_dir), manifest_out, manifest_json)
+    write_json_file(manifest_json, _exploration_json_safe(manifest_out))
+    run_index = _exploration_append_run_index(dirname(output_dir), manifest_out, manifest_json)
 
     return (
         output_dir = output_dir,

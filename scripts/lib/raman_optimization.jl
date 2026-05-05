@@ -829,7 +829,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         close("all")
     end # do_plots
 
-    # Mandatory standard image set (CLAUDE.md project rule, post-2026-04-17).
+    # Mandatory standard image set (AGENTS.md project rule, post-2026-04-17).
     save_standard_set(φ_after, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
         tag = basename(save_prefix),

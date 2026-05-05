@@ -1,5 +1,5 @@
 """
-Create a runnable Nelder-Mead vector playground experiment config.
+Create a runnable Nelder-Mead vector exploration experiment config.
 
 The generated config is for explicit research-extension variables. It is useful
 for notebook demos and smoke tests where the objective is scalar and
@@ -106,7 +106,7 @@ function _vector_config_text(p)
     objective = _toml_escape(p.objective)
     return """
 id = "$id"
-description = "Notebook playground vector experiment: $id"
+description = "Notebook exploration vector experiment: $id"
 maturity = "experimental"
 output_root = "results/raman/smoke"
 output_tag = "$id"
@@ -191,11 +191,11 @@ function scaffold_vector_config_main(args=ARGS)
         throw(ArgumentError("config already exists: $path; pass --force to overwrite"))
     end
     write(path, _vector_config_text(parsed))
-    println("Vector playground config created:")
+    println("Vector exploration config created:")
     println("  config: ", abspath(path))
     println()
     println("Next checks:")
-    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --playground-check ", abspath(path), " --local-smoke")
+    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --exploration-check ", abspath(path), " --local-smoke")
     println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --explore-run ", abspath(path), " --local-smoke")
     return abspath(path)
 end

@@ -1,5 +1,5 @@
 """
-Create a complete notebook playground bundle:
+Create a complete notebook exploration bundle:
 
 - executable scalar objective extension;
 - executable variable/control extension;
@@ -11,12 +11,12 @@ This command is the real backend behind `Experiment(...).scaffold(...)`.
 include(joinpath(@__DIR__, "..", "lib", "objective_registry.jl"))
 include(joinpath(@__DIR__, "..", "lib", "variable_registry.jl"))
 
-const PLAYGROUND_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
+const EXPLORATION_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
 
 function _pg_usage()
     return """
 Usage:
-    julia -t auto --project=. scripts/canonical/scaffold_playground.jl NAME [options]
+    julia -t auto --project=. scripts/canonical/scaffold_exploration.jl NAME [options]
 
 Options:
     --mode scalar|vector|control
@@ -97,7 +97,7 @@ function _pg_parse_args(args)
         :time_window => 5.0,
         :objective_dir => OBJECTIVE_EXTENSION_DIR,
         :variable_dir => VARIABLE_EXTENSION_DIR,
-        :config_dir => PLAYGROUND_CONFIG_DIR,
+        :config_dir => EXPLORATION_CONFIG_DIR,
         :force => false,
     )
 
@@ -160,7 +160,7 @@ function _pg_parse_args(args)
         elseif arg in ("--help", "-h")
             return (help=true,)
         else
-            error("Unknown playground option: $arg")
+            error("Unknown exploration option: $arg")
         end
         i += 1
     end
@@ -210,7 +210,7 @@ vector_x_tol = 1.0e-3
     parameterization = scalar ? "full_grid" : "vector_coefficients"
     return """
 id = "$id"
-description = "Notebook playground experiment: $id"
+description = "Notebook exploration experiment: $id"
 maturity = "experimental"
 output_root = "results/raman/smoke"
 output_tag = "$id"
@@ -275,7 +275,7 @@ normalize = true
 """
 end
 
-function scaffold_playground_main(args=ARGS)
+function scaffold_exploration_main(args=ARGS)
     parsed = _pg_parse_args(String.(args))
     if parsed.help
         println(_pg_usage())
@@ -286,13 +286,13 @@ function scaffold_playground_main(args=ARGS)
     objective = scaffold_objective_extension(
         parsed.objective;
         dir=String(parsed.objective_dir),
-        description="Executable notebook playground objective. Replace this template with the scalar metric for the experiment.",
+        description="Executable notebook exploration objective. Replace this template with the scalar metric for the experiment.",
         variables=((parsed.variable,),),
         regularizers=("energy",),
         backend=:scalar_extension,
         maturity="experimental",
         execution=:executable,
-        validation="Runtime-checked by playground doctor; replace template physics and add science validation before promotion.",
+        validation="Runtime-checked by exploration doctor; replace template physics and add science validation before promotion.",
         force=parsed.force,
     )
 
@@ -302,7 +302,7 @@ function scaffold_playground_main(args=ARGS)
     variable = scaffold_variable_extension(
         parsed.variable;
         dir=String(parsed.variable_dir),
-        description="Executable notebook playground control. Replace this template with the physical control map for the experiment.",
+        description="Executable notebook exploration control. Replace this template with the physical control map for the experiment.",
         units="dimensionless optimizer coordinates mapped by the Julia control builder",
         bounds="box bounds declared in the experiment config; projection function must enforce any stricter physical constraints",
         parameterizations=(mode == "scalar" ? "full_grid" : "vector_coefficients",),
@@ -310,7 +310,7 @@ function scaffold_playground_main(args=ARGS)
         backend=variable_backend,
         maturity="experimental",
         execution=:executable,
-        validation="Runtime-checked by playground doctor; replace template physics and add science validation before promotion.",
+        validation="Runtime-checked by exploration doctor; replace template physics and add science validation before promotion.",
         dimension=mode == "scalar" ? 1 : parsed.dimension,
         force=parsed.force,
     )
@@ -322,7 +322,7 @@ function scaffold_playground_main(args=ARGS)
     end
     write(config_path, _pg_config_text(parsed))
 
-    println("Playground bundle created:")
+    println("Exploration bundle created:")
     println("  objective: ", objective.toml_path)
     println("  objective source: ", objective.source_path)
     println("  variable: ", variable.toml_path)
@@ -330,7 +330,7 @@ function scaffold_playground_main(args=ARGS)
     println("  config: ", abspath(config_path))
     println()
     println("Next checks:")
-    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --playground-check ", abspath(config_path), " --local-smoke")
+    println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --exploration-check ", abspath(config_path), " --local-smoke")
     println("  julia -t auto --project=. scripts/canonical/run_experiment.jl --explore-run ", abspath(config_path), " --local-smoke")
     return (
         objective=objective,
@@ -340,5 +340,5 @@ function scaffold_playground_main(args=ARGS)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    scaffold_playground_main(ARGS)
+    scaffold_exploration_main(ARGS)
 end

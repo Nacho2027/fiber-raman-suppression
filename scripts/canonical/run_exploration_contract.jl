@@ -1,8 +1,8 @@
 """
-Run a freeform playground contract bundle.
+Run a freeform exploration contract bundle.
 
 Usage:
-    julia --project=. scripts/canonical/run_playground_contract.jl [--check] [--dry-run] [--max-iter N] [--output-root DIR] path/to/contract_dir
+    julia --project=. scripts/canonical/run_exploration_contract.jl [--check] [--dry-run] [--max-iter N] [--output-root DIR] path/to/contract_dir
 
 The bundle must contain `contract.json` and an execution source file. The
 execution source defines `loss_gradient(x, context)`, which may implement any
@@ -11,9 +11,9 @@ physics/adjoint math the researcher wants.
 
 ENV["MPLBACKEND"] = get(ENV, "MPLBACKEND", "Agg")
 
-include(joinpath(@__DIR__, "..", "lib", "playground_contract_runner.jl"))
+include(joinpath(@__DIR__, "..", "lib", "exploration_contract_runner.jl"))
 
-function _parse_playground_contract_args(args)
+function _parse_exploration_contract_args(args)
     check = false
     dry_run = false
     max_iter = nothing
@@ -35,7 +35,7 @@ function _parse_playground_contract_args(args)
             i += 1
             output_root = args[i]
         elseif startswith(arg, "--")
-            error("unknown run_playground_contract option `$arg`")
+            error("unknown run_exploration_contract option `$arg`")
         elseif bundle === nothing
             bundle = arg
         else
@@ -44,7 +44,7 @@ function _parse_playground_contract_args(args)
         i += 1
     end
     bundle === nothing && error(
-        "usage: scripts/canonical/run_playground_contract.jl [--check] [--dry-run] [--max-iter N] [--output-root DIR] contract_dir")
+        "usage: scripts/canonical/run_exploration_contract.jl [--check] [--dry-run] [--max-iter N] [--output-root DIR] contract_dir")
     return (
         check = check,
         dry_run = dry_run,
@@ -54,11 +54,11 @@ function _parse_playground_contract_args(args)
     )
 end
 
-function run_playground_contract_main(args=ARGS)
-    parsed = _parse_playground_contract_args(args)
+function run_exploration_contract_main(args=ARGS)
+    parsed = _parse_exploration_contract_args(args)
     if parsed.check
-        report = check_playground_contract_bundle(parsed.bundle)
-        println("# Playground Contract Check")
+        report = check_exploration_contract_bundle(parsed.bundle)
+        println("# Exploration Contract Check")
         println()
         println("- Status: `PASS`")
         println("- Dimension: `", report.dimension, "`")
@@ -68,14 +68,14 @@ function run_playground_contract_main(args=ARGS)
         return report
     end
 
-    result = run_playground_contract_bundle(
+    result = run_exploration_contract_bundle(
         parsed.bundle;
         output_root = parsed.output_root,
         max_iter = parsed.max_iter,
         dry_run = parsed.dry_run,
     )
     if parsed.dry_run
-        println("# Playground Contract Dry Run")
+        println("# Exploration Contract Dry Run")
         println()
         println("- Status: `PASS`")
         println("- Dimension: `", result.dimension, "`")
@@ -83,7 +83,7 @@ function run_playground_contract_main(args=ARGS)
         return result
     end
 
-    println("# Playground Contract Run")
+    println("# Exploration Contract Run")
     println()
     println("- Output dir: `", result.output_dir, "`")
     println("- Artifact: `", result.artifact_path, "`")
@@ -105,5 +105,5 @@ function run_playground_contract_main(args=ARGS)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    run_playground_contract_main()
+    run_exploration_contract_main()
 end

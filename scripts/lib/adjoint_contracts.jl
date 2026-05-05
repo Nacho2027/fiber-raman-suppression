@@ -1,5 +1,5 @@
 """
-Explicit adjoint-oriented contracts for research playground controls/objectives.
+Explicit adjoint-oriented contracts for research exploration controls/objectives.
 
 This file starts with the smallest useful first-class contract: a reduced-basis
 spectral phase control. It uses the existing full-grid phase adjoint gradient

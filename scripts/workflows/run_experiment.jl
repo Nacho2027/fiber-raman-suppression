@@ -19,7 +19,7 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-plan [spec]
-    julia --project=. -t auto scripts/canonical/run_experiment.jl --playground-check [--local-smoke] [--heavy-ok] spec
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --exploration-check [--local-smoke] [--heavy-ok] spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --heavy-ok spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --latest [spec]
@@ -58,7 +58,7 @@ function _load_or_default_experiment(args)
     return isempty(args) ? DEFAULT_EXPERIMENT_SPEC : args[1]
 end
 
-function _parse_playground_check_args(args)
+function _parse_exploration_check_args(args)
     local_smoke = false
     heavy_ok = false
     specs = String[]
@@ -69,14 +69,14 @@ function _parse_playground_check_args(args)
         elseif arg == "--heavy-ok"
             heavy_ok = true
         elseif startswith(arg, "--")
-            error("unknown --playground-check option `$arg`")
+            error("unknown --exploration-check option `$arg`")
         else
             push!(specs, arg)
         end
     end
 
     length(specs) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl --playground-check [--local-smoke] [--heavy-ok] spec")
+        "usage: scripts/canonical/run_experiment.jl --exploration-check [--local-smoke] [--heavy-ok] spec")
     return (
         spec = only(specs),
         local_smoke = local_smoke,
@@ -219,22 +219,22 @@ function run_experiment_main(args=ARGS)
         return spec
     end
 
-    if args[1] == "--playground-check"
-        parsed = _parse_playground_check_args(args[2:end])
+    if args[1] == "--exploration-check"
+        parsed = _parse_exploration_check_args(args[2:end])
         spec = load_experiment_spec(parsed.spec)
         check = research_config_check_report(spec)
         render_research_config_check(check)
-        check.validation_ok || error("playground check failed config validation")
+        check.validation_ok || error("exploration check failed config validation")
         extension_report = runtime_check_research_extensions(spec)
         render_runtime_extension_check(extension_report)
-        extension_report.complete || error("playground check failed runtime extension doctor")
+        extension_report.complete || error("exploration check failed runtime extension doctor")
         policy = render_explore_run_policy(
             spec;
             local_smoke=parsed.local_smoke,
             heavy_ok=parsed.heavy_ok,
         )
         policy.allowed || error(
-            "playground check failed run policy; blockers: $(join(string.(policy.blockers), ", "))")
+            "exploration check failed run policy; blockers: $(join(string.(policy.blockers), ", "))")
         return (
             config = check,
             extensions = extension_report,
@@ -320,7 +320,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --check [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --playground-check [--local-smoke] [--heavy-ok] spec | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --heavy-ok spec | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --check [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --exploration-check [--local-smoke] [--heavy-ok] spec | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --heavy-ok spec | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)

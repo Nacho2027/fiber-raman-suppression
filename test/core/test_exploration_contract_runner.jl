@@ -3,22 +3,22 @@ using JSON3
 using JLD2
 using SHA
 
-const _PLAYGROUND_CONTRACT_RUNNER_ROOT = isdefined(Main, :_ROOT) ?
+const _EXPLORATION_CONTRACT_RUNNER_ROOT = isdefined(Main, :_ROOT) ?
     getfield(Main, :_ROOT) :
     normpath(joinpath(@__DIR__, "..", ".."))
 
-if !isdefined(Main, :run_playground_contract_bundle)
-    include(joinpath(_PLAYGROUND_CONTRACT_RUNNER_ROOT, "scripts", "lib", "playground_contract_runner.jl"))
+if !isdefined(Main, :run_exploration_contract_bundle)
+    include(joinpath(_EXPLORATION_CONTRACT_RUNNER_ROOT, "scripts", "lib", "exploration_contract_runner.jl"))
 end
 
 function _write_freeform_quadratic_contract(dir)
     source = """
-    function playground_context()
+    function exploration_context()
         return (target = [0.25, -0.5], scale = 1.0)
     end
 
-    function playground_loss_gradient(x, context)
-        params = playground_parameter_dict(x, context)
+    function exploration_loss_gradient(x, context)
+        params = exploration_parameter_dict(x, context)
         params["chirp"] == x[1] || error("named parameter helper mismatch")
         delta = x .- context.target
         cost = context.scale * sum(abs2, delta)
@@ -27,7 +27,7 @@ function _write_freeform_quadratic_contract(dir)
         return cost, gradient, diagnostics
     end
 
-    function playground_artifacts(result, context, output_dir)
+    function exploration_artifacts(result, context, output_dir)
         path = joinpath(output_dir, "variable_summary.txt")
         open(path, "w") do io
             println(io, "x_opt=", result.x_opt)
@@ -41,7 +41,7 @@ function _write_freeform_quadratic_contract(dir)
         write(joinpath(dir, filename), "# Optional contract shard for test.\n")
     end
     manifest = Dict{String,Any}(
-        "schema" => "fiber_playground_contract_v1",
+        "schema" => "fiber_exploration_contract_v1",
         "name" => "freeform_quadratic_test",
         "problem" => Dict("regime" => "custom"),
         "variable" => Dict("name" => "arbitrary_vector"),
@@ -55,16 +55,16 @@ function _write_freeform_quadratic_contract(dir)
             ),
             "lower" => [-2.0, -2.0],
             "upper" => [2.0, 2.0],
-            "loss_gradient" => "playground_loss_gradient",
-            "context_function" => "playground_context",
-            "artifact_function" => "playground_artifacts",
+            "loss_gradient" => "exploration_loss_gradient",
+            "context_function" => "exploration_context",
+            "artifact_function" => "exploration_artifacts",
             "source_path" => "execution.jl",
         ),
         "solver" => Dict("kind" => "lbfgs", "max_iter" => 12, "uses_adjoint" => true),
         "artifacts" => Dict(
             "output_root" => joinpath(dir, "outputs"),
             "run_tag" => "unit test",
-            "run_note" => "quadratic smoke for playground runner",
+            "run_note" => "quadratic smoke for exploration runner",
         ),
     )
     open(joinpath(dir, "contract.json"), "w") do io
@@ -74,11 +74,11 @@ function _write_freeform_quadratic_contract(dir)
     return joinpath(dir, "contract.json")
 end
 
-@testset "Freeform playground contract runner" begin
+@testset "Freeform exploration contract runner" begin
     mktempdir() do dir
         manifest = _write_freeform_quadratic_contract(dir)
 
-        check = check_playground_contract_bundle(manifest)
+        check = check_exploration_contract_bundle(manifest)
         @test check.complete
         @test check.dimension == 2
         @test check.parameter_names == ("chirp", "energy_scale")
@@ -88,11 +88,11 @@ end
         @test check.initial_cost > 0
         @test check.initial_grad_norm > 0
 
-        dry = run_playground_contract_bundle(dir; dry_run=true)
+        dry = run_exploration_contract_bundle(dir; dry_run=true)
         @test dry.dry_run
         @test dry.dimension == 2
 
-        result = run_playground_contract_bundle(dir; timestamp="test")
+        result = run_exploration_contract_bundle(dir; timestamp="test")
         @test isdir(result.output_dir)
         @test isfile(result.artifact_path)
         @test isfile(result.manifest_json)
@@ -114,7 +114,7 @@ end
         @test result.payload.x_opt ≈ [0.25, -0.5] atol=1e-3
 
         saved = JLD2.load(result.artifact_path)
-        @test saved["schema"] == "fiber_playground_freeform_result_v1"
+        @test saved["schema"] == "fiber_exploration_freeform_result_v1"
         @test saved["cost_final"] < saved["cost_initial"]
         @test saved["x_opt"] ≈ [0.25, -0.5] atol=1e-3
         @test saved["parameter_names"] == ("chirp", "energy_scale")
@@ -132,10 +132,10 @@ end
         @test occursin("distance", read(saved["diagnostics_delta_csv"], String))
 
         run_manifest = JSON3.read(read(result.manifest_json, String))
-        @test run_manifest.schema == "fiber_playground_freeform_manifest_v1"
+        @test run_manifest.schema == "fiber_exploration_freeform_manifest_v1"
         @test run_manifest.contract_name == "freeform_quadratic_test"
         @test run_manifest.run_tag == "unit test"
-        @test run_manifest.run_note == "quadratic smoke for playground runner"
+        @test run_manifest.run_note == "quadratic smoke for exploration runner"
         @test run_manifest.parameter_names == ["chirp", "energy_scale"]
         @test run_manifest.parameters_opt.chirp ≈ 0.25 atol=1e-3
         @test run_manifest.parameter_metadata.chirp.unit == "rad"
@@ -154,7 +154,7 @@ end
               haskey(run_manifest.custom_artifacts, "variable_summary")
         index_text = read(result.run_index, String)
         @test occursin("freeform_quadratic_test", index_text)
-        @test occursin("quadratic smoke for playground runner", index_text)
+        @test occursin("quadratic smoke for exploration runner", index_text)
     end
 
     @testset "adversarial contract failures are explicit" begin
@@ -167,7 +167,7 @@ end
             execution = Dict{String,Any}(
                 "initial" => [0.0, 1.0],
                 "parameter_names" => ["a", "b"],
-                "loss_gradient" => "playground_loss_gradient",
+                "loss_gradient" => "exploration_loss_gradient",
                 "context_function" => nothing,
                 "artifact_function" => nothing,
                 "source_path" => "execution.jl",
@@ -175,7 +175,7 @@ end
             merge!(execution, execution_overrides)
             open(joinpath(dir, "contract.json"), "w") do io
                 JSON3.pretty(io, Dict(
-                    "schema" => "fiber_playground_contract_v1",
+                    "schema" => "fiber_exploration_contract_v1",
                     "name" => "bad_contract",
                     "execution" => execution,
                     "solver" => Dict("max_iter" => 1),
@@ -186,45 +186,45 @@ end
             return dir
         end
 
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(""))
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return 0.0, [1.0]\nend\n"
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(""))
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return 0.0, [1.0]\nend\n"
         ))
         try
-            check_playground_contract_bundle(bad_contract(
-                "function playground_loss_gradient(x, context)\n    return 0.0, [1.0]\nend\n"
+            check_exploration_contract_bundle(bad_contract(
+                "function exploration_loss_gradient(x, context)\n    return 0.0, [1.0]\nend\n"
             ))
         catch err
             @test occursin("expected 2 for parameters [a, b]", sprint(showerror, err))
         end
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return Inf, [1.0, 1.0]\nend\n"
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return Inf, [1.0, 1.0]\nend\n"
         ))
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return 0.0, [NaN, 1.0]\nend\n"
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return 0.0, [NaN, 1.0]\nend\n"
         ))
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
             execution_overrides=Dict("parameter_names" => ["only_one"]),
         ))
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
             execution_overrides=Dict("parameter_metadata" => Dict("missing" => Dict("unit" => "m"))),
         ))
-        @test_throws ArgumentError check_playground_contract_bundle(bad_contract(
-            "function playground_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
+        @test_throws ArgumentError check_exploration_contract_bundle(bad_contract(
+            "function exploration_loss_gradient(x, context)\n    return 0.0, [1.0, 1.0]\nend\n";
             execution_overrides=Dict("parameter_metadata" => Dict("a" => Dict("scale" => 0.0))),
         ))
-        artifact_failure = run_playground_contract_bundle(bad_contract(
+        artifact_failure = run_exploration_contract_bundle(bad_contract(
             """
-            function playground_loss_gradient(x, context)
+            function exploration_loss_gradient(x, context)
                 return sum(abs2, x), 2 .* x
             end
-            function playground_artifacts(result, context, output_dir)
+            function exploration_artifacts(result, context, output_dir)
                 error("artifact exploded")
             end
             """;
-            execution_overrides=Dict("artifact_function" => "playground_artifacts"),
+            execution_overrides=Dict("artifact_function" => "exploration_artifacts"),
         ))
         @test isfile(artifact_failure.artifact_path)
         @test isfile(artifact_failure.manifest_json)

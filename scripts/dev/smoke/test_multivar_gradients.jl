@@ -14,7 +14,7 @@ Tests (run in order; first failure exits nonzero):
      identical arrays for phi_opt, amp_opt, E_opt, convergence_history, and
      all metadata fields.
 
-Run on burst VM (CLAUDE.md Rule 1 — all simulation work).
+Run on burst VM (AGENTS.md Rule 1 — all simulation work).
 
     julia -t auto --project=. scripts/test_multivar_gradients.jl
 """

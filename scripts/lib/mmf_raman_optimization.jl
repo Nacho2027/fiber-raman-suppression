@@ -680,7 +680,7 @@ function run_mmf_baseline(;
         λ_boundary = λ_boundary,
     )
 
-    # ── MANDATORY standard image set (CLAUDE.md rule, 2026-04-17) ─────────
+    # ── MANDATORY standard image set (AGENTS.md rule, 2026-04-17) ─────────
     # Every driver producing phi_opt MUST call save_standard_set. Uses the
     # fundamental-mode slice internally (mode_idx=1) — appropriate for MMF
     # since LP01 is the dominant detected mode. phi_opt is a Vector{Float64}
