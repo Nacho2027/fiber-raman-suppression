@@ -15,6 +15,7 @@ Human-facing docs for the FiberLab API.
 | Doc | Use it for |
 |---|---|
 | [Public API](reference/api.md) | Notebook-facing types and functions |
+| [Julia File Inventory](reference/julia-file-inventory.md) | What each tracked Julia file does and what still needs cleanup |
 | [Repo Navigation](architecture/repo-navigation.md) | Where code belongs |
 | [Output Format](architecture/output-format.md) | Result bundles and artifacts |
 | [Research Verdicts](research-verdicts.md) | Which research paths are kept, deferred, or archived |
