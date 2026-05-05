@@ -11,7 +11,7 @@ using JSON3
 using JLD2
 using Printf
 using Statistics
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
 
@@ -32,7 +32,7 @@ end
 
 function _load_export_run(artifact::AbstractString)
     try
-        return MultiModeNoise.load_run(artifact)
+        return FiberLab.load_run(artifact)
     catch err
         sidecar_path = _multivar_slm_sidecar_path(artifact)
         sidecar_path === nothing && rethrow()
@@ -264,8 +264,8 @@ function export_run_bundle(input_path::AbstractString, output_dir::AbstractStrin
         "time_window_ps" => Float64(loaded.time_window_ps),
         "converged" => getproperty(loaded, :converged),
         "iterations" => getproperty(loaded, :iterations),
-        "J_initial_dB" => MultiModeNoise.lin_to_dB(getproperty(loaded, :J_before)),
-        "J_final_dB" => MultiModeNoise.lin_to_dB(getproperty(loaded, :J_after)),
+        "J_initial_dB" => FiberLab.lin_to_dB(getproperty(loaded, :J_before)),
+        "J_final_dB" => FiberLab.lin_to_dB(getproperty(loaded, :J_after)),
         "sidecar" => Dict{String,Any}(String(k) => v for (k, v) in pairs(loaded.sidecar)),
         "phase_csv" => basename(phase_csv),
         "amplitude" => amplitude_meta,
@@ -290,7 +290,7 @@ function export_run_bundle(input_path::AbstractString, output_dir::AbstractStrin
         println(io, "- Fiber: `", loaded.fiber_name, "`")
         println(io, "- L: `", loaded.L_m, " m`")
         println(io, "- P: `", loaded.P_cont_W, " W`")
-        println(io, "- Final objective: `", @sprintf("%.2f dB", MultiModeNoise.lin_to_dB(loaded.J_after)), "`")
+        println(io, "- Final objective: `", @sprintf("%.2f dB", FiberLab.lin_to_dB(loaded.J_after)), "`")
         println(io, "- Converged: `", loaded.converged, "` in `", loaded.iterations, "` iterations")
         println(io)
         println(io, "Files:")

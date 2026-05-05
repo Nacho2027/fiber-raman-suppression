@@ -2,11 +2,11 @@
 # Compatibility shim for the canonical output-format helpers.
 #
 # The implementation now lives in `src/io/results.jl` and is loaded through the
-# `MultiModeNoise` package. This file remains include-able so older scripts,
+# `FiberLab` package. This file remains include-able so older scripts,
 # tests, and docs examples keep working.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-using MultiModeNoise: OUTPUT_FORMAT_SCHEMA_VERSION, load_run, save_run
+using FiberLab: OUTPUT_FORMAT_SCHEMA_VERSION, load_run, save_run
 
 if abspath(PROGRAM_FILE) == @__FILE__
     mktempdir() do dir

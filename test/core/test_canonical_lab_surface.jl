@@ -50,7 +50,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
         time_window_ps = 0.08,
         J_before = 1e-2,
         J_after = 1e-4,
-        delta_J_dB = MultiModeNoise.lin_to_dB(1e-4) - MultiModeNoise.lin_to_dB(1e-2),
+        delta_J_dB = FiberLab.lin_to_dB(1e-4) - FiberLab.lin_to_dB(1e-2),
         grad_norm = 1e-6,
         converged = true,
         iterations = 12,
@@ -71,7 +71,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     )
 
     artifact = joinpath(run_dir, "opt_result.jld2")
-    MultiModeNoise.save_run(artifact, payload)
+    FiberLab.save_run(artifact, payload)
     sidecar_path = joinpath(run_dir, "opt_result.json")
     sidecar_payload = copy(JSON3.read(read(sidecar_path, String), Dict{String,Any}))
     sidecar_payload["timestamp_utc"] = "2026-04-26T22:00:00Z"
@@ -123,8 +123,8 @@ kind = "lbfgs"
     @test summary.converged
     @test length(summary.trust_reports) == 1
     @test summary.quality == suppression_quality_label(payload.J_after; uppercase=true)
-    @test summary.J_after_dB ≈ MultiModeNoise.lin_to_dB(payload.J_after)
-    @test summary.schema_version == MultiModeNoise.OUTPUT_FORMAT_SCHEMA_VERSION
+    @test summary.J_after_dB ≈ FiberLab.lin_to_dB(payload.J_after)
+    @test summary.schema_version == FiberLab.OUTPUT_FORMAT_SCHEMA_VERSION
 
     direct_summary = canonical_run_summary(run_dir)
     @test direct_summary.result_file == artifact
@@ -165,7 +165,7 @@ kind = "lbfgs"
     @test any(row -> row.kind == :run && row.path == artifact, index.rows)
     @test any(row -> row.kind == :sweep && row.path == sweep_summary_path, index.rows)
     run_row = only(filter(row -> row.kind == :run, index.rows))
-    @test run_row.J_after_dB ≈ MultiModeNoise.lin_to_dB(payload.J_after)
+    @test run_row.J_after_dB ≈ FiberLab.lin_to_dB(payload.J_after)
     @test run_row.standard_images_complete
     @test run_row.config_id == "smf28_L2m_P0p2W"
     @test run_row.regime == "single_mode"
@@ -234,7 +234,7 @@ kind = "lbfgs"
     mv_dir = joinpath(mv_tmp, "mv_run")
     mkpath(mv_dir)
     mv_artifact = joinpath(mv_dir, "opt_result.jld2")
-    MultiModeNoise.save_run(mv_artifact, payload)
+    FiberLab.save_run(mv_artifact, payload)
     rm(joinpath(mv_dir, "opt_result.json"); force=true)
     write(joinpath(mv_dir, "opt_slm.json"), "{\"generated_at\":\"2026-04-27T00:00:00\"}\n")
     cp(resolve_experiment_config_path("smf28_phase_amplitude_energy_poc"), joinpath(mv_dir, "run_config.toml"); force=true)
@@ -339,14 +339,14 @@ kind = "lbfgs"
         (start_idx = 3, sigma = 1.0, J_final = NaN, converged = false),
     ])
     @test length(ms_points) == 3
-    @test ms_points[1].J_dB ≈ MultiModeNoise.lin_to_dB(1e-4)
+    @test ms_points[1].J_dB ≈ FiberLab.lin_to_dB(1e-4)
     @test ms_points[2].J_dB == -42.0
     @test isnan(ms_points[3].J_dB)
 
     ms_spread = multistart_spread_summary(ms_points)
     @test ms_spread.n_valid == 2
     @test ms_spread.best_dB == -42.0
-    @test ms_spread.worst_dB ≈ MultiModeNoise.lin_to_dB(1e-4)
+    @test ms_spread.worst_dB ≈ FiberLab.lin_to_dB(1e-4)
     @test occursin("single basin", ms_spread.landscape)
 
     rendered = sprint(io -> render_run_summary(summary; io=io))
@@ -430,7 +430,7 @@ index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_ra
         amp_opt = reshape([0.9, 1.0, 1.1, 1.0, 0.95, 1.0, 1.05, 1.0], 8, 1),
     )
     amp_artifact = joinpath(amp_run_dir, "amp_result.jld2")
-    MultiModeNoise.save_run(amp_artifact, amp_payload)
+    FiberLab.save_run(amp_artifact, amp_payload)
 
     amp_export_dir = joinpath(amp_run_dir, "export_handoff")
     amp_exported = export_run_bundle(amp_run_dir, amp_export_dir)

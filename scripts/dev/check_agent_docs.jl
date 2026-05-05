@@ -94,6 +94,23 @@ function _check_short_agents!(errors::Vector{String}, root::AbstractString)
     end
 end
 
+function _check_public_readme_surface!(errors::Vector{String}, root::AbstractString)
+    relpath = "README.md"
+    text = _read(root, relpath)
+    first_screen = join(first(split(text, '\n'), min(40, length(split(text, '\n')))), "\n")
+    retired_backend = "Multi" * "Mode" * "Noise"
+    retired_import = "using " * retired_backend
+
+    startswith(text, "# FiberLab") ||
+        push!(errors, "`README.md` must open with the public product name `# FiberLab`")
+    occursin("using FiberLab", first_screen) ||
+        push!(errors, "`README.md` first screen must show the notebook-facing `using FiberLab` API")
+    !occursin(retired_import, first_screen) ||
+        push!(errors, "`README.md` first screen exposes the retired backend import")
+    !occursin(retired_backend, first_screen) ||
+        push!(errors, "`README.md` first screen should not center the inherited backend name")
+end
+
 function _check_agent_doc_registry!(errors::Vector{String}, root::AbstractString)
     readme = _read(root, "agent-docs/README.md")
     agent_root = joinpath(root, "agent-docs")
@@ -148,6 +165,7 @@ function check_agent_docs(; root::AbstractString=DEFAULT_ROOT)
     _check_required_files!(errors, root)
     isempty(errors) || return errors
     _check_short_agents!(errors, root)
+    _check_public_readme_surface!(errors, root)
     _check_agent_doc_registry!(errors, root)
     _check_current_context_index!(errors, root)
     _check_no_wikilinks_or_conflicts!(errors, root)

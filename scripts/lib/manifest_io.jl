@@ -9,7 +9,7 @@ defined here.
 if !(@isdefined _MANIFEST_IO_JL_LOADED)
 const _MANIFEST_IO_JL_LOADED = true
 
-using MultiModeNoise: read_run_manifest, upsert_run_manifest_entry!,
+using FiberLab: read_run_manifest, upsert_run_manifest_entry!,
                       write_run_manifest, update_run_manifest_entry
 
 read_manifest(args...; kwargs...) = read_run_manifest(args...; kwargs...)

@@ -1,6 +1,6 @@
 """
 Multimode setup helper for Session C — wraps the existing GRIN fiber builder
-(`MultiModeNoise.get_disp_fiber_params`) and returns the tuple of objects
+(`FiberLab.get_disp_fiber_params`) and returns the tuple of objects
 needed by the MMF Raman-phase optimizer.
 
 This is the MMF counterpart to `scripts/common.jl::setup_raman_problem`.
@@ -18,7 +18,7 @@ using LinearAlgebra
 using FFTW
 using Logging
 using Statistics
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(@__DIR__, "mmf_fiber_presets.jl"))
 
@@ -143,7 +143,7 @@ Returns a NamedTuple with fields:
 - `auto_time_window = true` : conservatively upsize undersized windows
 
 # Notes
-- Uses `MultiModeNoise.get_disp_sim_params` and `get_disp_fiber_params` — both
+- Uses `FiberLab.get_disp_sim_params` and `get_disp_fiber_params` — both
   already exist in `src/helpers/helpers.jl`. No modifications to `src/`.
 - Auto-sizing of time_window / Nt is NOT performed here because the MMF has
   mode-dependent β₂; the caller is responsible for choosing a safe window.
@@ -181,13 +181,13 @@ function setup_mmf_raman_problem(;
     w = w ./ norm(w)
 
     function _build_with_window(Nt_local::Int, time_window_local::Real)
-        sim_local = MultiModeNoise.get_disp_sim_params(λ0, M, Nt_local, time_window_local, p.β_order)
+        sim_local = FiberLab.get_disp_sim_params(λ0, M, Nt_local, time_window_local, p.β_order)
         mkpath(fiber_cache_dir)
         cache_fname_local = joinpath(
             fiber_cache_dir,
             @sprintf("mmf_%s_nt%d_tw%g.npz", String(preset), Nt_local, time_window_local),
         )
-        fiber_local = MultiModeNoise.get_disp_fiber_params(
+        fiber_local = FiberLab.get_disp_fiber_params(
             L_fiber, p.radius, p.core_NA, p.alpha, p.nx, sim_local, cache_fname_local;
             spatial_window = p.spatial_window,
             fR = p.fR,
@@ -195,7 +195,7 @@ function setup_mmf_raman_problem(;
             τ2 = p.τ2,
         )
         fiber_local["L"] = L_fiber
-        _, uω0_local = MultiModeNoise.get_initial_state(
+        _, uω0_local = FiberLab.get_initial_state(
             w, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim_local
         )
         return sim_local, fiber_local, uω0_local, cache_fname_local

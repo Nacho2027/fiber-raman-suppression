@@ -33,7 +33,7 @@ using Statistics
 using Logging
 ENV["MPLBACKEND"] = "Agg"
 using PyPlot
-using MultiModeNoise
+using FiberLab
 using Optim
 
 include(joinpath(@__DIR__, "common.jl"))
@@ -412,7 +412,7 @@ function cost_and_gradient_amplitude(A, uω0, fiber, sim, band_mask;
     # Forward solve — deepcopy fiber to avoid mutation across calls
     fiber_local = deepcopy(fiber)
     fiber_local["zsave"] = nothing
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_local, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_local, sim)
     ũω = sol["ode_sol"]
 
     # Get output field in lab frame
@@ -425,7 +425,7 @@ function cost_and_gradient_amplitude(A, uω0, fiber, sim, band_mask;
     J_raman, λωL = spectral_band_cost(uωf, band_mask)
 
     # Adjoint solve: propagate λ backward from L to 0
-    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber_local, sim)
+    sol_adj = FiberLab.solve_adjoint_disp_mmf(λωL, ũω, fiber_local, sim)
     λ0 = sol_adj(0)
 
     # Chain rule for amplitude: δu₀ = uω0 · δA
@@ -681,7 +681,7 @@ function print_solution_report(A_opt, uω0, fiber, sim, band_mask, cost_breakdow
     uω0_shaped = uω0 .* A_opt
     fiber_check = deepcopy(fiber)
     fiber_check["zsave"] = [fiber["L"]]
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_check, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_check, sim)
     utf = sol["ut_z"][end, :, :]
     bc_ok, edge_frac = check_boundary_conditions(utf, sim)
     status = bc_ok ? "OK" : "WARNING"
@@ -696,7 +696,7 @@ function print_solution_report(A_opt, uω0, fiber, sim, band_mask, cost_breakdow
     push!(report, "║                  Solution Quality Report                    ║")
     push!(report, "╠══════════════════════════════════════════════════════════════╣")
     push!(report, @sprintf("║  Raman cost (J_raman):    %12.6e                     ║", cost_breakdown["J_raman"]))
-    push!(report, @sprintf("║  Raman cost (dB):         %12.2f                     ║", MultiModeNoise.lin_to_dB(cost_breakdown["J_raman"])))
+    push!(report, @sprintf("║  Raman cost (dB):         %12.2f                     ║", FiberLab.lin_to_dB(cost_breakdown["J_raman"])))
     push!(report, @sprintf("║  Energy penalty:          %12.6e                     ║", cost_breakdown["J_energy"]))
     push!(report, @sprintf("║  Tikhonov penalty:        %12.6e                     ║", cost_breakdown["J_tikhonov"]))
     push!(report, @sprintf("║  TV penalty:              %12.6e                     ║", cost_breakdown["J_tv"]))
@@ -809,7 +809,7 @@ function run_amplitude_optimization(;
     # Boundary diagnostic
     fiber_bc = deepcopy(fiber)
     fiber_bc["zsave"] = [fiber["L"]]
-    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
+    sol_bc = FiberLab.solve_disp_mmf(uω0_opt, fiber_bc, sim)
     plot_boundary_diagnostic(sol_bc, sim, fiber_bc)
     savefig("$(save_prefix)_boundary.png", dpi=300)
     @info "Saved boundary diagnostic to $(save_prefix)_boundary.png"

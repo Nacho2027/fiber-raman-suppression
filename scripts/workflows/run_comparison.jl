@@ -34,7 +34,7 @@ using Logging
 using Dates
 ENV["MPLBACKEND"] = "Agg"  # Non-interactive backend for headless execution
 using PyPlot
-using MultiModeNoise
+using FiberLab
 using Optim
 using JLD2
 using JSON3
@@ -95,8 +95,8 @@ end
 manifest_path = joinpath("results", "raman", "manifest.json")
 @assert isfile(manifest_path) "manifest.json not found at $manifest_path — re-run section 2"
 
-manifest_raw = MultiModeNoise.read_run_manifest(manifest_path)
-all_runs = MultiModeNoise.load_canonical_runs(manifest_path)
+manifest_raw = FiberLab.read_run_manifest(manifest_path)
+all_runs = FiberLab.load_canonical_runs(manifest_path)
 @info "Loaded $(length(all_runs)) runs from manifest"
 @assert length(all_runs) >= 5 "Expected ≥ 5 runs, got $(length(all_runs)) — check manifest.json"
 
@@ -142,7 +142,7 @@ for entry in manifest_raw
     end
     push!(updated_manifest, entry_dict)
 end
-MultiModeNoise.write_run_manifest(manifest_path, updated_manifest)
+FiberLab.write_run_manifest(manifest_path, updated_manifest)
 @info "Updated manifest.json with soliton_number_N for $(length(updated_manifest)) entries"
 
 # ─────────────────────────────────────────────────────────────────────────────

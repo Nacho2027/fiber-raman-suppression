@@ -5,7 +5,7 @@ const _EXT_INTEGRATION_ROOT = isdefined(Main, :_ROOT) ?
     normpath(joinpath(@__DIR__, "..", ".."))
 
 if !isdefined(Main, :load_experiment_spec)
-    using MultiModeNoise
+    using FiberLab
     include(joinpath(_EXT_INTEGRATION_ROOT, "scripts", "lib", "experiment_spec.jl"))
 end
 if !isdefined(Main, :run_experiment_main)

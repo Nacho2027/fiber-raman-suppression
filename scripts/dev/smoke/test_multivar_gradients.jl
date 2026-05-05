@@ -27,7 +27,7 @@ using Logging
 using Test
 
 ENV["MPLBACKEND"] = "Agg"
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(@__DIR__, "..", "..", "lib", "multivar_optimization.jl"))
 

@@ -818,7 +818,7 @@ end
 
 function _scalar_extension_output(uω0, physical_A, φ, fiber, sim)
     u_shaped = @. physical_A * cis(φ) * uω0
-    sol = MultiModeNoise.solve_disp_mmf(u_shaped, fiber, sim)
+    sol = FiberLab.solve_disp_mmf(u_shaped, fiber, sim)
     L = fiber["L"]
     Dω = fiber["Dω"]
     ũω_L = sol["ode_sol"](L)
@@ -1231,7 +1231,7 @@ function run_scalar_gain_tilt_search(;
         J0_custom, _ = _scalar_extension_cost_with_regularizers(custom_cost, context0, cfg_linear)
         J0_custom, Float64(J_opt)
     end
-    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after_lin) - MultiModeNoise.lin_to_dB(J_before)
+    ΔJ_dB = FiberLab.lin_to_dB(J_after_lin) - FiberLab.lin_to_dB(J_before)
 
     outcome = (
         result = result,
@@ -1448,7 +1448,7 @@ function run_vector_phase_extension_search(;
     )
     J_before, _ = _scalar_extension_cost_with_regularizers(custom_cost, context0, cfg)
     J_after_lin = Float64(J_opt)
-    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after_lin) - MultiModeNoise.lin_to_dB(J_before)
+    ΔJ_dB = FiberLab.lin_to_dB(J_after_lin) - FiberLab.lin_to_dB(J_before)
 
     outcome = (
         result = result,

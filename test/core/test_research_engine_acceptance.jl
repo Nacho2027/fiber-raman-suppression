@@ -1,5 +1,5 @@
 using Test
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "results_index.jl"))
@@ -21,7 +21,7 @@ function _acceptance_payload()
         time_window_ps = 1.0,
         J_before = 1e-2,
         J_after = 1e-4,
-        delta_J_dB = MultiModeNoise.lin_to_dB(1e-4) - MultiModeNoise.lin_to_dB(1e-2),
+        delta_J_dB = FiberLab.lin_to_dB(1e-4) - FiberLab.lin_to_dB(1e-2),
         grad_norm = 1e-6,
         converged = true,
         iterations = 1,
@@ -68,7 +68,7 @@ end
         artifact_path = string(save_prefix, "_result.jld2")
         config_copy = joinpath(run_dir, "run_config.toml")
 
-        MultiModeNoise.save_run(artifact_path, _acceptance_payload())
+        FiberLab.save_run(artifact_path, _acceptance_payload())
         cp(supported_spec.config_path, config_copy; force=true)
         write(string(save_prefix, "_trust.md"), "# trust\n\nPASS\n")
         _write_standard_image_placeholders(save_prefix)

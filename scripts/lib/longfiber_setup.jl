@@ -1,7 +1,7 @@
 """
 Long-Fiber Raman Suppression — Problem Setup (Phase 16 / Session F)
 
-Provides a thin, explicit wrapper around MultiModeNoise's simulation primitives
+Provides a thin, explicit wrapper around FiberLab's simulation primitives
 for long-fiber runs (L ≥ 50 m) where `setup_raman_problem` in `scripts/common.jl`
 would silently auto-override the (Nt, time_window) pair chosen by the research
 brief (D-F-02).
@@ -32,7 +32,7 @@ using Interpolations
 using Printf
 using Logging
 using LinearAlgebra
-using MultiModeNoise
+using FiberLab
 
 # scripts/common.jl gives us `FIBER_PRESETS` and `check_boundary_conditions`
 include(joinpath(@__DIR__, "common.jl"))
@@ -156,7 +156,7 @@ function longfiber_interpolate_phi(phi_old, Nt_old, tw_old_ps, Nt_new, tw_new_ps
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public: setup_longfiber_problem — direct MultiModeNoise calls, NO auto-size
+# Public: setup_longfiber_problem — direct FiberLab calls, NO auto-size
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
@@ -245,13 +245,13 @@ function setup_longfiber_problem(;
     @info @sprintf("Long-fiber setup: %s, L=%.1f m, P=%.3f W, Nt=%d, tw=%.1f ps, β_order=%d",
         fiber_label, L_fiber, P_cont, Nt, time_window, β_order)
 
-    # Direct MultiModeNoise calls — bypasses setup_raman_problem auto-sizing.
-    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
-    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
+    # Direct FiberLab calls — bypasses setup_raman_problem auto-sizing.
+    sim = FiberLab.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
+    fiber = FiberLab.get_disp_fiber_params_user_defined(
         L_fiber, sim; fR = fR_used, gamma_user = γ, betas_user = βs,
     )
     u0_modes = ones(M) / √M
-    _, uω0 = MultiModeNoise.get_initial_state(
+    _, uω0 = FiberLab.get_initial_state(
         u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
     )
 
@@ -260,9 +260,9 @@ function setup_longfiber_problem(;
     band_mask = Δf_fft .< raman_threshold
 
     # POSTCONDITIONS — the override we're working around.
-    # MultiModeNoise.get_disp_sim_params stores sim["Δt"] and sim["time_window"] in
+    # FiberLab.get_disp_sim_params stores sim["Δt"] and sim["time_window"] in
     # PICOSECONDS (see src/helpers/helpers.jl:52). Do not multiply by 1e12.
-    @assert sim["Nt"] == Nt "sim[Nt] ($(sim["Nt"])) ≠ requested Nt ($Nt) — MultiModeNoise override?"
+    @assert sim["Nt"] == Nt "sim[Nt] ($(sim["Nt"])) ≠ requested Nt ($Nt) — FiberLab override?"
     tw_actual_ps = sim["Δt"] * Nt
     @assert isapprox(tw_actual_ps, float(time_window); atol = 1e-6) "sim time_window ($(tw_actual_ps) ps) ≠ requested ($(time_window) ps)"
     @assert any(band_mask) "Raman band mask is empty — check raman_threshold and grid"

@@ -414,7 +414,7 @@ function run_reduced_phase_optimization(;
         λ_boundary=0.0,
         log_cost=false,
     )
-    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
+    ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
     uω0_opt = @. uω0 * cis(φ_after)
     ut0_opt = ifft(uω0_opt, 1)
@@ -423,7 +423,7 @@ function run_reduced_phase_optimization(;
 
     fiber_bc = deepcopy(fiber)
     fiber_bc["zsave"] = [fiber["L"]]
-    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
+    sol_bc = FiberLab.solve_disp_mmf(uω0_opt, fiber_bc, sim)
     bc_output_ok, bc_output_frac = check_raw_temporal_edges(sol_bc["ut_z"][end, :, :];
         threshold=TRUST_THRESHOLDS.edge_frac_pass)
     uωf = sol_bc["uω_z"][end, :, :]
@@ -466,7 +466,7 @@ function run_reduced_phase_optimization(;
 
     convergence_history = log_cost ?
         collect(Optim.f_trace(result)) :
-        MultiModeNoise.lin_to_dB.(Optim.f_trace(result))
+        FiberLab.lin_to_dB.(Optim.f_trace(result))
     result_payload = build_raman_result_payload(;
         run_meta = run_meta,
         run_tag = (@isdefined(RUN_TAG) ? RUN_TAG : "interactive"),
@@ -495,7 +495,7 @@ function run_reduced_phase_optimization(;
         band_mask = band_mask,
     )
     jld2_path = "$(save_prefix)_result.jld2"
-    sidecar_path = MultiModeNoise.save_run(jld2_path, result_payload)
+    sidecar_path = FiberLab.save_run(jld2_path, result_payload)
     manifest_path = joinpath("results", "raman", "manifest.json")
     update_manifest_entry(manifest_path, build_raman_manifest_entry(result_payload, jld2_path))
 

@@ -12,7 +12,7 @@ const _EXPLORATORY_ARTIFACTS_JL_LOADED = true
 using FFTW
 using JLD2
 using JSON3
-using MultiModeNoise
+using FiberLab
 using PyPlot
 using Statistics
 

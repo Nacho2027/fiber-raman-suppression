@@ -31,7 +31,7 @@ using Statistics
 using Logging
 using Dates
 ENV["MPLBACKEND"] = "Agg"
-using MultiModeNoise
+using FiberLab
 using Optim
 using JLD2
 using JSON3
@@ -379,7 +379,7 @@ function cost_and_gradient_multivar(
     # Forward solve
     fiber_local = fiber  # shared by reference — we do NOT mutate it
     # Ensure zsave=nothing is honored (caller sets it once per sweep)
-    sol = MultiModeNoise.solve_disp_mmf(u_shaped, fiber_local, sim)
+    sol = FiberLab.solve_disp_mmf(u_shaped, fiber_local, sim)
     ũω = sol["ode_sol"]
 
     # Lift to lab frame at L
@@ -393,7 +393,7 @@ function cost_and_gradient_multivar(
     J_raman, λωL = spectral_band_cost(uωf, band_mask)
 
     # Adjoint backward solve
-    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber_local, sim)
+    sol_adj = FiberLab.solve_adjoint_disp_mmf(λωL, ũω, fiber_local, sim)
     λ0 = sol_adj(0)
 
     # Gradient blocks (derivations §3–5)
@@ -1119,7 +1119,7 @@ function run_multivar_optimization(;
     # Evaluate the optimum cost on linear scale for fair dB comparison
     cfg_linear2 = deepcopy(outcome.cfg); cfg_linear2.log_cost = false
     J_after_lin, _, _ = cost_and_gradient_multivar(outcome.x_opt, uω0, fiber, sim, band_mask, cfg_linear2; E_ref=E_ref)
-    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after_lin) - MultiModeNoise.lin_to_dB(J_before)
+    ΔJ_dB = FiberLab.lin_to_dB(J_after_lin) - FiberLab.lin_to_dB(J_before)
 
     # Convergence history
     conv = if outcome.cfg.log_cost
@@ -1130,7 +1130,7 @@ function run_multivar_optimization(;
         end
     else
         try
-            MultiModeNoise.lin_to_dB.(Optim.f_trace(outcome.result))
+            FiberLab.lin_to_dB.(Optim.f_trace(outcome.result))
         catch
             Float64[]
         end
@@ -1180,8 +1180,8 @@ function run_multivar_optimization(;
         Nt, Nt * sim["Δt"],
         objective_spec.scalar_surface,
         outcome.iterations, elapsed, outcome.wall_time_s,
-        J_before, MultiModeNoise.lin_to_dB(J_before),
-        J_after_lin, MultiModeNoise.lin_to_dB(J_after_lin),
+        J_before, FiberLab.lin_to_dB(J_before),
+        J_after_lin, FiberLab.lin_to_dB(J_after_lin),
         ΔJ_dB,
         outcome.g_norm, outcome.diagnostics[:alpha],
         outcome.diagnostics[:A_extrema][1], outcome.diagnostics[:A_extrema][2],

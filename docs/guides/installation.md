@@ -17,7 +17,7 @@ This is a Julia-first repo. There is no supported Python package or Python API.
 ## First Julia API Check
 
 ```julia
-using MultiModeNoise
+using FiberLab
 
 fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
 experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))

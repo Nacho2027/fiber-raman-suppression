@@ -120,7 +120,7 @@ The FFT field uω has units √(J/bin). To get physical PSD:
 4. Multiply by pulse_rep_rate to convert from single-pulse ESD to average PSD [W/Hz]
 """
 function psd_from_uω(uω, p::YDFAParams)
-    # Convert MultiModeNoise FFT convention to physical ESD/PSD
+    # Convert FiberLab FFT convention to physical ESD/PSD
     uω_s = uω .* p.Nt .* p.dt
     ESD = abs2.(uω_s)
     return fftshift(ESD) .* p.pulse_rep_rate # W/Hz
@@ -174,7 +174,7 @@ the Yb cross-section spectra by loading from NPZ data files.
 """
 function get_YDFAParams(sim)
     pYDFA = YDFAParams(fs=sim["fs"], Δt=sim["Δt"], Nt=sim["Nt"])
-    xs = MultiModeNoise.get_ydfa_cross_sections(pYDFA.fs)
+    xs = FiberLab.get_ydfa_cross_sections(pYDFA.fs)
     pYDFA.σas .= xs["sigma_as"]
     pYDFA.σes .= xs["sigma_es"]
     return pYDFA

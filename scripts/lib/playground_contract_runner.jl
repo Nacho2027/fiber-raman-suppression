@@ -21,7 +21,7 @@ using Dates
 using JLD2
 using JSON3
 using LinearAlgebra
-using MultiModeNoise
+using FiberLab
 using Optim
 using Printf
 using PyPlot

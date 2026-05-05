@@ -563,7 +563,7 @@ end
     uω0, fiber, sim, band_mask, _, _ = make_test_problem()
     fiber_prop = deepcopy(fiber)
     fiber_prop["zsave"] = [0.0, fiber["L"]]
-    sol = MultiModeNoise.solve_disp_mmf(uω0, fiber_prop, sim)
+    sol = FiberLab.solve_disp_mmf(uω0, fiber_prop, sim)
     E_in = sum(abs2.(sol["uω_z"][1, :, :]))
     E_out = sum(abs2.(sol["uω_z"][end, :, :]))
     @test abs(E_out / E_in - 1) < 0.05  # 5% tolerance
@@ -689,7 +689,7 @@ end
 
         fiber_prop = deepcopy(fiber)
         fiber_prop["zsave"] = [0.0, L]
-        sol = MultiModeNoise.solve_disp_mmf(uω0, fiber_prop, sim)
+        sol = FiberLab.solve_disp_mmf(uω0, fiber_prop, sim)
 
         ut_in = sol["ut_z"][1, :, 1]
         ut_out = sol["ut_z"][end, :, 1]
@@ -722,7 +722,7 @@ end
         fiber_prop = deepcopy(fiber)
         z_points = collect(LinRange(0, L, 20))
         fiber_prop["zsave"] = z_points
-        sol = MultiModeNoise.solve_disp_mmf(uω0, fiber_prop, sim)
+        sol = FiberLab.solve_disp_mmf(uω0, fiber_prop, sim)
 
         # Check spectral energy at each z
         E_ref = sum(abs2.(sol["uω_z"][1, :, :]))
@@ -757,11 +757,11 @@ end
         # Propagate both
         fiber_lo_prop = deepcopy(fiber_lo)
         fiber_lo_prop["zsave"] = [L]
-        sol_lo = MultiModeNoise.solve_disp_mmf(uω0_lo, fiber_lo_prop, sim_lo)
+        sol_lo = FiberLab.solve_disp_mmf(uω0_lo, fiber_lo_prop, sim_lo)
 
         fiber_ref_prop = deepcopy(fiber_ref)
         fiber_ref_prop["zsave"] = [L]
-        sol_ref = MultiModeNoise.solve_disp_mmf(uω0_ref, fiber_ref_prop, sim_ref)
+        sol_ref = FiberLab.solve_disp_mmf(uω0_ref, fiber_ref_prop, sim_ref)
 
         uω_lo = sol_lo["uω_z"][end, :, :]
         uω_ref = sol_ref["uω_z"][end, :, :]
@@ -811,7 +811,7 @@ end
         # Propagate
         fiber_prop = deepcopy(fiber)
         fiber_prop["zsave"] = [0.0, L_fiber]
-        sol = MultiModeNoise.solve_disp_mmf(uω0, fiber_prop, sim)
+        sol = FiberLab.solve_disp_mmf(uω0, fiber_prop, sim)
 
         ut_in = sol["ut_z"][1, :, 1]
         ut_out = sol["ut_z"][end, :, 1]

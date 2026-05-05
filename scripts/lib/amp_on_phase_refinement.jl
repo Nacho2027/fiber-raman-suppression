@@ -9,7 +9,7 @@ the fixed phase and write the standard image/result set.
 using Dates
 using Logging
 using Printf
-using MultiModeNoise
+using FiberLab
 using Optim
 
 include(joinpath(@__DIR__, "raman_optimization.jl"))
@@ -19,10 +19,10 @@ include(joinpath(@__DIR__, "multivar_optimization.jl"))
 function _amp_on_phase_physics_cost_dB(uω0_shaped, fiber, sim, band_mask)
     fiber_eval = deepcopy(fiber)
     fiber_eval["zsave"] = [fiber_eval["L"]]
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_eval, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_eval, sim)
     uωf = sol["uω_z"][end, :, :]
     J, _ = spectral_band_cost(uωf, band_mask)
-    return MultiModeNoise.lin_to_dB(J)
+    return FiberLab.lin_to_dB(J)
 end
 
 function _write_amp_on_phase_summary(;
@@ -162,7 +162,7 @@ function run_amp_on_phase_refinement(;
         :band_mask => band_mask,
         :uomega0 => uω0_phase,
         :convergence_history => try
-            MultiModeNoise.lin_to_dB.(collect(Optim.f_trace(outcome.result)))
+            FiberLab.lin_to_dB.(collect(Optim.f_trace(outcome.result)))
         catch
             Float64[]
         end,

@@ -6,7 +6,7 @@ if !(@isdefined _RUN_ARTIFACTS_JL_LOADED)
 const _RUN_ARTIFACTS_JL_LOADED = true
 
 using JLD2
-using MultiModeNoise
+using FiberLab
 
 const REQUIRED_STANDARD_IMAGE_SUFFIXES = (
     "_phase_profile.png",
@@ -80,7 +80,7 @@ function suppression_quality_label(J_lin; uppercase::Bool=false)
     base = if ismissing(J_lin) || isnan(Float64(J_lin))
         "crashed"
     else
-        J_dB = MultiModeNoise.lin_to_dB(Float64(J_lin))
+        J_dB = FiberLab.lin_to_dB(Float64(J_lin))
         J_dB < -40 ? "excellent" : J_dB < -30 ? "good" : J_dB < -20 ? "acceptable" : "poor"
     end
     return uppercase ? Base.uppercase(base) : base
@@ -96,7 +96,7 @@ set used by maintained inspection and reporting workflows.
 function canonical_run_summary(path::AbstractString)
     artifact = resolve_run_artifact_path(path)
     loaded = try
-        MultiModeNoise.load_run(artifact)
+        FiberLab.load_run(artifact)
     catch err
         if isfile(string(_artifact_result_prefix(artifact), "_slm.json"))
             JLD2.load(artifact)
@@ -120,7 +120,7 @@ function canonical_run_summary(loaded; artifact::Union{Nothing,AbstractString}=n
     delta_J_dB = if hasproperty(loaded, :delta_J_dB)
         Float64(getproperty(loaded, :delta_J_dB))
     elseif isfinite(J_before) && isfinite(J_after)
-        MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
+        FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
     else
         NaN
     end
@@ -141,8 +141,8 @@ function canonical_run_summary(loaded; artifact::Union{Nothing,AbstractString}=n
         betas = collect(_artifact_loaded_field(loaded, :betas, Float64[])),
         J_before = J_before,
         J_after = J_after,
-        J_before_dB = isfinite(J_before) ? MultiModeNoise.lin_to_dB(J_before) : NaN,
-        J_after_dB = isfinite(J_after) ? MultiModeNoise.lin_to_dB(J_after) : NaN,
+        J_before_dB = isfinite(J_before) ? FiberLab.lin_to_dB(J_before) : NaN,
+        J_after_dB = isfinite(J_after) ? FiberLab.lin_to_dB(J_after) : NaN,
         delta_J_dB = delta_J_dB,
         grad_norm = Float64(_artifact_loaded_field(loaded, :grad_norm, NaN)),
         converged = _artifact_loaded_field(loaded, :converged, missing),
@@ -179,7 +179,7 @@ function sweep_aggregate_points(agg)
     points = NamedTuple[]
     for (i, L) in enumerate(L_vals), (j, P) in enumerate(P_vals)
         J_lin = J_grid[i, j]
-        J_dB = isnan(J_lin) ? NaN : MultiModeNoise.lin_to_dB(J_lin)
+        J_dB = isnan(J_lin) ? NaN : FiberLab.lin_to_dB(J_lin)
         push!(points, (
             L = L,
             P = P,
@@ -207,7 +207,7 @@ function multistart_result_points(ms_results)
     points = NamedTuple[]
     for r in ms_results
         J_raw = Float64(r.J_final)
-        J_dB = isnan(J_raw) ? NaN : (J_raw < 0 ? J_raw : MultiModeNoise.lin_to_dB(J_raw))
+        J_dB = isnan(J_raw) ? NaN : (J_raw < 0 ? J_raw : FiberLab.lin_to_dB(J_raw))
         push!(points, (
             start_idx = Int(r.start_idx),
             sigma = Float64(r.sigma),

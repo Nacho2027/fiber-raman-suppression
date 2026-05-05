@@ -17,12 +17,12 @@ using Printf
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 # We need common.jl's recommended_time_window. common.jl pulls in the full
-# MultiModeNoise module which is heavy but import-time only (no simulation).
-# Using MultiModeNoise first lets common.jl's `using MultiModeNoise` resolve.
+# FiberLab module which is heavy but import-time only (no simulation).
+# Using FiberLab first lets common.jl's `using FiberLab` resolve.
 # Printf must be imported at top-level BEFORE include(common.jl) because
 # common.jl uses @sprintf — macros resolve at parse time and need Printf
 # visible in the including scope (matches test/core/test_determinism.jl pattern).
-using MultiModeNoise
+using FiberLab
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "canonical_runs.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_spec.jl"))
@@ -376,12 +376,12 @@ include(joinpath(@__DIR__, "core", "test_playground_contract_runner.jl"))
 
             n1 = update_run_manifest_entry(manifest_path, Dict{String,Any}(
                 "result_file" => path_a,
-                "J_after_dB" => MultiModeNoise.lin_to_dB(payload_a.J_after),
+                "J_after_dB" => FiberLab.lin_to_dB(payload_a.J_after),
                 "fiber_name" => payload_a.fiber_name,
             ))
             n2 = update_run_manifest_entry(manifest_path, Dict{String,Any}(
                 "result_file" => path_b,
-                "J_after_dB" => MultiModeNoise.lin_to_dB(payload_b.J_after),
+                "J_after_dB" => FiberLab.lin_to_dB(payload_b.J_after),
                 "fiber_name" => payload_b.fiber_name,
             ))
 
@@ -493,7 +493,7 @@ include(joinpath(@__DIR__, "core", "test_playground_contract_runner.jl"))
             @test loaded.J_after == result.J_after
             @test loaded.metadata["run_id"] == "canon"
             @test loaded.metadata["fiber_preset"] == "SMF-28"
-            @test loaded.sidecar.J_final_dB ≈ MultiModeNoise.lin_to_dB(result.J_after)
+            @test loaded.sidecar.J_final_dB ≈ FiberLab.lin_to_dB(result.J_after)
 
             loaded_json = load_run(joinpath(dir, "canon.json"))
             @test loaded_json.run_tag == result.run_tag
@@ -522,9 +522,9 @@ include(joinpath(@__DIR__, "core", "test_playground_contract_runner.jl"))
         )
         u0_modes = [1.0]
 
-        @test_throws ArgumentError MultiModeNoise.get_initial_state(
+        @test_throws ArgumentError FiberLab.get_initial_state(
             u0_modes, 0.1, 185e-15, 80.5e6, "lorentzian", sim)
-        @test_throws ArgumentError MultiModeNoise.get_initial_state_gain_smf(
+        @test_throws ArgumentError FiberLab.get_initial_state_gain_smf(
             u0_modes, 0.1, 185e-15, 80.5e6, "lorentzian", sim)
     end
 

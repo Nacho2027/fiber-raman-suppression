@@ -123,7 +123,7 @@ function save_standard_set(
     fiber_evo["zsave"] = collect(range(0.0, fiber["L"], length=n_z_samples))
 
     uω0_shaped = @. uω0_base * cis(phi_opt)
-    sol_opt = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_evo, sim)
+    sol_opt = FiberLab.solve_disp_mmf(uω0_shaped, fiber_evo, sim)
 
     plot_spectral_evolution(sol_opt, sim, fiber_evo)
     path_evo = joinpath(output_dir, "$(tag)_evolution.png")
@@ -146,7 +146,7 @@ function save_standard_set(
     # ── (4) unshaped evolution waterfall (for comparison) ─────────────────
     if also_unshaped
         uω0_flat = uω0_base
-        sol_un = MultiModeNoise.solve_disp_mmf(uω0_flat, fiber_evo, sim)
+        sol_un = FiberLab.solve_disp_mmf(uω0_flat, fiber_evo, sim)
         plot_spectral_evolution(sol_un, sim, fiber_evo)
         path_un = joinpath(output_dir, "$(tag)_evolution_unshaped.png")
         savefig(path_un; dpi=300, bbox_inches="tight")

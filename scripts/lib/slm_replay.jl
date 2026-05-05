@@ -12,7 +12,7 @@ const _SLM_REPLAY_JL_LOADED = true
 
 using Dates
 using JSON3
-using MultiModeNoise
+using FiberLab
 using TOML
 
 const SLM_REPLAY_SCHEMA_VERSION = "1.0"

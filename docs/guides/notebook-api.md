@@ -3,7 +3,7 @@
 The notebook-facing layer starts with FiberLab objects:
 
 ```julia
-using MultiModeNoise
+using FiberLab
 
 fiber = Fiber(
     regime = :single_mode,

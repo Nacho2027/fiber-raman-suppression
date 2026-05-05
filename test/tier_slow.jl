@@ -7,7 +7,7 @@ using Optim
 
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
-using MultiModeNoise
+using FiberLab
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()

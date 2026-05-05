@@ -6,7 +6,7 @@ const _ADJOINT_CONTRACT_ROOT = isdefined(Main, :_ROOT) ?
     normpath(joinpath(@__DIR__, "..", ".."))
 
 if !isdefined(Main, :ReducedPhaseControlMap)
-    using MultiModeNoise
+    using FiberLab
     include(joinpath(_ADJOINT_CONTRACT_ROOT, "scripts", "lib", "adjoint_contracts.jl"))
 end
 if !isdefined(Main, :load_experiment_spec)

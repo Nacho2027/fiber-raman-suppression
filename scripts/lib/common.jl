@@ -32,7 +32,7 @@ const _COMMON_JL_LOADED = true
 using LinearAlgebra
 using FFTW
 using Logging
-using MultiModeNoise
+using FiberLab
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fiber presets — named single-mode fiber parameter sets
@@ -125,7 +125,7 @@ end
                                   pulse_shape="sech_sq") -> Float64
 
 Convert average power to pulse peak power using the same pulse-shape factors as
-`MultiModeNoise.get_initial_state`.
+`FiberLab.get_initial_state`.
 
 - `sech_sq`: `0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)`
 - `gaussian`: `0.939437 * P_cont / (pulse_fwhm * pulse_rep_rate)`
@@ -565,12 +565,12 @@ function _setup_single_mode_problem(;
         )
     end
 
-    sim = MultiModeNoise.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
-    fiber = MultiModeNoise.get_disp_fiber_params_user_defined(
+    sim = FiberLab.get_disp_sim_params(λ0, M, Nt, time_window, β_order)
+    fiber = FiberLab.get_disp_fiber_params_user_defined(
         L_fiber, sim; fR=fR, gamma_user=gamma_user, betas_user=betas_user
     )
     u0_modes = ones(M) / √M
-    _, uω0 = MultiModeNoise.get_initial_state(
+    _, uω0 = FiberLab.get_initial_state(
         u0_modes, P_cont, pulse_fwhm, pulse_rep_rate, pulse_shape, sim
     )
 

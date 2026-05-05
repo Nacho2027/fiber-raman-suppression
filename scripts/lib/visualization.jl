@@ -18,7 +18,7 @@ Cross-run comparison functions (Phase 6):
   - plot_convergence_overlay: J vs iteration overlay for all runs (dB scale)
   - plot_spectral_overlay: optimized output spectra per fiber type
 
-Requires: PyPlot, FFTW, LinearAlgebra, MultiModeNoise (for meshgrid, lin_to_dB, solve_disp_mmf)
+Requires: PyPlot, FFTW, LinearAlgebra, FiberLab (for meshgrid, lin_to_dB, solve_disp_mmf)
 
 Include guard: safe to include multiple times.
 """
@@ -509,7 +509,7 @@ function plot_spectral_evolution(sol, sim, fiber;
     λ_nm = C_NM_THZ ./ f_shifted
 
     # Build meshgrid
-    ΛΛ, ZZ = MultiModeNoise.meshgrid(λ_nm, z_display)
+    ΛΛ, ZZ = FiberLab.meshgrid(λ_nm, z_display)
 
     if isnothing(ax)
         fig, ax = subplots(figsize=figsize)
@@ -581,7 +581,7 @@ function plot_temporal_evolution(sol, sim, fiber;
         vmin, vmax = 0.0, maximum(P)
     end
 
-    TT, ZZ = MultiModeNoise.meshgrid(ts_ps, z_display)
+    TT, ZZ = FiberLab.meshgrid(ts_ps, z_display)
 
     if isnothing(ax)
         fig, ax = subplots(figsize=figsize)
@@ -925,7 +925,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
         uω0_shaped = @. uω0_base * cis(phi_col)
         fiber_plot = deepcopy(fiber)
         fiber_plot["zsave"] = [0.0, fiber["L"]]
-        sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_plot, sim)
+        sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_plot, sim)
         uωf = sol["uω_z"][end, :, :]
         utf = sol["ut_z"][end, :, :]
         ut_in = fft(uω0_shaped, 1)
@@ -1009,7 +1009,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
             sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
         end
         push!(J_values, J_val)
-        axs[1, col].annotate(@sprintf("%s = %.4f (%.1f dB)", objective_label, J_val, MultiModeNoise.lin_to_dB(J_val)),
+        axs[1, col].annotate(@sprintf("%s = %.4f (%.1f dB)", objective_label, J_val, FiberLab.lin_to_dB(J_val)),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
@@ -1070,8 +1070,8 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
 
     # META-02: J_before, J_after, and Delta-J annotation on the "After" spectral panel
     if length(J_values) == 2
-        J_before_dB = MultiModeNoise.lin_to_dB(J_values[1])
-        J_after_dB = MultiModeNoise.lin_to_dB(J_values[2])
+        J_before_dB = FiberLab.lin_to_dB(J_values[1])
+        J_after_dB = FiberLab.lin_to_dB(J_values[2])
         ΔJ_dB = J_after_dB - J_before_dB
         axs[1, 2].annotate(
             @sprintf("%s_before = %.1f dB\n%s_after  = %.1f dB\nDelta      = %.1f dB",
@@ -1128,7 +1128,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         uω0_shaped = uω0_base .* A_col
         fiber_plot = deepcopy(fiber)
         fiber_plot["zsave"] = [0.0, fiber["L"]]
-        sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_plot, sim)
+        sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_plot, sim)
         uωf = sol["uω_z"][end, :, :]
         utf = sol["ut_z"][end, :, :]
         ut_in = fft(uω0_shaped, 1)
@@ -1200,7 +1200,7 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
         axs[1, col].ticklabel_format(useOffset=false, style="plain", axis="x")
 
         J_val = sum(abs2.(r.uωf) .* band_mask) / sum(abs2.(r.uωf))
-        axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, MultiModeNoise.lin_to_dB(J_val)),
+        axs[1, col].annotate(@sprintf("J = %.4f (%.1f dB)", J_val, FiberLab.lin_to_dB(J_val)),
             xy=(0.05, 0.95), xycoords="axes fraction", va="top", fontsize=10,
             bbox=Dict("boxstyle" => "round,pad=0.3", "facecolor" => "white", "alpha" => 0.8))
 
@@ -1262,8 +1262,8 @@ function plot_amplitude_result_v2(A_before, A_after, uω0_base, fiber, sim,
     if length(col_data) == 2
         J_before_val = sum(abs2.(col_data[1].uωf) .* band_mask) / sum(abs2.(col_data[1].uωf))
         J_after_val = sum(abs2.(col_data[2].uωf) .* band_mask) / sum(abs2.(col_data[2].uωf))
-        J_before_dB = MultiModeNoise.lin_to_dB(J_before_val)
-        J_after_dB = MultiModeNoise.lin_to_dB(J_after_val)
+        J_before_dB = FiberLab.lin_to_dB(J_before_val)
+        J_after_dB = FiberLab.lin_to_dB(J_after_val)
         ΔJ_dB = J_after_dB - J_before_dB
         axs[1, 2].annotate(
             @sprintf("J_before = %.1f dB\nJ_after  = %.1f dB\nDelta-J  = %.1f dB", J_before_dB, J_after_dB, -ΔJ_dB),
@@ -1393,7 +1393,7 @@ function propagate_and_plot_evolution(uω0_shaped, fiber, sim;
 
     fiber_evo = deepcopy(fiber)
     fiber_evo["zsave"] = collect(LinRange(0, fiber["L"], n_zsave))
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber_evo, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_evo, sim)
 
     fig, axes = plot_combined_evolution(sol, sim, fiber_evo;
         title=title, kwargs...)
@@ -1701,7 +1701,7 @@ function plot_spectral_overlay(runs_fiber_group, fiber_type_label; save_path=not
 
         # --- Apply optimal phase and propagate ---
         uomega0_shaped = @. run["uomega0"] * cis(run["phi_opt"])
-        sol = MultiModeNoise.solve_disp_mmf(uomega0_shaped, fiber_r, sim_r)
+        sol = FiberLab.solve_disp_mmf(uomega0_shaped, fiber_r, sim_r)
         uomega_out = sol["uω_z"][end, :, :]
 
         # --- Compute output power spectrum (fftshifted) ---
@@ -1785,7 +1785,7 @@ function plot_sweep_heatmap(sweep_results, fiber_name; save_path=nothing)
         if isnan(r.J_after)
             J_grid[i, j] = NaN
         else
-            J_grid[i, j] = MultiModeNoise.lin_to_dB(r.J_after)
+            J_grid[i, j] = FiberLab.lin_to_dB(r.J_after)
         end
         N_grid[i, j]    = r.N_sol
         conv_grid[i, j] = r.converged
@@ -1855,11 +1855,11 @@ Right panel: scatter of J_final vs initial phase sigma, color-coded by convergen
 (fig, axes) — matplotlib Figure and array of Axes objects
 """
 function plot_multistart_histogram(multistart_results; save_path=nothing)
-    J_vals = [MultiModeNoise.lin_to_dB(r.J_final) for r in multistart_results
+    J_vals = [FiberLab.lin_to_dB(r.J_final) for r in multistart_results
               if isfinite(r.J_final) && r.J_final > 0]
     sigmas = [r.sigma for r in multistart_results]
     J_all  = [isfinite(r.J_final) && r.J_final > 0 ?
-              MultiModeNoise.lin_to_dB(r.J_final) : NaN for r in multistart_results]
+              FiberLab.lin_to_dB(r.J_final) : NaN for r in multistart_results]
     conv   = [r.converged for r in multistart_results]
 
     fig, axes = subplots(1, 2, figsize=(12, 5))
@@ -1988,7 +1988,7 @@ function plot_sweep_report_card(data; save_path=nothing)
     λ_raman_onset = C_NM_THZ / (f0 - 13.2)
 
     # Quality label
-    J_dB = MultiModeNoise.lin_to_dB(J_aft)
+    J_dB = FiberLab.lin_to_dB(J_aft)
     quality = J_dB < -40 ? "EXCELLENT" : J_dB < -30 ? "GOOD" : J_dB < -20 ? "ACCEPTABLE" : "POOR"
 
     # --- Figure: 3×2 subplot layout ---
@@ -2056,7 +2056,7 @@ function plot_sweep_report_card(data; save_path=nothing)
     ax_gd.set_xlim(spec_xlim...)
 
     # Build metrics text
-    J_bef_dB = MultiModeNoise.lin_to_dB(J_bef)
+    J_bef_dB = FiberLab.lin_to_dB(J_bef)
     grad_norm = haskey(data, "grad_norm") ? data["grad_norm"] : NaN
     E_cons = haskey(data, "E_conservation") ? data["E_conservation"] : NaN
     bc_in  = haskey(data, "bc_input_frac") ? data["bc_input_frac"] : NaN

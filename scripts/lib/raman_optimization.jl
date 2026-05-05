@@ -12,7 +12,7 @@ but the supported public single-run entry point is now
 # Inputs
 - Config constants at top of file (fiber preset, L, P, pulse FWHM, max_iter).
 - `scripts/lib/common.jl` for `FIBER_PRESETS` and `setup_raman_problem`.
-- `MultiModeNoise.ensure_deterministic_environment()` pins FFTW/BLAS threads
+- `FiberLab.ensure_deterministic_environment()` pins FFTW/BLAS threads
   for bit-identity runs.
 
 # Outputs
@@ -38,7 +38,7 @@ using FFTW
 using Logging
 ENV["MPLBACKEND"] = "Agg"  # Non-interactive backend for headless execution
 using PyPlot
-using MultiModeNoise
+using FiberLab
 using Optim
 using JLD2
 using JSON3
@@ -123,7 +123,7 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     end
 
     # Forward solve
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber, sim)
     ũω = sol["ode_sol"]
 
     # Get output field in lab frame using cis() for the dispersion phase
@@ -149,7 +149,7 @@ function cost_and_gradient(φ, uω0, fiber, sim, band_mask;
     end
 
     # Adjoint solve: propagate λ backward from L to 0
-    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
+    sol_adj = FiberLab.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     λ0 = sol_adj(0)
 
     # Chain rule: ∂J/∂φ(ω) = 2 · Re(λ₀*(ω) · i · u₀(ω))
@@ -211,7 +211,7 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     # Callback for monitoring
     function callback(state)
         @debug @sprintf("Iter %3d: J = %.6e (%.2f dB)",
-            state.iteration, state.value, MultiModeNoise.lin_to_dB(state.value))
+            state.iteration, state.value, FiberLab.lin_to_dB(state.value))
         return false
     end
 
@@ -446,8 +446,8 @@ function plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix=
     fig, (ax1, ax2) = subplots(1, 2, figsize=(10, 4))
 
     gdd_fs2 = gdd_range .* 1e3  # convert ps² → fs²
-    J_gdd_dB = MultiModeNoise.lin_to_dB.(J_gdd)
-    J_tod_dB = MultiModeNoise.lin_to_dB.(J_tod)
+    J_gdd_dB = FiberLab.lin_to_dB.(J_gdd)
+    J_tod_dB = FiberLab.lin_to_dB.(J_tod)
 
     # Center index for zero-perturbation point
     center_idx_gdd = div(length(gdd_range) + 1, 2)
@@ -579,9 +579,9 @@ function build_raman_manifest_entry(payload::NamedTuple, jld2_path::AbstractStri
         "P_cont_W" => payload.P_cont_W,
         "lambda0_nm" => payload.lambda0_nm,
         "J_before" => payload.J_before,
-        "J_before_dB" => MultiModeNoise.lin_to_dB(payload.J_before),
+        "J_before_dB" => FiberLab.lin_to_dB(payload.J_before),
         "J_after" => payload.J_after,
-        "J_after_dB" => MultiModeNoise.lin_to_dB(payload.J_after),
+        "J_after_dB" => FiberLab.lin_to_dB(payload.J_after),
         "delta_J_dB" => payload.delta_J_dB,
         "converged" => payload.converged,
         "iterations" => payload.iterations,
@@ -664,7 +664,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         objective_kind=objective_kind, log_cost=false)
     J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask;
         objective_kind=objective_kind, log_cost=false)
-    ΔJ_dB = MultiModeNoise.lin_to_dB(J_after) - MultiModeNoise.lin_to_dB(J_before)
+    ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
     # Boundary check on optimized input pulse. Use the raw time-domain field:
     # `check_boundary_conditions` divides by the attenuator for legacy callers,
@@ -677,7 +677,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     # Boundary check on output pulse
     fiber_bc = deepcopy(fiber)
     fiber_bc["zsave"] = [fiber["L"]]
-    sol_bc = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_bc, sim)
+    sol_bc = FiberLab.solve_disp_mmf(uω0_opt, fiber_bc, sim)
     bc_output_ok, bc_output_frac = check_raw_temporal_edges(sol_bc["ut_z"][end, :, :];
         threshold=TRUST_THRESHOLDS.edge_frac_pass)
 
@@ -723,8 +723,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         λ_gdd_val, λ_boundary,
         objective_spec.scalar_surface,
         Optim.iterations(result), elapsed,
-        J_before, MultiModeNoise.lin_to_dB(J_before),
-        J_after, MultiModeNoise.lin_to_dB(J_after),
+        J_before, FiberLab.lin_to_dB(J_before),
+        J_after, FiberLab.lin_to_dB(J_after),
         ΔJ_dB,
         grad_norm,
         _format_power_watts(P_peak_in), _format_power_watts(P_peak_out),
@@ -757,7 +757,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     if log_cost
         convergence_history = collect(Optim.f_trace(result))
     else
-        convergence_history = MultiModeNoise.lin_to_dB.(Optim.f_trace(result))
+        convergence_history = FiberLab.lin_to_dB.(Optim.f_trace(result))
     end
     @info "Saving results to $jld2_path"
     result_payload = build_raman_result_payload(;
@@ -787,7 +787,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         trust_report_md = trust_md_path,
         band_mask = band_mask,
     )
-    sidecar_path = MultiModeNoise.save_run(jld2_path, result_payload)
+    sidecar_path = FiberLab.save_run(jld2_path, result_payload)
     @info "Saved JSON sidecar to $sidecar_path"
 
     # ── Manifest update (XRUN-01) ──

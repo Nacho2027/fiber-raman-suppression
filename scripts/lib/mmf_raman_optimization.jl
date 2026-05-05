@@ -8,12 +8,12 @@ Mirror of `scripts/raman_optimization.jl` for the multimode (M>1) case:
 - Input mode coefficients `c_m` are passed as a separate argument and held
   FIXED in Phase 16 plan 01. Phase 17 will optimize them jointly — see
   `.planning/seeds/mmf-joint-phase-mode-optimization.md`.
-- Uses the existing `MultiModeNoise.solve_disp_mmf` /
+- Uses the existing `FiberLab.solve_disp_mmf` /
   `solve_adjoint_disp_mmf` machinery unchanged.
 
 Protected files (no edits): `scripts/common.jl`, `scripts/raman_optimization.jl`,
 `scripts/sharpness_optimization.jl`, `src/simulation/*.jl`,
-`src/helpers/helpers.jl`, `src/MultiModeNoise.jl`.
+`src/helpers/helpers.jl`, `src/FiberLab.jl`.
 
 Used by the front-layer experiment runner for multimode phase searches.
 """
@@ -35,7 +35,7 @@ using Statistics
 using Random
 using Dates
 
-using MultiModeNoise
+using FiberLab
 using Optim
 using PyPlot
 
@@ -101,7 +101,7 @@ function mmf_forward_output(
 )
     phase_factor = cis.(φ)
     uω0_shaped = uω0_base .* phase_factor
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber, sim)
     ũω = sol["ode_sol"]
     L = fiber["L"]
     uωf = cis.(fiber["Dω"] .* L) .* ũω(L)
@@ -247,7 +247,7 @@ function cost_and_gradient_mmf(
     uω0_shaped   = uω0_base .* phase_factor        # (Nt, M)
 
     # Forward solve
-    sol = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber, sim)
     ũω  = sol["ode_sol"]
 
     # Lab-frame output at z=L
@@ -260,7 +260,7 @@ function cost_and_gradient_mmf(
     J, λωL = _mmf_cost_call(variant, uωf, band_mask)
 
     # Adjoint backward solve
-    sol_adj = MultiModeNoise.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
+    sol_adj = FiberLab.solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     λ0      = sol_adj(0)                           # (Nt, M)
 
     # Chain rule: ∂J/∂φ_expanded[t,m] = 2 · Re(conj(λ₀[t,m]) · i · uω0_shaped[t,m])
@@ -478,7 +478,7 @@ function plot_mmf_result(
     function _spectrum_at(φ)
         phase_factor = cis.(φ)
         uω0_shaped   = uω0_base .* phase_factor
-        sol          = MultiModeNoise.solve_disp_mmf(uω0_shaped, fiber, sim)
+        sol          = FiberLab.solve_disp_mmf(uω0_shaped, fiber, sim)
         ũω           = sol["ode_sol"]
         L            = fiber["L"]
         uωf          = cis.(fiber["Dω"] .* L) .* ũω(L)

@@ -13,7 +13,7 @@ objective; use it only when the run size is appropriate for the current host.
 
 using FFTW
 using JLD2
-using MultiModeNoise
+using FiberLab
 using Printf
 
 include(joinpath(@__DIR__, "..", "lib", "common.jl"))
@@ -70,7 +70,7 @@ end
 function _load_replay_artifact(path::AbstractString)
     artifact = resolve_run_artifact_path(path)
     loaded = try
-        MultiModeNoise.load_run(artifact)
+        FiberLab.load_run(artifact)
     catch
         JLD2.load(artifact)
     end
@@ -101,7 +101,7 @@ end
 
 function _ideal_objective_dB(loaded)
     J_after = Float64(_artifact_loaded_field(loaded, :J_after, NaN))
-    return isfinite(J_after) && J_after > 0 ? MultiModeNoise.lin_to_dB(J_after) : NaN
+    return isfinite(J_after) && J_after > 0 ? FiberLab.lin_to_dB(J_after) : NaN
 end
 
 function _evaluate_replayed_linear_cost(loaded, replay)
@@ -143,11 +143,11 @@ function _evaluate_replayed_linear_cost(loaded, replay)
     uomega0 = Matrix{ComplexF64}(_loaded_matrix_field(loaded, :uomega0))
     phi = reshape(replay.phi_replayed, Nt, 1)
     uomega_shaped = @. uomega0 * cis(phi)
-    sol = MultiModeNoise.solve_disp_mmf(uomega_shaped, fiber, sim)
+    sol = FiberLab.solve_disp_mmf(uomega_shaped, fiber, sim)
     utilde = sol["ode_sol"]
     uomegaf = @. cis(fiber["Dω"] * fiber["L"]) * utilde(fiber["L"])
     J, _ = spectral_band_cost(uomegaf, band_mask)
-    return J, MultiModeNoise.lin_to_dB(J)
+    return J, FiberLab.lin_to_dB(J)
 end
 
 function run_slm_replay_bundle(run_path::AbstractString,

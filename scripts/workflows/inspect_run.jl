@@ -6,7 +6,7 @@ Usage:
 """
 
 using Printf
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
 

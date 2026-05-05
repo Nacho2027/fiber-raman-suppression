@@ -13,7 +13,7 @@ using TOML
 using Printf
 using Dates
 using JSON3
-using MultiModeNoise
+using FiberLab
 
 include(joinpath(@__DIR__, "experiment_spec.jl"))
 

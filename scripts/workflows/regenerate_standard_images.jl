@@ -24,7 +24,7 @@ include(joinpath(@__DIR__, "..", "lib", "common.jl"))
 include(joinpath(@__DIR__, "..", "lib", "visualization.jl"))
 include(joinpath(@__DIR__, "..", "lib", "standard_images.jl"))
 
-using MultiModeNoise
+using FiberLab
 
 const ROOT = get(ENV, "REGEN_ROOT", joinpath(@__DIR__, "..", "..", "results", "raman"))
 const OUTPUT_SUBDIR = "standard_images"    # sibling folder next to each JLD2

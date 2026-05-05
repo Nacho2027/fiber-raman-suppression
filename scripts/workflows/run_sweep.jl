@@ -76,7 +76,7 @@ function compute_photon_drift(result, uω0, fiber, sim)
     uω0_opt = @. uω0 * cis(φ_after)
     fiber_prop = deepcopy(fiber)
     fiber_prop["zsave"] = [fiber["L"]]
-    sol = MultiModeNoise.solve_disp_mmf(uω0_opt, fiber_prop, sim)
+    sol = FiberLab.solve_disp_mmf(uω0_opt, fiber_prop, sim)
     uωf = sol["uω_z"][end, :, :]
     return photon_number_drift(uω0_opt, uωf, sim) * 100.0
 end
@@ -167,7 +167,7 @@ function run_fiber_sweep(fiber_spec, sweep_spec)
                 J_after   = saved_run.J_after
                 grad_norm = saved_run.grad_norm
 
-                J_dB = MultiModeNoise.lin_to_dB(J_after)
+                J_dB = FiberLab.lin_to_dB(J_after)
                 quality = suppression_quality_label(J_after)
                 @info @sprintf("    → J_after=%.1f dB [%s], converged=%s, drift=%.1f%%, wlim=%s",
                     J_dB, quality, converged, drift_pct, window_limited)
@@ -375,7 +375,7 @@ function run_multistart(sweep_spec)
             J_final   = saved_run.J_after
 
             @info @sprintf("    → J_final=%.1f dB, converged=%s, iters=%d",
-                MultiModeNoise.lin_to_dB(J_final), converged, iterations)
+                FiberLab.lin_to_dB(J_final), converged, iterations)
 
             push!(ms_results, (
                 start_idx  = i,
@@ -428,8 +428,8 @@ function _print_sweep_summary(label, results)
     n_exc   = count(r -> suppression_quality_label(r.J_after) == "excellent", valid)
     n_good  = count(r -> suppression_quality_label(r.J_after) in ("excellent", "good"), valid)
     n_poor  = count(r -> suppression_quality_label(r.J_after) == "poor", valid)
-    best_dB = isempty(valid) ? NaN : minimum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
-    worst_dB= isempty(valid) ? NaN : maximum(r -> MultiModeNoise.lin_to_dB(r.J_after), valid)
+    best_dB = isempty(valid) ? NaN : minimum(r -> FiberLab.lin_to_dB(r.J_after), valid)
+    worst_dB= isempty(valid) ? NaN : maximum(r -> FiberLab.lin_to_dB(r.J_after), valid)
 
     @info @sprintf("""
     ┌─── %s (%d points) ────────────────────────────┐
@@ -451,7 +451,7 @@ function _print_multistart_summary(ms_results)
     isempty(ms_results) && return nothing
     n_ms_converged = count(r -> r.converged, ms_results)
     ms_valid = filter(r -> !isnan(r.J_final), ms_results)
-    ms_good  = count(r -> MultiModeNoise.lin_to_dB(r.J_final) < -30, ms_valid)
+    ms_good  = count(r -> FiberLab.lin_to_dB(r.J_final) < -30, ms_valid)
     @info @sprintf("""
     ┌─── Multi-start (%d starts) ───────────────────────┐
     │  Converged: %2d/%2d   Suppression ≤-30dB: %2d/%2d     │

@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.6"
+julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "20bf3a2b41245eadc0eb6efb98959b5cd878d52f"
+project_hash = "f26c830ff5a91f3a45c935f61b290f9669c57da7"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -1307,7 +1307,7 @@ git-tree-sha1 = "cac9cc5499c25554cba55cd3c30543cff5ca4fab"
 uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
 version = "0.2.4"
 
-[[deps.MultiModeNoise]]
+[[deps.FiberLab]]
 deps = ["Arpack", "CSV", "DataFrames", "Dates", "DifferentialEquations", "FFTW", "FiniteDifferences", "Interpolations", "JLD2", "JSON3", "LinearAlgebra", "LoopVectorization", "NPZ", "Optim", "PyPlot", "SparseArrays", "Tullio"]
 path = "."
 uuid = "b336628f-8386-4303-a33d-f2bdce4c2a6e"
