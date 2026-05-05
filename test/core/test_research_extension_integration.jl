@@ -125,7 +125,7 @@ end
             @test sidecar["cost_surface"]["objective_backend"] == "scalar_extension"
             @test sidecar["cost_surface"]["objective_label"] == "temporal peak scalar test objective"
             @test sidecar["cost_surface"]["surface"] == "extension:temporal_peak_scalar"
-            @test sidecar["generator"] == "scripts/research/multivar/multivar_optimization.jl"
+            @test sidecar["generator"] == "scripts/lib/multivar_optimization.jl"
         end
     end
 
@@ -151,13 +151,114 @@ end
         @test occursin("execution_planning_only", message)
     end
 
+    @testset "Scalar variable extension is promoted for bounded scalar search" begin
+        @test :cubic_phase_scalar in registered_variable_extension_kinds(:single_mode)
+        @test :cubic_phase_scalar in registered_variable_kinds(:single_mode)
+        contract = variable_contract(:cubic_phase_scalar, :single_mode)
+        @test contract.backend == :scalar_phase_extension
+        @test contract.execution == :executable
+        @test :temporal_peak_scalar in contract.compatible_objectives
+
+        row = validate_variable_extension_contract(contract)
+        @test row.valid
+        @test row.promotable
+        @test isempty(row.blockers)
+        @test isempty(row.errors)
+
+        spec = load_experiment_spec("research_engine_temporal_peak_cubic_phase_extension_smoke")
+        @test spec.objective.kind == :temporal_peak_scalar
+        @test spec.controls.variables == (:cubic_phase_scalar,)
+        @test experiment_execution_mode(spec) == :scalar_search
+        @test validate_experiment_spec(spec) isa NamedTuple
+    end
+
+    @testset "Vector variable extension is promoted for derivative-free vector search" begin
+        @test :poly_phase_vector in registered_variable_extension_kinds(:single_mode)
+        @test :poly_phase_vector in registered_variable_kinds(:single_mode)
+        contract = variable_contract(:poly_phase_vector, :single_mode)
+        @test contract.backend == :vector_phase_extension
+        @test contract.execution == :executable
+        @test contract.dimension == 2
+        @test :temporal_peak_scalar in contract.compatible_objectives
+
+        row = validate_variable_extension_contract(contract)
+        @test row.valid
+        @test row.promotable
+        @test isempty(row.blockers)
+        @test isempty(row.errors)
+
+        spec = load_experiment_spec("research_engine_temporal_peak_poly_phase_vector_smoke")
+        @test spec.objective.kind == :temporal_peak_scalar
+        @test spec.controls.variables == (:poly_phase_vector,)
+        @test spec.solver.kind == :nelder_mead
+        @test experiment_execution_mode(spec) == :vector_search
+        @test validate_experiment_spec(spec) isa NamedTuple
+    end
+
+    @testset "Vector field-control extension is promoted for derivative-free vector search" begin
+        @test :phase_amp_energy_control in registered_variable_extension_kinds(:single_mode)
+        @test :phase_amp_energy_control in registered_variable_kinds(:single_mode)
+        contract = variable_contract(:phase_amp_energy_control, :single_mode)
+        @test contract.backend == :vector_control_extension
+        @test contract.execution == :executable
+        @test contract.dimension == 3
+        @test :temporal_peak_scalar in contract.compatible_objectives
+        @test :amplitude_mask in contract.artifact_hooks
+        @test :energy_scale in contract.artifact_hooks
+        @test :energy_throughput in contract.artifact_hooks
+
+        row = validate_variable_extension_contract(contract)
+        @test row.valid
+        @test row.promotable
+        @test isempty(row.blockers)
+        @test isempty(row.errors)
+
+        spec = load_experiment_spec("research_engine_temporal_peak_phase_amp_energy_control_smoke")
+        @test spec.objective.kind == :temporal_peak_scalar
+        @test spec.controls.variables == (:phase_amp_energy_control,)
+        @test spec.solver.kind == :nelder_mead
+        @test experiment_execution_mode(spec) == :vector_search
+        @test validate_experiment_spec(spec) isa NamedTuple
+
+        layout = control_layout_plan(spec)
+        @test layout.total_length == "3"
+        block = only(filter(block -> block.name == :phase_amp_energy_control, layout.blocks))
+        @test block.shape == "vector[3]"
+        @test :amplitude_mask in block.artifact_hooks
+        @test :energy_scale in block.artifact_hooks
+
+        plan = experiment_artifact_plan(spec)
+        hooks = Tuple(request.hook for request in plan.hooks)
+        @test :standard_image_set in hooks
+        @test :amplitude_mask in hooks
+        @test :energy_scale in hooks
+        @test :energy_throughput in hooks
+        @test :exploratory_summary in hooks
+        @test :exploratory_overview in hooks
+        @test plan.implemented
+
+        builder = _load_scalar_variable_builder(contract)
+        sim = Dict{String,Any}("Nt" => 16, "M" => 1, "Δt" => 0.01)
+        uω0 = ones(ComplexF64, 16, 1)
+        state = _vector_control_state(:phase_amp_energy_control, [1.0, 0.5, 0.2], uω0, sum(abs2, uω0), sim, 16, 1, builder)
+        @test state.scalar_controls["phase_amp_energy_control_phase_coeff"] == 1.0
+        @test state.scalar_controls["phase_amp_energy_control_amplitude_tilt"] == 0.5
+        @test state.scalar_controls["phase_amp_energy_control_energy_log_scale"] == 0.2
+        @test state.scalar_controls["phase_amp_energy_control_energy_scale"] ≈ exp(0.2)
+        @test maximum(abs.(state.φ)) ≈ 1.0
+        @test minimum(state.A) > 0.0
+        @test state.A != ones(16, 1)
+        @test state.diagnostics[:extension_variable] == :phase_amp_energy_control
+        @test state.diagnostics[:phase_amp_energy_control_energy_scale] ≈ exp(0.2)
+    end
+
     @testset "Extension validation commands remain green without executing science" begin
         objective_report = run_experiment_main(["--validate-objectives"])
         variable_report = run_experiment_main(["--validate-variables"])
         @test objective_report.invalid == 0
         @test objective_report.promotable >= 1
         @test variable_report.invalid == 0
-        @test variable_report.promotable == 0
-        @test variable_report.total >= 2
+        @test variable_report.promotable >= 3
+        @test variable_report.total >= 5
     end
 end

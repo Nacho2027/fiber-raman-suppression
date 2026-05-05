@@ -1,88 +1,32 @@
 # Configurable Experiments
 
-Run `./fiberlab` to inspect or launch a TOML-defined experiment
-without editing optimizer code.
+Experiment configs live under `configs/experiments/`. They are serialized
+FiberLab experiments for reproducible runs and batch execution.
 
-The config runner is meant to outgrow one Raman script. A config can select the
-fiber regime, objective, optimized control, solver, and artifact bundle. It only
-works for physics that exists in Julia: TOML is selection, not implementation.
+For new notebook work, start from `Experiment` objects first. Use configs when
+the run needs to be shared, repeated, validated by `make lab-ready`, or staged
+for lab compute.
 
-## List configs
+Useful commands:
 
 ```bash
 ./fiberlab configs
 ./fiberlab capabilities
+./fiberlab plan <config>
+./fiberlab layout <config>
+./fiberlab artifacts <config>
+./fiberlab compute-plan <config>
+./fiberlab run <config>
+./fiberlab latest <config>
 ```
 
-Good starting points:
-
-| Config | Status | Use |
-|---|---|---|
-| `research_engine_poc` | supported | single-mode phase baseline |
-| `research_engine_smoke` | supported smoke | quick CLI/artifact check |
-| `research_engine_export_smoke` | supported smoke | export handoff check |
-| `research_engine_gain_tilt_smoke` | experimental | phase plus gain-tilt smoke |
-| `research_engine_gain_tilt_scalar_search_smoke` | experimental | one-parameter scalar search |
-| `research_engine_temporal_peak_scalar_smoke` | experimental | non-Raman temporal-peak scalar smoke |
-| `research_engine_temporal_peak_quadratic_phase_smoke` | experimental | temporal-peak scalar search over quadratic phase |
-| `grin50_mmf_phase_sum_poc` | planning | MMF dry-run only |
-| `smf28_longfiber_phase_poc` | planning | long-fiber dry-run only |
-| `smf28_phase_amplitude_energy_poc` | experimental | direct multivariable research |
-
-## Plan and run
+Validation:
 
 ```bash
-./fiberlab plan research_engine_poc
-./fiberlab run research_engine_poc
-./fiberlab latest research_engine_poc
-./fiberlab ready latest research_engine_poc
-```
-
-For experimental work:
-
-```bash
-./fiberlab explore list
-./fiberlab explore plan research_engine_gain_tilt_smoke
-./fiberlab check config research_engine_gain_tilt_smoke
-./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
-./fiberlab explore compare results/raman --top 10
-```
-
-`run` is conservative. `explore` is for research work and requires explicit
-flags such as `--local-smoke` or `--heavy-ok` when a path is risky.
-
-## Inspect contracts
-
-```bash
-./fiberlab objectives
+./fiberlab validate
 ./fiberlab objectives --validate
-./fiberlab variables
 ./fiberlab variables --validate
-./fiberlab layout research_engine_poc
-./fiberlab artifacts research_engine_poc
 ```
 
-Do not create a new objective or variable by only editing TOML. Add the formula,
-gradient or fallback, validation, plots, and tests in code first. The point is
-to make new fiber-optic questions runnable after they have real code behind
-them.
-
-## Sweeps
-
-```bash
-./fiberlab sweep list
-./fiberlab sweep plan smf28_power_micro_sweep
-./fiberlab sweep validate
-./fiberlab sweep latest smf28_power_micro_sweep
-```
-
-Large sweeps should run through the burst workflow.
-
-## Artifacts
-
-Config-runner commands write `run_manifest.json` beside the result payload. Exploratory
-runs also write a generic summary JSON and overview PNG when specialized plots
-are not available.
-
-The manifest is metadata. It does not replace the JLD2 result or standard
-images.
+Add new supported behavior through the FiberLab API, Julia extension
+contracts, and tests. Do not add Python API code for maintained workflows.

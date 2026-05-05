@@ -1,60 +1,69 @@
 # Supported Workflows
 
-Most of the repo is research code. Start with the small set of commands below;
-they are the ones that are wired up, documented, and checked.
+The supported surface is Julia-only. The preferred mental model is the
+FiberLab API; the current execution path still lowers experiments into
+checked configs.
 
-For a step-by-step first-user handoff, start with
-`first-lab-user-walkthrough.md`.
+## Notebook API
 
-## Supported
+```julia
+using MultiModeNoise
 
-- Single-mode phase-only Raman optimization:
+fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
+experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))
 
-```bash
-julia -t auto --project=. scripts/canonical/optimize_raman.jl smf28_L2m_P0p2W
+summarize(experiment)
 ```
 
-- Configurable single-mode experiments:
+See [Notebook API Quickstart](notebook-api.md) for the current bridge from API
+objects to runnable configs.
+
+## Experiment Configs
+
+Configs are the maintained compatibility path for reproducible runs:
 
 ```bash
+./fiberlab configs
 ./fiberlab plan research_engine_poc
 ./fiberlab run research_engine_poc
-./fiberlab ready latest research_engine_poc
+./fiberlab latest research_engine_poc
 ```
 
-- Export smoke for lab handoff:
+Equivalent direct Julia commands:
 
 ```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl --list
+julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
+julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
+```
+
+## Lab Handoff Smoke
+
+```bash
+make docs-check
+make lab-ready
 make golden-smoke
 ```
 
-- Result inspection:
+Use these as permanent gates:
+
+- `make docs-check`: verifies the short agent/human documentation maps and
+  catches broken documentation structure.
+- `make lab-ready`: validates all maintained configs, front-layer behavior, and
+  fast regression tests without producing a long-lived science result.
+- `make golden-smoke`: runs one real supported smoke experiment and verifies
+  the artifact bundle, standard images, and export handoff.
+
+`make golden-smoke` writes generated output under `results/raman/smoke/`. That
+output is ignored by git and should be pruned after verification unless a run is
+intentionally promoted into human-facing docs:
 
 ```bash
-julia --project=. scripts/canonical/inspect_run.jl results/raman/<run_id>/
-julia --project=. scripts/canonical/export_run.jl results/raman/<run_id>/
+SMOKE_KEEP=0 make prune-smoke
 ```
 
-## Experimental
+## Experimental Work
 
-These are useful, but they are not default lab workflows:
-
-- staged `amp_on_phase` refinement;
-- gain-tilt scalar search;
-- long-fiber planning configs;
-- multimode planning configs;
-- direct phase/amplitude/energy joint optimization;
-- Newton and preconditioning research drivers.
-
-Use `./fiberlab explore ...` for these paths so the command prints blockers and
-compute warnings before running.
-
-## Completion rule
-
-A run that produces `phi_opt` is not complete until the standard image set is
-present and visually checked:
-
-- phase profile;
-- optimized evolution;
-- phase diagnostic;
-- unshaped evolution.
+Do not add new research drivers under `scripts/`. Promote reusable logic into
+`src/fiberlab/` or an extension contract, then record lane status in
+[Research Verdicts](../research-verdicts.md).

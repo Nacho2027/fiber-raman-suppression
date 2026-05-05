@@ -168,13 +168,13 @@ end
             "kind = \"lbfgs\"" => "kind = \"adam\"")
         _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "solver.scalar_lower must be less than solver.scalar_upper",
             "scalar_lower = -0.09" => "scalar_lower = 0.09")
-        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"] or [\"quadratic_phase\"]",
+        _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "bounded_scalar currently supports controls.variables=[\"gain_tilt\"], [\"quadratic_phase\"], or one promoted scalar variable extension",
             "variables = [\"gain_tilt\"]" => "variables = [\"phase\", \"gain_tilt\"]")
         _expect_rejected("research_engine_gain_tilt_scalar_search_smoke", "plots.temporal_pulse.time_range must be [low, high] with low < high",
             "time_range = [-0.75, 0.75]" => "time_range = [0.75, -0.75]")
         _expect_rejected("research_engine_smoke", "grid_policy `mystery_grid` is not supported",
             "grid_policy = \"auto_if_undersized\"" => "grid_policy = \"mystery_grid\"")
-        _expect_rejected("research_engine_smoke", "phase-only execution currently requires the full standard artifact bundle",
+        _expect_rejected("research_engine_smoke", "phase-like adjoint execution currently requires the full standard artifact bundle",
             "write_standard_images = true" => "write_standard_images = false")
         _expect_rejected("research_engine_export_smoke", "requires include_group_delay=true",
             "include_group_delay = true" => "include_group_delay = false")
@@ -185,13 +185,13 @@ end
             "write_trust_report = false" => "write_trust_report = true")
         _expect_rejected("smf28_phase_amplitude_energy_poc", "does not yet support phase/SLM export handoff",
             "enabled = false" => "enabled = true")
-        _expect_rejected("smf28_longfiber_phase_poc", "must use verification.mode=\"burst_required\"",
+        _expect_rejected("smf28_longfiber_phase_poc", "standard long_fiber front-layer smoke requires Nt <= 4096",
             "mode = \"burst_required\"" => "mode = \"standard\"")
         _expect_rejected("smf28_longfiber_phase_poc", "does not yet support phase export handoff",
             "enabled = false" => "enabled = true")
         _expect_rejected("grin50_mmf_phase_sum_poc", "parameterization `full_grid` is not supported",
             "parameterization = \"shared_across_modes\"" => "parameterization = \"full_grid\"")
-        _expect_rejected("grin50_mmf_phase_sum_poc", "planning does not yet support manifest updates or trust-report writing",
+        _expect_rejected("grin50_mmf_phase_sum_poc", "multimode front-layer execution does not yet support manifest updates or trust-report writing",
             "update_manifest = false" => "update_manifest = true")
 
         for id in ("smf28_longfiber_phase_poc", "grin50_mmf_phase_sum_poc")

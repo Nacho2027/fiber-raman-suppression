@@ -6,16 +6,18 @@ the artifact hooks advertised by `artifact_plan.jl` real for the current
 phase/amplitude/energy surface.
 """
 
+using Printf
+
 if !(@isdefined _MULTIVAR_ARTIFACTS_JL_LOADED)
 const _MULTIVAR_ARTIFACTS_JL_LOADED = true
 
 using FFTW
 using JSON3
-using Printf
 using Statistics
 using PyPlot
 
 include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "run_artifacts.jl"))
 
 function _multivar_artifact_tag(save_prefix::AbstractString)
     return basename(String(save_prefix))
@@ -37,13 +39,6 @@ end
 
 function _safe_ratio(num, den)
     den == 0 ? NaN : Float64(num / den)
-end
-
-function _write_json(path::AbstractString, payload)
-    open(path, "w") do io
-        JSON3.pretty(io, payload)
-    end
-    return path
 end
 
 function _wavelength_axis_nm(sim)
@@ -71,7 +66,7 @@ function _write_multivar_amplitude_plot(path, result_bundle, shaped)
     axs[1].set_title("Multivariable amplitude control")
     Amin, Amax = extrema(A_opt)
     axs[1].annotate(
-        @sprintf("A in [%.3f, %.3f]", Amin, Amax),
+        Printf.@sprintf("A in [%.3f, %.3f]", Amin, Amax),
         xy=(0.02, 0.92),
         xycoords="axes fraction",
         va="top",
@@ -105,7 +100,7 @@ function _write_multivar_gain_tilt_plot(path, result_bundle, shaped)
     axs[1].set_title("Gain-tilt control")
     Amin, Amax = extrema(A_opt)
     axs[1].annotate(
-        @sprintf("slope=%.4f, A in [%.3f, %.3f]", slope, Amin, Amax),
+        Printf.@sprintf("slope=%.4f, A in [%.3f, %.3f]", slope, Amin, Amax),
         xy=(0.02, 0.92),
         xycoords="axes fraction",
         va="top",
@@ -135,8 +130,15 @@ function write_multivar_variable_artifacts(spec, result_bundle)
     shaped = _multivar_shaped_input(result_bundle)
 
     paths = Dict{Symbol,String}()
+    requested_hooks = Set{Symbol}()
+    for variable in spec.controls.variables
+        contract = variable_contract(variable, spec.problem.regime)
+        for hook in contract.artifact_hooks
+            push!(requested_hooks, hook)
+        end
+    end
 
-    if :amplitude in spec.controls.variables
+    if :amplitude in spec.controls.variables || :amplitude_mask in requested_hooks || :shaped_input_spectrum in requested_hooks
         amplitude_path = joinpath(output_dir, "$(tag)_amplitude_mask.png")
         _write_multivar_amplitude_plot(amplitude_path, result_bundle, shaped)
         paths[:amplitude_mask] = amplitude_path
@@ -154,7 +156,11 @@ function write_multivar_variable_artifacts(spec, result_bundle)
     E_unshaped = Float64(sum(abs2, result_bundle.uω0))
     E_shaped = Float64(sum(abs2, shaped))
 
-    if :amplitude in spec.controls.variables || :energy in spec.controls.variables || :gain_tilt in spec.controls.variables
+    if :amplitude in spec.controls.variables ||
+            :energy in spec.controls.variables ||
+            :gain_tilt in spec.controls.variables ||
+            :energy_throughput in requested_hooks ||
+            :energy_scale in requested_hooks
         energy_path = joinpath(output_dir, "$(tag)_energy_metrics.json")
         energy_payload = Dict{String,Any}(
             "schema_version" => "multivar_energy_metrics_v1",
@@ -171,7 +177,7 @@ function write_multivar_variable_artifacts(spec, result_bundle)
             "amplitude_max" => Float64(maximum(outcome.A_opt)),
             "amplitude_mean" => Float64(mean(outcome.A_opt)),
         )
-        _write_json(energy_path, energy_payload)
+        write_json_file(energy_path, energy_payload)
         paths[:energy_throughput] = energy_path
         paths[:energy_scale] = energy_path
     end
@@ -187,7 +193,7 @@ function write_multivar_variable_artifacts(spec, result_bundle)
             "E_opt" => E_opt,
             "energy_scale_alpha" => Float64(get(outcome.diagnostics, :alpha, sqrt(E_opt / E_ref))),
         )
-        _write_json(pulse_path, pulse_payload)
+        write_json_file(pulse_path, pulse_payload)
         paths[:peak_power] = pulse_path
     end
 

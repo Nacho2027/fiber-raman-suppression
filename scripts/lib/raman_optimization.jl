@@ -27,7 +27,7 @@ but the supported public single-run entry point is now
 Nt=2^13, max_iter=30). Scale linearly with `max_iter`; super-linearly with Nt.
 
 # Docs
-Docs: docs/guides/quickstart-optimization.md
+Docs: docs/guides/supported-workflows.md
 """
 
 try using Revise catch end
@@ -49,7 +49,7 @@ include(joinpath(@__DIR__, "manifest_io.jl"))
 include(joinpath(@__DIR__, "objective_surface.jl"))
 include(joinpath(@__DIR__, "regularizers.jl"))
 include(joinpath(@__DIR__, "visualization.jl"))
-include(joinpath(@__DIR__, "..", "research", "analysis", "numerical_trust.jl"))
+include(joinpath(@__DIR__, "numerical_trust.jl"))
 include(joinpath(@__DIR__, "standard_images.jl"))
 ensure_deterministic_environment()
 
@@ -605,9 +605,9 @@ end
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
     λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
     log_cost::Bool=true, objective_kind::Symbol=:raman_band, solver_reltol=1e-8,
-    solver_f_abstol=:auto, solver_g_abstol=:auto, kwargs...)
+    solver_f_abstol=:auto, solver_g_abstol=:auto, problem_setup=setup_raman_problem, kwargs...)
     t_start = time()
-    uω0, fiber, sim, band_mask, Δf, raman_threshold = setup_raman_problem(; kwargs...)
+    uω0, fiber, sim, band_mask, Δf, raman_threshold = problem_setup(; kwargs...)
     fiber["reltol"] = Float64(solver_reltol)
 
     # Construct metadata for figure annotations (META-01)

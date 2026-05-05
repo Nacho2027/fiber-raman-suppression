@@ -144,11 +144,7 @@ end
     write_run_manifest(path, manifest) -> path
 """
 function write_run_manifest(path::AbstractString, manifest::Vector{Dict{String,Any}})
-    mkpath(dirname(path) == "" ? "." : dirname(path))
-    open(path, "w") do io
-        JSON3.pretty(io, manifest)
-    end
-    return path
+    return write_json_file(path, manifest)
 end
 
 """
@@ -205,20 +201,14 @@ function save_run(path::AbstractString, result; schema_version::AbstractString=O
     meta = _canonical_sidecar_metadata(result, jld2_path; schema_version=schema_version)
     payload_pairs = _payload_pairs(result, meta)
 
-    JLD2.jldopen(jld2_path, "w") do f
-        for (key, value) in payload_pairs
-            f[String(key)] = value
-        end
-    end
+    write_jld2_file(jld2_path; payload_pairs...)
 
     sidecar_path = _sidecar_path_for(jld2_path)
     for k in _SIDECAR_REQUIRED_SCALARS
         haskey(meta, k) || @warn "save_run: sidecar field :$k missing from metadata (writing anyway)"
     end
 
-    open(sidecar_path, "w") do io
-        JSON3.pretty(io, meta)
-    end
+    write_json_file(sidecar_path, meta)
 
     return sidecar_path
 end

@@ -1,17 +1,204 @@
-#!/usr/bin/env python3
-"""Checkout-local entry point for the fiber research engine CLI."""
+#!/usr/bin/env bash
+set -euo pipefail
 
-from __future__ import annotations
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+threads="${FIBERLAB_THREADS:-auto}"
 
-from pathlib import Path
-import sys
+usage() {
+  cat <<'EOF'
+Usage:
+  ./fiberlab [--repo-root DIR] [--threads N|auto] COMMAND [ARGS...]
 
+Julia-first command router.
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "python"))
+Common commands:
+  configs                         List experiment configs
+  capabilities                    Show regimes, controls, objectives, artifacts
+  plan SPEC                       Dry-run an experiment config
+  run SPEC                        Run an experiment config
+  latest SPEC                     Inspect latest run for a config
+  layout SPEC                     Show optimizer-vector layout
+  artifacts SPEC                  Show expected artifacts
+  compute-plan SPEC               Show compute guidance
+  objectives [--validate]         List or validate objectives
+  variables [--validate]          List or validate variables
+  validate                        Validate configs, sweeps, objectives, variables
+  ready config SPEC               Lab-readiness check for a config
+  ready latest SPEC [--require-export]
+  ready run PATH [--require-export]
+  check config SPEC               Config check
+  inspect run PATH                Inspect a completed run
+  sweep list|validate|plan|run|latest [SPEC]
+  explore list|plan|run|compare ...
+  scaffold objective|variable|scalar-config|vector-config ...
+  index [OPTIONS] [ROOT...]
+EOF
+}
 
-from fiber_research_engine.app import main  # noqa: E402
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-root)
+      [[ $# -ge 2 ]] || { echo "--repo-root requires a value" >&2; exit 2; }
+      repo_root="$2"
+      shift 2
+      ;;
+    --threads)
+      [[ $# -ge 2 ]] || { echo "--threads requires a value" >&2; exit 2; }
+      threads="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
+[[ $# -gt 0 ]] || { usage >&2; exit 2; }
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_julia() {
+  (cd "$repo_root" && exec julia -t "$threads" --project=. "$@")
+}
+
+cmd="$1"
+shift
+
+case "$cmd" in
+  configs)
+    run_julia scripts/canonical/run_experiment.jl --list "$@"
+    ;;
+  capabilities)
+    run_julia scripts/canonical/run_experiment.jl --capabilities "$@"
+    ;;
+  playbook)
+    cat <<'EOF'
+Start with:
+  ./fiberlab configs
+  ./fiberlab capabilities
+  ./fiberlab plan research_engine_poc
+  ./fiberlab run research_engine_poc
+
+Use Julia configs and maintained scripts as the supported surface. Notebook and
+Python APIs are not canonical.
+EOF
+    ;;
+  plan)
+    run_julia scripts/canonical/run_experiment.jl --dry-run "$@"
+    ;;
+  run)
+    run_julia scripts/canonical/run_experiment.jl "$@"
+    ;;
+  latest)
+    run_julia scripts/canonical/run_experiment.jl --latest "$@"
+    ;;
+  layout)
+    run_julia scripts/canonical/run_experiment.jl --control-layout "$@"
+    ;;
+  artifacts)
+    run_julia scripts/canonical/run_experiment.jl --artifact-plan "$@"
+    ;;
+  compute-plan)
+    run_julia scripts/canonical/run_experiment.jl --compute-plan "$@"
+    ;;
+  objectives)
+    if [[ "${1:-}" == "--validate" ]]; then
+      shift
+      run_julia scripts/canonical/run_experiment.jl --validate-objectives "$@"
+    else
+      run_julia scripts/canonical/run_experiment.jl --objectives "$@"
+    fi
+    ;;
+  variables)
+    if [[ "${1:-}" == "--validate" ]]; then
+      shift
+      run_julia scripts/canonical/run_experiment.jl --validate-variables "$@"
+    else
+      run_julia scripts/canonical/run_experiment.jl --variables "$@"
+    fi
+    ;;
+  extensions)
+    run_julia scripts/canonical/run_experiment.jl --validate-objectives
+    run_julia scripts/canonical/run_experiment.jl --validate-variables
+    ;;
+  validate)
+    run_julia scripts/canonical/run_experiment.jl --validate-all
+    run_julia scripts/canonical/run_experiment_sweep.jl --validate-all
+    run_julia scripts/canonical/run_experiment.jl --validate-objectives
+    run_julia scripts/canonical/run_experiment.jl --validate-variables
+    ;;
+  ready)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      config) run_julia scripts/canonical/lab_ready.jl --config "$@" ;;
+      latest) run_julia scripts/canonical/lab_ready.jl --latest "$@" ;;
+      run) run_julia scripts/canonical/lab_ready.jl --run "$@" ;;
+      *) echo "usage: ./fiberlab ready config|latest|run ..." >&2; exit 2 ;;
+    esac
+    ;;
+  check)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      config) run_julia scripts/canonical/run_experiment.jl --check "$@" ;;
+      latest) run_julia scripts/canonical/lab_ready.jl --latest "$@" ;;
+      run) run_julia scripts/canonical/lab_ready.jl --run "$@" ;;
+      *) echo "usage: ./fiberlab check config|latest|run ..." >&2; exit 2 ;;
+    esac
+    ;;
+  inspect)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      run) run_julia scripts/canonical/inspect_run.jl "$@" ;;
+      *) echo "usage: ./fiberlab inspect run PATH" >&2; exit 2 ;;
+    esac
+    ;;
+  sweep)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      list) run_julia scripts/canonical/run_experiment_sweep.jl --list "$@" ;;
+      validate) run_julia scripts/canonical/run_experiment_sweep.jl --validate-all "$@" ;;
+      plan) run_julia scripts/canonical/run_experiment_sweep.jl --dry-run "$@" ;;
+      run) run_julia scripts/canonical/run_experiment_sweep.jl --execute "$@" ;;
+      latest) run_julia scripts/canonical/run_experiment_sweep.jl --latest "$@" ;;
+      *) echo "usage: ./fiberlab sweep list|validate|plan|run|latest [SPEC]" >&2; exit 2 ;;
+    esac
+    ;;
+  explore)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      list) run_julia scripts/canonical/run_experiment.jl --list "$@" ;;
+      plan) run_julia scripts/canonical/run_experiment.jl --explore-plan "$@" ;;
+      run) run_julia scripts/canonical/run_experiment.jl --explore-run "$@" ;;
+      compare) run_julia scripts/canonical/index_results.jl --compare "$@" ;;
+      *) echo "usage: ./fiberlab explore list|plan|run|compare ..." >&2; exit 2 ;;
+    esac
+    ;;
+  playground)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      new) run_julia scripts/canonical/scaffold_playground.jl "$@" ;;
+      check) run_julia scripts/canonical/run_experiment.jl --playground-check "$@" ;;
+      *) echo "usage: ./fiberlab playground new|check ..." >&2; exit 2 ;;
+    esac
+    ;;
+  scaffold)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      objective) run_julia scripts/canonical/scaffold_objective.jl "$@" ;;
+      variable) run_julia scripts/canonical/scaffold_variable.jl "$@" ;;
+      scalar-config) run_julia scripts/canonical/scaffold_scalar_config.jl "$@" ;;
+      vector-config) run_julia scripts/canonical/scaffold_vector_config.jl "$@" ;;
+      *) echo "usage: ./fiberlab scaffold objective|variable|scalar-config|vector-config ..." >&2; exit 2 ;;
+    esac
+    ;;
+  index)
+    run_julia scripts/canonical/index_results.jl "$@"
+    ;;
+  *)
+    echo "Unknown fiberlab command: $cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

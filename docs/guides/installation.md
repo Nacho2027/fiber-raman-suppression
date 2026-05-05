@@ -1,47 +1,40 @@
 # Installation
 
-Install a local checkout here. Heavy sweeps still belong on the burst machine.
-
-## Requirements
-
-- Julia 1.12.x
-- Python 3.10+
-- `make`
-- Git
-- Docker, optional
-
-## Install
+Install Julia 1.12.x, then instantiate the project:
 
 ```bash
 make install
 ```
 
-This runs `Pkg.instantiate()`, creates `.venv`, and installs the local Python
-wrapper.
-
-## Check the checkout
+Check the local environment:
 
 ```bash
 make doctor
 ```
 
-`make doctor` runs the fast Julia test tier and Python CLI tests. It does not
-run simulation-heavy tests.
+This is a Julia-first repo. There is no supported Python package or Python API.
 
-## First real run
+## First Julia API Check
 
-```bash
-make optimize
+```julia
+using MultiModeNoise
+
+fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
+experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))
+summarize(experiment)
 ```
 
-The run writes into `results/raman/`. Inspect the standard images before using
-the result in a meeting or report.
+## First Compatibility Commands
 
-## Common failures
+```bash
+./fiberlab configs
+./fiberlab plan research_engine_poc
+./fiberlab run research_engine_poc
+./fiberlab latest research_engine_poc
+```
 
-- Missing Julia: install Julia 1.12.x and make sure `julia` is on `PATH`.
-- Missing Python venv support on Debian/Ubuntu: install `python3-venv` and
-  `python3-pip`.
-- PyPlot backend problems on headless Linux: use the Docker path or set an Agg
-  backend before plotting.
-- Slow or memory-heavy runs on the editing VM: stop and use the burst workflow.
+Large simulations should run on suitable compute with Julia threading enabled:
+
+```bash
+julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
+```

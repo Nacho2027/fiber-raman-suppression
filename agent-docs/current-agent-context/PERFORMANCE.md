@@ -2,10 +2,8 @@
 
 This file distills the still-actionable conclusions from the remote-only Phase 29 kernel inventory.
 
-Source artifacts:
-
-- `docs/planning-history/phases/29-performance-modeling-and-roofline-audit-for-the-fft-adjoint-/29-KERNEL-INVENTORY.md`
-- `docs/planning-history/quick/260415-u4s-benchmark-threading-opportunities-across/*`
+Source artifacts are archived outside the active repo under the 2026-05-04
+cleanup vault.
 
 ## Durable conclusions
 
@@ -38,4 +36,5 @@ Source artifacts:
 
 - When discussing runtime bottlenecks, state whether the claim is for `M = 1` or multimode operation.
 - When proposing optimization-speed work, separate per-solve kernel tuning from embarrassingly parallel solve orchestration.
-- If a future task needs the full static accounting, read the archived source document in `docs/planning-history/` instead of reconstructing it from memory.
+- If a future task needs the full static accounting, use the external cleanup
+  archive instead of reconstructing it from memory.

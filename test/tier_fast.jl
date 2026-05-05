@@ -30,6 +30,7 @@ include(joinpath(_ROOT, "scripts", "lib", "manifest_io.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
+include(joinpath(@__DIR__, "core", "test_fiberlab_api.jl"))
 include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_sweep_sidecars.jl"))
@@ -41,6 +42,7 @@ include(joinpath(@__DIR__, "core", "test_non_raman_objective_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_gain_tilt_variable_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_regime_promotion_status.jl"))
 include(joinpath(@__DIR__, "core", "test_slm_replay.jl"))
+include(joinpath(@__DIR__, "core", "test_playground_contract_runner.jl"))
 
 @testset "Phase 16 — fast tier" begin
 

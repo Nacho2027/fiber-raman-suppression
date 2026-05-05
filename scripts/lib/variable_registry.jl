@@ -14,6 +14,7 @@ using TOML
 
 const VARIABLE_EXTENSION_DIR = normpath(joinpath(@__DIR__, "..", "..", "lab_extensions", "variables"))
 const VARIABLE_REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const VARIABLE_EXTENSION_DIRS_ENV = "FIBER_VARIABLE_EXTENSION_DIRS"
 
 _variable_normalize_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
 _variable_safe_name(x) = replace(String(_variable_normalize_symbol(x)), r"[^A-Za-z0-9_]" => "_")
@@ -85,17 +86,30 @@ const VARIABLE_CONTRACTS = (
         artifact_semantics = "Standard phase profile and group-delay diagnostics show the induced quadratic phase.",
     ),
     (
+        kind = :reduced_phase,
+        regime = :single_mode,
+        backend = :spectral_reduced_phase,
+        description = "Adjoint-compatible reduced-basis spectral phase control. Optimizer coefficients map to explicit phase bases, then full-grid adjoint gradients are pulled back to coefficients.",
+        maturity = "experimental",
+        units = "rad on normalized spectral phase basis coefficients",
+        bounds = "unbounded coefficient vector unless solver/config adds explicit regularization",
+        optimizer_representation = "coefficient vector over controls.policy_options.basis_orders",
+        parameterizations = (:basis_coefficients,),
+        artifact_hooks = (:phase_profile, :group_delay),
+        artifact_semantics = "Standard phase profile and group-delay diagnostics show the phase produced by the reduced-basis coefficients.",
+    ),
+    (
         kind = :phase,
         regime = :long_fiber,
         backend = :spectral_phase,
-        description = "Spectral phase control for long-fiber planning and burst-only workflows.",
+        description = "Spectral phase control for exact-grid length-scaled single-mode workflows.",
         maturity = "experimental",
         units = "rad",
-        bounds = "unbounded real phase values; long-fiber execution remains workflow-specific",
+        bounds = "unbounded real phase values; large long-fiber runs may still need dedicated checkpointed workflows",
         optimizer_representation = "full-grid real array with shape Nt x M",
         parameterizations = (:full_grid,),
         artifact_hooks = (:phase_profile, :group_delay),
-        artifact_semantics = "Standard long-fiber artifacts after dedicated workflow promotion.",
+        artifact_semantics = "Standard phase artifacts plus a long-fiber reach/grid diagnostic.",
     ),
     (
         kind = :phase,
@@ -119,7 +133,12 @@ function registered_variable_contracts(regime::Union{Nothing,Symbol}=nothing)
 end
 
 function registered_variable_kinds(regime::Symbol)
-    return Tuple(unique(contract.kind for contract in registered_variable_contracts(regime)))
+    builtins = Symbol[contract.kind for contract in registered_variable_contracts(regime)]
+    for contract in registered_variable_extension_contracts(regime)
+        row = validate_variable_extension_contract(contract)
+        row.promotable && push!(builtins, contract.kind)
+    end
+    return Tuple(unique(builtins))
 end
 
 function variable_contract(kind::Symbol, regime::Symbol)
@@ -127,6 +146,21 @@ function variable_contract(kind::Symbol, regime::Symbol)
         contract for contract in VARIABLE_CONTRACTS
         if contract.kind == kind && contract.regime == regime
     )
+    if isempty(matches)
+        extension_matches = Tuple(
+            contract for contract in registered_variable_extension_contracts(regime)
+            if contract.kind == kind
+        )
+        if !isempty(extension_matches)
+            contract = only(extension_matches)
+            row = validate_variable_extension_contract(contract)
+            row.promotable && return contract
+            blockers = isempty(row.blockers) ? "none" : join(row.blockers, ",")
+            errors = isempty(row.errors) ? "none" : join(row.errors, ",")
+            throw(ArgumentError(
+                "variable `$(kind)` is a research extension for regime `$(regime)`, but it is not promoted for execution; blockers: $(blockers); errors: $(errors)"))
+        end
+    end
     isempty(matches) && throw(ArgumentError(
         "variable `$(kind)` is not registered for regime `$(regime)`; registered variables: $(collect(registered_variable_kinds(regime)))"))
     return only(matches)
@@ -169,19 +203,31 @@ function _parse_variable_extension_contract(path::AbstractString)
         compatible_objectives = objectives,
         artifact_semantics = String(get(parsed, "artifact_semantics", "")),
         validation = String(get(parsed, "validation", "")),
+        dimension = Int(get(parsed, "dimension", 1)),
         config_path = abspath(path),
     )
 end
 
+function _variable_extension_dirs()
+    dirs = String[VARIABLE_EXTENSION_DIR]
+    raw = get(ENV, VARIABLE_EXTENSION_DIRS_ENV, "")
+    if !isempty(strip(raw))
+        append!(dirs, [normpath(path) for path in split(raw, Sys.iswindows() ? ';' : ':') if !isempty(strip(path))])
+    end
+    return unique(dirs)
+end
+
 function registered_variable_extension_contracts(regime::Union{Nothing,Symbol}=nothing)
-    isdir(VARIABLE_EXTENSION_DIR) || return ()
     contracts = []
-    for entry in readdir(VARIABLE_EXTENSION_DIR; join=true)
-        isfile(entry) || continue
-        endswith(entry, ".toml") || continue
-        contract = _parse_variable_extension_contract(entry)
-        if isnothing(regime) || contract.regime == regime
-            push!(contracts, contract)
+    for dir in _variable_extension_dirs()
+        isdir(dir) || continue
+        for entry in readdir(dir; join=true)
+            isfile(entry) || continue
+            endswith(entry, ".toml") || continue
+            contract = _parse_variable_extension_contract(entry)
+            if isnothing(regime) || contract.regime == regime
+                push!(contracts, contract)
+            end
         end
     end
     sort!(contracts; by = contract -> string(contract.kind))
@@ -241,6 +287,19 @@ function validate_variable_extension_contract(contract)
     contract.execution == :executable || contract.execution == :planning_only ||
         push!(errors, "unknown_execution")
     contract.backend == :lab_extension && push!(blockers, "backend_not_promoted")
+    contract.backend in (:lab_extension, :scalar_phase_extension, :vector_phase_extension, :vector_control_extension) ||
+        push!(errors, "unknown_backend")
+    if contract.backend == :scalar_phase_extension && contract.execution != :executable
+        push!(blockers, "scalar_phase_extension_not_executable")
+    end
+    if contract.backend == :vector_phase_extension
+        contract.execution == :executable || push!(blockers, "vector_phase_extension_not_executable")
+        get(contract, :dimension, 0) > 1 || push!(errors, "invalid_vector_dimension")
+    end
+    if contract.backend == :vector_control_extension
+        contract.execution == :executable || push!(blockers, "vector_control_extension_not_executable")
+        get(contract, :dimension, 0) > 1 || push!(errors, "invalid_vector_dimension")
+    end
     contract.maturity in ("supported", "experimental") || push!(blockers, "maturity_$(contract.maturity)")
     isempty(contract.validation) || occursin("Requires", contract.validation) &&
         push!(blockers, "validation_requirements_unmet")
@@ -333,6 +392,159 @@ end
 """
 end
 
+function _variable_executable_scalar_phase_text(kind_name, build_name, projection_name)
+    return """
+\"\"\"
+Executable scalar phase variable scaffold for `$kind_name`.
+
+This default template maps one bounded scalar to a normalized quadratic
+spectral phase basis. Replace the basis construction to define your own control
+while keeping the returned `(phase, amplitude, scalar_controls, diagnostics)`
+contract.
+\"\"\"
+
+using FFTW
+
+function _$(kind_name)_basis(sim, Nt::Int, M::Int)
+    frequency = FFTW.fftfreq(Nt, 1 / sim["Δt"])
+    denom = max(maximum(abs.(frequency)), eps(Float64))
+    basis = (frequency ./ denom) .^ 2
+    basis .-= sum(basis) / length(basis)
+    basis ./= max(maximum(abs.(basis)), eps(Float64))
+    return repeat(reshape(basis, Nt, 1), 1, M)
+end
+
+function $build_name(context)
+    coeff = Float64(context.scalar_value)
+    basis = _$(kind_name)_basis(context.sim, context.Nt, context.M)
+    return (
+        phase = coeff .* basis,
+        amplitude = ones(context.Nt, context.M),
+        scalar_controls = Dict("$kind_name" => coeff),
+        diagnostics = Dict(
+            Symbol("$kind_name") => coeff,
+            Symbol("$(kind_name)_basis_max_abs") => Float64(maximum(abs.(basis))),
+        ),
+    )
+end
+
+function $projection_name(value)
+    return Float64(value)
+end
+"""
+end
+
+function _variable_executable_vector_phase_text(kind_name, build_name, projection_name, dimension::Int)
+    return """
+\"\"\"
+Executable vector phase variable scaffold for `$kind_name`.
+
+This default template maps a bounded coefficient vector to low-order normalized
+spectral phase bases. Replace `_$(kind_name)_basis` or the basis orders to
+define your own multi-parameter control.
+\"\"\"
+
+using FFTW
+
+function _$(kind_name)_basis(sim, Nt::Int, M::Int, order::Int)
+    frequency = FFTW.fftfreq(Nt, 1 / sim["Δt"])
+    denom = max(maximum(abs.(frequency)), eps(Float64))
+    basis = (frequency ./ denom) .^ order
+    basis .-= sum(basis) / length(basis)
+    basis ./= max(maximum(abs.(basis)), eps(Float64))
+    return repeat(reshape(basis, Nt, 1), 1, M)
+end
+
+function $build_name(context)
+    values = Float64.(context.control_values)
+    length(values) == $dimension || throw(ArgumentError("$kind_name expects $dimension coefficients"))
+    phase = zeros(context.Nt, context.M)
+    controls = Dict{String,Float64}()
+    for (i, value) in enumerate(values)
+        phase .+= value .* _$(kind_name)_basis(context.sim, context.Nt, context.M, i + 1)
+        controls["$(kind_name)[\$(i)]"] = value
+    end
+    return (
+        phase = phase,
+        amplitude = ones(context.Nt, context.M),
+        scalar_controls = controls,
+        diagnostics = Dict(
+            Symbol("$kind_name") => maximum(abs.(phase)),
+            Symbol("$(kind_name)_dimension") => $dimension,
+        ),
+    )
+end
+
+function $projection_name(values)
+    return Float64.(values)
+end
+"""
+end
+
+function _variable_executable_vector_control_text(kind_name, build_name, projection_name, dimension::Int)
+    return """
+\"\"\"
+Executable vector control scaffold for `$kind_name`.
+
+This broader control-extension template maps a bounded coefficient vector into
+phase, amplitude, and an optional energy scale. It is the first-class pattern
+for non-phase-only exploratory controls: edit the basis construction and
+control mapping, not optimizer internals.
+\"\"\"
+
+using FFTW
+
+function _$(kind_name)_normalized_frequency(sim, Nt::Int)
+    frequency = FFTW.fftfreq(Nt, 1 / sim["Δt"])
+    denom = max(maximum(abs.(frequency)), eps(Float64))
+    return frequency ./ denom
+end
+
+function $build_name(context)
+    values = Float64.(context.control_values)
+    length(values) == $dimension || throw(ArgumentError("$kind_name expects $dimension coefficients"))
+    normalized_frequency = _$(kind_name)_normalized_frequency(context.sim, context.Nt)
+    phase_basis = normalized_frequency .^ 2
+    phase_basis .-= sum(phase_basis) / length(phase_basis)
+    phase_basis ./= max(maximum(abs.(phase_basis)), eps(Float64))
+
+    phase_coeff = values[1]
+    amplitude_tilt = length(values) >= 2 ? values[2] : 0.0
+    energy_log_scale = length(values) >= 3 ? values[3] : 0.0
+
+    phase = phase_coeff .* repeat(reshape(phase_basis, context.Nt, 1), 1, context.M)
+    amplitude_1d = clamp.(1 .+ 0.05 .* tanh(amplitude_tilt) .* normalized_frequency, 0.05, 2.0)
+    amplitude = repeat(reshape(amplitude_1d, context.Nt, 1), 1, context.M)
+    energy_scale = exp(clamp(energy_log_scale, -2.0, 2.0))
+
+    controls = Dict{String,Float64}(
+        "$(kind_name)_phase_coeff" => phase_coeff,
+        "$(kind_name)_amplitude_tilt" => amplitude_tilt,
+        "$(kind_name)_energy_log_scale" => energy_log_scale,
+        "$(kind_name)_energy_scale" => energy_scale,
+    )
+
+    return (
+        phase = phase,
+        amplitude = amplitude .* sqrt(energy_scale),
+        energy_scale = energy_scale,
+        scalar_controls = controls,
+        diagnostics = Dict(
+            Symbol("$kind_name") => maximum(abs.(phase)),
+            Symbol("$(kind_name)_amplitude_min") => Float64(minimum(amplitude)),
+            Symbol("$(kind_name)_amplitude_max") => Float64(maximum(amplitude)),
+            Symbol("$(kind_name)_energy_scale") => energy_scale,
+            Symbol("$(kind_name)_dimension") => $dimension,
+        ),
+    )
+end
+
+function $projection_name(values)
+    return Float64.(values)
+end
+"""
+end
+
 function scaffold_variable_extension(
     kind;
     regime=:single_mode,
@@ -342,6 +554,11 @@ function scaffold_variable_extension(
     bounds::AbstractString="document bounds/projection behavior",
     parameterizations=("full_grid",),
     compatible_objectives=("raman_band",),
+    backend::Symbol=:lab_extension,
+    maturity::AbstractString="research",
+    execution::Symbol=:planning_only,
+    validation::AbstractString="Requires units, bounds/projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution.",
+    dimension::Int=1,
     force::Bool=false,
 )
     kind_name = _variable_safe_name(kind)
@@ -359,13 +576,28 @@ function scaffold_variable_extension(
     build_name = "build_$(kind_name)_control"
     projection_name = "project_$(kind_name)_control"
     source_field = _variable_source_field(source_path)
+    artifact_hooks_text =
+        backend == :scalar_phase_extension && execution == :executable ?
+            "[\"phase_profile\", \"group_delay\"]" :
+        backend == :vector_phase_extension && execution == :executable ?
+            "[\"phase_profile\", \"group_delay\"]" :
+        backend == :vector_control_extension && execution == :executable ?
+            "[\"phase_profile\", \"group_delay\", \"amplitude_mask\", \"energy_scale\", \"energy_throughput\"]" :
+            "[\"control_profile\", \"control_diagnostic\"]"
+    artifact_semantics_text =
+        backend == :vector_control_extension && execution == :executable ?
+            "Generic explore overview plus phase, amplitude, and energy diagnostics show the vector control update." :
+        backend in (:scalar_phase_extension, :vector_phase_extension) && execution == :executable ?
+            "Standard phase and group-delay diagnostics show the generated phase control." :
+            "Standard phase and group-delay diagnostics show the scalar phase control."
+
     toml_text = """
 kind = "$(kind_name)"
 regime = "$(regime_name)"
-backend = "lab_extension"
+backend = "$(String(backend))"
 description = "$(replace(String(description), "\"" => "\\\""))"
-maturity = "research"
-execution = "planning_only"
+maturity = "$(replace(String(maturity), "\"" => "\\\""))"
+execution = "$(String(execution))"
 source = "$(replace(source_field, "\\" => "/"))"
 build_function = "$(build_name)"
 projection_function = "$(projection_name)"
@@ -373,13 +605,22 @@ units = "$(replace(String(units), "\"" => "\\\""))"
 bounds = "$(replace(String(bounds), "\"" => "\\\""))"
 parameterizations = $(_variable_string_array(parameterizations))
 compatible_objectives = $(_variable_string_array(compatible_objectives))
-artifact_hooks = ["control_profile", "control_diagnostic"]
-artifact_semantics = "Requires output metrics, plots, and handoff semantics before execution."
-validation = "Requires units, bounds/projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution."
+dimension = $(dimension)
+artifact_hooks = $(artifact_hooks_text)
+artifact_semantics = "$(artifact_semantics_text)"
+validation = "$(replace(String(validation), "\"" => "\\\""))"
 """
 
     write(toml_path, toml_text)
-    write(source_path, _variable_stub_text(kind_name, build_name, projection_name))
+    source_text =
+        backend == :scalar_phase_extension && execution == :executable ?
+            _variable_executable_scalar_phase_text(kind_name, build_name, projection_name) :
+        backend == :vector_phase_extension && execution == :executable ?
+            _variable_executable_vector_phase_text(kind_name, build_name, projection_name, dimension) :
+        backend == :vector_control_extension && execution == :executable ?
+            _variable_executable_vector_control_text(kind_name, build_name, projection_name, dimension) :
+            _variable_stub_text(kind_name, build_name, projection_name)
+    write(source_path, source_text)
     return (
         kind = Symbol(kind_name),
         regime = Symbol(regime_name),

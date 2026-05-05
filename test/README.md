@@ -1,15 +1,9 @@
 # Tests
 
-Run the fast tier:
+Run the fast Julia tier:
 
 ```bash
 make test
-```
-
-Python CLI tests:
-
-```bash
-make test-python
 ```
 
 Slow and full tiers are for broader numerical checks and should run on suitable
@@ -19,3 +13,5 @@ compute:
 make test-slow
 make test-full
 ```
+
+There is no supported Python test tier.

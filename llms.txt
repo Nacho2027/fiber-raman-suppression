@@ -1,102 +1,54 @@
 # Fiber Raman Suppression
 
-Raman-suppression simulation, optimization, and result-generation workflows for
-nonlinear fiber propagation. This file is a compact map for agents and LLM
-tools; it is not a full documentation dump.
+Compact source map for agents and LLM tools.
 
 ## Start Here
 
-- [Project README](README.md): Project overview, supported research lanes,
-  first commands, and repository layout.
-- [Human documentation index](docs/README.md): Curated map of user guides,
-  architecture docs, reports, status notes, and research notes.
-- [Agent documentation index](agent-docs/README.md): Curated map of agent
-  continuity notes and current context.
-- [Agent operating rules](AGENTS.md): Short mandatory operating contract for
-  agents.
-- [Long-form project manual](CLAUDE.md): Detailed conventions, architecture,
-  compute workflow, and session hygiene.
+- [AGENTS.md](AGENTS.md): mandatory operating rules.
+- [README.md](README.md): project overview and first commands.
+- [docs/README.md](docs/README.md): human-facing doc map.
+- [agent-docs/README.md](agent-docs/README.md): minimal agent context map.
 
-## Supported Workflows
+## Supported Spine
 
-- [Supported workflows](docs/guides/supported-workflows.md): Supported versus
-  experimental workflow boundary.
-- [Installation guide](docs/guides/installation.md): Local setup and
-  troubleshooting.
-- [Container guide](docs/guides/container.md): Reproducible Docker setup.
-- [Configurable experiments](docs/guides/configurable-experiments.md):
-  Maintained configurable experiment surface.
-- [Internal lab release readiness](docs/guides/internal-lab-release-readiness.md):
-  Rivera Lab internal handoff blockers, practical readiness gates, and
-  first-user sequence.
-- [Public release readiness](docs/guides/public-release-readiness.md):
-  Release blockers, public metadata gaps, and preview-release sequence.
-- [Quickstart optimization](docs/guides/quickstart-optimization.md): Canonical
-  single-run optimization.
-- [Quickstart sweep](docs/guides/quickstart-sweep.md): Burst VM sweep workflow.
-- [Interpreting plots](docs/guides/interpreting-plots.md): Standard image and
-  report-card interpretation.
+- `src/fiberlab/`: notebook-facing FiberLab API for fiber optimization.
+- `src/simulation/`, `src/gain_simulation/`, `src/mmf_cost.jl`: inherited
+  physics backend.
+- `configs/experiments/`: serialized experiments for reproducible runs.
+- `lab_extensions/`: experimental controls and objectives.
+- `scripts/canonical/`: maintained compatibility entry points.
+- `scripts/lib/`: transitional Julia runner/orchestration internals.
+- `./fiberlab`: Bash router to maintained Julia commands.
+- `test/`: supported regression tests.
 
-## Architecture And Reference
+Python is not a supported API surface.
+Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`, and
+`.pytest_cache/` are not source structure.
 
-- [Repo navigation](docs/architecture/repo-navigation.md): Authoritative code
-  and workflow boundaries.
-- [Output format](docs/architecture/output-format.md): Saved JLD2, JSON, and
-  manifest conventions.
-- [Cost convention](docs/architecture/cost-convention.md): Cost sign and dB
-  reporting conventions.
-- [Cost-function physics](docs/architecture/cost-function-physics.md): Raman
-  band objective, adjoint framing, and physics rationale.
-- [Current equation verification](docs/reference/current-equation-verification.pdf):
-  Current equation-level verification reference.
+## Core Docs
 
-## Current Research Status
+- [Installation](docs/guides/installation.md)
+- [FiberLab concepts](docs/concepts/fiberlab-model.md)
+- [Notebook API](docs/guides/notebook-api.md)
+- [Public API](docs/reference/api.md)
+- [Supported workflows](docs/guides/supported-workflows.md)
+- [Research verdicts](docs/research-verdicts.md)
+- [Repo navigation](docs/architecture/repo-navigation.md)
+- [Output format](docs/architecture/output-format.md)
+- [Cost convention](docs/notes/cost-convention.md)
 
-- [Research closure report](docs/reports/research-closure-2026-04-28/REPORT.md):
-  End-of-exploration lane classification and packaging decisions.
-- [MMF readiness report](docs/reports/mmf-raman-readiness-2026-04-28/REPORT.md):
-  Qualified multimode readiness status and caveats.
-- [Long-fiber 200 m closure](docs/status/longfiber-200m-closure-2026-04-28.md):
-  Completed image-backed long-fiber milestone with caveats.
-- [Multivar positive result](docs/status/multivar-amp-on-phase-positive-result-2026-04-24.md):
-  Staged amplitude-on-phase result.
-- [Multivar negative result](docs/status/multivar-canonical-negative-result-2026-04-24.md):
-  Direct joint multivariable negative result.
-- [MMF window validation](docs/status/mmf-window-validation-2026-04-27.md):
-  MMF window validation status.
-- [Recent phase synthesis](docs/synthesis/recent-phase-synthesis-29-34.md):
-  Compact synthesis of recent phase conclusions.
+## Current Status
 
-## Research Notes
-
-- [Research notes index](docs/research-notes/README.md): Paper-style mini-note
-  series and quality checklist.
-- [Traceability map](docs/research-notes/TRACEABILITY-MAP.md): Code, result,
-  and figure traceability across the note series.
-- [Verification closure matrix](docs/research-notes/VERIFICATION-CLOSURE-MATRIX.md):
-  Note-by-note verification gaps.
-
-## Agent Context
-
-- [Current agent context](agent-docs/current-agent-context/INDEX.md): Entry
-  point for durable active context.
-- [Methodology notes](agent-docs/current-agent-context/METHODOLOGY.md): Sweep
-  windowing and threading findings.
-- [Numerics notes](agent-docs/current-agent-context/NUMERICS.md): Numerics
-  audit status and remaining cautions.
-- [Infrastructure notes](agent-docs/current-agent-context/INFRASTRUCTURE.md):
-  Multi-machine compute context.
-- [Long-fiber context](agent-docs/current-agent-context/LONGFIBER.md):
-  Current long-fiber support boundary.
-- [Multimode context](agent-docs/current-agent-context/MULTIMODE.md): Current
-  MMF lane status.
-- [Multivar context](agent-docs/current-agent-context/MULTIVAR.md): Current
-  multivariable optimization lane status.
+- [Research verdicts](docs/research-verdicts.md)
+- [Current agent context](agent-docs/current-agent-context/INDEX.md)
 
 ## Archive Boundary
 
-- [Planning history](docs/planning-history/): Historical GSD and phase archive.
-  Use for provenance, not as active project state.
-- [Results](results/): Generated run artifacts and figures. Do not treat as
-  normal source code unless a current doc explicitly designates a durable
-  fixture or summary.
+Raw results, old notebooks, historical planning, bulky artifacts, and old agent
+topic folders were moved out of the active repo on 2026-05-04:
+
+```text
+/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/
+```
+
+Do not recursively inspect `results/` or archived material by default.

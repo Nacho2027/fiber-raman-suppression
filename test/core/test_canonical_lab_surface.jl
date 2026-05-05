@@ -499,7 +499,7 @@ index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_ra
     @test refine_plan.output_dir == joinpath("results", "raman", "multivar", "amp_on_phase_lab_smoke")
     @test endswith(refine_plan.artifact, joinpath("amp_on_phase_lab_smoke", "amp_on_phase_result.jld2"))
     @test refine_plan.export_requested
-    @test occursin("multivar_amp_on_phase_ablation.jl", refine_plan.command)
+    @test occursin("run_amp_on_phase_refinement", refine_plan.command)
 
     rendered_refine = sprint(io -> render_refine_amp_on_phase_plan(refine_plan; io=io))
     @test occursin("experimental optional workflow", rendered_refine)

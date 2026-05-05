@@ -23,7 +23,7 @@ are untouched and remain available for A/B comparison.
 recommended.
 
 # Docs
-Docs: docs/architecture/cost-function-physics.md
+Docs: docs/notes/cost-function-physics.md
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════

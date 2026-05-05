@@ -13,15 +13,18 @@ optical fibers, with support for:
 The primary use case is Raman suppression optimization: finding spectral phase profiles
 that minimize energy transfer to Raman-shifted frequencies during fiber propagation.
 
-See `scripts/raman_optimization.jl` for the main optimization entry point and
-`scripts/common.jl` for fiber presets and problem setup utilities.
+The high-level FiberLab API is defined in `src/fiberlab/`. Lower-level
+simulation functions remain available for backend and numerical work.
 """
 module MultiModeNoise
 
-export OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
-       ensure_deterministic_environment, load_run, load_canonical_runs,
-       read_run_manifest, save_run, update_run_manifest_entry,
-       upsert_run_manifest_entry!, write_run_manifest
+export ArtifactPolicy, Control, Experiment, Fiber, Grid, Objective, Pulse,
+       Solver, experiment_config_text, summarize, write_experiment_config,
+       OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
+       artifact_paths_for_prefix, ensure_deterministic_environment,
+       load_run, load_canonical_runs, read_run_manifest, save_run,
+       update_run_manifest_entry, upsert_run_manifest_entry!, write_jld2_file,
+       write_json_file, write_run_manifest
 
 using Tullio
 using SparseArrays
@@ -46,7 +49,9 @@ include("analysis/analysis.jl")
 include("analysis/plotting.jl")
 
 include("helpers/helpers.jl")
+include("io/artifacts.jl")
 include("io/results.jl")
 include("runtime/determinism.jl")
+include("fiberlab/api.jl")
 
 end

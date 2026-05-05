@@ -2,28 +2,51 @@
 
 Read this before moving code.
 
-## Main directories
+## Canonical Surfaces
 
 | Path | Purpose |
 |---|---|
-| `src/` | reusable Julia package code |
-| `scripts/lib/` | shared implementation for scripts |
-| `scripts/canonical/` | maintained CLI wrappers |
-| `scripts/workflows/` | implementation called by wrappers |
-| `scripts/research/` | active research drivers that still need context |
-| `configs/` | run, sweep, experiment, and SLM specs |
-| `docs/` | human-facing docs |
-| `agent-docs/` | agent continuity notes |
-| `results/` | generated artifacts |
+| `src/fiberlab/` | Notebook-facing FiberLab API and product vocabulary |
+| `src/simulation/`, `src/gain_simulation/`, `src/mmf_cost.jl` | Low-level physics backend |
+| `configs/experiments/` | Serialized experiments for reproducible runs |
+| `lab_extensions/` | Experimental controls and objectives |
+| `scripts/canonical/` | Maintained compatibility entry points |
+| `scripts/lib/` | Transitional runner/orchestration internals |
+| `./fiberlab` | Bash router to maintained Julia commands |
+| `test/` | Regression tests for supported behavior |
+| `docs/` | Human-facing docs |
+| `agent-docs/` | Minimal active agent context |
 
-## Where to edit
+## Non-Canonical Areas
 
-- physics or reusable numerics: `src/`;
-- supported command behavior: `scripts/lib/` plus a thin wrapper in
-  `scripts/canonical/`;
-- one-off research driver: `scripts/research/<topic>/`;
-- approved run settings: `configs/`;
-- user-facing behavior changes: the matching file under `docs/`.
+| Path | Rule |
+|---|---|
+| `results/` | Generated evidence; use manifests or targeted paths |
+| `.venv/`, `.claude/`, `.burst-sync/`, `.pytest_cache/` | Ignored local tooling; not repo structure |
+| external cleanup vault | Historical source/results; inspect only for archaeology |
 
-Do not promote notebook code by linking to it. Move reusable logic into `src/`
-or `scripts/lib/` first.
+Python is not a supported API surface.
+
+## Where To Edit
+
+- Notebook-facing experiment concepts: `src/fiberlab/`.
+- Physics or reusable numerics: the backend files under `src/`.
+- Supported command behavior: prefer FiberLab API in `src/fiberlab/`; use
+  `scripts/lib/` only for transitional orchestration; keep wrappers in
+  `scripts/canonical/` thin.
+- Experiment settings: `configs/experiments/`.
+- Experimental objectives and controls: `lab_extensions/`.
+- Research verdicts: [Research Verdicts](../research-verdicts.md).
+- User-facing behavior changes: the relevant file under `docs/`.
+
+Do not promote notebook code by linking to it. Move reusable logic into Julia
+first.
+
+## What Not To Add
+
+- New long-lived phase scripts.
+- New Python API code.
+- New docs that duplicate an existing doc instead of replacing it.
+- Generated results or cached fiber/data files in active source paths.
+- New script-first APIs when a FiberLab object or extension contract would
+  express the idea.

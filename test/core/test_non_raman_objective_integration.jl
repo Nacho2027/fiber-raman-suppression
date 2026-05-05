@@ -17,7 +17,8 @@ end
     @test :temporal_width in registered_objective_kinds(:single_mode)
     contract = objective_contract(:temporal_width, :single_mode)
     @test contract.maturity == "experimental"
-    @test contract.supported_variables == ((:phase,),)
+    @test (:phase,) in contract.supported_variables
+    @test (:reduced_phase,) in contract.supported_variables
     @test :temporal_width_fraction in contract.metrics
 
     spec = load_experiment_spec("research_engine_temporal_width_smoke")

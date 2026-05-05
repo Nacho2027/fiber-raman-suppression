@@ -23,7 +23,7 @@ JLD2 + JSON pair, and aggregates into `sweep_results.jld2` + heatmap PNGs.
 (22 cores). Much longer on `claude-code-host` — burst VM strongly recommended.
 
 # Docs
-Docs: docs/guides/quickstart-sweep.md
+Docs: docs/guides/supported-workflows.md
 """
 
 ENV["MPLBACKEND"] = "Agg"

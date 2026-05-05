@@ -60,7 +60,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     variable_extension_report = validate_variable_extension_contracts()
     @test variable_extension_report.total >= 1
     @test variable_extension_report.valid == variable_extension_report.total
-    @test variable_extension_report.promotable == 0
+    @test variable_extension_report.promotable >= 3
     mode_weights_row = only(filter(row -> row.kind == :mode_weights_planning, variable_extension_report.rows))
     @test mode_weights_row.valid
     @test !mode_weights_row.promotable
@@ -91,7 +91,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test :raman_peak in registered_objective_kinds(:single_mode)
     peak_contract = objective_contract(:raman_peak, :single_mode)
     @test peak_contract.kind == :raman_peak
-    @test peak_contract.supported_variables == ((:phase,),)
+    @test (:phase,) in peak_contract.supported_variables
+    @test (:reduced_phase,) in peak_contract.supported_variables
     @test peak_contract.allowed_regularizers == (:gdd, :boundary)
     capabilities = sprint(io -> render_experiment_capabilities(; io=io))
     @test occursin("Experiment capabilities", capabilities)
@@ -545,11 +546,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     long_compute_plan = render_experiment_compute_plan(long_spec)
     @test occursin("Compute plan: smf28_longfiber_phase_poc", long_compute_plan)
     @test occursin("Provider-neutral path", long_compute_plan)
-    @test occursin("Optional Rivera Lab burst helper", long_compute_plan)
     @test occursin("No command in this plan is launched automatically", long_compute_plan)
-    @test occursin("scripts/research/longfiber/longfiber_optimize_100m.jl", long_compute_plan)
-    @test occursin("LF100_MODE=fresh", long_compute_plan)
-    @test occursin("LF100_L=100.0", long_compute_plan)
+    @test occursin("scripts/canonical/run_experiment.jl --heavy-ok", long_compute_plan)
     @test_throws ArgumentError run_supported_experiment(long_spec; timestamp="test")
     @test_throws ErrorException run_experiment_main(["smf28_longfiber_phase_poc"])
 
@@ -573,8 +571,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     mmf_compute_plan = render_experiment_compute_plan(mmf_spec)
     @test occursin("Compute plan: grin50_mmf_phase_sum_poc", mmf_compute_plan)
     @test occursin("Provider-neutral path", mmf_compute_plan)
-    @test occursin("Optional Rivera Lab burst helper", mmf_compute_plan)
-    @test occursin("scripts/research/mmf/baseline.jl", mmf_compute_plan)
+    @test occursin("scripts/canonical/run_experiment.jl --heavy-ok", mmf_compute_plan)
     explore_plan_spec = run_experiment_main(["--explore-plan", "grin50_mmf_phase_sum_poc"])
     @test explore_plan_spec.id == mmf_spec.id
     @test_throws ErrorException run_experiment_main(["--explore-run", "--local-smoke", "grin50_mmf_phase_sum_poc"])
@@ -885,7 +882,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
         mmf_spec...,
         verification = (mmf_spec.verification..., mode = :standard),
     )
-    @test_throws ArgumentError validate_experiment_spec(mmf_not_burst)
+    @test validate_experiment_spec(mmf_not_burst) isa NamedTuple
 
     mv_export = (
         mv_spec...,

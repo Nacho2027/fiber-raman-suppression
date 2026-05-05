@@ -13,6 +13,7 @@ using TOML
 
 const OBJECTIVE_EXTENSION_DIR = normpath(joinpath(@__DIR__, "..", "..", "lab_extensions", "objectives"))
 const OBJECTIVE_REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const OBJECTIVE_EXTENSION_DIRS_ENV = "FIBER_OBJECTIVE_EXTENSION_DIRS"
 
 _objective_normalize_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
 _objective_safe_name(x) = replace(String(_objective_normalize_symbol(x)), r"[^A-Za-z0-9_]" => "_")
@@ -26,6 +27,7 @@ const OBJECTIVE_CONTRACTS = (
         maturity = "supported",
         supported_variables = (
             (:phase,),
+            (:reduced_phase,),
             (:gain_tilt,),
             (:phase, :gain_tilt),
             (:phase, :amplitude),
@@ -49,7 +51,7 @@ const OBJECTIVE_CONTRACTS = (
         backend = :raman_optimization,
         description = "Maximum single-bin Raman-band fractional leakage with optional phase regularization.",
         maturity = "experimental",
-        supported_variables = ((:phase,),),
+        supported_variables = ((:phase,), (:reduced_phase,)),
         metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :raman_peak_fraction),
         artifact_hooks = (:spectrum_before_after, :raman_peak_marker, :convergence_trace),
         allowed_regularizers = (
@@ -63,7 +65,7 @@ const OBJECTIVE_CONTRACTS = (
         backend = :raman_optimization,
         description = "Non-Raman temporal second-moment pulse-width objective for phase-only pulse shaping.",
         maturity = "experimental",
-        supported_variables = ((:phase,),),
+        supported_variables = ((:phase,), (:reduced_phase,)),
         metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :temporal_width_fraction),
         artifact_hooks = (:spectrum_before_after, :convergence_trace),
         allowed_regularizers = (
@@ -205,15 +207,26 @@ function _parse_extension_contract(path::AbstractString)
     )
 end
 
+function _objective_extension_dirs()
+    dirs = String[OBJECTIVE_EXTENSION_DIR]
+    raw = get(ENV, OBJECTIVE_EXTENSION_DIRS_ENV, "")
+    if !isempty(strip(raw))
+        append!(dirs, [normpath(path) for path in split(raw, Sys.iswindows() ? ';' : ':') if !isempty(strip(path))])
+    end
+    return unique(dirs)
+end
+
 function registered_objective_extension_contracts(regime::Union{Nothing,Symbol}=nothing)
-    isdir(OBJECTIVE_EXTENSION_DIR) || return ()
     contracts = []
-    for entry in readdir(OBJECTIVE_EXTENSION_DIR; join=true)
-        isfile(entry) || continue
-        endswith(entry, ".toml") || continue
-        contract = _parse_extension_contract(entry)
-        if isnothing(regime) || contract.regime == regime
-            push!(contracts, contract)
+    for dir in _objective_extension_dirs()
+        isdir(dir) || continue
+        for entry in readdir(dir; join=true)
+            isfile(entry) || continue
+            endswith(entry, ".toml") || continue
+            contract = _parse_extension_contract(entry)
+            if isnothing(regime) || contract.regime == regime
+                push!(contracts, contract)
+            end
         end
     end
     sort!(contracts; by = contract -> string(contract.kind))
@@ -374,6 +387,35 @@ end
 """
 end
 
+function _objective_executable_scalar_text(kind_name::AbstractString, cost_name::AbstractString, gradient_name::AbstractString)
+    return """
+\"\"\"
+Executable scalar objective extension scaffold for `$kind_name`.
+
+This default template minimizes `1 - peak_fraction`, where peak_fraction is the
+largest temporal power sample divided by total temporal energy at the fiber
+output. Replace this body with your physics metric while keeping the same
+`context -> Float64` contract.
+\"\"\"
+
+using FFTW
+
+function $cost_name(context)
+    ut = ifft(context.uωf, 1)
+    power = vec(sum(abs2.(ut), dims = 2))
+    total = sum(power)
+    total > 0 || throw(ArgumentError("$kind_name requires nonzero output energy"))
+    peak_fraction = maximum(power) / total
+    return 1.0 - Float64(peak_fraction)
+end
+
+function $gradient_name(args...)
+    throw(ArgumentError(
+        "$kind_name is executable only with derivative-free bounded_scalar search"))
+end
+"""
+end
+
 function scaffold_objective_extension(
     kind;
     regime=:single_mode,
@@ -381,6 +423,10 @@ function scaffold_objective_extension(
     description::AbstractString="Research objective contract. Replace with physical quantity, units, and normalization.",
     variables=(("phase",),),
     regularizers=("gdd", "boundary"),
+    backend::Symbol=:lab_extension,
+    maturity::AbstractString="research",
+    execution::Symbol=:planning_only,
+    validation::AbstractString="Requires units, gradient check, artifact metrics, and a promoted backend before execution.",
     force::Bool=false,
 )
     kind_name = _objective_safe_name(kind)
@@ -402,22 +448,27 @@ function scaffold_objective_extension(
     toml_text = """
 kind = "$(kind_name)"
 regime = "$(regime_name)"
-backend = "lab_extension"
+backend = "$(String(backend))"
 description = "$(replace(String(description), "\"" => "\\\""))"
-maturity = "research"
-execution = "planning_only"
+maturity = "$(replace(String(maturity), "\"" => "\\\""))"
+execution = "$(String(execution))"
 source = "$(replace(source_field, "\\" => "/"))"
 function = "$(cost_name)"
 gradient = "$(gradient_name)"
-validation = "Requires units, gradient check, artifact metrics, and a promoted backend before execution."
+validation = "$(replace(String(validation), "\"" => "\\\""))"
 supported_variables = $(_toml_nested_variables(variable_tuples))
 metrics = ["objective_value"]
-artifact_hooks = ["objective_metric", "objective_diagnostic"]
+artifact_hooks = $(backend == :scalar_extension && execution == :executable ?
+    "[\"exploratory_summary\", \"exploratory_overview\"]" :
+    "[\"objective_metric\", \"objective_diagnostic\"]")
 allowed_regularizers = $(_toml_string_array(regularizers))
 """
 
     write(toml_path, toml_text)
-    write(source_path, _objective_stub_text(kind_name, cost_name, gradient_name))
+    source_text = backend == :scalar_extension && execution == :executable ?
+        _objective_executable_scalar_text(kind_name, cost_name, gradient_name) :
+        _objective_stub_text(kind_name, cost_name, gradient_name)
+    write(source_path, source_text)
     return (
         kind = Symbol(kind_name),
         regime = Symbol(regime_name),
@@ -431,7 +482,16 @@ end
 function experiment_objective_contract(spec)
     contract = objective_contract(spec.objective.kind, spec.problem.regime)
 
-    spec.controls.variables in contract.supported_variables || throw(ArgumentError(
+    variables_supported = spec.controls.variables in contract.supported_variables
+    if !variables_supported && contract.backend == :scalar_extension && length(spec.controls.variables) == 1
+        if @isdefined(variable_contract)
+            variable = variable_contract(only(spec.controls.variables), spec.problem.regime)
+            variables_supported =
+                get(variable, :backend, nothing) in (:scalar_phase_extension, :vector_phase_extension, :vector_control_extension) &&
+                spec.objective.kind in get(variable, :compatible_objectives, ())
+        end
+    end
+    variables_supported || throw(ArgumentError(
         "objective `$(spec.objective.kind)` does not support variables $(spec.controls.variables); supported tuples: $(collect(contract.supported_variables))"))
 
     for name in keys(spec.objective.regularizers)

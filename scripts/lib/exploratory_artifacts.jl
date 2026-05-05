@@ -12,6 +12,7 @@ const _EXPLORATORY_ARTIFACTS_JL_LOADED = true
 using FFTW
 using JLD2
 using JSON3
+using MultiModeNoise
 using PyPlot
 using Statistics
 
@@ -343,10 +344,7 @@ function _write_exploratory_summary(path::AbstractString, spec, result_bundle, z
             ),
         ),
     )
-    open(path, "w") do io
-        JSON3.pretty(io, payload)
-    end
-    return path
+    return write_json_file(path, payload)
 end
 
 function _write_exploratory_overview(path::AbstractString, spec, result_bundle, zoom)

@@ -14,9 +14,10 @@ using Dates
 using Printf
 
 include(joinpath(@__DIR__, "export_run.jl"))
+include(joinpath(@__DIR__, "..", "lib", "amp_on_phase_refinement.jl"))
 
 const REFINE_DEFAULT_TAG = Dates.format(now(UTC), "yyyymmddTHHMMSSZ")
-const REFINE_DRIVER = joinpath("scripts", "research", "multivar", "multivar_amp_on_phase_ablation.jl")
+const REFINE_API = "scripts/lib/amp_on_phase_refinement.jl"
 
 function _refine_usage()
     return """
@@ -92,22 +93,6 @@ function refine_amp_on_phase_output_dir(opts)
     return joinpath("results", "raman", "multivar", string("amp_on_phase_", opts.tag))
 end
 
-function refine_amp_on_phase_environment(opts)
-    env = copy(ENV)
-    env["MV_AMP_PHASE_TAG"] = String(opts.tag)
-    env["MV_AMP_PHASE_L_FIBER"] = string(opts.L)
-    env["MV_AMP_PHASE_P_CONT"] = string(opts.P)
-    env["MV_AMP_PHASE_PHASE_ITER"] = string(opts.phase_iter)
-    env["MV_AMP_PHASE_AMP_ITER"] = string(opts.amp_iter)
-    env["MV_AMP_PHASE_DELTA_BOUND"] = string(opts.delta_bound)
-    env["MV_AMP_PHASE_THRESHOLD_DB"] = string(opts.threshold_db)
-    return env
-end
-
-function refine_amp_on_phase_command()
-    return Cmd(["julia", "-t", "auto", "--project=.", REFINE_DRIVER])
-end
-
 function refine_amp_on_phase_plan(opts)
     output_dir = refine_amp_on_phase_output_dir(opts)
     artifact = joinpath(output_dir, "amp_on_phase_result.jld2")
@@ -125,7 +110,7 @@ function refine_amp_on_phase_plan(opts)
         artifact = artifact,
         export_dir = export_dir,
         export_requested = Bool(opts.export),
-        command = "julia -t auto --project=. $REFINE_DRIVER",
+        command = "run_amp_on_phase_refinement(...) via $REFINE_API",
     )
 end
 
@@ -159,8 +144,16 @@ function refine_amp_on_phase_main(args=ARGS)
     render_refine_amp_on_phase_plan(plan)
     opts.dry_run && return plan
 
-    env = refine_amp_on_phase_environment(opts)
-    run(setenv(refine_amp_on_phase_command(), env))
+    run_result = run_amp_on_phase_refinement(
+        tag = opts.tag,
+        output_dir = plan.output_dir,
+        phase_iter = opts.phase_iter,
+        amp_iter = opts.amp_iter,
+        threshold_db = opts.threshold_db,
+        delta_bound = opts.delta_bound,
+        L_fiber = opts.L,
+        P_cont = opts.P,
+    )
 
     isfile(plan.summary) || throw(ArgumentError("refinement summary missing: $(plan.summary)"))
     isfile(plan.artifact) || throw(ArgumentError("refinement artifact missing: $(plan.artifact)"))
@@ -181,7 +174,7 @@ function refine_amp_on_phase_main(args=ARGS)
         println("Optional export command:")
         println("  julia --project=. scripts/canonical/export_run.jl ", plan.artifact, " ", plan.export_dir)
     end
-    return exported === nothing ? plan : (; plan..., exported=exported)
+    return exported === nothing ? (; plan..., result=run_result) : (; plan..., result=run_result, exported=exported)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

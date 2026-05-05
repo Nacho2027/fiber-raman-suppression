@@ -29,7 +29,7 @@ using Test
 ENV["MPLBACKEND"] = "Agg"
 using MultiModeNoise
 
-include(joinpath(@__DIR__, "..", "..", "research", "multivar", "multivar_optimization.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "multivar_optimization.jl"))
 
 Random.seed!(424242)
 

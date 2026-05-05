@@ -23,7 +23,7 @@ paper-style figures and saves a unified comparison set.
 ~25–40 minutes on a 4-core laptop. Burst VM strongly recommended.
 
 # Docs
-Docs: docs/guides/quickstart-optimization.md
+Docs: docs/guides/supported-workflows.md
 """
 
 try using Revise catch end

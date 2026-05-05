@@ -13,7 +13,7 @@ if !isdefined(Main, :supported_experiment_run_kwargs)
     include(joinpath(_GAIN_TILT_ROOT, "scripts", "lib", "experiment_runner.jl"))
 end
 if !isdefined(Main, :mv_block_offsets)
-    include(joinpath(_GAIN_TILT_ROOT, "scripts", "research", "multivar", "multivar_optimization.jl"))
+    include(joinpath(_GAIN_TILT_ROOT, "scripts", "lib", "multivar_optimization.jl"))
 end
 
 @testset "Scalar quadratic-phase playground variable integration" begin
@@ -68,6 +68,72 @@ end
     @test state.A == ones(16, 1)
     @test maximum(abs.(state.φ)) ≈ 2.5
     @test state.gain_tilt == 0.0
+end
+
+@testset "Scalar variable extension integration" begin
+    @test :cubic_phase_scalar in registered_variable_extension_kinds(:single_mode)
+    @test :cubic_phase_scalar in registered_variable_kinds(:single_mode)
+    contract = variable_contract(:cubic_phase_scalar, :single_mode)
+    @test contract.backend == :scalar_phase_extension
+    @test contract.maturity == "experimental"
+    @test :temporal_peak_scalar in contract.compatible_objectives
+
+    spec = load_experiment_spec("research_engine_temporal_peak_cubic_phase_extension_smoke")
+    @test spec.id == "smf28_temporal_peak_cubic_phase_extension_smoke"
+    @test spec.controls.variables == (:cubic_phase_scalar,)
+    @test spec.objective.kind == :temporal_peak_scalar
+    @test spec.solver.kind == :bounded_scalar
+    @test experiment_execution_mode(spec) == :scalar_search
+    @test validate_experiment_spec(spec) isa NamedTuple
+
+    layout = control_layout_plan(spec)
+    @test layout.total_length == "1"
+    block = only(filter(block -> block.name == :cubic_phase_scalar, layout.blocks))
+    @test block.shape == "scalar"
+
+    builder = _load_scalar_variable_builder(contract)
+    sim = Dict{String,Any}("Nt" => 16, "M" => 1, "Δt" => 0.01)
+    cfg = MVConfig(variables = (:cubic_phase_scalar,), log_cost = false)
+    uω0 = ones(ComplexF64, 16, 1)
+    state = _scalar_control_state(:cubic_phase_scalar, 1.5, 0.10, uω0, sum(abs2, uω0), cfg, sim, 16, 1, builder)
+    @test state.scalar_controls["cubic_phase_scalar"] == 1.5
+    @test state.A == ones(16, 1)
+    @test maximum(abs.(state.φ)) ≈ 1.5
+    @test state.gain_tilt == 0.0
+    @test state.diagnostics[:extension_variable] == :cubic_phase_scalar
+end
+
+@testset "Vector phase extension integration" begin
+    @test :poly_phase_vector in registered_variable_extension_kinds(:single_mode)
+    @test :poly_phase_vector in registered_variable_kinds(:single_mode)
+    contract = variable_contract(:poly_phase_vector, :single_mode)
+    @test contract.backend == :vector_phase_extension
+    @test contract.dimension == 2
+    @test :temporal_peak_scalar in contract.compatible_objectives
+
+    spec = load_experiment_spec("research_engine_temporal_peak_poly_phase_vector_smoke")
+    @test spec.id == "smf28_temporal_peak_poly_phase_vector_smoke"
+    @test spec.controls.variables == (:poly_phase_vector,)
+    @test spec.objective.kind == :temporal_peak_scalar
+    @test spec.solver.kind == :nelder_mead
+    @test experiment_execution_mode(spec) == :vector_search
+    @test validate_experiment_spec(spec) isa NamedTuple
+
+    layout = control_layout_plan(spec)
+    @test layout.total_length == "2"
+    block = only(filter(block -> block.name == :poly_phase_vector, layout.blocks))
+    @test block.shape == "vector[2]"
+
+    builder = _load_scalar_variable_builder(contract)
+    sim = Dict{String,Any}("Nt" => 16, "M" => 1, "Δt" => 0.01)
+    uω0 = ones(ComplexF64, 16, 1)
+    state = _vector_control_state(:poly_phase_vector, [1.0, -0.5], uω0, sum(abs2, uω0), sim, 16, 1, builder)
+    @test state.scalar_controls["poly_phase_vector_quadratic"] == 1.0
+    @test state.scalar_controls["poly_phase_vector_cubic"] == -0.5
+    @test state.A == ones(16, 1)
+    @test maximum(abs.(state.φ)) > 0.5
+    @test state.gain_tilt == 0.0
+    @test state.diagnostics[:extension_variable] == :poly_phase_vector
 end
 
 @testset "Gain-tilt variable integration" begin

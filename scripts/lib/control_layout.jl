@@ -20,19 +20,37 @@ function _control_mode_count_hint(spec)
 end
 
 function _control_shape_hint(spec, variable::Symbol)
-    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase
+    contract = variable_contract(variable, spec.problem.regime)
+    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase ||
+       contract.backend == :scalar_phase_extension
         return "scalar"
+    elseif contract.backend == :spectral_reduced_phase
+        orders = get(spec.controls.policy_options, :basis_orders, [2, 3])
+        return string("vector[", length(orders), "]")
+    elseif contract.backend in (:vector_phase_extension, :vector_control_extension)
+        return string("vector[", get(contract, :dimension, "unknown"), "]")
     elseif variable == :mode_weights || variable == :mode_coeffs
         return "mode_count"
+    elseif contract.backend == :shared_spectral_phase
+        return string(spec.problem.Nt, " shared across modes")
     end
     return string(spec.problem.Nt, " x ", _control_mode_count_hint(spec))
 end
 
 function _control_length_hint(spec, variable::Symbol)
-    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase
+    contract = variable_contract(variable, spec.problem.regime)
+    if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase ||
+       contract.backend == :scalar_phase_extension
         return "1"
+    elseif contract.backend == :spectral_reduced_phase
+        orders = get(spec.controls.policy_options, :basis_orders, [2, 3])
+        return string(length(orders))
+    elseif contract.backend in (:vector_phase_extension, :vector_control_extension)
+        return string(get(contract, :dimension, "unknown"))
     elseif variable == :mode_weights || variable == :mode_coeffs
         return "mode_count"
+    elseif contract.backend == :shared_spectral_phase
+        return string(spec.problem.Nt)
     end
     mode_count = _control_mode_count_hint(spec)
     return mode_count == "1" ? string(spec.problem.Nt) : string(spec.problem.Nt, " * ", mode_count)

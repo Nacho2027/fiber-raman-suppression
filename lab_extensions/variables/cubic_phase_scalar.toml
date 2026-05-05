@@ -1,0 +1,17 @@
+kind = "cubic_phase_scalar"
+regime = "single_mode"
+backend = "scalar_phase_extension"
+description = "Research variable contract. Replace with control semantics, units, and bounds."
+maturity = "experimental"
+execution = "executable"
+source = "lab_extensions/variables/cubic_phase_scalar.jl"
+build_function = "build_cubic_phase_scalar_control"
+projection_function = "project_cubic_phase_scalar_control"
+units = "rad"
+bounds = "unbounded"
+parameterizations = ["full_grid"]
+compatible_objectives = ["temporal_peak_scalar"]
+dimension = 1
+artifact_hooks = ["phase_profile", "group_delay"]
+artifact_semantics = "Standard phase and group-delay diagnostics show the generated phase control."
+validation = "Runtime-checked by playground doctor; replace template physics and add science validation before promotion."

@@ -1,7 +1,12 @@
 # Results
 
-Generated simulation outputs live here.
+Generated simulation outputs are not source code.
 
-Do not treat this directory as source code. Routine JLD2 files, logs, and PNGs
-should stay untracked unless intentionally curated as fixtures or moved under
-`docs/artifacts/` for communication.
+The pre-cleanup result tree was moved out of the active repo on 2026-05-04:
+
+```text
+/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/results/
+```
+
+Do not recursively inspect or commit routine outputs here. Keep only deliberately
+curated summaries, fixtures, or figures in git.

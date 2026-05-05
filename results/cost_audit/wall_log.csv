@@ -1,9 +1,0 @@
-config,variant,wall_s,J_final_dB,iterations,iter_to_90pct,converged,dnf,hostname,timestamp
-A,linear,16.948930978775024,-70.52651966953992,10,5,true,false,fiber-raman-temp-h-audit-20260417t231945z,20260417_2332478
-A,log_dB,10.598489046096802,-75.78889666922757,15,9,true,false,fiber-raman-temp-h-audit-20260417t231945z,20260417_2332205
-A,sharp,537.3622779846191,-55.956679345845316,17,12,true,false,fiber-raman-temp-h-audit-20260417t231945z,20260417_2342981
-A,curvature,14.168312788009644,-70.57417037543829,20,14,true,false,fiber-raman-temp-h-audit-20260417t231945z,20260417_2343179
-B,linear,NaN,NaN,0,0,false,true,fiber-raman-temp-h-audit-20260417t231945z,20260417_2343256
-B,log_dB,NaN,NaN,0,0,false,true,fiber-raman-temp-h-audit-20260417t231945z,20260417_2343272
-B,sharp,NaN,NaN,0,0,false,true,fiber-raman-temp-h-audit-20260417t231945z,20260417_2343275
-B,curvature,NaN,NaN,0,0,false,true,fiber-raman-temp-h-audit-20260417t231945z,20260417_2343277

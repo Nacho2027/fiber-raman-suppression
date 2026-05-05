@@ -19,7 +19,9 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --dry-run [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --compute-plan [spec]
     julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-plan [spec]
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --playground-check [--local-smoke] [--heavy-ok] spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec
+    julia --project=. -t auto scripts/canonical/run_experiment.jl --heavy-ok spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --latest [spec]
 
 The current implementation is intentionally narrow:
@@ -54,6 +56,32 @@ end
 
 function _load_or_default_experiment(args)
     return isempty(args) ? DEFAULT_EXPERIMENT_SPEC : args[1]
+end
+
+function _parse_playground_check_args(args)
+    local_smoke = false
+    heavy_ok = false
+    specs = String[]
+
+    for arg in args
+        if arg == "--local-smoke"
+            local_smoke = true
+        elseif arg == "--heavy-ok"
+            heavy_ok = true
+        elseif startswith(arg, "--")
+            error("unknown --playground-check option `$arg`")
+        else
+            push!(specs, arg)
+        end
+    end
+
+    length(specs) == 1 || error(
+        "usage: scripts/canonical/run_experiment.jl --playground-check [--local-smoke] [--heavy-ok] spec")
+    return (
+        spec = only(specs),
+        local_smoke = local_smoke,
+        heavy_ok = heavy_ok,
+    )
 end
 
 function _parse_explore_run_args(args)
@@ -191,6 +219,29 @@ function run_experiment_main(args=ARGS)
         return spec
     end
 
+    if args[1] == "--playground-check"
+        parsed = _parse_playground_check_args(args[2:end])
+        spec = load_experiment_spec(parsed.spec)
+        check = research_config_check_report(spec)
+        render_research_config_check(check)
+        check.validation_ok || error("playground check failed config validation")
+        extension_report = runtime_check_research_extensions(spec)
+        render_runtime_extension_check(extension_report)
+        extension_report.complete || error("playground check failed runtime extension doctor")
+        policy = render_explore_run_policy(
+            spec;
+            local_smoke=parsed.local_smoke,
+            heavy_ok=parsed.heavy_ok,
+        )
+        policy.allowed || error(
+            "playground check failed run policy; blockers: $(join(string.(policy.blockers), ", "))")
+        return (
+            config = check,
+            extensions = extension_report,
+            policy = policy,
+        )
+    end
+
     if args[1] == "--explore-run"
         parsed = _parse_explore_run_args(args[2:end])
         spec = load_experiment_spec(parsed.spec)
@@ -200,6 +251,10 @@ function run_experiment_main(args=ARGS)
             local_smoke=parsed.local_smoke,
             heavy_ok=parsed.heavy_ok,
         )
+        if parsed.dry_run && parsed.heavy_ok
+            println(render_experiment_compute_plan(spec))
+            return spec
+        end
         if !policy.allowed
             error(
                 "explore run refused; blockers: $(join(string.(policy.blockers), ", ")). " *
@@ -210,8 +265,15 @@ function run_experiment_main(args=ARGS)
             return spec
         end
         if policy.action == :front_layer
-            command = "./fiberlab explore run $(experiment_cli_spec_hint(spec)) --local-smoke"
-            result = run_supported_experiment(spec; run_context=:explore_local_smoke, run_command=command)
+            command = "./fiberlab explore run $(experiment_cli_spec_hint(spec))" *
+                (parsed.local_smoke ? " --local-smoke" : "") *
+                (parsed.heavy_ok ? " --heavy-ok" : "")
+            result = run_supported_experiment(
+                spec;
+                run_context=parsed.heavy_ok ? :explore_heavy : :explore_local_smoke,
+                run_command=command,
+                allow_high_resource=parsed.heavy_ok,
+            )
             render_experiment_completion_summary(result)
             return result
         end
@@ -219,6 +281,23 @@ function run_experiment_main(args=ARGS)
         error(
             "explore run for dedicated workflow `$(policy.mode)` is not launched automatically yet; " *
             "run the command from the compute plan on appropriate compute.")
+    end
+
+    if args[1] == "--heavy-ok"
+        length(args) == 2 || error("usage: scripts/canonical/run_experiment.jl --heavy-ok spec")
+        spec = load_experiment_spec(args[2])
+        mode = experiment_execution_mode(spec)
+        mode in (:long_fiber_phase, :multimode_phase) || error(
+            "--heavy-ok is only needed for high-resource long-fiber or multimode front-layer configs")
+        command = "./fiberlab run --heavy-ok $(experiment_cli_spec_hint(spec))"
+        result = run_supported_experiment(
+            spec;
+            run_context=:run_heavy,
+            run_command=command,
+            allow_high_resource=true,
+        )
+        render_experiment_completion_summary(result)
+        return result
     end
 
     if args[1] == "--latest"
@@ -241,7 +320,7 @@ function run_experiment_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --check [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --latest [spec]]")
+        "usage: scripts/canonical/run_experiment.jl [spec | --list | --capabilities | --objectives | --validate-objectives | --variables | --validate-variables | --control-layout [spec] | --artifact-plan [spec] | --check [spec] | --validate-all | --dry-run [spec] | --compute-plan [spec] | --explore-plan [spec] | --playground-check [--local-smoke] [--heavy-ok] spec | --explore-run [--local-smoke] [--heavy-ok] [--dry-run] spec | --heavy-ok spec | --latest [spec]]")
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)

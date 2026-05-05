@@ -10,6 +10,7 @@ Options:
     --description TEXT     Human-readable objective description.
     --variables LIST       Comma-separated variables, default: phase.
     --regularizers LIST    Comma-separated regularizers, default: gdd,boundary.
+    --executable-scalar    Create an executable scalar-extension objective template.
     --force                Overwrite an existing scaffold.
 """
 
@@ -26,6 +27,7 @@ Options:
     --description TEXT     Human-readable objective description.
     --variables LIST       Comma-separated variables, default: phase.
     --regularizers LIST    Comma-separated regularizers, default: gdd,boundary.
+    --executable-scalar    Create an executable scalar-extension objective template.
     --force                Overwrite an existing scaffold.
     --help                 Show this message.
 """
@@ -49,12 +51,15 @@ function parse_scaffold_objective_args(args)
     variables = ("phase",)
     regularizers = ("gdd", "boundary")
     force = false
+    executable_scalar = false
 
     i = 2
     while i <= length(args)
         arg = args[i]
         if arg == "--force"
             force = true
+        elseif arg == "--executable-scalar"
+            executable_scalar = true
         elseif arg == "--regime"
             i += 1
             i <= length(args) || error("--regime requires a value")
@@ -91,6 +96,7 @@ function parse_scaffold_objective_args(args)
         description = description,
         variables = (Tuple(variables),),
         regularizers = regularizers,
+        executable_scalar = executable_scalar,
         force = force,
     )
 end
@@ -109,6 +115,12 @@ function scaffold_objective_main(args=ARGS)
         description=parsed.description,
         variables=parsed.variables,
         regularizers=parsed.regularizers,
+        backend=parsed.executable_scalar ? :scalar_extension : :lab_extension,
+        maturity=parsed.executable_scalar ? "experimental" : "research",
+        execution=parsed.executable_scalar ? :executable : :planning_only,
+        validation=parsed.executable_scalar ?
+            "Runtime-checked by playground doctor; replace template physics and add science validation before promotion." :
+            "Requires units, gradient check, artifact metrics, and a promoted backend before execution.",
         force=parsed.force,
     )
 

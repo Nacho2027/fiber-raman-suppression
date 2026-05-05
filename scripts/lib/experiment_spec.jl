@@ -68,6 +68,17 @@ registered_experiment_regimes() = (:single_mode, :long_fiber, :multimode)
 
 const EXPERIMENT_PROMOTION_STAGES = (:planning, :smoke, :validated, :lab_ready)
 
+function _promoted_scalar_variable_tuples(regime::Symbol)
+    regime == :single_mode || return ()
+    tuples = Tuple{Symbol}[]
+    for contract in registered_variable_extension_contracts(regime)
+        row = validate_variable_extension_contract(contract)
+        row.promotable && contract.backend in (:scalar_phase_extension, :vector_phase_extension, :vector_control_extension) &&
+            push!(tuples, (contract.kind,))
+    end
+    return Tuple(tuples)
+end
+
 function resolve_experiment_config_path(spec::AbstractString)
     if isfile(spec)
         return abspath(spec)
@@ -127,6 +138,16 @@ function _normalize_auto_float_pair(x)
     x isa AbstractVector || throw(ArgumentError("auto-or-pair field must be \"auto\" or a two-element numeric array"))
     length(x) == 2 || throw(ArgumentError("auto-or-pair field must be \"auto\" or a two-element numeric array"))
     return (Float64(x[1]), Float64(x[2]))
+end
+
+function _normalize_auto_float_vector(x)
+    if x isa AbstractString
+        lower = lowercase(strip(String(x)))
+        lower == "auto" && return :auto
+        throw(ArgumentError("auto-or-vector field must be \"auto\" or a numeric array"))
+    end
+    x isa AbstractVector || throw(ArgumentError("auto-or-vector field must be \"auto\" or a numeric array"))
+    return Tuple(Float64(item) for item in x)
 end
 
 function _require_auto_or_positive_finite(x, label::AbstractString)
@@ -223,6 +244,10 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             scalar_lower = _normalize_auto_float(get(solver, "scalar_lower", "auto")),
             scalar_upper = _normalize_auto_float(get(solver, "scalar_upper", "auto")),
             scalar_x_tol = _normalize_auto_float(get(solver, "scalar_x_tol", 1e-3)),
+            vector_initial = _normalize_auto_float_vector(get(solver, "vector_initial", "auto")),
+            vector_lower = _normalize_auto_float_vector(get(solver, "vector_lower", "auto")),
+            vector_upper = _normalize_auto_float_vector(get(solver, "vector_upper", "auto")),
+            vector_x_tol = _normalize_auto_float(get(solver, "vector_x_tol", 1e-3)),
         ),
         artifacts = (
             bundle = _normalize_symbol(get(artifacts, "bundle", "standard")),
@@ -307,6 +332,10 @@ function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONIC
             scalar_lower = :auto,
             scalar_upper = :auto,
             scalar_x_tol = :auto,
+            vector_initial = :auto,
+            vector_lower = :auto,
+            vector_upper = :auto,
+            vector_x_tol = :auto,
         ),
         artifacts = (
             bundle = :standard,
@@ -360,16 +389,18 @@ function experiment_capability_profile(regime::Symbol)
         return (
             variables = (
                 (:phase,),
+                (:reduced_phase,),
                 (:gain_tilt,),
                 (:quadratic_phase,),
                 (:phase, :gain_tilt),
                 (:phase, :amplitude),
                 (:phase, :energy),
                 (:phase, :amplitude, :energy),
+                _promoted_scalar_variable_tuples(regime)...,
             ),
             objectives = registered_objective_kinds(regime),
-            solvers = (:lbfgs, :bounded_scalar),
-            parameterizations = (:full_grid,),
+            solvers = (:lbfgs, :bounded_scalar, :nelder_mead),
+            parameterizations = (:full_grid, :basis_coefficients, :vector_coefficients),
             initializations = (:zero,),
             policies = (:direct, :amp_on_phase),
             grid_policies = (:auto_if_undersized, :exact),
@@ -397,7 +428,7 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:shared_across_modes,),
             initializations = (:zero,),
-            policies = (:planning,),
+            policies = (:planning, :direct),
             grid_policies = (:auto_if_undersized, :exact),
             artifact_bundles = (:mmf_planning,),
             export_profiles = Tuple(registered_export_profiles()),
@@ -416,8 +447,19 @@ function experiment_execution_mode(spec)
         if spec.controls.variables == (:phase,)
             return :phase_only
         end
+        if spec.controls.variables == (:reduced_phase,) && spec.solver.kind == :lbfgs
+            return :reduced_phase
+        end
         if spec.controls.variables in ((:gain_tilt,), (:quadratic_phase,)) && spec.solver.kind == :bounded_scalar
             return :scalar_search
+        end
+        if length(spec.controls.variables) == 1 && spec.solver.kind == :bounded_scalar
+            contract = variable_contract(only(spec.controls.variables), spec.problem.regime)
+            contract.backend == :scalar_phase_extension && return :scalar_search
+        end
+        if length(spec.controls.variables) == 1 && spec.solver.kind == :nelder_mead
+            contract = variable_contract(only(spec.controls.variables), spec.problem.regime)
+            contract.backend in (:vector_phase_extension, :vector_control_extension) && return :vector_search
         end
         return :multivar
     elseif spec.problem.regime == :long_fiber
@@ -449,12 +491,14 @@ function experiment_promotion_status(spec)
     spec.maturity == "supported" || _push_blocker!(blockers, :experimental_maturity)
     spec.verification.mode == :burst_required && _push_blocker!(blockers, :burst_required)
 
-    front_layer_executable = mode in (:phase_only, :multivar, :scalar_search)
+    front_layer_executable = mode in (:phase_only, :reduced_phase, :multivar, :scalar_search, :vector_search) ||
+        (mode == :long_fiber_phase && spec.verification.mode != :burst_required) ||
+        (mode == :multimode_phase && spec.verification.mode != :burst_required)
     if !front_layer_executable
         _push_blocker!(blockers, mode == :amp_on_phase ? :dedicated_workflow_only : :front_layer_execution_blocked)
     end
 
-    if mode == :multivar || mode == :scalar_search
+    if mode == :multivar || mode == :scalar_search || mode == :vector_search
         spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
         spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
@@ -463,15 +507,23 @@ function experiment_promotion_status(spec)
         spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
         spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
-    elseif mode in (:long_fiber_phase, :multimode_phase)
+    elseif (mode == :long_fiber_phase && spec.verification.mode == :burst_required) ||
+            (mode == :multimode_phase && spec.verification.mode == :burst_required)
         _push_blocker!(blockers, :no_local_smoke)
+        experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
+    elseif mode == :long_fiber_phase
+        experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
+    elseif mode == :multimode_phase
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
     end
 
     stage =
-        mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase) ? :planning :
+        mode == :long_fiber_phase && front_layer_executable && artifact_plan.implemented ? :smoke :
+        mode in (:long_fiber_phase, :amp_on_phase) ? :planning :
+        mode == :multimode_phase && front_layer_executable && artifact_plan.implemented ? :smoke :
+        mode == :multimode_phase ? :planning :
         mode == :phase_only && spec.maturity == "supported" && artifact_plan.implemented ? :lab_ready :
-        mode in (:phase_only, :multivar, :scalar_search) && artifact_plan.implemented ? :smoke :
+        mode in (:phase_only, :reduced_phase, :multivar, :scalar_search, :vector_search) && artifact_plan.implemented ? :smoke :
         :planning
 
     requirements = stage == :lab_ready ? Symbol[] : Symbol[
@@ -511,18 +563,19 @@ function experiment_explore_run_policy(spec; local_smoke::Bool=false, heavy_ok::
     blockers = Symbol[]
     warnings = Symbol[]
 
-    action =
-        mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase) ?
-            :dedicated_workflow :
-            :front_layer
+    action = mode == :amp_on_phase ? :dedicated_workflow : :front_layer
 
     spec.maturity != "supported" && _push_blocker!(warnings, :experimental_run)
     status.stage != :lab_ready && _push_blocker!(warnings, Symbol(string("stage_", status.stage)))
 
     if action == :front_layer
-        if spec.maturity != "supported" && !local_smoke
+        if spec.verification.mode == :burst_required && !heavy_ok
+            _push_blocker!(blockers, :requires_heavy_ok)
+        end
+        if spec.maturity != "supported" && !local_smoke && !heavy_ok
             _push_blocker!(blockers, :requires_local_smoke)
         end
+        spec.verification.mode == :burst_required && _push_blocker!(warnings, :heavy_compute)
     else
         if !heavy_ok
             _push_blocker!(blockers, :requires_heavy_ok)
@@ -567,7 +620,7 @@ function _research_run_path(spec, mode::Symbol, status)
             kind = :run,
             command = "./fiberlab run $(spec_hint)",
         )
-    elseif mode in (:phase_only, :multivar, :scalar_search) && status.local_execution_allowed
+    elseif mode in (:phase_only, :reduced_phase, :multivar, :scalar_search, :vector_search, :long_fiber_phase, :multimode_phase) && status.local_execution_allowed
         return (
             kind = :explore_local_smoke,
             command = "./fiberlab explore run $(spec_hint) --local-smoke",
@@ -607,7 +660,8 @@ function research_config_check_report(spec)
         spec.verification.block_on_failed_checks || _push_unique_symbol!(missing, :failed_checks_do_not_block)
         spec.artifacts.save_payload || _push_unique_symbol!(missing, :payload_disabled)
         spec.artifacts.save_sidecar || _push_unique_symbol!(missing, :json_sidecar_disabled)
-        mode in (:phase_only, :multivar, :scalar_search) || _push_unique_symbol!(missing, :requires_dedicated_workflow)
+        mode in (:phase_only, :reduced_phase, :multivar, :scalar_search, :vector_search, :long_fiber_phase, :multimode_phase) &&
+            status.local_execution_allowed || _push_unique_symbol!(missing, :requires_dedicated_workflow)
     end
 
     compare_ready = validation_ok &&
@@ -777,6 +831,7 @@ function validate_experiment_spec(spec)
     _require_auto_or_positive_finite(spec.solver.f_abstol, "solver.f_abstol")
     _require_auto_or_positive_finite(spec.solver.g_abstol, "solver.g_abstol")
     _require_auto_or_positive_finite(spec.solver.scalar_x_tol, "solver.scalar_x_tol")
+    _require_auto_or_positive_finite(spec.solver.vector_x_tol, "solver.vector_x_tol")
     _validate_objective_regularizers(spec, objective_contract)
     if objective_contract.backend == :scalar_extension && spec.objective.log_cost
         throw(ArgumentError(
@@ -786,8 +841,10 @@ function validate_experiment_spec(spec)
 
     mode = experiment_execution_mode(spec)
     if spec.solver.kind == :bounded_scalar
-        spec.controls.variables in ((:gain_tilt,), (:quadratic_phase,)) || throw(ArgumentError(
-            "bounded_scalar currently supports controls.variables=[\"gain_tilt\"] or [\"quadratic_phase\"]"))
+        scalar_extension_ok = length(spec.controls.variables) == 1 &&
+            variable_contract(only(spec.controls.variables), spec.problem.regime).backend == :scalar_phase_extension
+        spec.controls.variables in ((:gain_tilt,), (:quadratic_phase,)) || scalar_extension_ok || throw(ArgumentError(
+            "bounded_scalar currently supports controls.variables=[\"gain_tilt\"], [\"quadratic_phase\"], or one promoted scalar variable extension"))
         spec.solver.scalar_lower === :auto && throw(ArgumentError(
             "bounded_scalar requires numeric solver.scalar_lower"))
         spec.solver.scalar_upper === :auto && throw(ArgumentError(
@@ -798,25 +855,68 @@ function validate_experiment_spec(spec)
             "solver.scalar_upper must be finite"))
         Float64(spec.solver.scalar_lower) < Float64(spec.solver.scalar_upper) || throw(ArgumentError(
             "solver.scalar_lower must be less than solver.scalar_upper"))
+        spec.solver.vector_initial === :auto || throw(ArgumentError(
+            "solver.vector_initial is only valid for solver.kind=\"nelder_mead\""))
+        spec.solver.vector_lower === :auto || throw(ArgumentError(
+            "solver.vector_lower is only valid for solver.kind=\"nelder_mead\""))
+        spec.solver.vector_upper === :auto || throw(ArgumentError(
+            "solver.vector_upper is only valid for solver.kind=\"nelder_mead\""))
+    elseif spec.solver.kind == :nelder_mead
+        length(spec.controls.variables) == 1 || throw(ArgumentError(
+            "nelder_mead currently supports exactly one promoted vector variable extension"))
+        variable = variable_contract(only(spec.controls.variables), spec.problem.regime)
+        variable.backend in (:vector_phase_extension, :vector_control_extension) || throw(ArgumentError(
+            "nelder_mead currently supports one promoted vector_phase_extension or vector_control_extension variable"))
+        objective_contract.backend == :scalar_extension || throw(ArgumentError(
+            "nelder_mead playground execution currently requires a scalar_extension objective"))
+        dim = get(variable, :dimension, 0)
+        spec.solver.vector_initial === :auto && throw(ArgumentError(
+            "nelder_mead requires numeric solver.vector_initial"))
+        spec.solver.vector_lower === :auto && throw(ArgumentError(
+            "nelder_mead requires numeric solver.vector_lower"))
+        spec.solver.vector_upper === :auto && throw(ArgumentError(
+            "nelder_mead requires numeric solver.vector_upper"))
+        length(spec.solver.vector_initial) == dim || throw(ArgumentError(
+            "solver.vector_initial length must match variable dimension $dim"))
+        length(spec.solver.vector_lower) == dim || throw(ArgumentError(
+            "solver.vector_lower length must match variable dimension $dim"))
+        length(spec.solver.vector_upper) == dim || throw(ArgumentError(
+            "solver.vector_upper length must match variable dimension $dim"))
+        all(isfinite, spec.solver.vector_initial) || throw(ArgumentError(
+            "solver.vector_initial entries must be finite"))
+        all(isfinite, spec.solver.vector_lower) || throw(ArgumentError(
+            "solver.vector_lower entries must be finite"))
+        all(isfinite, spec.solver.vector_upper) || throw(ArgumentError(
+            "solver.vector_upper entries must be finite"))
+        all(spec.solver.vector_lower .< spec.solver.vector_upper) || throw(ArgumentError(
+            "solver.vector_lower entries must be less than solver.vector_upper entries"))
+        all(lo <= x <= hi for (lo, x, hi) in zip(spec.solver.vector_lower, spec.solver.vector_initial, spec.solver.vector_upper)) || throw(ArgumentError(
+            "solver.vector_initial must lie inside vector bounds"))
+        (spec.solver.scalar_lower === :auto && spec.solver.scalar_upper === :auto) || throw(ArgumentError(
+            "solver.scalar_lower/scalar_upper are only valid for solver.kind=\"bounded_scalar\""))
     else
         (spec.solver.scalar_lower === :auto && spec.solver.scalar_upper === :auto) || throw(ArgumentError(
             "solver.scalar_lower/scalar_upper are only valid for solver.kind=\"bounded_scalar\""))
+        spec.solver.vector_initial === :auto || throw(ArgumentError(
+            "solver.vector_initial is only valid for solver.kind=\"nelder_mead\""))
+        spec.solver.vector_lower === :auto || throw(ArgumentError(
+            "solver.vector_lower is only valid for solver.kind=\"nelder_mead\""))
+        spec.solver.vector_upper === :auto || throw(ArgumentError(
+            "solver.vector_upper is only valid for solver.kind=\"nelder_mead\""))
     end
     for contract in variable_contracts
         spec.controls.parameterization in contract.parameterizations || throw(ArgumentError(
             "variable `$(contract.kind)` does not support parameterization `$(spec.controls.parameterization)`; supported parameterizations: $(collect(contract.parameterizations))"))
     end
-    spec.controls.variables in objective_contract.supported_variables || throw(ArgumentError(
-        "variables $(spec.controls.variables) are not supported by objective `$(spec.objective.kind)`"))
-    if mode == :phase_only
+    if mode == :phase_only || mode == :reduced_phase
         if !(spec.artifacts.bundle == :standard &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
              spec.artifacts.update_manifest && spec.artifacts.write_trust_report &&
              spec.artifacts.write_standard_images)
             throw(ArgumentError(
-                "phase-only execution currently requires the full standard artifact bundle"))
+                "phase-like adjoint execution currently requires the full standard artifact bundle"))
         end
-    elseif mode == :multivar || mode == :scalar_search || mode == :amp_on_phase
+    elseif mode == :multivar || mode == :scalar_search || mode == :vector_search || mode == :amp_on_phase
         if !(spec.artifacts.bundle == :experimental_multivar &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
              spec.artifacts.write_standard_images)
@@ -834,8 +934,16 @@ function validate_experiment_spec(spec)
     elseif mode == :long_fiber_phase
         spec.maturity == "experimental" || throw(ArgumentError(
             "long_fiber front-layer configs must be marked experimental"))
-        spec.verification.mode == :burst_required || throw(ArgumentError(
-            "long_fiber front-layer configs must use verification.mode=\"burst_required\""))
+        spec.verification.mode in (:standard, :burst_required) || throw(ArgumentError(
+            "long_fiber front-layer configs must use verification.mode=\"standard\" or \"burst_required\""))
+        if spec.verification.mode == :standard
+            spec.problem.Nt <= 4096 || throw(ArgumentError(
+                "standard long_fiber front-layer smoke requires Nt <= 4096; mark larger grids verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+            spec.problem.L_fiber <= 10.0 || throw(ArgumentError(
+                "standard long_fiber front-layer smoke requires L_fiber <= 10 m; mark longer studies verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+            spec.solver.max_iter <= 5 || throw(ArgumentError(
+                "standard long_fiber front-layer smoke requires solver.max_iter <= 5; mark larger studies verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+        end
         if experiment_export_requested(spec)
             throw(ArgumentError(
                 "long_fiber front-layer execution does not yet support phase export handoff"))
@@ -850,8 +958,6 @@ function validate_experiment_spec(spec)
     elseif mode == :multimode_phase
         spec.maturity == "experimental" || throw(ArgumentError(
             "multimode front-layer configs must be marked experimental"))
-        spec.verification.mode == :burst_required || throw(ArgumentError(
-            "multimode front-layer configs must use verification.mode=\"burst_required\""))
         if experiment_export_requested(spec)
             throw(ArgumentError(
                 "multimode front-layer execution does not yet support phase export handoff"))
@@ -864,7 +970,7 @@ function validate_experiment_spec(spec)
         end
         if spec.artifacts.update_manifest || spec.artifacts.write_trust_report
             throw(ArgumentError(
-                "multimode front-layer planning does not yet support manifest updates or trust-report writing"))
+                "multimode front-layer execution does not yet support manifest updates or trust-report writing"))
         end
     end
 
@@ -881,8 +987,7 @@ function experiment_plan_lines(spec)
     mode = experiment_execution_mode(spec)
     export_supported = mode == :phase_only
     export_requested = experiment_export_requested(spec)
-    burst_required = spec.verification.mode == :burst_required ||
-        spec.problem.regime in (:long_fiber, :multimode)
+    burst_required = spec.verification.mode == :burst_required
     objective_contract = experiment_objective_contract(spec)
     export_contract = export_profile_contract(spec.export_plan.profile)
     layout = control_layout_plan(spec)
@@ -899,9 +1004,12 @@ function experiment_plan_lines(spec)
     end
     policy_option_summary = isempty(policy_option_parts) ? "none" : join(policy_option_parts, ", ")
 
-    scalar_solver_suffix = spec.solver.kind == :bounded_scalar ?
-        " scalar_lower=$(spec.solver.scalar_lower) scalar_upper=$(spec.solver.scalar_upper) scalar_x_tol=$(spec.solver.scalar_x_tol)" :
-        ""
+    solver_suffix =
+        spec.solver.kind == :bounded_scalar ?
+            " scalar_lower=$(spec.solver.scalar_lower) scalar_upper=$(spec.solver.scalar_upper) scalar_x_tol=$(spec.solver.scalar_x_tol)" :
+        spec.solver.kind == :nelder_mead ?
+            " vector_initial=$(collect(spec.solver.vector_initial)) vector_lower=$(collect(spec.solver.vector_lower)) vector_upper=$(collect(spec.solver.vector_upper)) vector_x_tol=$(spec.solver.vector_x_tol)" :
+            ""
 
     return [
         "Experiment spec: $(spec.id)",
@@ -916,7 +1024,7 @@ function experiment_plan_lines(spec)
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization) policy=$(spec.controls.policy) policy_options=$(policy_option_summary)",
         "Control layout: optimizer_length=$(layout.total_length) blocks=$(layout_summary)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
-        "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)$(scalar_solver_suffix)",
+        "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)$(solver_suffix)",
         "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(export_contract.profile)",
         "Artifact plan: implemented_now=$(artifact_plan.implemented) hooks=$(artifact_hook_summary)",
         "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",
@@ -931,7 +1039,11 @@ function render_experiment_capabilities(; io::IO=stdout)
     for regime in registered_experiment_regimes()
         caps = experiment_capability_profile(regime)
         println(io, "  regime=", regime)
-        println(io, "    current_stage=", regime == :single_mode ? "lab_ready for supported phase-only; smoke for experimental multivariable" : "planning")
+        stage_summary =
+            regime == :single_mode ? "lab_ready for supported phase-only; smoke for experimental multivariable" :
+            regime == :multimode ? "smoke for standard-verification shared-phase MMF; high-resource configs use dedicated workflows" :
+            "planning/dedicated workflow until long-fiber execution is merged into the core single-mode path"
+        println(io, "    current_stage=", stage_summary)
         println(io, "    variables=", _objective_tuple_summary(caps.variables))
         println(io, "    objectives=", join(string.(caps.objectives), ", "))
         println(io, "    solvers=", join(string.(caps.solvers), ", "))
@@ -947,7 +1059,8 @@ function render_experiment_capabilities(; io::IO=stdout)
     println(io, "  single_mode phase-only is the supported local execution path.")
     println(io, "  single_mode multivariable controls are experimental.")
     println(io, "  use `fiberlab explore` for intentional experimental playground runs.")
-    println(io, "  long_fiber and multimode are planning/dry-run surfaces until their dedicated workflows are promoted.")
+    println(io, "  multimode shared-phase smoke configs can execute through the front layer.")
+    println(io, "  long_fiber should converge toward the core single-mode path with explicit length-scaling checks.")
     println(io, "  Configs select from these contracts; new physics and new controls still belong in code first.")
     return nothing
 end
@@ -1037,37 +1150,48 @@ function experiment_compute_plan_lines(spec)
     ]
 
     if mode == :long_fiber_phase
-        lf_mode = string(spec.controls.policy)
-        lf_cmd = "LF100_MODE=$(lf_mode) LF100_L=$(spec.problem.L_fiber) LF100_P_CONT=$(spec.problem.P_cont) LF100_NT=$(spec.problem.Nt) LF100_TIME_WIN=$(spec.problem.time_window) LF100_BETA_ORDER=$(spec.problem.β_order) LF100_RUN_LABEL=$(spec.output_tag) LF100_MAX_ITER=$(spec.solver.max_iter) julia -t auto --project=. scripts/research/longfiber/longfiber_optimize_100m.jl"
-        append!(lines, [
-            "Provider-neutral path:",
-            "  1. Use any sufficiently provisioned machine or cluster node.",
-            "  2. Sync or clone this repository and instantiate the Julia project.",
-            "  3. Run the dry-run command above on that machine to confirm the config.",
-            "  4. Use the dedicated long-fiber workflow until front-layer burst execution is promoted:",
-            "     $(lf_cmd)",
-            "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
-            "Local laptop/default VM guidance:",
-            "  Long-fiber execution is intentionally blocked by the front layer because this config is marked burst_required.",
-            "Optional Rivera Lab burst helper:",
-            "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
-            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy F-longfiber '$(lf_cmd)'\"",
-        ])
+        if promotion_status.local_execution_allowed
+            append!(lines, [
+                "Front-layer command:",
+                "  $(local_cmd)",
+                "Provider-neutral path:",
+                "  This long-fiber smoke config runs through the same front-layer CLI as other executable experiments.",
+                "  It uses exact-grid single-mode propagation plus a long-fiber reach diagnostic.",
+                "  Increase L_fiber, Nt, time_window, or max_iter only when you are prepared for the added CPU/memory cost.",
+            ])
+        else
+            lf_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl --heavy-ok $(spec_hint)"
+            append!(lines, [
+                "Provider-neutral path:",
+                "  1. Use any machine or cluster environment with enough CPU time and memory for the configured grid.",
+                "  2. Clone/sync this repository and instantiate the Julia project.",
+                "  3. Run the dry-run command above to confirm the config on that machine.",
+                "  4. Launch through the canonical front-layer CLI after explicitly acknowledging heavy compute:",
+                "     $(lf_cmd)",
+                "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
+            ])
+        end
     elseif mode == :multimode_phase
-        append!(lines, [
-            "Provider-neutral path:",
-            "  1. Use any sufficiently provisioned machine or cluster node.",
-            "  2. Sync or clone this repository and instantiate the Julia project.",
-            "  3. Run the dry-run command above on that machine to confirm the config.",
-            "  4. Use the dedicated MMF baseline workflow until front-layer MMF execution is promoted:",
-            "     julia -t auto --project=. scripts/research/mmf/baseline.jl",
-            "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
-            "Local laptop/default VM guidance:",
-            "  Multimode execution is intentionally blocked by the front layer because this config is marked burst_required.",
-            "Optional Rivera Lab burst helper:",
-            "  Only use this if your environment already has the Rivera Lab burst helpers configured.",
-            "  burst-ssh \"cd fiber-raman-suppression && ~/bin/burst-run-heavy M-mmf 'julia -t auto --project=. scripts/research/mmf/baseline.jl'\"",
-        ])
+        if promotion_status.local_execution_allowed
+            append!(lines, [
+                "Front-layer command:",
+                "  $(local_cmd)",
+                "Provider-neutral path:",
+                "  This MMF config runs through the same front-layer CLI as other executable experiments.",
+                "  Run the same command on any machine with the Julia environment installed.",
+                "  Increase Nt, fiber length, power, or max_iter only when you are prepared for the added CPU/memory cost.",
+            ])
+        else
+            append!(lines, [
+                "Provider-neutral path:",
+                "  1. Use any machine or cluster environment with enough CPU time and memory for the configured grid.",
+                "  2. Clone/sync this repository and instantiate the Julia project.",
+                "  3. Run the dry-run command above to confirm the config on that machine.",
+                "  4. Launch through the canonical front-layer CLI after explicitly acknowledging heavy compute:",
+                "     julia -t auto --project=. scripts/canonical/run_experiment.jl --heavy-ok $(spec_hint)",
+                "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
+            ])
+        end
     elseif mode == :amp_on_phase
         opts = spec.controls.policy_options
         phase_iter = Int(get(opts, :phase_iter, spec.solver.max_iter))

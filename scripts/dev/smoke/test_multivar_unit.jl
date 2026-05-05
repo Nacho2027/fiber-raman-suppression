@@ -16,7 +16,7 @@ ENV["MPLBACKEND"] = "Agg"
 using Test
 using LinearAlgebra
 
-include(joinpath(@__DIR__, "..", "..", "research", "multivar", "multivar_optimization.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "multivar_optimization.jl"))
 
 @testset "sanitize_variables" begin
     @test sanitize_variables((:phase,)) == (:phase,)

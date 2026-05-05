@@ -1,2 +1,0 @@
-iter,J,grad_norm,delta,rho,pred_reduction,actual_reduction,step_norm,step_accepted,cg_iters,cg_exit,lambda_min_est,lambda_max_est,kappa_eff,hvps_this_iter,grad_calls_this_iter,forward_only_calls_this_iter,wall_time_s,eps_hvp_used
-1,9.1968209845448768e-08,1.2034867538084393e-06,0.5,NaN,0,0,0,false,0,NO_DESCENT,-1.0407066821347341e-06,8.940077744214825e-07,0.85903914116094882,139,0,0,134.9794659614563,1.4901161193847656e-08

@@ -1,0 +1,17 @@
+kind = "poly_phase_vector"
+regime = "single_mode"
+backend = "vector_phase_extension"
+description = "Research variable contract. Replace with control semantics, units, and bounds."
+maturity = "experimental"
+execution = "executable"
+source = "lab_extensions/variables/poly_phase_vector.jl"
+build_function = "build_poly_phase_vector_control"
+projection_function = "project_poly_phase_vector_control"
+units = "rad"
+bounds = "box"
+parameterizations = ["vector_coefficients"]
+compatible_objectives = ["temporal_peak_scalar"]
+dimension = 2
+artifact_hooks = ["phase_profile", "group_delay"]
+artifact_semantics = "Standard phase and group-delay diagnostics show the generated phase control."
+validation = "Runtime-checked by playground doctor; replace template physics and add science validation before promotion."

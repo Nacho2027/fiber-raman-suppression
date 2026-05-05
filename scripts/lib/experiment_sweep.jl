@@ -13,6 +13,7 @@ using TOML
 using Printf
 using Dates
 using JSON3
+using MultiModeNoise
 
 include(joinpath(@__DIR__, "experiment_spec.jl"))
 
@@ -399,9 +400,7 @@ function write_experiment_sweep_summary_files(sweep_spec, results, sweep_dir::Ab
     csv_path = joinpath(sweep_dir, "SWEEP_SUMMARY.csv")
 
     write(md_path, summary_md)
-    open(json_path, "w") do io
-        JSON3.pretty(io, payload)
-    end
+    write_json_file(json_path, payload)
     write(csv_path, summary_csv)
 
     return (

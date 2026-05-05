@@ -13,6 +13,13 @@ Options:
     --parameterizations LIST
                            Comma-separated parameterizations, default: full_grid.
     --objectives LIST      Comma-separated compatible objectives, default: raman_band.
+    --executable-scalar-phase
+                           Create an executable one-scalar phase-control template.
+    --executable-vector-phase
+                           Create an executable vector phase-control template.
+    --executable-vector-control
+                           Create an executable vector phase/amplitude/energy template.
+    --dimension N          Optimizer dimension for executable vector templates.
     --force                Overwrite an existing scaffold.
 """
 
@@ -32,6 +39,13 @@ Options:
     --parameterizations LIST
                            Comma-separated parameterizations, default: full_grid.
     --objectives LIST      Comma-separated compatible objectives, default: raman_band.
+    --executable-scalar-phase
+                           Create an executable one-scalar phase-control template.
+    --executable-vector-phase
+                           Create an executable vector phase-control template.
+    --executable-vector-control
+                           Create an executable vector phase/amplitude/energy template.
+    --dimension N          Optimizer dimension for executable vector templates.
     --force                Overwrite an existing scaffold.
     --help                 Show this message.
 """
@@ -57,12 +71,26 @@ function parse_scaffold_variable_args(args)
     parameterizations = ("full_grid",)
     compatible_objectives = ("raman_band",)
     force = false
+    executable_scalar_phase = false
+    executable_vector_phase = false
+    executable_vector_control = false
+    dimension = 1
 
     i = 2
     while i <= length(args)
         arg = args[i]
         if arg == "--force"
             force = true
+        elseif arg == "--executable-scalar-phase"
+            executable_scalar_phase = true
+        elseif arg == "--executable-vector-phase"
+            executable_vector_phase = true
+        elseif arg == "--executable-vector-control"
+            executable_vector_control = true
+        elseif arg == "--dimension"
+            i += 1
+            i <= length(args) || error("--dimension requires a value")
+            dimension = parse(Int, args[i])
         elseif arg == "--regime"
             i += 1
             i <= length(args) || error("--regime requires a value")
@@ -109,6 +137,10 @@ function parse_scaffold_variable_args(args)
         bounds = bounds,
         parameterizations = parameterizations,
         compatible_objectives = compatible_objectives,
+        executable_scalar_phase = executable_scalar_phase,
+        executable_vector_phase = executable_vector_phase,
+        executable_vector_control = executable_vector_control,
+        dimension = dimension,
         force = force,
     )
 end
@@ -129,6 +161,18 @@ function scaffold_variable_main(args=ARGS)
         bounds=parsed.bounds,
         parameterizations=parsed.parameterizations,
         compatible_objectives=parsed.compatible_objectives,
+        backend=parsed.executable_scalar_phase ? :scalar_phase_extension :
+            parsed.executable_vector_phase ? :vector_phase_extension :
+            parsed.executable_vector_control ? :vector_control_extension :
+            :lab_extension,
+        maturity=(parsed.executable_scalar_phase || parsed.executable_vector_phase || parsed.executable_vector_control) ?
+            "experimental" : "research",
+        execution=(parsed.executable_scalar_phase || parsed.executable_vector_phase || parsed.executable_vector_control) ?
+            :executable : :planning_only,
+        validation=(parsed.executable_scalar_phase || parsed.executable_vector_phase || parsed.executable_vector_control) ?
+            "Runtime-checked by playground doctor; replace template physics and add science validation before promotion." :
+            "Requires units, bounds/projection tests, gradient compatibility, artifact metrics, and a promoted backend before execution.",
+        dimension=parsed.executable_scalar_phase ? 1 : parsed.dimension,
         force=parsed.force,
     )
 

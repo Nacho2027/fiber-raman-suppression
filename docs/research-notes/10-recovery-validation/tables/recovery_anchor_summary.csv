@@ -1,4 +1,0 @@
-artifact,regime,recovered_j_db,reference_j_db,edge_frac,energy_drift,iterations,converged,nt,time_window_ps
-smf28_recovered_anchor,"SMF-28, L=2.0 m, P=0.2 W",-66.6062107419444,,0.0008097178456000353,4.3863105170645186e-5,16,true,16384,54.0
-hnlf_recovered_anchor,"HNLF, L=0.5 m, P=0.01 W",-86.68024387372787,,0.00022363361244215961,3.727329195352995e-6,50,false,65536,320.0
-longfiber_validated_lower_bound,"SMF-28, L=100.0 m, P=0.05 W",-54.76581848146803,-54.76581847340812,8.468393674328087e-6,0.000490846534208512,,false,,

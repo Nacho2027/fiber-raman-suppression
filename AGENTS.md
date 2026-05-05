@@ -1,79 +1,137 @@
-# Codex Operating Rules
+# Agent Operating Rules
 
-This is a Julia + Python nonlinear fiber optics simulation project focused on Raman suppression, optimization, and visualization work.
+This is a Julia-first nonlinear fiber optics simulation project focused on
+Raman suppression, optimization, and visualization. Keep the active repo small,
+legible, and easy for agents to navigate.
 
-`AGENTS.md` is the canonical short operational contract for agents. `CLAUDE.md` is the longer human/reference manual.
+`AGENTS.md` is the canonical short contract for agents. Keep it short and
+operational.
 
-## Core Rules
+## Project Spine
 
-- Keep agent docs and human docs separate. Put internal work notes in `agent-docs/<topic>/CONTEXT.md`, `agent-docs/<topic>/PLAN.md`, and `agent-docs/<topic>/SUMMARY.md`. Put human-facing docs and reports in `docs/`.
-- Use `agent-docs/README.md` as the agent-facing documentation map and `llms.txt` as the compact machine-readable source map.
-- Read `agent-docs/current-agent-context/` before deep numerics, methodology, or infrastructure work.
-- Research before coding. Grep the repo, read the files you touch and the files they call into, then check official docs and known pitfalls when the change depends on external behavior.
-- Prefer test-driven development for non-trivial code changes. When practical, start with a failing or missing test, make the smallest change that gets it green, then refactor while keeping tests green. If true red-first TDD is not practical for a task, still add or update the regression test before closing the work.
-- Test heavily. Add or update tests for every non-trivial change, and do not call work done until the relevant tests have been run.
-- Raise the documentation bar. Public or reused code should have clear docstrings, tricky numerics should document assumptions and invariants, and behavior changes should be reflected in the relevant `docs/`, `README`, or agent work summary. Comments should explain why, not restate the code.
+- Primary implementation language: Julia.
+- Product-facing code starts in `src/fiberlab/`: fibers, pulses, grids,
+  controls, objectives, solvers, experiments, and artifacts.
+- Low-level propagation and inherited physics backend code stays under `src/`.
+- Checked TOML configs in `configs/experiments/` serialize experiments for
+  reproducibility; they are not the conceptual API.
+- Experimental controls and objectives live under `lab_extensions/`.
+- `scripts/lib/` is transitional orchestration glue, not the product center.
+- `scripts/canonical/` and `./fiberlab` are maintained compatibility entry
+  points and readiness tools.
+- Python is not a supported API surface unless the user explicitly asks for it.
+- Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`,
+  `.pytest_cache/`, and `.bg-shell/` are not repo structure. Do not inspect or
+  summarize them unless the task is explicitly about local tooling.
+- Treat one-off notebooks, old phase scripts, generated outputs, and historical
+  planning as non-canonical unless a current doc says otherwise.
+
+## Agent Context Diet
+
+- Prefer deleting, moving, or condensing obsolete docs, scripts, and generated
+  artifacts over preserving stale context in the active tree.
+- Do not create new long-lived agent-doc folders by default.
+- If cleanup needs a breadcrumb, use one short temporary note and remove or
+  collapse it when done.
+- Do not add a new script when a config, small canonical wrapper, or reusable
+  Julia function can express the workflow.
+- Promote stable user-facing behavior toward `src/fiberlab/`; keep
+  `scripts/lib/` for orchestration and transitional workflow glue.
+- Keep human docs in `docs/`; keep agent-only operational notes in
+  `agent-docs/`.
+- Use `llms.txt`, `README.md`, and the smallest relevant doc map before
+  recursively reading large documentation trees.
+
+## Safety
+
+- Delete obsolete files when a refactor or feature removal makes them
+  irrelevant.
+- Never delete files just to silence a test, lint, type, import, or runtime
+  error. Stop and ask if deletion is only a workaround.
+- Never edit `.env` or other environment variable files.
+- Do not revert or delete work you did not author unless the user explicitly
+  asks or all active agents agree.
+- Moving, renaming, and restoring files is allowed when it preserves intent and
+  improves structure.
+- Never run destructive git operations such as `git reset --hard`,
+  `git checkout --`, or broad `git restore` unless the user gives explicit
+  written approval in the current thread.
+- If a git operation leaves you unsure about another agent's in-flight work,
+  stop and coordinate instead of deleting or reverting.
 
 ## Git And Sync
 
-- All sessions work on `main` and push to `main`.
-- Start by checking local state and Syncthing health:
+- Work on `main` unless the user asks otherwise.
+- Start substantial sessions by checking local state and Syncthing health:
 
 ```bash
 git status
 syncthing cli show connections
 ```
 
-- Do not reflexively `git pull` at session start. Syncthing keeps the Mac and `claude-code-host` working trees aligned; use git to reconcile commit history only when needed.
-- Before committing and pushing, refresh remote history:
+- Do not reflexively `git pull` at session start. Syncthing keeps the Mac and
+  `claude-code-host` working trees aligned; use git to reconcile commit history
+  only when needed.
+- Before committing or pushing, run:
 
 ```bash
 git fetch origin
 git status
 ```
 
-- If `origin/main` has moved or your push is rejected, run:
+- Keep commits atomic. Commit only files you touched and list paths explicitly.
+- Quote git paths containing brackets, parentheses, or shell metacharacters.
+- When rebasing, avoid opening editors by using `GIT_EDITOR=:` and
+  `GIT_SEQUENCE_EDITOR=:` or an equivalent no-editor option.
+- Never amend commits without explicit written approval.
+- The Mac and `claude-code-host` sync via Syncthing; `.git` is not synced.
+- Syncthing does not solve simultaneous edits. Avoid overlapping edits to the
+  same path, or `.sync-conflict-*` files may appear.
 
-```bash
-git fetch origin
-git rebase origin/main
-git push origin main
-```
+## Research Before Coding
 
-- The Mac and `claude-code-host` working trees are kept in sync by Syncthing.
-- `.git` is not synced. Syncthing is for live file movement; git is for history and GitHub pushes.
-- Syncthing does not solve simultaneous edits. Avoid overlapping edits to the same file path, or you will get `.sync-conflict-*` files.
+- Grep the repo before changing code. Read the files you touch and the files
+  they call into.
+- Check official docs or known pitfalls when a change depends on external
+  behavior.
+- Prefer test-driven development for non-trivial code changes. If red-first TDD
+  is not practical, still add or update the relevant regression test before
+  closing the work.
+- Run the relevant tests before calling non-trivial work done.
+- Public or reused code should have clear docstrings. Tricky numerics should
+  document assumptions and invariants.
 
 ## Compute Rules
 
-- Heavy simulation work belongs on `fiber-raman-burst`, not on `claude-code-host`.
-- `claude-code-host` is for editing, orchestration, dependency operations, and inspection only.
-- The Mac and `claude-code-host` sync via Syncthing. `fiber-raman-burst` is not part of that sync mesh.
-- Stage code to burst explicitly with `rsync`, run through `~/bin/burst-run-heavy`, then pull `results/` back explicitly with `rsync`.
+- Heavy simulation work belongs on `fiber-raman-burst`, not on
+  `claude-code-host`.
+- `claude-code-host` is for editing, orchestration, dependency operations, and
+  inspection only.
+- Stage code to burst explicitly with `rsync`, run through
+  `~/bin/burst-run-heavy`, then pull `results/` back explicitly with `rsync`.
 - Never bypass the heavy-job wrapper for substantial Julia runs on burst.
-- Always launch Julia with threading enabled for simulation work: `julia -t auto --project=. ...`
+- Always launch Julia with threading enabled for simulation work:
+  `julia -t auto --project=. ...`
 - Always stop the burst VM when done.
 
-## Output Rules
+## Results And Outputs
 
-- Every optimization driver that produces a `phi_opt` must call `save_standard_set(...)` from `scripts/standard_images.jl` before exiting.
-- The expected standard image set is:
-  - `{tag}_phase_profile.png`
-  - `{tag}_evolution.png`
-  - `{tag}_phase_diagnostic.png`
-  - `{tag}_evolution_unshaped.png`
-- Work that produces `phi_opt` but does not leave the standard images on disk is incomplete.
-- Do not treat PNG existence as sufficient verification. For a single run, visually inspect the full standard image set before calling the work complete.
-- For sweeps, multistart batches, or large regenerations, inspect representative best / typical / worst / outlier cases and note what was checked in the agent summary.
-
-## Results Rules
-
-- Do not treat `results/` as normal source code.
-- Syncthing moves `results/` between the Mac and `claude-code-host`.
-- Burst results come back via explicit `rsync`, then Syncthing carries them to the Mac.
-- Commit only durable, intentionally chosen summaries or fixtures. Do not reflexively commit the whole `results/` tree.
-- Generated PNGs, burst logs, and routine run-output JLD2s should stay out of git unless they are deliberate fixtures or moved into a human-facing docs location.
+- Do not treat `results/` as source code.
+- Do not recursively inspect `results/` by default; use manifests, summaries,
+  or targeted paths.
+- Preserve important raw results by inventorying or moving them to a results
+  vault before deleting from the active repo.
+- Commit only durable, intentionally chosen summaries, fixtures, or figures.
+- Generated PNGs, burst logs, and routine JLD2 outputs should stay out of git
+  unless deliberately curated.
+- Any optimization driver that produces `phi_opt` must save the standard image
+  set before exiting.
+- Do not treat PNG existence as sufficient verification. For a single run,
+  visually inspect the standard image set before calling it complete.
 
 ## When In Doubt
 
-- Use `CLAUDE.md` for the full project conventions, architecture notes, multi-machine workflow, and compute-discipline details.
+- Choose the smallest supported Julia path.
+- Prefer one canonical doc update over adding another document.
+- Ask before making an irreversible cleanup decision that could destroy unique
+  scientific evidence or another agent's active work.

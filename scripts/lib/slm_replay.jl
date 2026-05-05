@@ -12,6 +12,7 @@ const _SLM_REPLAY_JL_LOADED = true
 
 using Dates
 using JSON3
+using MultiModeNoise
 using TOML
 
 const SLM_REPLAY_SCHEMA_VERSION = "1.0"
@@ -429,9 +430,7 @@ function write_slm_replay_bundle(output_dir::AbstractString,
         ),
         "profile" => _profile_metadata(replay.profile),
     )
-    open(metadata_json, "w") do io
-        JSON3.pretty(io, metadata)
-    end
+    write_json_file(metadata_json, metadata)
 
     return (
         output_dir = output_dir,

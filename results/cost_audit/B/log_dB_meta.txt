@@ -1,6 +1,0 @@
-hostname=fiber-raman-temp-h-auditbc-20260418t030951z
-timestamp=20260418_0322709
-julia_version=1.12.6
-threads=16
-fftw_threads=1
-blas_threads=1

@@ -1,0 +1,17 @@
+kind = "phase_amp_energy_control"
+regime = "single_mode"
+backend = "vector_control_extension"
+description = "Research variable contract. Replace with control semantics, units, and bounds."
+maturity = "experimental"
+execution = "executable"
+source = "lab_extensions/variables/phase_amp_energy_control.jl"
+build_function = "build_phase_amp_energy_control_control"
+projection_function = "project_phase_amp_energy_control_control"
+units = "normalized"
+bounds = "box"
+parameterizations = ["vector_coefficients"]
+compatible_objectives = ["temporal_peak_scalar"]
+dimension = 3
+artifact_hooks = ["phase_profile", "group_delay", "amplitude_mask", "energy_scale", "energy_throughput"]
+artifact_semantics = "Generic explore overview plus phase, amplitude, and energy diagnostics show the vector control update."
+validation = "Runtime-checked by playground doctor; replace template physics and add science validation before promotion."

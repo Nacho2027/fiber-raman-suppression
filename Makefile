@@ -2,38 +2,38 @@
 # Fiber Raman Suppression — convenience targets
 #
 # Run `make` (no args) for a short list, or see docs/README.md for the full
-# story. See CLAUDE.md "Running Simulations — Compute Discipline" for the
-# burst-VM workflow that belongs with `make sweep`.
+# story. Large runs should be launched on whatever workstation, cluster, or
+# cloud VM has enough CPU time and memory for the configured grid.
 # ══════════════════════════════════════════════════════════════════════════════
 
 JULIA ?= julia
-PYTHON ?= python3
 DOCKER ?= docker
 DOCKER_IMAGE ?= fiber-raman-suppression:dev
-VENV ?= .venv
 SMOKE_KEEP ?= 3
 JL     = $(JULIA) --project=.
-VENV_PYTHON = $(VENV)/bin/python
 
-.PHONY: help check-tools check-python-venv install install-julia install-python test test-python test-slow test-full acceptance lab-ready doctor golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
+.PHONY: help check-tools docs-check install install-julia test test-slow test-full acceptance lab-ready doctor playground-smoke mmf-frontlayer-smoke longfiber-frontlayer-smoke golden-smoke prune-smoke optimize sweep report docker-build docker-test clean
 
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Fiber Raman Suppression — common tasks"
 	@echo ""
-	@echo "  make install     Install Julia deps and Python wrapper"
+	@echo "  make install     Install Julia deps"
+	@echo "  make docs-check  Verify agent/human documentation maps and links"
 	@echo "  make test        Fast Julia regression tier (simulation-free)"
-	@echo "  make test-python Python wrapper unit tests"
 	@echo "  make acceptance  Research-engine acceptance harness"
 	@echo "  make lab-ready   Local lab-readiness gate for supported workflows"
-	@echo "  make doctor      Verify tools, Julia tests, and Python wrapper tests"
+	@echo "  make doctor      Verify tools, docs, and fast Julia tests"
+	@echo "  make playground-smoke Run generated playground bundle end-to-end"
+	@echo "  make mmf-frontlayer-smoke Run executable MMF front-layer smoke"
+	@echo "  make longfiber-frontlayer-smoke Run executable long-fiber front-layer smoke"
 	@echo "  make golden-smoke Run the end-to-end lab handoff smoke test"
 	@echo "  make prune-smoke Keep newest SMOKE_KEEP golden-smoke runs; delete older smoke outputs"
-	@echo "  make test-slow   Slow tier (~5 min; burst VM recommended)"
-	@echo "  make test-full   Full tier (~20 min; burst VM)"
+	@echo "  make test-slow   Slow tier (~5 min; use suitable compute)"
+	@echo "  make test-full   Full tier (~20 min; use suitable compute)"
 	@echo "  make optimize    Canonical SMF-28 optimization (~5 min)"
-	@echo "  make sweep       Full (L, P) parameter sweep (~2–3 h; burst VM strongly recommended)"
+	@echo "  make sweep       Full (L, P) parameter sweep (~2–3 h; use suitable compute)"
 	@echo "  make report      Regenerate report cards + presentation figures from JLD2"
 	@echo "  make docker-build Build a reproducible Linux/headless container"
 	@echo "  make docker-test  Run make doctor inside the container"
@@ -43,37 +43,19 @@ help:
 
 check-tools:
 	@command -v $(JULIA) >/dev/null || { echo "Missing Julia. Install Julia 1.12.x."; exit 1; }
-	@command -v $(PYTHON) >/dev/null || { echo "Missing Python. Install Python 3.10+."; exit 1; }
 	@command -v git >/dev/null || { echo "Missing git."; exit 1; }
 	@command -v make >/dev/null || { echo "Missing make."; exit 1; }
 
-check-python-venv:
-	@$(PYTHON) -c 'import ensurepip' >/dev/null 2>&1 || { \
-		echo "Missing Python venv/ensurepip support."; \
-		echo "Debian/Ubuntu: sudo apt install python3-venv python3-pip"; \
-		echo "macOS/Homebrew Python includes this support by default."; \
-		exit 1; \
-	}
+docs-check:
+	$(JL) scripts/dev/check_agent_docs.jl
 
-install: check-tools check-python-venv install-julia install-python
+install: check-tools install-julia
 
 install-julia:
 	$(JL) -e 'using Pkg; Pkg.instantiate()'
 
-install-python: check-python-venv
-	$(PYTHON) -m venv $(VENV)
-	$(VENV_PYTHON) -m pip install --upgrade pip
-	$(VENV_PYTHON) -m pip install -e .
-
 test:
 	TEST_TIER=fast $(JL) test/runtests.jl
-
-test-python:
-	@if [ ! -x "$(VENV_PYTHON)" ]; then \
-		echo "Missing $(VENV_PYTHON). Run: make install-python"; \
-		exit 1; \
-	fi
-	$(VENV_PYTHON) -m unittest discover -s test/python -p test_fiber_research_engine_cli.py
 
 test-slow:
 	TEST_TIER=slow $(JL) -t auto test/runtests.jl
@@ -83,19 +65,30 @@ test-full:
 
 acceptance:
 	$(JL) -e 'using Test; const _ROOT = pwd(); include("test/core/test_research_engine_acceptance.jl")'
-	PYTHONPATH=python $(PYTHON) -m unittest discover -s test/python
 
 lab-ready: check-tools acceptance
 	$(JL) -t auto scripts/canonical/run_experiment.jl --validate-all
 	$(JL) -t auto scripts/canonical/run_experiment_sweep.jl --validate-all
 	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_export_smoke
+	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_experiment_front_layer.jl")'
+	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_playground_contract_runner.jl")'
 	TEST_TIER=fast $(JL) -t auto test/runtests.jl
 	@echo ""
 	@echo "Local lab-readiness gate passed for the supported front-layer surface."
-	@echo "For a real generated artifact check, also run: make golden-smoke"
-	@echo "For milestone physics/numerics closure on burst, run: make test-slow or make test-full"
+	@echo "Generated playground bundle smoke passed."
+	@echo "For a real export handoff artifact check, also run: make golden-smoke"
+	@echo "For milestone physics/numerics closure on suitable compute, run: make test-slow or make test-full"
 
-doctor: check-tools test test-python
+doctor: check-tools docs-check test
+
+playground-smoke:
+	$(JL) -t auto -e 'using Test; const _ROOT = pwd(); include("test/core/test_playground_contract_runner.jl")'
+
+mmf-frontlayer-smoke:
+	$(JL) -t auto scripts/canonical/run_experiment.jl --dry-run grin50_mmf_phase_sum_poc
+
+longfiber-frontlayer-smoke:
+	$(JL) -t auto scripts/canonical/run_experiment.jl --dry-run smf28_longfiber_phase_poc
 
 golden-smoke:
 	$(JL) -t auto scripts/canonical/lab_ready.jl --config research_engine_export_smoke
@@ -123,15 +116,13 @@ optimize:
 
 sweep:
 	@echo ""
-	@echo "⚠  make sweep: heavy job (2–3 h wall). On the burst VM, launch it through"
-	@echo "    the heavy-lock wrapper (Rule P5 in CLAUDE.md) — not this target:"
+	@echo "⚠  make sweep: heavy job (2–3 h wall). Prefer launching it on a"
+	@echo "    workstation, cluster node, or cloud VM with enough CPU time and memory:"
 	@echo ""
-	@echo "      burst-ssh \"cd fiber-raman-suppression && \\"
-	@echo "                 ~/bin/burst-run-heavy <SESSION-TAG> \\"
-	@echo "                 'julia -t auto --project=. scripts/canonical/run_sweep.jl'\""
+	@echo "      julia -t auto --project=. scripts/canonical/run_sweep.jl"
 	@echo ""
 	@echo "    See docs/guides/quickstart-sweep.md for the full recipe."
-	@echo "    Press Ctrl-C within 3 seconds to abort this local run."
+	@echo "    Press Ctrl-C within 3 seconds to abort this run."
 	@echo ""
 	@sleep 3
 	$(JL) -t auto scripts/canonical/run_sweep.jl
@@ -150,6 +141,5 @@ clean:
 	@find results/raman -name 'report_card.png' -delete 2>/dev/null || true
 	@find results/raman -name 'report.md' -delete 2>/dev/null || true
 	@rm -f results/raman/sweeps/SWEEP_REPORT.md
-	@rm -rf build dist *.egg-info python/*.egg-info
 	@echo "Removed: presentation PNGs, report cards, SWEEP_REPORT.md"
 	@echo "Kept:    results/raman/**/*.jld2 and *.json (expensive to regenerate)"

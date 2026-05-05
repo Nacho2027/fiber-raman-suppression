@@ -1,125 +1,65 @@
 # Fiber Raman Suppression
 
-This repo is about one problem in nonlinear fiber propagation: shaping the
-input pulse so less energy ends up in the Raman-shifted band.
+Julia-first FiberLab API for building, running, and inspecting nonlinear
+fiber-optic optimization experiments.
 
-Start with the SMF-28 phase-mask experiment. It optimizes the input spectral
-phase, saves the optimized mask, and writes the before/after propagation plots
-needed to judge the run.
+The active user-facing model is:
 
-Multimode, long-fiber, amplitude-control, and Newton/preconditioner work is in
-the repo too. Treat it as research material with caveats, not as the default
-way to use the project.
+```julia
+using MultiModeNoise
 
-The longer-term shape is broader than Raman. `./fiberlab` is a small research
-bench for fiber-optic optimization: configs choose a regime, objective, control
-variable, solver, and output bundle; Julia code supplies the actual physics.
-Raman suppression is the first case with enough evidence to hand to someone
-else. New objectives such as temporal metrics or new controls such as gain tilt
-belong in the same machinery once their formulas, checks, and plots exist.
+fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
+experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))
+summarize(experiment)
+```
+
+The inherited low-level propagation code remains in `src/` as the physics
+backend. New work should start from the FiberLab concepts: fibers, pulses,
+grids, controls, objectives, solvers, experiments, and artifacts.
+
+Python is not a supported API surface.
 
 ## Start
 
 ```bash
 make install
-make doctor
-make optimize
-```
-
-That installs the Julia environment, installs the local Python wrapper, runs
-fast checks, and launches the reference SMF-28 optimization.
-
-For the local lab handoff smoke:
-
-```bash
+make docs-check
 make lab-ready
-make golden-smoke
 ```
 
-For a clean Linux reference environment:
+For the current compatibility execution path:
 
 ```bash
-make docker-build
-make docker-test
-```
-
-## Run these first
-
-| Area | Status | Read |
-|---|---|---|
-| SMF-28 phase-mask run | Main working example | [supported workflows](docs/guides/supported-workflows.md) |
-| TOML-driven experiments | Change regime/objective/control without editing run scripts | [configurable experiments](docs/guides/configurable-experiments.md) |
-| New objective or control ideas | Scaffold, implement in Julia, then run checks | [researcher playbook](docs/guides/researcher-playbook.md) |
-| Staged `amp_on_phase` refinement | Research follow-up after a phase solution | [amp-on-phase guide](docs/guides/amp-on-phase-refinement.md) |
-| Long-fiber 200 m result | Completed result, not optimizer-converged | [status note](docs/status/longfiber-200m-closure-2026-04-28.md) |
-| Multimode fiber work | Qualified simulation candidate | [MMF report](docs/reports/mmf-raman-readiness-2026-04-28/REPORT.md) |
-| Newton and preconditioning | Notes only for now | [research notes](docs/research-notes/README.md) |
-
-The shortest project-state summary is
-[docs/reports/research-closure-2026-04-28/REPORT.md](docs/reports/research-closure-2026-04-28/REPORT.md).
-
-## Common commands
-
-```bash
-./fiberlab configs
-./fiberlab plan research_engine_poc
-./fiberlab run research_engine_poc
-./fiberlab latest research_engine_poc
-./fiberlab ready latest research_engine_poc
-```
-
-Use `./fiberlab explore ...` for explicitly experimental configs:
-
-```bash
-./fiberlab explore list
-./fiberlab explore plan research_engine_gain_tilt_smoke
-./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke
-./fiberlab explore compare results/raman --top 10
-```
-
-Use Julia entry points directly when you need the lower-level commands:
-
-```bash
-julia -t auto --project=. scripts/canonical/optimize_raman.jl --list
 julia -t auto --project=. scripts/canonical/run_experiment.jl --list
-julia -t auto --project=. scripts/canonical/run_sweep.jl --list
+julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
+julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
 ```
 
-## Where things live
+## Where Things Live
+
+| Path | Purpose |
+|---|---|
+| `src/fiberlab/` | Notebook-facing FiberLab API |
+| `src/simulation/`, `src/gain_simulation/`, `src/mmf_cost.jl` | Low-level physics backend |
+| `configs/experiments/` | Serialized experiments for reproducible runs |
+| `lab_extensions/` | Experimental controls and objectives |
+| `scripts/canonical/` | Maintained compatibility entry points |
+| `scripts/lib/` | Transitional runner/orchestration internals |
+| `docs/` | Human-facing docs |
+| `agent-docs/` | Minimal active agent context |
+| `results/` | Generated artifacts; do not commit wholesale |
+
+Start with [docs/README.md](docs/README.md) for the human doc map and
+[llms.txt](llms.txt) for the compact agent source map.
+
+## Archive Boundary
+
+Old notebooks, raw result trees, cached fiber/data files, historical plans, and
+superseded research drivers were moved out of the active repo:
 
 ```text
-src/         Julia package code
-configs/     approved run, sweep, and SLM profile specs
-scripts/     command-line entry points and research drivers
-docs/        human-facing guides, reports, architecture notes, and status notes
-agent-docs/  agent continuity notes, not user docs
-test/        Julia and Python regression tests
-results/     generated run artifacts; do not commit wholesale
-notebooks/   scratch analysis and inspection
+/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/
 ```
 
-Start with [docs/README.md](docs/README.md) when you need a document map.
-
-## Results
-
-Canonical runs write JLD2 payloads, JSON sidecars, and standard PNGs under
-`results/`. A run that produces `phi_opt` is not complete until the standard
-image set exists and has been inspected.
-
-The saved-result schema is described in
-[docs/architecture/output-format.md](docs/architecture/output-format.md).
-
-## Environment
-
-- Julia 1.12.x is the pinned development/runtime line.
-- Python 3.10+ is used for the local `fiberlab` wrapper and tests.
-- Docker is optional.
-- Heavy sweeps belong on the burst machine, launched through the project burst
-  wrapper, not from the small editing host.
-
-## Attribution
-
-This repo builds on Michael Horodynski's
-[MultiModeNoise.jl](https://github.com/michaelhorodynski/MultiModeNoise.jl).
-
-MIT license. See [LICENSE](LICENSE).
+Do not reintroduce archived code as active source. Promote reusable Julia logic
+into the FiberLab API or the maintained backend first.

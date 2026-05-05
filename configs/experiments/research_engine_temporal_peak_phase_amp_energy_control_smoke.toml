@@ -1,0 +1,71 @@
+id = "smf28_temporal_peak_phase_amp_energy_control_smoke"
+description = "Notebook playground vector experiment: smf28_temporal_peak_phase_amp_energy_control_smoke"
+maturity = "experimental"
+output_root = "results/raman/smoke"
+output_tag = "smf28_temporal_peak_phase_amp_energy_control_smoke"
+save_prefix_basename = "opt"
+
+[problem]
+regime = "single_mode"
+preset = "SMF28"
+L_fiber = 0.05
+P_cont = 0.001
+beta_order = 3
+Nt = 1024
+time_window = 5.0
+grid_policy = "auto_if_undersized"
+pulse_fwhm = 1.85e-13
+pulse_rep_rate = 8.05e7
+pulse_shape = "sech_sq"
+raman_threshold = -5.0
+
+[controls]
+variables = ["phase_amp_energy_control"]
+parameterization = "vector_coefficients"
+initialization = "zero"
+policy = "direct"
+
+[objective]
+kind = "temporal_peak_scalar"
+log_cost = false
+
+[[objective.regularizer]]
+name = "energy"
+lambda = 0.0
+
+[solver]
+kind = "nelder_mead"
+max_iter = 1
+validate_gradient = false
+store_trace = true
+vector_initial = [0.0, 0.0, 0.0]
+vector_lower = [-1.0, -1.0, -1.0]
+vector_upper = [1.0, 1.0, 1.0]
+vector_x_tol = 1.0e-3
+
+[artifacts]
+bundle = "experimental_multivar"
+save_payload = true
+save_sidecar = true
+update_manifest = false
+write_trust_report = false
+write_standard_images = true
+export_phase_handoff = false
+
+[verification]
+mode = "standard"
+block_on_failed_checks = true
+gradient_check = false
+taylor_check = false
+exact_grid_replay = false
+artifact_validation = true
+
+[export]
+enabled = false
+profile = "neutral_csv_v1"
+include_unwrapped_phase = true
+include_group_delay = true
+
+[plots.temporal_pulse]
+time_range = [-0.75, 0.75]
+normalize = true
