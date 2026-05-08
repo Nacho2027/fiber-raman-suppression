@@ -150,6 +150,7 @@ end
         figure_hooks = (:mapped_energy_plot,),
     )
     @test has_terminal_adjoint(mapped_objective)
+    @test objective_value(mapped_objective, field) ≈ sum(abs2, field)
     @test terminal_adjoint(mapped_objective, field) == 2 .* field
     @test assert_adjoint_ready(mapped_objective, custom_control, Solver(kind = :lbfgs))
     @test_throws ArgumentError terminal_adjoint(
@@ -366,6 +367,12 @@ end
               transpose(B) * (2 .* expected_multivar_state),
               [sum(2 .* expected_multivar_state)],
           )
+    multivar_trust = trust_check(
+        multivar_result;
+        profile = LabProfile(coordinate_range = (-10.0, 10.0)),
+    )
+    @test multivar_trust.pass
+    @test any(check -> check.name == :lab_coordinate_range, multivar_trust.checks)
 
     feasibility = FeasibilityMap(
         :keep_energy_nonzero;
@@ -399,6 +406,7 @@ end
         cost = state -> NaN,
         terminal_adjoint = (state, context) -> state,
     )
+    @test_throws ArgumentError objective_value(bad_cost, [1.0, 2.0])
     @test_throws ArgumentError run_adjoint_step(model, control, bad_cost, [2.0, 3.0])
 
     bad_model = AdjointModel(
@@ -1355,6 +1363,40 @@ end
         ones(sample_count(problem)),
         range(-1.0, 1.0; length = sample_count(problem)),
     )
+    demo_basis = polynomial_basis(problem, 0:2)
+    @test size(demo_basis) == (sample_count(problem), 3)
+    smooth_basis = fourier_basis(problem, 2)
+    @test size(smooth_basis) == (sample_count(problem), 5)
+    @test all(isfinite, smooth_basis)
+    @test smooth_basis[:, 1] == ones(sample_count(problem))
+    bounded_full_phase = phase_control(problem; bounds = (-0.2, 0.2))
+    @test dimension(bounded_full_phase) == sample_count(problem)
+    bounded_phase_values = decode(
+        bounded_full_phase,
+        fill(0.5, dimension(bounded_full_phase)),
+    )
+    @test all(abs.(bounded_phase_values) .<= 0.2)
+    @test length(pullback(
+        bounded_full_phase,
+        ones(sample_count(problem)),
+        evaluate_control(bounded_full_phase, fill(0.5, dimension(bounded_full_phase))),
+    )) == sample_count(problem)
+    demo_control = controls(
+        phase_control(problem; basis = demo_basis, bounds = (-0.1, 0.1)),
+        amplitude_control(problem; basis = demo_basis, bounds = (0.9, 1.1)),
+        energy_control(),
+    )
+    @test dimension(demo_control) == 7
+    @test length(initial_coordinates(demo_control)) == dimension(demo_control)
+    demo_decoded = decode(demo_control, initial_coordinates(demo_control))
+    @test hasproperty(demo_decoded, :phase)
+    @test hasproperty(demo_decoded, :amplitude)
+    @test hasproperty(demo_decoded, :energy)
+    @test all(abs.(demo_decoded.phase) .<= 0.1)
+    @test all(demo_decoded.amplitude .>= 0.9)
+    @test all(demo_decoded.amplitude .<= 1.1)
+    @test demo_decoded.energy == 1.0
+
     basis_control = PhaseBasis(basis; name = :two_parameter_phase)
     basis_check = check_adjoint_gradient(
         model,
@@ -1477,6 +1519,26 @@ end
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:group_delay])
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:amplitude_profile])
     @test verify(multivar_artifact_result).artifact_complete
+
+    standard_artifacts = standard_figures(
+        problem,
+        multivar_artifact_result;
+        output_dir = mktempdir(),
+        tag = "native_standard_figures",
+        n_z_samples = 2,
+        also_unshaped = false,
+    )
+    @test isfile(standard_artifacts.metric_summary)
+    @test isfile(standard_artifacts.evolution_comparison)
+    @test isfile(standard_artifacts.phase_profile)
+    @test isfile(standard_artifacts.evolution)
+    @test isfile(standard_artifacts.phase_diagnostic)
+    @test !haskey(pairs(standard_artifacts), :evolution_unshaped)
+    @test FiberLab._native_png_passes_audit(standard_artifacts.metric_summary)
+    @test FiberLab._native_png_passes_audit(standard_artifacts.evolution_comparison)
+    @test FiberLab._native_png_passes_audit(standard_artifacts.phase_profile)
+    @test FiberLab._native_png_passes_audit(standard_artifacts.evolution)
+    @test FiberLab._native_png_passes_audit(standard_artifacts.phase_diagnostic)
 
     multimode_sim = FiberLab.get_disp_sim_params(1550e-9, 2, 16, 5.0, 2)
     _, multimode_uω0 = FiberLab.get_initial_state(

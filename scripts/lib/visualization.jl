@@ -45,7 +45,7 @@ _rc["xtick.labelsize"]    = 10
 _rc["ytick.labelsize"]    = 10
 _rc["legend.fontsize"]    = 10
 _rc["figure.dpi"]         = 150
-_rc["savefig.dpi"]        = 300
+_rc["savefig.dpi"]        = 450
 _rc["savefig.bbox"]       = "tight"
 _rc["axes.grid"]          = true
 _rc["grid.alpha"]         = 0.3
@@ -514,7 +514,7 @@ function plot_spectral_evolution(sol, sim, fiber;
     if isnothing(ax)
         fig, ax = subplots(figsize=figsize)
     end
-    im = ax.pcolormesh(ΛΛ, ZZ, P_dB, shading="nearest", cmap=cmap,
+    im = ax.pcolormesh(ΛΛ, ZZ, P_dB, shading="gouraud", cmap=cmap,
         vmin=-dB_range, vmax=0)
     ax.grid(false)
 
@@ -586,7 +586,7 @@ function plot_temporal_evolution(sol, sim, fiber;
     if isnothing(ax)
         fig, ax = subplots(figsize=figsize)
     end
-    im = ax.pcolormesh(TT, ZZ, P_plot, shading="nearest", cmap=cmap,
+    im = ax.pcolormesh(TT, ZZ, P_plot, shading="gouraud", cmap=cmap,
         vmin=vmin, vmax=vmax)
     ax.grid(false)
 
@@ -669,7 +669,7 @@ Fiber length displayed in suptitle (META-03). Metadata block if provided (META-0
 Returns (fig, axs) where axs is a 2x2 array.
 """
 function plot_merged_evolution(sol_opt, sol_unshaped, sim, fiber;
-    dB_range=40.0, cmap="inferno", figsize=(14, 10),
+    dB_range=40.0, cmap="inferno", figsize=(16, 12),
     length_unit=:auto, metadata=nothing, save_path=nothing)
 
     fig, axs = subplots(2, 2, figsize=figsize)
@@ -716,7 +716,7 @@ function plot_merged_evolution(sol_opt, sol_unshaped, sim, fiber;
     end
 
     if !isnothing(save_path)
-        savefig(save_path, dpi=300, bbox_inches="tight")
+        savefig(save_path, dpi=450, bbox_inches="tight")
         @info "Saved merged evolution plot to $save_path"
     end
 
@@ -1084,7 +1084,7 @@ function plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
     _tight_layout_with_optional_metadata!(fig, metadata)
 
     if !isnothing(save_path)
-        savefig(save_path, dpi=300, bbox_inches="tight")
+        savefig(save_path, dpi=450, bbox_inches="tight")
         @info "Saved optimization result to $save_path"
     end
 

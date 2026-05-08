@@ -127,7 +127,7 @@ function save_standard_set(
 
     plot_spectral_evolution(sol_opt, sim, fiber_evo)
     path_evo = joinpath(output_dir, "$(tag)_evolution.png")
-    savefig(path_evo; dpi=300, bbox_inches="tight")
+    savefig(path_evo; dpi=450, bbox_inches="tight")
     PyPlot.close("all")
     results[:evolution] = path_evo
     @info "standard image wrote" kind="evolution (optimized)" path=path_evo
@@ -149,7 +149,7 @@ function save_standard_set(
         sol_un = FiberLab.solve_disp_mmf(uω0_flat, fiber_evo, sim)
         plot_spectral_evolution(sol_un, sim, fiber_evo)
         path_un = joinpath(output_dir, "$(tag)_evolution_unshaped.png")
-        savefig(path_un; dpi=300, bbox_inches="tight")
+        savefig(path_un; dpi=450, bbox_inches="tight")
         PyPlot.close("all")
         results[:evolution_unshaped] = path_un
         @info "standard image wrote" kind="evolution (unshaped)" path=path_un

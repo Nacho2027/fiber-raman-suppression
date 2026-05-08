@@ -153,7 +153,13 @@ struct NativeAdjointResult{E<:ExperimentPlan,B<:NativeAdjointBackend,S}
     trust_report
 end
 
-function _objective_cost(objective::AbstractFiberObjective, final_state)
+"""
+    objective_value(objective, final_state)
+
+Evaluate an objective on a propagated final field with the same scalar and
+finite-value validation used by native adjoint execution.
+"""
+function objective_value(objective::AbstractFiberObjective, final_state)
     value = objective.cost(final_state)
     value isa Real || throw(ArgumentError(
         "objective `$(objective.name)` cost must return a real scalar"))
@@ -161,6 +167,9 @@ function _objective_cost(objective::AbstractFiberObjective, final_state)
         "objective `$(objective.name)` cost returned a non-finite value"))
     return Float64(value)
 end
+
+_objective_cost(objective::AbstractFiberObjective, final_state) =
+    objective_value(objective, final_state)
 
 function _run_model_forward(model::AdjointModel, decoded_control, context)
     final_state = model.forward_function(decoded_control, context)

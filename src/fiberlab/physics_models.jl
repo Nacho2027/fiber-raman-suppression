@@ -729,3 +729,10 @@ function solve(problem::FiberFieldProblem,
         kwargs...,
     )
 end
+
+function solve(problem::FiberFieldProblem,
+               control::AbstractControlMap,
+               objective::AbstractFiberObjective;
+               kwargs...)
+    return solve(problem, control, objective, initial_coordinates(control); kwargs...)
+end

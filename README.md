@@ -11,17 +11,21 @@ seed, and models provide the physical adjoint gradient.
 ```julia
 using FiberLab
 
-fiber = Fiber(preset = :SMF28_beta2_only, length_m = 1e-4, power_w = 1e-5, beta_order = 2)
-grid = Grid(nt = 16, time_window_ps = 5.0, policy = :exact)
-problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -0.25)
+fiber = Fiber(preset = :SMF28, length_m = 2.0, power_w = 0.2)
+grid = Grid(nt = 1024, time_window_ps = 12.0, policy = :exact)
+problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -13.2)
 
-control = FullGridPhase(problem)
-objective = raman_band_objective(problem; log_cost = false)
-model = fiber_model(problem)
+control = controls(
+    phase_control(problem; basis = polynomial_basis(problem, 0:3), bounds = (-3.0, 3.0)),
+    amplitude_control(problem; bounds = (0.8, 1.2)),
+    energy_control(),
+)
+objective = raman_band_objective(problem)
 
-x0 = zeros(dimension(control))
-result = solve(problem, control, objective, x0; max_iter = 1)
+result = solve(problem, control, objective; max_iter = 4)
 metrics(result)
+report = standard_report(problem, result; output_dir = "results/demo", tag = "demo")
+display_report(report)  # shows PNGs inline in notebooks
 ```
 
 Symbolic objects such as `Control(variables = (:phase,))` and
@@ -57,6 +61,7 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_po
 | Path | Purpose |
 |---|---|
 | `src/fiberlab/` | Notebook-facing FiberLab API |
+| `examples/` | Runnable Julia notebooks for Raman, multivariable, multimode, and reduced-basis workflows |
 | `src/simulation/`, `src/gain_simulation/`, `src/mmf_cost.jl` | Low-level physics backend |
 | `configs/experiments/` | Serialized experiments for reproducible runs |
 | `lab_extensions/` | Experimental controls and objectives |

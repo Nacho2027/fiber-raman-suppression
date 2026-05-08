@@ -77,7 +77,7 @@ The repo now has 115 tracked Julia files after removing one unreferenced legacy 
 | File | Lines | Status | Summary |
 |---|---:|---|---|
 | `scripts/workflows/export_run.jl` | 343 | Workflow | Builds experiment-facing export bundles from saved run artifacts, including phase/hardware handoff metadata and validation helpers. |
-| `scripts/workflows/generate_presentation_figures.jl` | 392 | Workflow | Reads existing sweep/run artifacts and renders advisor/presentation figures without rerunning simulations. |
+| `scripts/workflows/generate_presentation_figures.jl` | 392 | Workflow | Reads existing sweep/run artifacts and renders presentation figures without rerunning simulations. |
 | `scripts/workflows/generate_sweep_reports.jl` | 425 | Workflow | Generates per-point report cards and ranked sweep summaries from existing sweep payloads. |
 | `scripts/workflows/index_results.jl` | 210 | Workflow | CLI-facing result-index builder that scans result roots and writes/prints run index summaries. |
 | `scripts/workflows/index_telemetry.jl` | 141 | Workflow | CLI-facing telemetry-index builder that summarizes `telemetry.json` files. |

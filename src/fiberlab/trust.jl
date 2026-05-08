@@ -149,6 +149,17 @@ function _trust_control_value(evaluations::NamedTuple, name::Symbol)
     return nothing
 end
 
+_trust_coordinates(evaluation::ControlEvaluation) = evaluation.coordinates
+
+function _trust_coordinates(evaluations::NamedTuple)
+    chunks = Vector{Float64}[]
+    for name in propertynames(evaluations)
+        push!(chunks, Float64.(_trust_coordinates(getproperty(evaluations, name))))
+    end
+    isempty(chunks) && return Float64[]
+    return vcat(chunks...)
+end
+
 function _trust_phase_checks!(checks::Vector{TrustCheck}, phase, profile::LabProfile)
     vector = _trust_real_vector(phase)
     if vector === nothing
@@ -506,7 +517,7 @@ function trust_check(step::AdjointStepResult; profile=nothing)
                      :blocker, "Optimizer-space gradient contains only finite values.",
                      (norm = norm(gradient_vector(step)),)),
     ]
-    _trust_lab_checks!(checks, step.control_evaluation, step.control_evaluation.coordinates, profile)
+    _trust_lab_checks!(checks, step.control_evaluation, _trust_coordinates(step.control_evaluation), profile)
     return _trust_report(checks)
 end
 

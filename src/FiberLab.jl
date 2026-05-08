@@ -41,8 +41,11 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        figure_hooks, figure_paths, has_control_pullback,
        has_objective_terminal_adjoint, has_pullback, has_terminal_adjoint,
        has_feasibility_check, has_penalty, has_physical_gradient, has_projection,
+       amplitude_control, bounded_profile_control, controls, energy_control,
        fiber_field_problem, fiber_problem, fiber_model, field_objective,
-       frequency_offsets, gradient_vector, metrics, mode_count, objective_contract, plan,
+       frequency_offsets, gradient_vector, metrics, mode_count, objective_contract,
+       objective_value, plan,
+       initial_coordinates, phase_control, fourier_basis, polynomial_basis,
        project, pullback, pullback_gradient,
        registered_control_kinds, run_adjoint_step,
        registered_objective_kinds,
@@ -50,6 +53,7 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        fundamental_mode_objective, mode_sum_objective, raman_band_objective,
        raman_peak_objective, temporal_width_objective, worst_mode_objective,
        sample_count, single_mode_fiber_problem, single_mode_phase_model, single_mode_shaper_model,
+       display_report, standard_figures, standard_report,
        spectral_shaper_model, trust_check,
        solve, summarize, terminal_adjoint, verify,
        write_experiment_config,
@@ -72,6 +76,7 @@ using FFTW
 using LoopVectorization
 using PyPlot
 using Interpolations
+using Printf
 
 include("gain_simulation/gain.jl")
 
@@ -98,5 +103,7 @@ include("fiberlab/native_execution.jl")
 include("fiberlab/trust.jl")
 include("fiberlab/physics_helpers.jl")
 include("fiberlab/physics_models.jl")
+include("fiberlab/design_api.jl")
+include("fiberlab/standard_figures.jl")
 
 end
