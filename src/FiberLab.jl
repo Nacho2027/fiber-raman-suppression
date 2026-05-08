@@ -1,25 +1,58 @@
 """
     FiberLab
 
-Julia package for simulating nonlinear pulse propagation in single-mode and multimode
-optical fibers, with support for:
+Julia API for adjoint-based inverse design in nonlinear single-mode and
+multimode fiber systems, with support for:
 
 - **Kerr + Raman nonlinearity** in the interaction picture (split-step via ODE solver)
-- **Adjoint-based sensitivity analysis** for gradient computation (spectral phase optimization)
+- **Adjoint-based sensitivity analysis** for gradient computation
 - **YDFA gain modeling** (Yb-doped fiber amplifier via rate equations)
 - **Quantum noise analysis** (shot noise, excess noise decomposition via mode overlaps)
 - **GRIN fiber mode solving** (graded-index eigenvalue problem)
 
-The primary use case is Raman suppression optimization: finding spectral phase profiles
-that minimize energy transfer to Raman-shifted frequencies during fiber propagation.
+The conceptual center is the adjoint contract: controls decode optimizer
+coordinates, objectives define costs and terminal adjoint seeds, and models map
+those seeds to physical gradients. Built-in physics helpers are conveniences
+that use the same contracts available to notebook code.
 
 The high-level FiberLab API is defined in `src/fiberlab/`. Lower-level
 simulation functions remain available for backend and numerical work.
 """
 module FiberLab
 
-export ArtifactPolicy, Control, Experiment, Fiber, Grid, Objective, Pulse,
-       Solver, experiment_config_text, summarize, write_experiment_config,
+export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, AdjointObjective,
+       AbstractExecutionBackend, AdjointModel, AdjointStepResult,
+       AdjointGradientCheckResult, AmplitudeBasis, ArtifactPolicy, CheckReport,
+       ConfigRunnerBackend, Control, ControlBlock, ControlEvaluation,
+       ControlGradient, ControlMap, ControlSpace, CoordinateBounds,
+       ControlContract, DefaultAssumption,
+       Experiment, ExperimentPlan, Fiber, FiberLabBackendError,
+       FeasibilityEvaluation, FeasibilityMap,
+       FiberFieldProblem, FiberProblem, FiberLabCheckError, FiberLabResult, FullGridPhase, Grid, Objective,
+       NativeAdjointBackend, NativeAdjointResult, NativeArtifactContext,
+       ObjectiveMap, PhaseBasis, PositiveScalar, Pulse,
+       NoExecutionBackend, ObjectiveContract, ScalarObjective, Solver,
+       ScalarControl, SingleModeFiberProblem, LabProfile, TrustCheck, TrustReport,
+       assert_adjoint_ready, check, check_adjoint_gradient,
+       control_bounds, control_contract, control_slices, decode,
+       decoded_final, default_assumptions, dimension, evaluate_control, execute,
+       evaluate_feasibility, experiment_config_text, feasibility_check,
+       feasibility_penalty, feasibility_physical_gradient,
+       figure_hooks, figure_paths, has_control_pullback,
+       has_objective_terminal_adjoint, has_pullback, has_terminal_adjoint,
+       has_feasibility_check, has_penalty, has_physical_gradient, has_projection,
+       fiber_field_problem, fiber_problem, fiber_model, field_objective,
+       frequency_offsets, gradient_vector, metrics, mode_count, objective_contract, plan,
+       project, pullback, pullback_gradient,
+       registered_control_kinds, run_adjoint_step,
+       registered_objective_kinds,
+       register_control!, register_objective!,
+       fundamental_mode_objective, mode_sum_objective, raman_band_objective,
+       raman_peak_objective, temporal_width_objective, worst_mode_objective,
+       sample_count, single_mode_fiber_problem, single_mode_phase_model, single_mode_shaper_model,
+       spectral_shaper_model, trust_check,
+       solve, summarize, terminal_adjoint, verify,
+       write_experiment_config,
        OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
        artifact_paths_for_prefix, ensure_deterministic_environment,
        load_run, load_canonical_runs, read_run_manifest, save_run,
@@ -32,7 +65,9 @@ using Arpack
 using FiniteDifferences
 using NPZ
 using DifferentialEquations
+import DifferentialEquations: solve
 using LinearAlgebra
+using Optim
 using FFTW
 using LoopVectorization
 using PyPlot
@@ -53,5 +88,15 @@ include("io/artifacts.jl")
 include("io/results.jl")
 include("runtime/determinism.jl")
 include("fiberlab/api.jl")
+include("fiberlab/adjoints.jl")
+include("fiberlab/feasibility.jl")
+include("fiberlab/contracts.jl")
+include("fiberlab/defaults.jl")
+include("fiberlab/run_result.jl")
+include("fiberlab/execution.jl")
+include("fiberlab/native_execution.jl")
+include("fiberlab/trust.jl")
+include("fiberlab/physics_helpers.jl")
+include("fiberlab/physics_models.jl")
 
 end

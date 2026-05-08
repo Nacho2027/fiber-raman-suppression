@@ -1,11 +1,13 @@
 """
-    Fiber(; regime=:single_mode, preset=:SMF28, length_m, power_w, beta_order=3)
+    Fiber(; preset=:SMF28, length_m, power_w, regime=:single_mode, beta_order=3)
 
 Notebook-facing description of a fiber propagation setting.
 
 `Fiber` is a high-level experiment object. It intentionally stores user-facing
 choices, not the low-level propagation dictionaries consumed by the inherited
-simulation backend.
+simulation backend. Most notebooks can omit `regime` and choose the number of
+fields through `fiber_problem(...; modes=...)`; `regime` remains available for
+compatibility specs and explicit metadata.
 """
 Base.@kwdef struct Fiber
     regime::Symbol = :single_mode
@@ -40,10 +42,14 @@ end
 """
     Control(; variables=(:phase,), parameterization=:full_grid, initialization=:zero, policy=:direct)
 
-High-level pulse-shaping or launch-control choice.
+Symbolic pulse-shaping or launch-control choice for config-backed workflows.
 
 Examples of `variables` are `(:phase,)`, `(:phase, :amplitude)`, or an
 extension kind registered under `lab_extensions/variables/`.
+
+For behavior-first native adjoint work, pass `ControlMap`, `ControlSpace`, or a
+built-in map such as `FullGridPhase`, `PhaseBasis`, `AmplitudeBasis`, or
+`PositiveScalar` directly to `Experiment`.
 """
 Base.@kwdef struct Control
     variables::Tuple{Vararg{Symbol}} = (:phase,)
@@ -56,9 +62,11 @@ end
 """
     Objective(; kind=:raman_band, log_cost=true, regularizers=Dict(:gdd => :auto, :boundary => 1.0))
 
-High-level optimization target.
+Symbolic optimization target for config-backed workflows.
 
 Objective kinds may be built in or registered through `lab_extensions/objectives/`.
+For behavior-first native adjoint work, pass `ObjectiveMap`,
+`AdjointObjective`, or `ScalarObjective` directly to `Experiment`.
 """
 Base.@kwdef struct Objective
     kind::Symbol = :raman_band
@@ -98,10 +106,9 @@ end
 
 High-level FiberLab experiment object.
 
-This is the intended notebook and agent-facing mental model. Current executable
-backends still reuse the older config/runner layer, but new public workflow
-code should start from `Experiment` and only lower into backend-specific
-representations at the boundary.
+This is the notebook and agent-facing container. It accepts either symbolic
+config specs or direct adjoint behavior objects and only lowers into
+backend-specific representations at the execution boundary.
 """
 Base.@kwdef struct Experiment
     id::String
@@ -109,25 +116,41 @@ Base.@kwdef struct Experiment
     fiber::Fiber
     pulse::Pulse = Pulse()
     grid::Grid = Grid()
-    control::Control = Control()
-    objective::Objective = Objective()
+    control = Control()
+    objective = Objective()
     solver::Solver = Solver()
     artifacts::ArtifactPolicy = ArtifactPolicy()
-    output_root::String = joinpath("results", "raman")
+    output_root::String = joinpath("results", "fiberlab")
     output_tag::String = id
     maturity::Symbol = :experimental
 end
 
-function Experiment(fiber::Fiber, control::Control=Control(), objective::Objective=Objective();
+function _valid_control_spec(control)
+    control isa Control && return true
+    isdefined(@__MODULE__, :AbstractControlMap) && control isa AbstractControlMap && return true
+    return false
+end
+
+function _valid_objective_spec(objective)
+    objective isa Objective && return true
+    isdefined(@__MODULE__, :AbstractFiberObjective) && objective isa AbstractFiberObjective && return true
+    return false
+end
+
+function Experiment(fiber::Fiber, control=Control(), objective=Objective();
                     id::AbstractString="notebook_experiment",
                     description::AbstractString=String(id),
                     pulse::Pulse=Pulse(),
                     grid::Grid=Grid(),
                     solver::Solver=Solver(),
                     artifacts::ArtifactPolicy=ArtifactPolicy(),
-                    output_root::AbstractString=joinpath("results", "raman"),
+                    output_root::AbstractString=joinpath("results", "fiberlab"),
                     output_tag::AbstractString=String(id),
                     maturity::Symbol=:experimental)
+    _valid_control_spec(control) || throw(ArgumentError(
+        "control must be a FiberLab Control or AbstractControlMap"))
+    _valid_objective_spec(objective) || throw(ArgumentError(
+        "objective must be a FiberLab Objective or AbstractFiberObjective"))
     return Experiment(;
         id = String(id),
         description = String(description),
@@ -163,9 +186,14 @@ end
 Render a FiberLab `Experiment` as the current front-layer TOML schema.
 
 This keeps notebooks centered on the abstract API while preserving the existing
-config-backed execution path during the migration.
+config-backed execution path for reproducible compatibility runs.
 """
 function experiment_config_text(experiment::Experiment)
+    experiment.control isa Control || throw(ArgumentError(
+        "experiment_config_text only supports symbolic Control objects; custom control maps require an API execution backend"))
+    experiment.objective isa Objective || throw(ArgumentError(
+        "experiment_config_text only supports symbolic Objective objects; custom objective maps require an API execution backend"))
+
     lines = String[]
     _push_kv!(lines, "id", experiment.id)
     _push_kv!(lines, "description", experiment.description)
@@ -252,6 +280,31 @@ end
 
 Compact machine-readable summary for notebooks, docs, and agent inspection.
 """
+function _summary_control_variables(control::Control)
+    return control.variables
+end
+
+function _summary_control_variables(control)
+    if isdefined(@__MODULE__, :ControlSpace) && control isa ControlSpace
+        return Tuple(block.name for block in control.blocks)
+    end
+    if isdefined(@__MODULE__, :AbstractControlMap) && control isa AbstractControlMap
+        return (control.name,)
+    end
+    return (:unknown_control,)
+end
+
+function _summary_objective_kind(objective::Objective)
+    return objective.kind
+end
+
+function _summary_objective_kind(objective)
+    if isdefined(@__MODULE__, :AbstractFiberObjective) && objective isa AbstractFiberObjective
+        return objective.name
+    end
+    return :unknown_objective
+end
+
 function summarize(experiment::Experiment)
     return (
         id = experiment.id,
@@ -259,8 +312,8 @@ function summarize(experiment::Experiment)
         preset = experiment.fiber.preset,
         length_m = experiment.fiber.length_m,
         power_w = experiment.fiber.power_w,
-        variables = experiment.control.variables,
-        objective = experiment.objective.kind,
+        variables = _summary_control_variables(experiment.control),
+        objective = _summary_objective_kind(experiment.objective),
         solver = experiment.solver.kind,
         max_iter = experiment.solver.max_iter,
         output_root = experiment.output_root,

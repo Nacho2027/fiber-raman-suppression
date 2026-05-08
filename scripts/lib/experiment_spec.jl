@@ -1040,8 +1040,8 @@ function render_experiment_capabilities(; io::IO=stdout)
         caps = experiment_capability_profile(regime)
         println(io, "  regime=", regime)
         stage_summary =
-            regime == :single_mode ? "lab_ready for supported phase-only; smoke for experimental multivariable" :
-            regime == :multimode ? "smoke for standard-verification shared-phase MMF; high-resource configs use dedicated workflows" :
+            regime == :single_mode ? "lab_ready for validated benchmark configs; smoke for experimental multivariable" :
+            regime == :multimode ? "smoke for validated shared-phase MMF checks; high-resource configs use dedicated workflows" :
             "planning/dedicated workflow until long-fiber execution is merged into the core single-mode path"
         println(io, "    current_stage=", stage_summary)
         println(io, "    variables=", _objective_tuple_summary(caps.variables))
@@ -1056,7 +1056,7 @@ function render_experiment_capabilities(; io::IO=stdout)
     end
     println(io)
     println(io, "Execution notes:")
-    println(io, "  single_mode phase-only is the supported local execution path.")
+    println(io, "  single_mode phase/Raman configs are validated benchmark and regression paths.")
     println(io, "  single_mode multivariable controls are experimental.")
     println(io, "  use `fiberlab explore` for intentional experimental exploration runs.")
     println(io, "  multimode shared-phase smoke configs can execute through the front layer.")

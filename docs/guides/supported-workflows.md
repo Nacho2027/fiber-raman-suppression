@@ -1,22 +1,34 @@
 # Supported Workflows
 
 The supported surface is Julia-only. The preferred mental model is the
-FiberLab API; the current execution path still lowers experiments into
-checked configs.
+FiberLab adjoint inverse-design API: explicit controls, objectives, and
+models connected by an explicit adjoint contract.
 
 ## Notebook API
 
 ```julia
 using FiberLab
 
-fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
-experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))
+fiber = Fiber(preset = :SMF28, length_m = 2.0, power_w = 0.2)
+grid = Grid(nt = 8192, time_window_ps = 12.0)
+problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -5.0)
 
-summarize(experiment)
+control = FullGridPhase(problem)
+objective = raman_band_objective(problem; log_cost = false)
+model = fiber_model(problem)
+x0 = zeros(dimension(control))
+
+check_adjoint_gradient(
+    model,
+    control,
+    objective,
+    x0;
+    coordinate_indices = [1, dimension(control) ÷ 2],
+)
 ```
 
-See [Notebook API Quickstart](notebook-api.md) for the current bridge from API
-objects to runnable configs.
+See [Notebook API Quickstart](notebook-api.md) for native adjoint execution and
+the compatibility bridge to config-backed runs.
 
 ## Experiment Configs
 

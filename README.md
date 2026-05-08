@@ -1,17 +1,34 @@
 # FiberLab
 
-Julia-first FiberLab API for building, running, and inspecting nonlinear
-fiber-optic optimization experiments.
+Julia-first FiberLab API for adjoint-based inverse design in nonlinear
+fiber-optic systems.
 
-The active user-facing model is:
+The active user-facing model is a composable adjoint problem. Researchers pass
+physics problems, controls, objectives, and models directly: controls decode
+optimizer coordinates, objectives return a scalar cost and terminal adjoint
+seed, and models provide the physical adjoint gradient.
 
 ```julia
 using FiberLab
 
-fiber = Fiber(regime = :single_mode, preset = :SMF28, length_m = 2.0, power_w = 0.2)
-experiment = Experiment(fiber, Control(variables = (:phase,)), Objective(kind = :raman_band))
-summarize(experiment)
+fiber = Fiber(preset = :SMF28_beta2_only, length_m = 1e-4, power_w = 1e-5, beta_order = 2)
+grid = Grid(nt = 16, time_window_ps = 5.0, policy = :exact)
+problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -0.25)
+
+control = FullGridPhase(problem)
+objective = raman_band_objective(problem; log_cost = false)
+model = fiber_model(problem)
+
+x0 = zeros(dimension(control))
+result = solve(problem, control, objective, x0; max_iter = 1)
+metrics(result)
 ```
+
+Symbolic objects such as `Control(variables = (:phase,))` and
+`Objective(kind = :raman_band)` are compatibility and reproducibility helpers.
+They are not the conceptual center of the API. New user-facing work should be
+expressed as fibers, pulses, grids, controls, objectives, adjoint contracts,
+solvers, results, and figures.
 
 The inherited low-level propagation code remains in `src/` as the physics
 backend. New work should start from the FiberLab concepts: fibers, pulses,

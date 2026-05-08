@@ -30,6 +30,7 @@ Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`, and
 - [Installation](docs/guides/installation.md)
 - [FiberLab concepts](docs/concepts/fiberlab-model.md)
 - [Notebook API](docs/guides/notebook-api.md)
+- [Adjoint inverse design API contract](docs/architecture/adjoint-inverse-design.md)
 - [Public API](docs/reference/api.md)
 - [Supported workflows](docs/guides/supported-workflows.md)
 - [Research verdicts](docs/research-verdicts.md)
