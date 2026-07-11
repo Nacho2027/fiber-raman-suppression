@@ -44,6 +44,7 @@ from the Julia package.
 - `NativeAdjointBackend`
 - `NativeAdjointResult`
 - `NativeArtifactContext`
+- `PropagationResult`
 - `LabProfile`
 - `TrustCheck`
 - `TrustReport`
@@ -83,6 +84,7 @@ from the Julia package.
 - `fiber_problem(fiber; modes=1, pulse=Pulse(), grid=Grid(), kwargs...)`
 - `fiber_problem(experiment; kwargs...)`
 - `fiber_problem(uω0, fiber, sim; kwargs...)`
+- `propagate(problem; saveat=nothing)`
 - `FullGridPhase(problem; kwargs...)`
 - `fiber_model(problem)`
 - `sample_count(problem)`
@@ -96,6 +98,7 @@ from the Julia package.
 - `temporal_width_objective(problem; log_cost=false)`
 - `decoded_final(result)`
 - `metrics(result)`
+- `summarize(result::PropagationResult)`
 - `gradient_vector(control_gradient)`
 - `control_slices(control_space)`
 - `control_contract(kind)`

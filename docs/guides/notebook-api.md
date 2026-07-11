@@ -10,6 +10,33 @@ FiberLab notebooks are built from four explicit objects:
 The same contract handles package-native helpers and researcher-defined
 controls, objectives, and models.
 
+## Forward Simulation
+
+Forward propagation needs only a resolved problem—no objective or optimizer:
+
+```julia
+z_m = collect(range(0, fiber.length_m; length = 9))
+forward = propagate(problem; saveat = z_m)
+
+summarize(forward)  # source authority, hashes, grid, and solver facts
+metrics(forward)    # energy, peak power, edges, modes, and photon drift
+verify(forward)     # numerical checks; never a scientific-readiness claim
+```
+
+`forward.spectra` has shape `(Nt, modes, saved_positions)` in lab-frame raw
+FFT order. `saveat` must be sorted, unique, and include both endpoints; omit it
+to store only input and output. The result contains stored samples, not a live
+solver object, so plots and analysis do not rerun the propagation.
+Containment maxima cover the stored positions only; the endpoint-only default
+does not certify unsaved intermediate states.
+
+Package-built problems retain authoritative `Fiber`/`Pulse` metadata. Explicit
+array problems record only resolved numerical identity and grid facts. A
+different launch field requires a new explicit `fiber_field_problem`, avoiding
+silent changes to the source contract. This method covers the passive
+single-mode and multimode backend; gain propagation remains a separate
+low-level capability until it has equivalent evidence and tests.
+
 ## Minimal Run
 
 ```julia

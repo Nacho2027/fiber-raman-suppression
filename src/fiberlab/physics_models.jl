@@ -154,13 +154,15 @@ function _raman_threshold(value::Real)
     return threshold
 end
 
-function _array_sha256(values)
-    array = Array(values)
-    payload = IOBuffer()
-    write(payload, string(eltype(array), ":", join(size(array), "x"), ":"))
-    write(payload, reinterpret(UInt8, vec(array)))
-    return bytes2hex(sha256(take!(payload)))
+function _array_sha256(array::Array)
+    context = SHA.SHA256_CTX()
+    header = string(eltype(array), ":", join(size(array), "x"), ":")
+    SHA.update!(context, codeunits(header))
+    SHA.update!(context, reinterpret(UInt8, vec(array)))
+    return bytes2hex(SHA.digest!(context))
 end
+
+_array_sha256(values::AbstractArray) = _array_sha256(Array(values))
 
 _signature_value(value::AbstractArray) = (
     eltype = string(eltype(value)),
@@ -678,9 +680,9 @@ function _cached_forward!(physics::SingleModePhasePhysics, decoded_control)
     end
 
     shaped = _shaped_input(problem, fields)
-    solution = solve_disp_mmf(shaped, problem.fiber, problem.sim)["ode_sol"]
-    final_field = cis.(problem.fiber["Dω"] .* problem.fiber["L"]) .*
-        solution(problem.fiber["L"])
+    propagation = _forward_propagation(problem, shaped)
+    solution = propagation.solution
+    final_field = propagation.output
 
     cache.signature = signature
     cache.shaped_input = Matrix{ComplexF64}(shaped)
