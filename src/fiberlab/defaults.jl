@@ -141,3 +141,29 @@ function default_assumptions(experiment::Experiment)
 
     return Tuple(items)
 end
+
+function default_assumptions(experiment::NativeExperiment)
+    items = DefaultAssumption[]
+    level = experiment.metadata_authority == :user_asserted ? :review : :explicit
+    message = if experiment.metadata_authority == :authoritative
+        "Fiber, Pulse, and resolved Grid metadata come from the package-built numerical problem."
+    elseif experiment.metadata_authority == :user_asserted
+        "fiber and pulse metadata are user assertions; resolved numerical identity is recorded separately."
+    else
+        "only metadata resolved from the numerical problem is recorded."
+    end
+    _assumption!(
+        items,
+        :metadata_authority,
+        experiment.metadata_authority,
+        level,
+        message,
+    )
+    _assumption!(items, :control_map, _control_map_label(experiment.control), :explicit,
+        "explicit control map supplied.")
+    _assumption!(items, :objective_map, experiment.objective.name, :explicit,
+        "explicit objective supplied.")
+    !experiment.solver.validate_gradient && _assumption!(items, :gradient_validation, false, :review,
+        "gradient validation is disabled; enable it for new controls, objectives, or physics models.")
+    return Tuple(items)
+end

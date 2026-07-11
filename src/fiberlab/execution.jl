@@ -6,7 +6,7 @@ execution, then delegates to an explicit backend adapter.
 """
 
 struct ExperimentPlan
-    experiment::Experiment
+    experiment::Union{Experiment,NativeExperiment}
     config_text::String
     backend::Symbol
     requires_adjoint::Bool
@@ -171,6 +171,22 @@ function plan(experiment::Experiment)
     )
 end
 
+function plan(experiment::NativeExperiment)
+    return ExperimentPlan(
+        experiment,
+        "",
+        :api_native,
+        _gradient_solver(experiment.solver.kind),
+        _control_kinds(experiment.control),
+        _objective_kind(experiment.objective),
+        experiment.solver.kind,
+        figure_hooks(experiment.control, experiment.objective),
+        experiment.output_root,
+        experiment.output_tag,
+        default_assumptions(experiment),
+    )
+end
+
 function _push_unique!(items::Vector{Symbol}, item::Symbol)
     item in items || push!(items, item)
     return items
@@ -186,12 +202,25 @@ function _check_plan(plan::ExperimentPlan)
         push!(messages, "experiment id cannot be empty"))
     isempty(plan.variables) && (_push_unique!(blockers, :missing_controls);
         push!(messages, "at least one control variable is required"))
-    experiment.grid.nt > 0 || (_push_unique!(blockers, :invalid_grid);
-        push!(messages, "grid.nt must be positive"))
-    experiment.fiber.length_m > 0 || (_push_unique!(blockers, :invalid_fiber);
-        push!(messages, "fiber.length_m must be positive"))
-    experiment.fiber.power_w > 0 || (_push_unique!(blockers, :invalid_fiber);
-        push!(messages, "fiber.power_w must be positive"))
+    if !ismissing(experiment.grid) &&
+            (experiment.grid.nt <= 0 || !isfinite(experiment.grid.time_window_ps) ||
+             experiment.grid.time_window_ps <= 0)
+        _push_unique!(blockers, :invalid_grid)
+        push!(messages, "grid size and time window must be positive and finite")
+    end
+    if !ismissing(experiment.fiber) &&
+            (!isfinite(experiment.fiber.length_m) || experiment.fiber.length_m <= 0 ||
+             !isfinite(experiment.fiber.power_w) || experiment.fiber.power_w <= 0 ||
+             experiment.fiber.beta_order < 2)
+        _push_unique!(blockers, :invalid_fiber)
+        push!(messages, "fiber length and power must be positive and finite; beta order must be at least 2")
+    end
+    if !ismissing(experiment.pulse) &&
+            (!isfinite(experiment.pulse.fwhm_s) || experiment.pulse.fwhm_s <= 0 ||
+             !isfinite(experiment.pulse.rep_rate_hz) || experiment.pulse.rep_rate_hz <= 0)
+        _push_unique!(blockers, :invalid_pulse)
+        push!(messages, "pulse width and repetition rate must be positive and finite")
+    end
     experiment.solver.max_iter > 0 || (_push_unique!(blockers, :invalid_solver);
         push!(messages, "solver.max_iter must be positive"))
 
@@ -238,7 +267,7 @@ Run FiberLab's simulation-free defensive checks. `solve(experiment)` calls this
 automatically; users call it when they want to inspect blockers without
 launching a run.
 """
-check(experiment::Experiment) = _check_plan(plan(experiment))
+check(experiment::Union{Experiment,NativeExperiment}) = _check_plan(plan(experiment))
 check(plan::ExperimentPlan) = _check_plan(plan)
 
 execute(plan::ExperimentPlan, backend::NoExecutionBackend) =
@@ -249,6 +278,7 @@ execute(plan::ExperimentPlan, backend::NoExecutionBackend) =
     ))
 
 _preflight_backend(plan::ExperimentPlan, backend::AbstractExecutionBackend) = nothing
+_preflight_in_execute(::AbstractExecutionBackend) = false
 
 function _runner_command(backend::ConfigRunnerBackend, config_path::AbstractString)
     return Cmd(
@@ -360,12 +390,15 @@ Primary notebook-facing execution entry point. It always runs `plan` and
 `check` first. `dry_run=true` returns the `CheckReport` without executing.
 Use `ConfigRunnerBackend()` to execute through the maintained canonical runner.
 """
-function solve(experiment::Experiment; dry_run::Bool=false,
+function solve(experiment::Union{Experiment,NativeExperiment}; dry_run::Bool=false,
                backend::AbstractExecutionBackend=NoExecutionBackend())
     experiment_plan = plan(experiment)
     report = check(experiment_plan)
     report.pass || throw(FiberLabCheckError(report))
-    dry_run && return report
-    _preflight_backend(experiment_plan, backend)
+    if dry_run
+        _preflight_backend(experiment_plan, backend)
+        return report
+    end
+    _preflight_in_execute(backend) || _preflight_backend(experiment_plan, backend)
     return execute(experiment_plan, backend)
 end

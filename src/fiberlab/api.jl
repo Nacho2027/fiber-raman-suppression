@@ -5,9 +5,8 @@ Notebook-facing description of a fiber propagation setting.
 
 `Fiber` is a high-level experiment object. It intentionally stores user-facing
 choices, not the low-level propagation dictionaries consumed by the inherited
-simulation backend. Most notebooks can omit `regime` and choose the number of
-fields through `fiber_problem(...; modes=...)`; `regime` remains available for
-compatibility specs and explicit metadata.
+simulation backend. `regime` must agree with the number of fields requested
+through `fiber_problem(...; modes=...)`.
 """
 Base.@kwdef struct Fiber
     regime::Symbol = :single_mode
@@ -123,6 +122,22 @@ Base.@kwdef struct Experiment
     output_root::String = joinpath("results", "fiberlab")
     output_tag::String = id
     maturity::Symbol = :experimental
+end
+
+Base.@kwdef struct NativeExperiment
+    id::String
+    description::String = id
+    fiber::Union{Missing,Fiber} = missing
+    pulse::Union{Missing,Pulse} = missing
+    grid::Union{Missing,Grid} = missing
+    control
+    objective
+    solver::Solver = Solver()
+    artifacts::ArtifactPolicy = ArtifactPolicy()
+    output_root::String = joinpath("results", "fiberlab")
+    output_tag::String = id
+    maturity::Symbol = :experimental
+    metadata_authority::Symbol = :resolved_numerical
 end
 
 function _valid_control_spec(control)

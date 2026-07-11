@@ -77,6 +77,7 @@ using LoopVectorization
 using PyPlot
 using Interpolations
 using Printf
+using SHA
 
 include("gain_simulation/gain.jl")
 

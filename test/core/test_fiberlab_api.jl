@@ -153,6 +153,12 @@ end
     @test objective_value(mapped_objective, field) ≈ sum(abs2, field)
     @test terminal_adjoint(mapped_objective, field) == 2 .* field
     @test assert_adjoint_ready(mapped_objective, custom_control, Solver(kind = :lbfgs))
+    @test_throws MethodError ObjectiveMap(
+        :forged_problem_binding;
+        cost = f -> sum(abs2, f),
+        terminal_adjoint = (f, ctx) -> f,
+        problem_sha256 = repeat("0", 64),
+    )
     @test_throws ArgumentError terminal_adjoint(
         ObjectiveMap(
             :wrong_shape;
@@ -507,12 +513,37 @@ end
     @test isempty(verification.requested_artifact_hooks)
     @test isempty(verification.missing_artifact_hooks)
 
+    for authority in (:resolved_numerical, :authoritative, :user_asserted)
+        bypass_output = mktempdir()
+        incomplete_native_experiment = FiberLab.NativeExperiment(;
+            id = "incomplete_custom_metadata_$(authority)",
+            control = control,
+            objective = objective,
+            solver = Solver(kind = :lbfgs, max_iter = 1),
+            maturity = :supported,
+            metadata_authority = authority,
+        )
+        @test_throws FiberLabBackendError solve(
+            incomplete_native_experiment;
+            backend = NativeAdjointBackend(
+                model;
+                initial_coordinates = [2.0],
+                max_iter = 1,
+                write_artifacts = true,
+                output_dir = bypass_output,
+            ),
+        )
+        @test isempty(readdir(bypass_output))
+    end
+
     direct_result = solve(
         model,
         control,
         objective,
         [2.0];
         fiber = fiber,
+        pulse = Pulse(),
+        grid = Grid(),
         id = "direct_native_scalar_quadratic",
         max_iter = 6,
         validate_gradient = true,
@@ -525,6 +556,14 @@ end
     @test direct_result.trust_report.pass
     @test isapprox(direct_result.x_final[1], 0.0; atol = 1e-12)
     @test verify(direct_result).gradient_check_pass
+    @test_throws ArgumentError solve(
+        model,
+        control,
+        objective,
+        [2.0];
+        fiber = fiber,
+        max_iter = 1,
+    )
 
     artifact_dir = mktempdir()
     artifact_result = solve(
@@ -554,6 +593,7 @@ end
     @test occursin("\"trust_report\"", native_sidecar)
     @test occursin("\"trust_report\": \"native_scalar_quadratic_trust_report.json\"", native_sidecar)
     @test occursin("\"convergence_trace_file\"", native_sidecar)
+    @test occursin("\"metadata_authority\": \"user_asserted\"", native_sidecar)
 
     figure_control = FullGridPhase(4)
     figure_objective = ObjectiveMap(
@@ -617,6 +657,8 @@ end
         figure_objective,
         [0.5, -0.25, 0.1, -0.05];
         fiber = fiber,
+        pulse = Pulse(),
+        grid = Grid(),
         id = "direct_native_default_figures",
         max_iter = 1,
         write_artifacts = true,
@@ -639,6 +681,8 @@ end
         figure_objective,
         [0.01, -0.02, 0.01, -0.02];
         fiber = fiber,
+        pulse = Pulse(),
+        grid = Grid(),
         id = "direct_native_trust_required",
         max_iter = 1,
         gradient_tolerance = 1e99,
@@ -653,6 +697,8 @@ end
         figure_objective,
         [2.0, -2.0, 2.0, -2.0];
         fiber = fiber,
+        pulse = Pulse(),
+        grid = Grid(),
         id = "direct_native_trust_rejected",
         max_iter = 1,
         gradient_tolerance = 1e99,
@@ -957,16 +1003,24 @@ end
     @test isapprox(decoded_final(schedule_result).gain_offset, 0.0; atol = 1e-8)
     @test metrics(schedule_result).gradient_check_pass
 
+    strict_schedule_dir = mktempdir()
+    strict_schedule_backend = NativeAdjointBackend(
+        schedule_model;
+        initial_coordinates = [1.0, -2.0, 3.0],
+        write_artifacts = true,
+        output_dir = strict_schedule_dir,
+        artifact_writers = Dict(:pump_schedule => (context, result) -> nothing),
+    )
     @test_throws FiberLabBackendError solve(
         schedule_experiment;
-        backend = NativeAdjointBackend(
-            schedule_model;
-            initial_coordinates = [1.0, -2.0, 3.0],
-            write_artifacts = true,
-            output_dir = mktempdir(),
-            artifact_writers = Dict(:pump_schedule => (context, result) -> nothing),
-        ),
+        dry_run = true,
+        backend = strict_schedule_backend,
     )
+    @test_throws FiberLabBackendError solve(
+        schedule_experiment;
+        backend = strict_schedule_backend,
+    )
+    @test isempty(readdir(strict_schedule_dir))
 
     schedule_artifact_dir = mktempdir()
     schedule_artifact_result = solve(
@@ -1231,9 +1285,15 @@ end
         solver = Solver(kind = :nelder_mead, max_iter = 1),
         maturity = :supported,
     )
+    unsupported_solver_backend = NativeAdjointBackend(model; initial_coordinates = [2.0])
     @test_throws FiberLabBackendError solve(
         unsupported_solver_experiment;
-        backend = NativeAdjointBackend(model; initial_coordinates = [2.0]),
+        dry_run = true,
+        backend = unsupported_solver_backend,
+    )
+    @test_throws FiberLabBackendError solve(
+        unsupported_solver_experiment;
+        backend = unsupported_solver_backend,
     )
 
     wrong_gradient_model = AdjointModel(
@@ -1287,7 +1347,13 @@ end
         beta_order = 2,
     )
     grid = Grid(nt = 16, time_window_ps = 5.0, policy = :exact)
-    problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -0.25)
+    pulse = Pulse(fwhm_s = 1e-12, rep_rate_hz = 50e6, shape = :gaussian)
+    problem = fiber_problem(
+        fiber;
+        pulse = pulse,
+        grid = grid,
+        raman_threshold_thz = -0.25,
+    )
     @test problem isa FiberProblem
     @test problem isa FiberFieldProblem
     @test problem isa SingleModeFiberProblem
@@ -1303,12 +1369,71 @@ end
     @test problem_summary.raman_threshold_thz == -0.25
     @test problem_summary.band_bins == count(problem.band_mask)
     @test problem_summary.reference_power_w == fiber.power_w
+    @test problem.metadata.requested_fiber == fiber
+    @test problem.metadata.requested_pulse == pulse
+    @test problem.metadata.requested_grid == grid
+
+    auto_grid = Grid(nt = 16, time_window_ps = 1.0, policy = :auto_if_undersized)
+    auto_problem = fiber_problem(
+        fiber;
+        grid = auto_grid,
+        raman_threshold_thz = -0.25,
+    )
+    @test auto_problem.metadata.requested_grid == auto_grid
+    @test auto_problem.sim["Nt"] > auto_grid.nt
+    @test auto_problem.sim["time_window"] > auto_grid.time_window_ps
+    @test_throws ArgumentError fiber_problem(Fiber(
+        preset = :SMF28_beta2_only,
+        length_m = 1e-4,
+        power_w = 0.0,
+        beta_order = 2,
+    ))
+    @test_throws ArgumentError fiber_problem(
+        fiber;
+        pulse = Pulse(fwhm_s = 0.0),
+        grid = grid,
+    )
+    @test_throws ArgumentError fiber_problem(fiber; modes = 2, grid = grid)
+
+    negative_dt = deepcopy(problem.sim)
+    negative_dt["Δt"] *= -1
+    @test_throws ArgumentError fiber_field_problem(problem.uω0, problem.fiber, negative_dt)
+    nan_attenuator = deepcopy(problem.sim)
+    nan_attenuator["attenuator"][1, 1] = NaN
+    @test_throws ArgumentError fiber_field_problem(
+        problem.uω0,
+        problem.fiber,
+        nan_attenuator,
+    )
+    inconsistent_omega = deepcopy(problem.sim)
+    inconsistent_omega["ωs"] = zeros(sample_count(problem))
+    @test_throws ArgumentError fiber_field_problem(
+        problem.uω0,
+        problem.fiber,
+        inconsistent_omega,
+    )
+    short_raman = deepcopy(problem.fiber)
+    short_raman["hRω"] = short_raman["hRω"][1:end-1]
+    @test_throws ArgumentError fiber_field_problem(problem.uω0, short_raman, problem.sim)
+    @test_throws MethodError fiber_field_problem(
+        problem.uω0,
+        problem.fiber,
+        problem.sim;
+        requested_fiber = fiber,
+    )
+    @test_throws ArgumentError fiber_problem(
+        fiber;
+        pulse = pulse,
+        grid = grid,
+        raman_threshold_thz = Inf,
+    )
 
     setup_experiment = Experiment(
         fiber,
         Control(variables = (:phase,)),
         Objective(kind = :raman_band, log_cost = false);
         id = "native_physics_setup",
+        pulse = pulse,
         grid = grid,
         solver = Solver(kind = :lbfgs, max_iter = 1),
         maturity = :supported,
@@ -1339,7 +1464,108 @@ end
     objective = raman_band_objective(problem; log_cost = false)
     model = fiber_model(problem)
     @test model isa AdjointModel
+    @test length(problem.metadata.construction_sha256) == 64
     coordinates = zeros(sample_count(problem))
+    explicit_problem = fiber_field_problem(
+        problem.uω0,
+        problem.fiber,
+        problem.sim;
+        band_mask = problem.band_mask,
+        preset = :explicit_test_problem,
+    )
+    explicit_model = fiber_model(explicit_problem)
+    explicit_objective = raman_band_objective(explicit_problem; log_cost = false)
+    @test explicit_model.run_source === nothing
+    @test explicit_model.problem_source !== nothing
+    @test explicit_problem.metadata.construction_sha256 === nothing
+    @test isfinite(run_adjoint_step(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates,
+    ).cost)
+    @test check_adjoint_gradient(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates;
+        coordinate_indices = [1],
+        step = 1e-5,
+        atol = 1e-6,
+        rtol = 5e-2,
+    ).pass
+    explicit_result = solve(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates;
+        id = "explicit_numerical_metadata",
+        max_iter = 1,
+        gradient_tolerance = 1e99,
+        write_artifacts = true,
+        output_dir = mktempdir(),
+        maturity = :supported,
+    )
+    @test ismissing(explicit_result.plan.experiment.fiber)
+    @test ismissing(explicit_result.plan.experiment.pulse)
+    @test explicit_result.plan.experiment.grid ==
+        Grid(nt = problem.sim["Nt"], time_window_ps = problem.sim["time_window"], policy = :exact)
+    @test explicit_result.plan.experiment.metadata_authority == :resolved_numerical
+    explicit_sidecar = FiberLab.JSON3.read(
+        read(explicit_result.sidecar_path, String),
+        Dict{String,Any},
+    )
+    @test explicit_sidecar["metadata_authority"] == "resolved_numerical"
+    @test explicit_sidecar["experiment_summary"]["fiber"] === nothing
+    @test explicit_sidecar["experiment_summary"]["pulse"] === nothing
+    @test explicit_sidecar["experiment_summary"]["grid"]["nt"] == problem.sim["Nt"]
+    @test explicit_sidecar["source_metadata"] === nothing
+    @test_throws ArgumentError solve(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates;
+        fiber = fiber,
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates;
+        fiber = Fiber(
+            regime = :multimode,
+            preset = :custom,
+            length_m = problem.fiber["L"],
+            power_w = fiber.power_w,
+            beta_order = problem.sim["β_order"],
+        ),
+        pulse = pulse,
+        grid = Grid(nt = problem.sim["Nt"], time_window_ps = problem.sim["time_window"], policy = :exact),
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
+        explicit_model,
+        control,
+        explicit_objective,
+        coordinates;
+        fiber = fiber,
+        pulse = pulse,
+        grid = Grid(nt = 32, time_window_ps = 7.0, policy = :exact),
+        max_iter = 1,
+    )
+    @test_throws ArgumentError FiberLab._single_mode_fields(
+        fill(NaN, sample_count(problem)),
+        problem,
+    )
+    @test_throws ArgumentError FiberLab._single_mode_fields(
+        (
+            phase = zeros(sample_count(problem)),
+            amplitude = fill(Inf, sample_count(problem)),
+            energy = 1.0,
+        ),
+        problem,
+    )
     step = run_adjoint_step(model, control, objective, coordinates)
     @test step.cost >= 0
     @test isfinite(step.cost)
@@ -1436,7 +1662,10 @@ end
         preset = :test_bandless_single_mode,
     )
     @test bandless_problem.band_mask === nothing
-    @test bandless_problem.reference_power_w === nothing
+    @test ismissing(bandless_problem.metadata.requested_fiber)
+    @test_throws ArgumentError FiberLab._standard_reference_power(bandless_problem)
+    @test_throws ArgumentError FiberLab._standard_pulse(bandless_problem)
+    @test_throws ArgumentError FiberLab._standard_raman_threshold(bandless_problem)
     bandless_custom_check = check_adjoint_gradient(
         fiber_model(bandless_problem),
         basis_control,
@@ -1493,12 +1722,10 @@ end
         :energy => PositiveScalar(:energy; figure_hooks = (:energy_scale,)),
     )
     multivar_artifact_result = solve(
-        fiber_model(problem),
+        problem,
         multivar_artifact_control,
         objective,
         [0.01, -0.02, 0.03, -0.01, log(1.02)];
-        fiber = fiber,
-        grid = grid,
         id = "native_multivar_physics_artifacts",
         max_iter = 1,
         write_artifacts = true,
@@ -1519,6 +1746,60 @@ end
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:group_delay])
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:amplitude_profile])
     @test verify(multivar_artifact_result).artifact_complete
+    @test multivar_artifact_result.backend.run_source.problem !== problem
+    @test FiberLab._same_resolved_problem(
+        problem,
+        multivar_artifact_result.backend.run_source.problem,
+    )
+    native_sidecar = FiberLab.JSON3.read(
+        read(multivar_artifact_result.sidecar_path, String),
+        Dict{String,Any},
+    )
+    @test native_sidecar["experiment_summary"]["fiber"]["power_w"] == fiber.power_w
+    @test native_sidecar["experiment_summary"]["pulse"]["fwhm_s"] == pulse.fwhm_s
+    source_metadata = native_sidecar["source_metadata"]
+    @test source_metadata["requested_fiber"]["preset"] == String(fiber.preset)
+    @test source_metadata["requested_fiber"]["power_w"] == fiber.power_w
+    @test source_metadata["requested_pulse"]["fwhm_s"] == pulse.fwhm_s
+    @test source_metadata["requested_grid"]["nt"] == grid.nt
+    @test source_metadata["requested_grid"]["policy"] == String(grid.policy)
+    @test source_metadata["resolved_grid"]["nt"] == problem.sim["Nt"]
+    @test source_metadata["resolved_grid"]["time_window_ps"] == problem.sim["time_window"]
+    @test source_metadata["wavelength_m"] == problem.sim["λ0"]
+    @test source_metadata["modes"] == problem.sim["M"]
+    @test source_metadata["construction_sha256"] == problem.metadata.construction_sha256
+    @test length(source_metadata["snapshot_sha256"]) == 64
+    @test native_sidecar["objective_problem_sha256"] == source_metadata["snapshot_sha256"]
+    @test native_sidecar["resolved_problem_sha256"] == source_metadata["snapshot_sha256"]
+    @test native_sidecar["metadata_authority"] == "authoritative"
+
+    mismatched_problem = fiber_problem(
+        Fiber(
+            preset = fiber.preset,
+            length_m = fiber.length_m,
+            power_w = 2 * fiber.power_w,
+            beta_order = fiber.beta_order,
+        );
+        pulse = pulse,
+        grid = grid,
+        raman_threshold_thz = -0.25,
+    )
+    @test_throws ArgumentError standard_figures(
+        mismatched_problem,
+        multivar_artifact_result;
+        output_dir = mktempdir(),
+        n_z_samples = 2,
+    )
+    run_snapshot = multivar_artifact_result.backend.run_source.problem
+    original_launch_value = run_snapshot.uω0[1, 1]
+    run_snapshot.uω0[1, 1] = 2 * original_launch_value
+    @test_throws ArgumentError standard_figures(
+        problem,
+        multivar_artifact_result;
+        output_dir = mktempdir(),
+        n_z_samples = 2,
+    )
+    run_snapshot.uω0[1, 1] = original_launch_value
 
     standard_artifacts = standard_figures(
         problem,
@@ -1579,20 +1860,22 @@ end
         preset = :test_two_mode,
     )
     multimode_problem = fiber_problem(
-        Fiber(regime = :multimode, preset = :custom, length_m = 1e-4, power_w = 1e-5);
+        Fiber(regime = :multimode, preset = :test_two_mode, length_m = 1e-4, power_w = 1e-5);
         modes = 2,
         grid = grid,
         initial_modes = [1 / sqrt(2), 1im / sqrt(2)],
         dispersion = multimode_fiber["Dω"],
         gamma_tensor = multimode_gamma,
         band_mask = FFTW.fftfreq(16, 1 / multimode_sim["Δt"]) .< -0.25,
-        preset = :test_two_mode,
     )
     @test explicit_multimode_problem isa FiberProblem
     @test multimode_problem isa FiberFieldProblem
     @test size(multimode_problem.uω0) == (16, 2)
     @test multimode_problem.sim["M"] == 2
     @test multimode_problem.fiber["Dω"] == explicit_multimode_problem.fiber["Dω"]
+    @test ismissing(explicit_multimode_problem.metadata.requested_fiber)
+    @test multimode_problem.metadata.requested_fiber.regime == :multimode
+    @test multimode_problem.metadata.preset == :test_two_mode
     @test_throws ArgumentError fiber_problem(
         Fiber(regime = :multimode, preset = :custom, length_m = 1e-4, power_w = 1e-5);
         modes = 2,
@@ -1603,6 +1886,26 @@ end
         :phase => basis_control,
         :amplitude => AmplitudeBasis(basis; scale = 0.01),
         :energy => PositiveScalar(:energy),
+    )
+    @test_throws ArgumentError solve(
+        fiber_model(explicit_multimode_problem),
+        multimode_control,
+        mode_sum_objective(explicit_multimode_problem; log_cost = false),
+        [0.01, -0.02, 0.02, -0.01, log(0.98)];
+        fiber = Fiber(
+            regime = :single_mode,
+            preset = :custom,
+            length_m = explicit_multimode_problem.fiber["L"],
+            power_w = 1e-5,
+            beta_order = explicit_multimode_problem.sim["β_order"],
+        ),
+        pulse = Pulse(),
+        grid = Grid(
+            nt = explicit_multimode_problem.sim["Nt"],
+            time_window_ps = explicit_multimode_problem.sim["time_window"],
+            policy = :exact,
+        ),
+        max_iter = 1,
     )
     multimode_model = fiber_model(multimode_problem)
     multimode_step = run_adjoint_step(
@@ -1678,7 +1981,12 @@ end
         multimode_artifact_control,
         mode_sum_objective(multimode_problem; log_cost = false),
         [0.01, -0.02, 0.02, -0.01, log(0.98)];
-        fiber = Fiber(regime = :multimode, preset = :custom, length_m = 1e-4, power_w = 1e-5),
+        fiber = Fiber(
+            regime = :multimode,
+            preset = :test_two_mode,
+            length_m = 1e-4,
+            power_w = 1e-5,
+        ),
         grid = grid,
         id = "native_multimode_physics_artifacts",
         max_iter = 1,
@@ -1712,6 +2020,7 @@ end
         objective,
         coordinates;
         fiber = fiber,
+        pulse = pulse,
         grid = grid,
         id = "direct_native_physics_phase_smoke",
         max_iter = 1,
@@ -1723,6 +2032,123 @@ end
     @test isfinite(result.cost_final)
     @test length(result.x_final) == problem.sim["Nt"]
     @test verify(result).finite_final_coordinates
+    mutated_before_model = deepcopy(problem)
+    mutated_before_model.uω0 .*= 2
+    @test_throws ArgumentError fiber_model(mutated_before_model)
+    @test_throws ArgumentError solve(
+        mutated_before_model,
+        control,
+        raman_band_objective(mutated_before_model; log_cost = false),
+        coordinates;
+        max_iter = 1,
+    )
+    edited_explicit_problem = fiber_field_problem(
+        mutated_before_model.uω0,
+        mutated_before_model.fiber,
+        mutated_before_model.sim;
+        band_mask = mutated_before_model.band_mask,
+        preset = :edited_explicit_problem,
+    )
+    @test edited_explicit_problem.metadata.construction_sha256 === nothing
+    @test fiber_model(edited_explicit_problem).problem_source !== nothing
+    mutated_before_solve = deepcopy(problem)
+    stale_model = fiber_model(mutated_before_solve)
+    mutated_before_solve.fiber["Dω"][1, 1] += 1
+    @test_throws ArgumentError run_adjoint_step(
+        stale_model,
+        control,
+        objective,
+        coordinates,
+    )
+    @test_throws ArgumentError check_adjoint_gradient(
+        stale_model,
+        control,
+        objective,
+        coordinates;
+        coordinate_indices = [1],
+    )
+    @test_throws FiberLabBackendError solve(
+        stale_model,
+        control,
+        objective,
+        coordinates;
+        fiber = fiber,
+        pulse = pulse,
+        grid = grid,
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
+        model,
+        control,
+        objective,
+        coordinates;
+        fiber = Fiber(
+            preset = :HNLF,
+            length_m = fiber.length_m,
+            power_w = fiber.power_w,
+            beta_order = fiber.beta_order,
+        ),
+        pulse = pulse,
+        grid = grid,
+        max_iter = 1,
+    )
+    false_metadata_output = mktempdir()
+    false_metadata_experiment = Experiment(
+        Fiber(preset = :HNLF, length_m = fiber.length_m, power_w = 99.0),
+        control,
+        objective;
+        id = "false_native_model_metadata",
+        pulse = Pulse(fwhm_s = 999e-15),
+        grid = Grid(nt = 32, time_window_ps = 7.0, policy = :exact),
+        solver = Solver(kind = :lbfgs, max_iter = 1),
+        maturity = :supported,
+    )
+    false_metadata_backend = NativeAdjointBackend(
+        model;
+        initial_coordinates = coordinates,
+        max_iter = 1,
+        write_artifacts = true,
+        output_dir = false_metadata_output,
+    )
+    @test_throws FiberLabBackendError solve(
+        false_metadata_experiment;
+        dry_run = true,
+        backend = false_metadata_backend,
+    )
+    @test_throws FiberLabBackendError solve(
+        false_metadata_experiment;
+        backend = false_metadata_backend,
+    )
+    @test isempty(readdir(false_metadata_output))
+    explicit_claim_experiment = Experiment(
+        fiber,
+        control,
+        explicit_objective;
+        id = "unlabeled_explicit_model_metadata",
+        pulse = pulse,
+        grid = Grid(nt = problem.sim["Nt"], time_window_ps = problem.sim["time_window"], policy = :exact),
+        solver = Solver(kind = :lbfgs, max_iter = 1),
+        maturity = :supported,
+    )
+    @test_throws FiberLabBackendError solve(
+        explicit_claim_experiment;
+        backend = NativeAdjointBackend(
+            explicit_model;
+            initial_coordinates = coordinates,
+            max_iter = 1,
+        ),
+    )
+    @test_throws MethodError solve(
+        model,
+        control,
+        objective,
+        coordinates;
+        fiber = fiber,
+        pulse = pulse,
+        grid = grid,
+        source_problem = problem,
+        max_iter = 1,
+    )
 
     problem_result = solve(
         problem,
@@ -1738,8 +2164,46 @@ end
     @test problem_result.plan.experiment.id == "problem_native_physics_phase_smoke"
     @test problem_result.plan.experiment.fiber.regime == :single_mode
     @test problem_result.plan.experiment.fiber.power_w == fiber.power_w
+    @test problem_result.plan.experiment.fiber.preset == problem.metadata.preset
+    @test problem_result.plan.experiment.fiber.length_m == problem.fiber["L"]
+    @test problem_result.plan.experiment.fiber.beta_order == problem.sim["β_order"]
+    @test problem_result.plan.experiment.pulse == problem.metadata.requested_pulse
+    @test problem_result.plan.experiment.grid.nt == problem.sim["Nt"]
+    @test problem_result.plan.experiment.grid.time_window_ps == problem.sim["time_window"]
+    @test problem_result.backend.run_source.metadata.requested_grid == grid
+    @test problem_result.backend.run_source.metadata.resolved_grid ==
+        Grid(nt = problem.sim["Nt"], time_window_ps = problem.sim["time_window"], policy = :exact)
+    @test problem_result.backend.run_source.metadata.requested_pulse == pulse
     @test isfinite(problem_result.cost_final)
     @test length(problem_result.x_final) == sample_count(problem)
+
+    other_band_problem = fiber_problem(
+        fiber;
+        pulse = pulse,
+        grid = grid,
+        raman_threshold_thz = -0.05,
+    )
+    other_band_objective = raman_band_objective(other_band_problem; log_cost = false)
+    @test_throws ArgumentError run_adjoint_step(
+        model,
+        control,
+        other_band_objective,
+        coordinates,
+    )
+    @test_throws ArgumentError check_adjoint_gradient(
+        model,
+        control,
+        other_band_objective,
+        coordinates;
+        coordinate_indices = [1],
+    )
+    @test_throws FiberLabBackendError solve(
+        problem,
+        control,
+        other_band_objective,
+        coordinates;
+        max_iter = 1,
+    )
 
     @test_throws ArgumentError solve(
         bandless_problem,
@@ -1750,7 +2214,31 @@ end
         max_iter = 1,
         maturity = :supported,
     )
-    explicit_power_result = solve(
+    @test_throws ArgumentError solve(
+        problem,
+        control,
+        objective,
+        coordinates;
+        fiber = Fiber(preset = :HNLF, length_m = fiber.length_m, power_w = 99.0),
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
+        problem,
+        control,
+        objective,
+        coordinates;
+        pulse = Pulse(fwhm_s = 999e-15),
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
+        problem,
+        control,
+        objective,
+        coordinates;
+        grid = Grid(nt = 32, time_window_ps = 5.0, policy = :exact),
+        max_iter = 1,
+    )
+    @test_throws ArgumentError solve(
         bandless_problem,
         basis_control,
         custom_objective,
@@ -1760,7 +2248,6 @@ end
         max_iter = 1,
         maturity = :supported,
     )
-    @test explicit_power_result.plan.experiment.fiber.power_w == fiber.power_w
 
     multimode_problem_result = solve(
         multimode_problem,

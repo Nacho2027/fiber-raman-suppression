@@ -49,9 +49,15 @@ verify(result)
 decoded_final(result)
 ```
 
-`solve(problem, ...)` is the shortest path when the physics comes from
-`fiber_problem`. If the model is fully researcher-defined, call
-`solve(model, control, objective, x0; fiber = fiber)` instead.
+`solve(problem, ...)` is the shortest path when the problem was built from a
+`Fiber`, `Pulse`, and `Grid`; those inputs and the resolved grid are recorded
+without an override path. For explicit low-level arrays,
+`solve(model, control, objective, x0)` records the resolved numerical grid
+without inventing Fiber or Pulse metadata. You may pass `fiber`, `pulse`, and
+`grid` together as descriptive metadata; FiberLab labels that complete set
+`user_asserted` and keeps the numerical problem hash separate.
+Researcher-defined models without a resolved numerical problem must provide all
+three metadata objects.
 
 `validate_gradient = true` runs a finite-difference adjoint check before the
 optimizer starts. Keep it on for new controls, objectives, and physics models;
@@ -90,9 +96,10 @@ report.warnings
 default_assumptions(experiment)
 ```
 
-`check` is defensive preflight. It should catch missing pullbacks, missing
-terminal adjoints, unsupported solver choices, and artifact hooks that cannot be
-written.
+`check` performs backend-independent preflight for missing pullbacks, terminal
+adjoints, and solver constraints. When a backend matters, use
+`solve(experiment; dry_run=true, backend=backend)` to also validate provenance,
+coordinate dimensions, bounds, feasibility gradients, and artifact writers.
 
 ## Artifacts
 
@@ -282,14 +289,13 @@ requires explicit modal physics rather than guessed defaults:
 
 ```julia
 problem = fiber_problem(
-    Fiber(regime = :multimode, preset = :custom, length_m = L, power_w = P);
+    Fiber(regime = :multimode, preset = :two_mode_setup, length_m = L, power_w = P);
     modes = 2,
     grid = grid,
     initial_modes = [1 / sqrt(2), im / sqrt(2)],
     dispersion = Dω,
     gamma_tensor = γ,
     band_mask = band_mask,
-    preset = :two_mode_setup,
 )
 
 model = fiber_model(problem)
@@ -320,6 +326,10 @@ Fully explicit propagation inputs are also supported:
 ```julia
 problem = fiber_problem(uω0, fiber_dict, sim; band_mask = band_mask)
 ```
+
+Use `fiber_model(problem)` with the model-first `solve` overload for these
+low-level problems. The problem-first convenience method intentionally refuses
+to invent a `Fiber` or `Pulse` from numerical arrays.
 
 Band-based objectives need a band definition:
 

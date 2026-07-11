@@ -9,6 +9,17 @@ control decode -> forward model -> objective cost -> terminal adjoint ->
 physical gradient -> control pullback.
 """
 
+struct ResolvedProblemSource{P}
+    problem::P
+    snapshot_sha256::String
+end
+
+struct NativeRunSource{M,P}
+    metadata::M
+    problem::P
+    snapshot_sha256::String
+end
+
 """
     AdjointModel(name; forward, physical_gradient, description="")
 
@@ -23,14 +34,36 @@ struct AdjointModel
     forward_function::Function
     physical_gradient_function::Function
     description::String
+    problem_source::Union{Nothing,ResolvedProblemSource}
+    run_source::Union{Nothing,NativeRunSource}
 
     function AdjointModel(name::Symbol; forward::Function,
                           physical_gradient::Function,
                           description::AbstractString="")
         _nonempty_name(name, "adjoint model")
-        return new(name, forward, physical_gradient, String(description))
+        return new(name, forward, physical_gradient, String(description), nothing, nothing)
+    end
+
+    function AdjointModel(name::Symbol, problem_source::ResolvedProblemSource;
+                          run_source::Union{Nothing,NativeRunSource}=nothing,
+                          forward::Function,
+                          physical_gradient::Function,
+                          description::AbstractString="")
+        _nonempty_name(name, "adjoint model")
+        return new(
+            name,
+            forward,
+            physical_gradient,
+            String(description),
+            problem_source,
+            run_source,
+        )
     end
 end
+
+_adjoint_model(name::Symbol, source::ResolvedProblemSource;
+               run_source::Union{Nothing,NativeRunSource}=nothing, kwargs...) =
+    AdjointModel(name, source; run_source = run_source, kwargs...)
 
 struct AdjointStepResult{M<:AdjointModel,E,O<:AbstractFiberObjective,F,A,P,G}
     model::M
@@ -57,6 +90,7 @@ Base.@kwdef struct NativeAdjointBackend <: AbstractExecutionBackend
     max_iter::Union{Nothing,Int} = nothing
     gradient_tolerance::Float64 = 0.0
     context = nothing
+    run_source::Union{Nothing,NativeRunSource} = nothing
     write_artifacts::Bool = false
     strict_artifacts::Bool = true
     output_dir::Union{Nothing,String} = nothing
@@ -96,7 +130,8 @@ Base.@kwdef struct NativeAdjointBackend <: AbstractExecutionBackend
         writers = _native_artifact_writers(artifact_writers)
         return new(model, coordinates, Float64(step_size),
                    max_iter === nothing ? nothing : Int(max_iter),
-                   Float64(gradient_tolerance), context, write_artifacts,
+                   Float64(gradient_tolerance), context, model.run_source,
+                   write_artifacts,
                    strict_artifacts,
                    output_dir === nothing ? nothing : String(output_dir),
                    writers,
@@ -261,6 +296,7 @@ function run_adjoint_step(model::AdjointModel,
                           coordinates;
                           context=nothing,
                           feasibility::Union{Nothing,FeasibilityMap}=nothing)
+    _validate_adjoint_sources(model, objective)
     assert_adjoint_ready(objective, control, :lbfgs)
     evaluation = evaluate_control(control, coordinates; context=context)
     decoded = _decoded_value(evaluation)
@@ -375,12 +411,17 @@ function _optim_options(plan::ExperimentPlan, backend::NativeAdjointBackend)
     return Optim.Options(; kwargs...)
 end
 
-function _optim_method(plan::ExperimentPlan, backend::NativeAdjointBackend)
+function _validate_native_solver(plan::ExperimentPlan, backend::NativeAdjointBackend)
     plan.solver == :lbfgs || throw(FiberLabBackendError(
         plan,
         backend,
         "NativeAdjointBackend currently supports solver kind `:lbfgs`; got `$(plan.solver)`.",
     ))
+    return nothing
+end
+
+function _optim_method(plan::ExperimentPlan, backend::NativeAdjointBackend)
+    _validate_native_solver(plan, backend)
     return Optim.LBFGS(
         alphaguess = Optim.LineSearches.InitialStatic(alpha = backend.step_size),
     )
@@ -458,7 +499,7 @@ function _native_cost(model::AdjointModel,
 end
 
 _native_json_value(value::Nothing) = nothing
-_native_json_value(value::Missing) = missing
+_native_json_value(value::Missing) = nothing
 _native_json_value(value::Symbol) = String(value)
 _native_json_value(value::AbstractString) = String(value)
 _native_json_value(value::Bool) = value
@@ -498,6 +539,22 @@ function _native_json_value(value)
     return string(value)
 end
 
+function _native_experiment_summary(experiment, metadata_authority::Symbol)
+    return Dict(
+        "id" => experiment.id,
+        "description" => experiment.description,
+        "fiber" => _native_json_value(experiment.fiber),
+        "pulse" => _native_json_value(experiment.pulse),
+        "grid" => _native_json_value(experiment.grid),
+        "solver" => _native_json_value(experiment.solver),
+        "artifacts" => _native_json_value(experiment.artifacts),
+        "output_root" => experiment.output_root,
+        "output_tag" => experiment.output_tag,
+        "maturity" => String(experiment.maturity),
+        "metadata_authority" => String(metadata_authority),
+    )
+end
+
 function _check_coordinate_indices(indices, dimension::Int)
     coordinate_indices = Int.(collect(indices))
     isempty(coordinate_indices) && throw(ArgumentError(
@@ -526,6 +583,7 @@ function check_adjoint_gradient(model::AdjointModel,
                                 atol::Real=1e-6,
                                 rtol::Real=1e-4,
                                 coordinate_indices=nothing)
+    _validate_adjoint_sources(model, objective)
     n = dimension(control)
     x = _finite_real_vector(coordinates, n, "gradient-check coordinate")
     h = Float64(step)
@@ -882,6 +940,22 @@ function _native_supported_artifact_hooks(backend::NativeAdjointBackend)
 end
 
 function _preflight_backend(plan::ExperimentPlan, backend::NativeAdjointBackend)
+    _validate_native_solver(plan, backend)
+    control = _native_control(plan)
+    objective = _native_objective(plan)
+    _validate_native_sources(plan, backend, objective)
+    expected_dimension = dimension(control)
+    length(backend.initial_coordinates) == expected_dimension || throw(ArgumentError(
+        "NativeAdjointBackend initial coordinate length $(length(backend.initial_coordinates)) does not match control dimension $(expected_dimension)"))
+    _validate_native_bounds(backend.bounds, expected_dimension, backend.initial_coordinates)
+    if backend.feasibility !== nothing && has_penalty(backend.feasibility) &&
+            !has_physical_gradient(backend.feasibility)
+        throw(FiberLabBackendError(
+            plan,
+            backend,
+            "NativeAdjointBackend feasibility `$(backend.feasibility.name)` declares a penalty but no physical_gradient callback.",
+        ))
+    end
     backend.write_artifacts || return nothing
     requested_hooks = Set(plan.figure_hooks)
     extra_hooks = setdiff(Set(keys(backend.artifact_writers)), requested_hooks)
@@ -899,6 +973,8 @@ function _preflight_backend(plan::ExperimentPlan, backend::NativeAdjointBackend)
     ))
     return nothing
 end
+
+_preflight_in_execute(::NativeAdjointBackend) = true
 
 function _write_native_hook_artifacts(plan::ExperimentPlan, result::NativeAdjointResult,
                                       output_dir::AbstractString, tag::AbstractString)
@@ -928,6 +1004,7 @@ function _write_native_artifacts(plan::ExperimentPlan, result::NativeAdjointResu
         sidecar_path = nothing,
         artifact_paths = Dict{Symbol,String}(),
     )
+    _validate_native_sources(plan, result.backend, result.final_step.objective)
 
     output_dir = _native_output_dir(plan, result.backend)
     mkpath(output_dir)
@@ -953,7 +1030,17 @@ function _write_native_artifacts(plan::ExperimentPlan, result::NativeAdjointResu
         "controls" => [String(variable) for variable in plan.variables],
         "control" => String(plan.variables[1]),
         "objective" => String(plan.objective),
+        "objective_problem_sha256" => _objective_problem_sha256(result.final_step.objective),
+        "resolved_problem_sha256" => result.backend.model.problem_source === nothing ?
+            nothing : result.backend.model.problem_source.snapshot_sha256,
+        "metadata_authority" => String(_native_metadata_authority(plan, result.backend)),
         "solver" => String(plan.solver),
+        "experiment_summary" => _native_experiment_summary(
+            plan.experiment,
+            _native_metadata_authority(plan, result.backend),
+        ),
+        "source_metadata" => _native_json_value(
+            result.backend.run_source === nothing ? nothing : result.backend.run_source.metadata),
         "x_initial" => result.x_initial,
         "x_final" => result.x_final,
         "decoded_final" => _native_json_value(decoded_final(result)),
@@ -977,20 +1064,10 @@ function _write_native_artifacts(plan::ExperimentPlan, result::NativeAdjointResu
 end
 
 function execute(plan::ExperimentPlan, backend::NativeAdjointBackend)
+    _preflight_backend(plan, backend)
     control = _native_control(plan)
     objective = _native_objective(plan)
     expected_dimension = dimension(control)
-    length(backend.initial_coordinates) == expected_dimension || throw(ArgumentError(
-        "NativeAdjointBackend initial coordinate length $(length(backend.initial_coordinates)) does not match control dimension $(expected_dimension)"))
-    _validate_native_bounds(backend.bounds, expected_dimension, backend.initial_coordinates)
-    if backend.feasibility !== nothing && has_penalty(backend.feasibility) &&
-            !has_physical_gradient(backend.feasibility)
-        throw(FiberLabBackendError(
-            plan,
-            backend,
-            "NativeAdjointBackend feasibility `$(backend.feasibility.name)` declares a penalty but no physical_gradient callback.",
-        ))
-    end
     gradient_check = _native_gradient_check(plan, backend, control, objective)
 
     function cost_function(x)
@@ -1118,6 +1195,176 @@ function execute(plan::ExperimentPlan, backend::NativeAdjointBackend)
     )
 end
 
+function _adjoint_source_error(model::AdjointModel,
+                               objective::AbstractFiberObjective)
+    source = model.problem_source
+    if source !== nothing &&
+            _resolved_problem_signature(source.problem) != source.snapshot_sha256
+        return "resolved problem changed after its native model was constructed"
+    end
+    signature = _objective_problem_sha256(objective)
+    if signature !== nothing &&
+            (source === nothing || signature != source.snapshot_sha256)
+        return "objective was constructed from a different resolved problem"
+    end
+    return nothing
+end
+
+function _validate_adjoint_sources(model::AdjointModel,
+                                   objective::AbstractFiberObjective)
+    message = _adjoint_source_error(model, objective)
+    message === nothing || throw(ArgumentError(message))
+    return nothing
+end
+
+function _validate_native_sources(plan::ExperimentPlan,
+                                  backend::NativeAdjointBackend,
+                                  objective::AbstractFiberObjective)
+    message = _adjoint_source_error(backend.model, objective)
+    message === nothing && (message = _native_plan_metadata_error(backend.model, plan.experiment))
+    message === nothing || throw(
+        FiberLabBackendError(plan, backend, message)
+    )
+    return nothing
+end
+
+function _validate_model_source_metadata(model::AdjointModel, fiber, pulse, grid)
+    message = _model_source_metadata_error(model, fiber, pulse, grid)
+    message === nothing || throw(ArgumentError(message))
+    return nothing
+end
+
+function _model_source_metadata_error(model::AdjointModel, fiber, pulse, grid)
+    source = model.run_source
+    source === nothing && return nothing
+    metadata = source.metadata
+    fiber == metadata.requested_fiber || return "fiber metadata does not match the resolved model source"
+    pulse == metadata.requested_pulse || return "pulse metadata does not match the resolved model source"
+    grid == metadata.resolved_grid || return "grid metadata must equal the model's resolved grid"
+    return nothing
+end
+
+function _resolved_model_grid(model::AdjointModel)
+    source = model.problem_source
+    source === nothing && return missing
+    problem = source.problem
+    hasproperty(problem, :sim) || return missing
+    sim = problem.sim
+    return Grid(
+        nt = Int(sim["Nt"]),
+        time_window_ps = Float64(sim["time_window"]),
+        policy = :exact,
+    )
+end
+
+function _asserted_model_metadata_error(model::AdjointModel, fiber, pulse, grid)
+    if any(ismissing, (fiber, pulse, grid))
+        return "user-asserted metadata must provide Fiber, Pulse, and Grid together"
+    end
+    model.problem_source === nothing && return nothing
+    resolved_grid = _resolved_model_grid(model)
+    if !ismissing(resolved_grid) && grid != resolved_grid
+        return "user-asserted grid must equal the model's resolved numerical grid"
+    end
+    problem = model.problem_source.problem
+    if hasproperty(problem, :fiber) && hasproperty(problem, :sim)
+        expected_regime = Int(problem.sim["M"]) == 1 ? :single_mode : :multimode
+        if fiber.regime != expected_regime
+            return "user-asserted fiber regime does not match the numerical mode count"
+        end
+        if fiber.length_m != Float64(problem.fiber["L"])
+            return "user-asserted fiber length does not match the numerical problem"
+        end
+        if fiber.beta_order != Int(problem.sim["β_order"])
+            return "user-asserted fiber beta order does not match the numerical problem"
+        end
+    end
+    return nothing
+end
+
+function _native_plan_metadata_error(model::AdjointModel, experiment)
+    if model.run_source !== nothing
+        return _model_source_metadata_error(
+            model,
+            experiment.fiber,
+            experiment.pulse,
+            experiment.grid,
+        )
+    end
+    if model.problem_source === nothing
+        experiment isa NativeExperiment || return nothing
+        if experiment.metadata_authority != :user_asserted
+            return "source-free custom models can only record user-asserted metadata"
+        end
+        return _asserted_model_metadata_error(
+            model,
+            experiment.fiber,
+            experiment.pulse,
+            experiment.grid,
+        )
+    end
+    if !(experiment isa NativeExperiment)
+        return "explicit numerical models must use the model-first solve path so metadata authority is recorded"
+    end
+    if experiment.metadata_authority == :resolved_numerical
+        if !ismissing(experiment.fiber) || !ismissing(experiment.pulse)
+            return "resolved-numerical metadata must not claim a Fiber or Pulse"
+        end
+        if experiment.grid != _resolved_model_grid(model)
+            return "resolved-numerical grid does not match the model"
+        end
+        return nothing
+    end
+    if experiment.metadata_authority != :user_asserted
+        return "unsupported native metadata authority `$(experiment.metadata_authority)`"
+    end
+    return _asserted_model_metadata_error(
+        model,
+        experiment.fiber,
+        experiment.pulse,
+        experiment.grid,
+    )
+end
+
+function _native_metadata_authority(plan::ExperimentPlan, backend::NativeAdjointBackend)
+    backend.model.run_source !== nothing && return :authoritative
+    experiment = plan.experiment
+    backend.model.problem_source !== nothing && experiment isa NativeExperiment &&
+        return experiment.metadata_authority
+    return :user_asserted
+end
+
+function _model_first_metadata(model::AdjointModel, fiber, pulse, grid)
+    if model.run_source !== nothing
+        source = model.run_source.metadata
+        resolved = (
+            fiber = fiber === nothing ? source.requested_fiber : fiber,
+            pulse = pulse === nothing ? source.requested_pulse : pulse,
+            grid = grid === nothing ? source.resolved_grid : grid,
+            authority = :authoritative,
+        )
+        _validate_model_source_metadata(model, resolved.fiber, resolved.pulse, resolved.grid)
+        return resolved
+    end
+
+    supplied = (fiber !== nothing, pulse !== nothing, grid !== nothing)
+    if model.problem_source !== nothing && !any(supplied)
+        return (
+            fiber = missing,
+            pulse = missing,
+            grid = _resolved_model_grid(model),
+            authority = :resolved_numerical,
+        )
+    end
+    all(supplied) || throw(ArgumentError(
+        "provide Fiber, Pulse, and Grid together for user-asserted metadata, or omit all three for an explicit numerical model"))
+    if model.problem_source !== nothing
+        message = _asserted_model_metadata_error(model, fiber, pulse, grid)
+        message === nothing || throw(ArgumentError(message))
+    end
+    return (fiber = fiber, pulse = pulse, grid = grid, authority = :user_asserted)
+end
+
 figure_paths(result::NativeAdjointResult) = copy(result.artifact_paths)
 
 decoded_final(result::NativeAdjointResult) = _decoded_value(result.final_step.control_evaluation)
@@ -1217,7 +1464,7 @@ function verify(result::NativeAdjointResult)
 end
 
 """
-    solve(model, control, objective, initial_coordinates; fiber, kwargs...)
+    solve(model, control, objective, initial_coordinates; fiber=nothing, pulse=nothing, grid=nothing, kwargs...)
 
 Run a direct adjoint optimization without manually constructing an
 `Experiment` or `NativeAdjointBackend`.
@@ -1231,11 +1478,11 @@ function solve(model::AdjointModel,
                control::AbstractControlMap,
                objective::AbstractFiberObjective,
                initial_coordinates;
-               fiber::Fiber,
+               fiber::Union{Nothing,Fiber}=nothing,
                id::AbstractString="native_adjoint_notebook",
                description::AbstractString=String(id),
-               pulse::Pulse=Pulse(),
-               grid::Grid=Grid(),
+               pulse::Union{Nothing,Pulse}=nothing,
+               grid::Union{Nothing,Grid}=nothing,
                solver::Solver=Solver(),
                max_iter::Union{Nothing,Integer}=nothing,
                validate_gradient::Union{Nothing,Bool}=nothing,
@@ -1255,20 +1502,22 @@ function solve(model::AdjointModel,
                trust_profile=nothing,
                require_trust::Bool=false,
                trust_gradient_check::Bool=false)
+    metadata = _model_first_metadata(model, fiber, pulse, grid)
     native_solver = _native_solver_from_keywords(solver, max_iter, validate_gradient)
-    experiment = Experiment(
-        fiber,
-        control,
-        objective;
+    experiment = NativeExperiment(;
         id = id,
         description = description,
-        pulse = pulse,
-        grid = grid,
+        fiber = metadata.fiber,
+        pulse = metadata.pulse,
+        grid = metadata.grid,
+        control = control,
+        objective = objective,
         solver = native_solver,
         artifacts = artifacts,
         output_root = output_root,
         output_tag = output_tag,
         maturity = maturity,
+        metadata_authority = metadata.authority,
     )
     backend = NativeAdjointBackend(
         model;

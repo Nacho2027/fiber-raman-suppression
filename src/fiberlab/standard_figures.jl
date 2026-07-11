@@ -16,10 +16,30 @@ function standard_figures(problem::FiberFieldProblem,
                           output_dir::Union{Nothing,AbstractString}=nothing,
                           tag::Union{Nothing,AbstractString}=nothing,
                           n_z_samples::Int=32,
-                          also_unshaped::Bool=true,
-                          lambda0_nm::Real=1550.0,
-                          fwhm_fs::Real=185.0)
+                          also_unshaped::Bool=true)
     n_z_samples >= 2 || throw(ArgumentError("standard_figures requires at least two z samples"))
+    run_source = result.backend.run_source
+    run_source isa NativeRunSource || throw(ArgumentError(
+        "standard_figures requires a result produced by solve(problem, ...)"))
+    source_problem = run_source.problem
+    _resolved_problem_signature(source_problem) == run_source.snapshot_sha256 ||
+        throw(ArgumentError("the result's problem snapshot was mutated after execution"))
+    expected_metadata = _execution_metadata_from_problem(source_problem).source_metadata
+    expected_metadata = merge(
+        expected_metadata,
+        (snapshot_sha256 = run_source.snapshot_sha256,),
+    )
+    run_source.metadata == expected_metadata || throw(ArgumentError(
+        "result source metadata does not match its problem snapshot"))
+    result.plan.experiment.fiber == run_source.metadata.requested_fiber &&
+        result.plan.experiment.pulse == run_source.metadata.requested_pulse &&
+        result.plan.experiment.grid == run_source.metadata.resolved_grid ||
+        throw(ArgumentError("result experiment metadata does not match its model source"))
+    _objective_problem_sha256(result.final_step.objective) == run_source.snapshot_sha256 ||
+        throw(ArgumentError("standard_figures requires a problem-bound objective"))
+    _same_resolved_problem(problem, source_problem) || throw(ArgumentError(
+        "the supplied problem does not match the problem snapshot used by this result"))
+    problem = source_problem
     target_dir = output_dir === nothing ?
         _standard_output_dir(result) :
         String(output_dir)
@@ -31,6 +51,8 @@ function standard_figures(problem::FiberFieldProblem,
     objective_kind = result.final_step.objective.name
     band_mask = _standard_band_mask(problem, objective_kind)
     raman_threshold = _standard_raman_threshold(problem)
+    lambda0_nm = Float64(problem.sim["λ0"]) * 1e9
+    fwhm_fs = _standard_pulse(problem).fwhm_s * 1e15
 
     _ensure_standard_image_helpers_loaded()
     standard_paths = Base.invokelatest(
@@ -43,7 +65,7 @@ function standard_figures(problem::FiberFieldProblem,
         fftshift(FFTW.fftfreq(sample_count(problem), 1 / problem.sim["Δt"])),
         raman_threshold;
         tag = target_tag,
-        fiber_name = String(problem.preset),
+        fiber_name = String(problem.metadata.preset),
         L_m = Float64(problem.fiber["L"]),
         P_W = _standard_reference_power(problem),
         output_dir = target_dir,
@@ -75,6 +97,16 @@ function standard_figures(problem::FiberFieldProblem,
     return merge(paths, (evolution_unshaped = standard_paths.evolution_unshaped,))
 end
 
+function _same_resolved_problem(left::FiberFieldProblem, right::FiberFieldProblem)
+    return left.metadata == right.metadata &&
+        left.uω0 == right.uω0 &&
+        left.fiber == right.fiber &&
+        left.sim == right.sim &&
+        left.band_mask == right.band_mask &&
+        left.frequency_offset_thz == right.frequency_offset_thz &&
+        left.raman_threshold_thz == right.raman_threshold_thz
+end
+
 """
     display_report(report)
 
@@ -103,13 +135,23 @@ function _standard_tag(result::NativeAdjointResult)
 end
 
 function _standard_reference_power(problem::FiberFieldProblem)
-    problem.reference_power_w !== nothing && return problem.reference_power_w
-    return 1.0
+    !ismissing(problem.metadata.requested_fiber) &&
+        return problem.metadata.requested_fiber.power_w
+    throw(ArgumentError(
+        "standard_figures requires recorded launch power; explicit low-level problems must provide a custom renderer"))
+end
+
+function _standard_pulse(problem::FiberFieldProblem)
+    !ismissing(problem.metadata.requested_pulse) &&
+        return problem.metadata.requested_pulse
+    throw(ArgumentError(
+        "standard_figures requires recorded pulse metadata; explicit low-level problems must provide a custom renderer"))
 end
 
 function _standard_raman_threshold(problem::FiberFieldProblem)
     problem.raman_threshold_thz !== nothing && return problem.raman_threshold_thz
-    return -13.2
+    throw(ArgumentError(
+        "standard_figures requires a scalar raman_threshold_thz; an arbitrary band mask has no honest threshold label"))
 end
 
 function _standard_band_mask(problem::FiberFieldProblem, objective_kind::Symbol)
@@ -131,7 +173,7 @@ function _write_evolution_comparison(phase, base_field, problem::FiberFieldProbl
     sol_opt = solve_disp_mmf(shaped, fiber_evo, problem.sim)
     sol_unshaped = solve_disp_mmf(base_field, fiber_evo, problem.sim)
     metadata = (
-        fiber_name = String(problem.preset),
+        fiber_name = String(problem.metadata.preset),
         L_m = Float64(problem.fiber["L"]),
         P_cont_W = _standard_reference_power(problem),
         lambda0_nm = Float64(lambda0_nm),

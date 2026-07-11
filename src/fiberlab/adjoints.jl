@@ -581,12 +581,20 @@ User-defined objective. Gradient-based adjoint solvers require
 `terminal_adjoint(final_state, context)`, which seeds the adjoint propagation at
 the output of the forward model.
 """
+struct _ObjectiveProblemBinding
+    sha256::String
+end
+
+struct _ObjectiveBindingToken end
+const _OBJECTIVE_BINDING_TOKEN = _ObjectiveBindingToken()
+
 struct ObjectiveMap <: AbstractFiberObjective
     name::Symbol
     cost::Function
     terminal_adjoint_function::Union{Nothing,Function}
     figure_hooks::Tuple{Vararg{Symbol}}
     description::String
+    _problem_binding::Union{Nothing,_ObjectiveProblemBinding}
 
     function ObjectiveMap(name::Symbol; cost::Function,
                           terminal_adjoint::Union{Nothing,Function}=nothing,
@@ -594,8 +602,41 @@ struct ObjectiveMap <: AbstractFiberObjective
                           description::AbstractString="")
         _nonempty_name(name, "objective")
         hooks = Tuple(Symbol(hook) for hook in figure_hooks)
-        return new(name, cost, terminal_adjoint, hooks, String(description))
+        return new(
+            name,
+            cost,
+            terminal_adjoint,
+            hooks,
+            String(description),
+            nothing,
+        )
     end
+
+    function ObjectiveMap(token::_ObjectiveBindingToken, name::Symbol;
+                          cost::Function,
+                          terminal_adjoint::Union{Nothing,Function}=nothing,
+                          figure_hooks=(),
+                          description::AbstractString="",
+                          problem_sha256::AbstractString)
+        token === _OBJECTIVE_BINDING_TOKEN || throw(ArgumentError(
+            "problem-bound objectives can only be created by FiberLab"))
+        _nonempty_name(name, "objective")
+        hooks = Tuple(Symbol(hook) for hook in figure_hooks)
+        return new(
+            name,
+            cost,
+            terminal_adjoint,
+            hooks,
+            String(description),
+            _ObjectiveProblemBinding(String(problem_sha256)),
+        )
+    end
+end
+
+_objective_problem_sha256(::AbstractFiberObjective) = nothing
+function _objective_problem_sha256(objective::ObjectiveMap)
+    binding = getfield(objective, :_problem_binding)
+    return binding === nothing ? nothing : binding.sha256
 end
 
 has_terminal_adjoint(::AbstractFiberObjective) = false

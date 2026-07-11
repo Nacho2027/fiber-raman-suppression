@@ -1,3 +1,11 @@
+struct FiberProblemMetadata
+    requested_fiber::Union{Missing,Fiber}
+    requested_pulse::Union{Missing,Pulse}
+    requested_grid::Union{Missing,Grid}
+    preset::Symbol
+    construction_sha256::Union{Nothing,String}
+end
+
 struct FiberFieldProblem
     uω0::Matrix{ComplexF64}
     fiber::Dict{String,Any}
@@ -5,8 +13,7 @@ struct FiberFieldProblem
     band_mask::Union{Nothing,Vector{Bool}}
     frequency_offset_thz::Vector{Float64}
     raman_threshold_thz::Union{Nothing,Float64}
-    preset::Symbol
-    reference_power_w::Union{Nothing,Float64}
+    metadata::FiberProblemMetadata
 end
 
 const SingleModeFiberProblem = FiberFieldProblem
@@ -36,14 +43,30 @@ frequency_offsets(problem::FiberFieldProblem) = copy(problem.frequency_offset_th
 function summarize(problem::FiberFieldProblem)
     band_bins = problem.band_mask === nothing ? nothing : count(problem.band_mask)
     return (
-        preset = problem.preset,
+        preset = problem.metadata.preset,
         samples = sample_count(problem),
         modes = mode_count(problem),
         length_m = Float64(problem.fiber["L"]),
-        reference_power_w = problem.reference_power_w,
+        reference_power_w = ismissing(problem.metadata.requested_fiber) ?
+            missing : problem.metadata.requested_fiber.power_w,
         raman_threshold_thz = problem.raman_threshold_thz,
         band_bins = band_bins,
     )
+end
+
+function _validate_package_inputs(fiber::Fiber, pulse::Pulse, wavelength_m::Real)
+    isfinite(fiber.length_m) && fiber.length_m > 0 || throw(ArgumentError(
+        "fiber length_m must be positive and finite"))
+    isfinite(fiber.power_w) && fiber.power_w > 0 || throw(ArgumentError(
+        "fiber power_w must be positive and finite"))
+    fiber.beta_order >= 2 || throw(ArgumentError("fiber beta_order must be at least 2"))
+    isfinite(pulse.fwhm_s) && pulse.fwhm_s > 0 || throw(ArgumentError(
+        "pulse fwhm_s must be positive and finite"))
+    isfinite(pulse.rep_rate_hz) && pulse.rep_rate_hz > 0 || throw(ArgumentError(
+        "pulse rep_rate_hz must be positive and finite"))
+    isfinite(wavelength_m) && wavelength_m > 0 || throw(ArgumentError(
+        "wavelength_m must be positive and finite"))
+    return nothing
 end
 
 """
@@ -79,6 +102,7 @@ or adjoint solve.
 """
 function _single_mode_low_level_setup(fiber_spec::Fiber, pulse::Pulse, grid::Grid,
                                       wavelength_m::Real)
+    _validate_package_inputs(fiber_spec, pulse, wavelength_m)
     fiber_spec.regime == :single_mode || throw(ArgumentError(
         "single_mode_fiber_problem requires fiber.regime = :single_mode"))
     preset = _single_mode_preset(fiber_spec.preset)
@@ -109,6 +133,104 @@ function _single_mode_low_level_setup(fiber_spec::Fiber, pulse::Pulse, grid::Gri
     return Matrix{ComplexF64}(uω0), Dict{String,Any}(fiber), Dict{String,Any}(sim)
 end
 
+function _problem_metadata(; requested_fiber=missing,
+                           requested_pulse=missing,
+                           requested_grid=missing,
+                           preset::Symbol=:custom,
+                           construction_sha256=nothing)
+    return FiberProblemMetadata(
+        requested_fiber,
+        requested_pulse,
+        requested_grid,
+        preset,
+        construction_sha256,
+    )
+end
+
+function _raman_threshold(value::Real)
+    threshold = Float64(value)
+    isfinite(threshold) && threshold < 0 || throw(ArgumentError(
+        "raman_threshold_thz must be finite and negative"))
+    return threshold
+end
+
+function _array_sha256(values)
+    array = Array(values)
+    payload = IOBuffer()
+    write(payload, string(eltype(array), ":", join(size(array), "x"), ":"))
+    write(payload, reinterpret(UInt8, vec(array)))
+    return bytes2hex(sha256(take!(payload)))
+end
+
+_signature_value(value::AbstractArray) = (
+    eltype = string(eltype(value)),
+    size = size(value),
+    sha256 = _array_sha256(value),
+)
+_signature_value(value::AbstractDict) = Tuple(
+    (String(key), _signature_value(value[key])) for key in sort!(collect(keys(value)))
+)
+_signature_value(value) = repr(value)
+
+function _numerical_problem_signature(problem::FiberFieldProblem)
+    components = (
+        launch = _array_sha256(problem.uω0),
+        fiber = _signature_value(problem.fiber),
+        simulation = _signature_value(problem.sim),
+        band_mask = problem.band_mask === nothing ? nothing : _array_sha256(problem.band_mask),
+        frequency_offsets = _array_sha256(problem.frequency_offset_thz),
+        raman_threshold_thz = problem.raman_threshold_thz,
+        solver = (:Tsit5, get(problem.fiber, "reltol", 1e-8),
+            get(problem.fiber, "abstol", 1e-6)),
+    )
+    return bytes2hex(sha256(codeunits(repr(components))))
+end
+
+function _resolved_problem_signature(problem::FiberFieldProblem)
+    components = (
+        metadata = repr(problem.metadata),
+        numerical_sha256 = _numerical_problem_signature(problem),
+    )
+    return bytes2hex(sha256(codeunits(repr(components))))
+end
+
+function _seal_package_problem(problem::FiberFieldProblem)
+    metadata = problem.metadata
+    any(ismissing, (
+        metadata.requested_fiber,
+        metadata.requested_pulse,
+        metadata.requested_grid,
+    )) && return problem
+    construction_sha256 = _numerical_problem_signature(problem)
+    metadata.construction_sha256 === nothing ||
+        metadata.construction_sha256 == construction_sha256 || throw(ArgumentError(
+            "package-built problem changed after construction"))
+    sealed_metadata = FiberProblemMetadata(
+        metadata.requested_fiber,
+        metadata.requested_pulse,
+        metadata.requested_grid,
+        metadata.preset,
+        construction_sha256,
+    )
+    return FiberFieldProblem(
+        problem.uω0,
+        problem.fiber,
+        problem.sim,
+        problem.band_mask,
+        problem.frequency_offset_thz,
+        problem.raman_threshold_thz,
+        sealed_metadata,
+    )
+end
+
+function _validate_package_problem_snapshot(problem::FiberFieldProblem)
+    construction_sha256 = problem.metadata.construction_sha256
+    construction_sha256 === nothing && return nothing
+    _numerical_problem_signature(problem) == construction_sha256 || throw(ArgumentError(
+        "package-built problem changed after construction; wrap edited arrays with fiber_field_problem for an explicit numerical run"))
+    return nothing
+end
+
 function single_mode_fiber_problem(fiber_spec::Fiber;
                                    pulse::Pulse=Pulse(),
                                    grid::Grid=Grid(),
@@ -122,19 +244,24 @@ function single_mode_fiber_problem(fiber_spec::Fiber;
     )
     nt = Int(sim["Nt"])
     frequency_offset_fft = FFTW.fftfreq(nt, 1 / sim["Δt"])
-    band_mask = frequency_offset_fft .< Float64(raman_threshold_thz)
+    threshold = _raman_threshold(raman_threshold_thz)
+    band_mask = frequency_offset_fft .< threshold
     any(band_mask) || throw(ArgumentError(
         "raman_threshold_thz selects no frequency bins"))
-    return SingleModeFiberProblem(
+    return _seal_package_problem(SingleModeFiberProblem(
         uω0,
         fiber,
         sim,
         Vector{Bool}(band_mask),
         fftshift(frequency_offset_fft),
-        Float64(raman_threshold_thz),
-        fiber_spec.preset,
-        fiber_spec.power_w,
-    )
+        threshold,
+        _problem_metadata(;
+            requested_fiber = fiber_spec,
+            requested_pulse = pulse,
+            requested_grid = grid,
+            preset = fiber_spec.preset,
+        ),
+    ))
 end
 
 single_mode_fiber_problem(experiment::Experiment; kwargs...) =
@@ -205,10 +332,13 @@ function fiber_problem(fiber_spec::Fiber;
                        band_mask=nothing,
                        initial_modes=nothing,
                        dispersion=nothing,
-                       gamma_tensor=nothing,
-                       preset::Symbol=fiber_spec.preset)
+                       gamma_tensor=nothing)
+    _validate_package_inputs(fiber_spec, pulse, wavelength_m)
     mode_count = Int(modes)
     mode_count > 0 || throw(ArgumentError("fiber_problem modes must be positive"))
+    expected_regime = mode_count == 1 ? :single_mode : :multimode
+    fiber_spec.regime == expected_regime || throw(ArgumentError(
+        "fiber regime $(fiber_spec.regime) does not match modes=$mode_count"))
     if mode_count == 1 && dispersion === nothing && gamma_tensor === nothing &&
             initial_modes === nothing
         uω0, fiber, sim = _single_mode_low_level_setup(
@@ -217,14 +347,18 @@ function fiber_problem(fiber_spec::Fiber;
             grid,
             wavelength_m,
         )
-        return fiber_field_problem(
+        return _fiber_field_problem(
             uω0,
             fiber,
             sim;
             band_mask = band_mask,
             raman_threshold_thz = band_mask === nothing ? raman_threshold_thz : nothing,
-            preset = preset,
-            reference_power_w = fiber_spec.power_w,
+            metadata = _problem_metadata(
+                requested_fiber = fiber_spec,
+                requested_pulse = pulse,
+                requested_grid = grid,
+                preset = fiber_spec.preset,
+            ),
         )
     end
 
@@ -266,14 +400,18 @@ function fiber_problem(fiber_spec::Fiber;
         "x" => nothing,
         "gain_parameters" => 0.0,
     )
-    return fiber_field_problem(
+    return _fiber_field_problem(
         Matrix{ComplexF64}(uω0),
         fiber,
         sim;
         band_mask = band_mask,
         raman_threshold_thz = band_mask === nothing ? raman_threshold_thz : nothing,
-        preset = preset,
-        reference_power_w = fiber_spec.power_w,
+        metadata = _problem_metadata(
+            requested_fiber = fiber_spec,
+            requested_pulse = pulse,
+            requested_grid = grid,
+            preset = fiber_spec.preset,
+        ),
     )
 end
 
@@ -298,15 +436,56 @@ the actual initial field, fiber dictionary, and simulation dictionary used by
 need either an explicit `band_mask` or a `raman_threshold_thz`; custom
 objectives that do not use a band can omit both.
 """
-function fiber_field_problem(uω0, fiber, sim;
-                             band_mask=nothing,
-                             raman_threshold_thz=nothing,
-                             preset::Symbol=:custom,
-                             reference_power_w=nothing)
+function _fiber_field_problem(uω0, fiber, sim;
+                              metadata::FiberProblemMetadata,
+                              band_mask=nothing,
+                              raman_threshold_thz=nothing)
+    required_sim = ("Nt", "M", "Δt", "time_window", "λ0", "ω0", "ωs", "attenuator", "β_order")
+    all(key -> haskey(sim, key), required_sim) || throw(ArgumentError(
+        "simulation dictionary is missing required propagation fields"))
+    field = Matrix{ComplexF64}(uω0)
     nt = Int(sim["Nt"])
     m = Int(sim["M"])
-    size(uω0) == (nt, m) || throw(ArgumentError(
-        "uω0 size $(size(uω0)) does not match simulation size ($nt, $m)"))
+    nt >= 4 && ispow2(nt) || throw(ArgumentError("simulation Nt must be a power of two ≥ 4"))
+    m > 0 || throw(ArgumentError("simulation M must be positive"))
+    delta_t = Float64(sim["Δt"])
+    time_window = Float64(sim["time_window"])
+    wavelength = Float64(sim["λ0"])
+    omega0 = Float64(sim["ω0"])
+    isfinite(delta_t) && delta_t > 0 || throw(ArgumentError("simulation Δt must be positive and finite"))
+    isfinite(time_window) && time_window > 0 || throw(ArgumentError(
+        "simulation time_window must be positive and finite"))
+    isapprox(time_window, nt * delta_t; rtol = 1e-12) || throw(ArgumentError(
+        "simulation time_window must equal Nt * Δt"))
+    isfinite(wavelength) && wavelength > 0 || throw(ArgumentError(
+        "simulation λ0 must be positive and finite"))
+    isfinite(omega0) && omega0 > 0 || throw(ArgumentError(
+        "simulation ω0 must be positive and finite"))
+    expected_f0 = 2.99792458e8 / wavelength / 1e12
+    expected_omega0 = 2π * expected_f0
+    isapprox(omega0, expected_omega0; rtol = 1e-12) || throw(ArgumentError(
+        "simulation ω0 is inconsistent with λ0"))
+    Int(sim["β_order"]) >= 2 || throw(ArgumentError(
+        "simulation β_order must be at least 2"))
+    sim["ωs"] isa AbstractVector && length(sim["ωs"]) == nt &&
+        all(isfinite, sim["ωs"]) || throw(ArgumentError(
+        "simulation ωs must be a finite Nt-vector"))
+    expected_omegas = 2π .* (
+        expected_f0 .+ fftshift(FFTW.fftfreq(nt, 1 / delta_t)))
+    isapprox(sim["ωs"], expected_omegas; rtol = 1e-12) || throw(ArgumentError(
+        "simulation ωs is inconsistent with λ0, Nt, and Δt"))
+    all(>(0), sim["ωs"]) || throw(ArgumentError(
+        "simulation absolute angular frequencies must be positive"))
+    size(sim["attenuator"]) == (nt, m) && all(isfinite, sim["attenuator"]) ||
+        throw(ArgumentError("simulation attenuator must be a finite Nt×M array"))
+    all(value -> 0 <= value <= 1, sim["attenuator"]) || throw(ArgumentError(
+        "simulation attenuator values must lie in [0, 1]"))
+    size(field) == (nt, m) || throw(ArgumentError(
+        "uω0 size $(size(field)) does not match simulation size ($nt, $m)"))
+    all(isfinite, field) || throw(ArgumentError("uω0 must contain only finite values"))
+    field_norm = norm(field)
+    isfinite(field_norm) && field_norm > 0 || throw(ArgumentError(
+        "uω0 must contain a finite, nonzero launch field"))
     size(fiber["Dω"]) == (nt, m) || throw(ArgumentError(
         "fiber Dω size $(size(fiber["Dω"])) does not match ($nt, $m)"))
     size(fiber["γ"]) == (m, m, m, m) || throw(ArgumentError(
@@ -316,31 +495,56 @@ function fiber_field_problem(uω0, fiber, sim;
     haskey(fiber, "one_m_fR") || throw(ArgumentError(
         "fiber dictionary must contain \"one_m_fR\""))
     haskey(fiber, "zsave") || throw(ArgumentError("fiber dictionary must contain \"zsave\""))
+    fiber["hRω"] isa AbstractVector && length(fiber["hRω"]) == nt || throw(ArgumentError(
+        "fiber hRω length must match simulation Nt"))
+    isfinite(Float64(fiber["L"])) && Float64(fiber["L"]) > 0 || throw(ArgumentError(
+        "fiber L must be positive and finite"))
+    all(isfinite, fiber["Dω"]) || throw(ArgumentError("fiber Dω must be finite"))
+    all(isfinite, fiber["γ"]) || throw(ArgumentError("fiber γ must be finite"))
+    all(isfinite, fiber["hRω"]) || throw(ArgumentError("fiber hRω must be finite"))
+    one_m_fR = Float64(fiber["one_m_fR"])
+    isfinite(one_m_fR) && 0 <= one_m_fR <= 1 || throw(ArgumentError(
+        "fiber one_m_fR must be finite and lie in [0, 1]"))
 
     frequency_offset_fft = FFTW.fftfreq(nt, 1 / sim["Δt"])
+    resolved_threshold = raman_threshold_thz === nothing ?
+        nothing : _raman_threshold(raman_threshold_thz)
     resolved_band_mask = if band_mask !== nothing
         mask = Vector{Bool}(collect(band_mask))
         length(mask) == nt || throw(ArgumentError(
             "band_mask length $(length(mask)) does not match Nt=$nt"))
         any(mask) || throw(ArgumentError("band_mask must select at least one frequency bin"))
         mask
-    elseif raman_threshold_thz !== nothing
-        mask = frequency_offset_fft .< Float64(raman_threshold_thz)
+    elseif resolved_threshold !== nothing
+        mask = frequency_offset_fft .< resolved_threshold
         any(mask) || throw(ArgumentError(
             "raman_threshold_thz selects no frequency bins"))
         Vector{Bool}(mask)
     else
         nothing
     end
-    return SingleModeFiberProblem(
-        Matrix{ComplexF64}(uω0),
+    return _seal_package_problem(SingleModeFiberProblem(
+        field,
         Dict{String,Any}(fiber),
         Dict{String,Any}(sim),
         resolved_band_mask,
         fftshift(frequency_offset_fft),
-        raman_threshold_thz === nothing ? nothing : Float64(raman_threshold_thz),
-        preset,
-        reference_power_w === nothing ? nothing : Float64(reference_power_w),
+        resolved_threshold,
+        metadata,
+    ))
+end
+
+function fiber_field_problem(uω0, fiber, sim;
+                             band_mask=nothing,
+                             raman_threshold_thz=nothing,
+                             preset::Symbol=:custom)
+    return _fiber_field_problem(
+        uω0,
+        fiber,
+        sim;
+        band_mask = band_mask,
+        raman_threshold_thz = raman_threshold_thz,
+        metadata = _problem_metadata(preset = preset),
     )
 end
 
@@ -356,13 +560,17 @@ function _phase_matrix(decoded_phase, problem::FiberFieldProblem)
     if decoded_phase isa AbstractVector
         length(decoded_phase) == nt || throw(ArgumentError(
             "phase vector length $(length(decoded_phase)) does not match Nt=$nt"))
-        column = reshape(Float64.(collect(decoded_phase)), nt, 1)
+        values = Float64.(collect(decoded_phase))
+        all(isfinite, values) || throw(ArgumentError("phase values must be finite"))
+        column = reshape(values, nt, 1)
         return repeat(column, 1, m), :vector
     end
     if decoded_phase isa AbstractMatrix
         size(decoded_phase) == (nt, m) || throw(ArgumentError(
             "phase matrix size $(size(decoded_phase)) does not match ($nt, $m)"))
-        return Float64.(decoded_phase), :matrix
+        values = Float64.(decoded_phase)
+        all(isfinite, values) || throw(ArgumentError("phase values must be finite"))
+        return values, :matrix
     end
     throw(ArgumentError("fiber field physics requires a vector or matrix decoded phase"))
 end
@@ -371,18 +579,24 @@ function _field_matrix(field, problem::FiberFieldProblem, label::AbstractString)
     nt = problem.sim["Nt"]
     m = problem.sim["M"]
     if field isa Real
-        return fill(Float64(field), nt, m), :scalar
+        value = Float64(field)
+        isfinite(value) || throw(ArgumentError("$label must be finite"))
+        return fill(value, nt, m), :scalar
     end
     if field isa AbstractVector
         length(field) == nt || throw(ArgumentError(
             "$label vector length $(length(field)) does not match Nt=$nt"))
-        column = reshape(Float64.(collect(field)), nt, 1)
+        values = Float64.(collect(field))
+        all(isfinite, values) || throw(ArgumentError("$label values must be finite"))
+        column = reshape(values, nt, 1)
         return repeat(column, 1, m), :vector
     end
     if field isa AbstractMatrix
         size(field) == (nt, m) || throw(ArgumentError(
             "$label matrix size $(size(field)) does not match ($nt, $m)"))
-        return Float64.(field), :matrix
+        values = Float64.(field)
+        all(isfinite, values) || throw(ArgumentError("$label values must be finite"))
+        return values, :matrix
     end
     throw(ArgumentError("$label must be a real scalar, vector, or matrix"))
 end
@@ -447,7 +661,11 @@ function _same_signature(left, right)
 end
 
 function _shaped_input(problem::FiberFieldProblem, fields)
-    return fields.alpha .* fields.amplitude .* cis.(fields.phase) .* problem.uω0
+    shaped = fields.alpha .* fields.amplitude .* cis.(fields.phase) .* problem.uω0
+    shaped_norm = norm(shaped)
+    all(isfinite, shaped) && isfinite(shaped_norm) && shaped_norm > 0 || throw(ArgumentError(
+        "decoded controls must produce a finite, nonzero launch field"))
+    return shaped
 end
 
 function _cached_forward!(physics::SingleModePhasePhysics, decoded_control)
@@ -460,12 +678,13 @@ function _cached_forward!(physics::SingleModePhasePhysics, decoded_control)
     end
 
     shaped = _shaped_input(problem, fields)
-    sol = solve_disp_mmf(shaped, problem.fiber, problem.sim)["ode_sol"]
-    final_field = cis.(problem.fiber["Dω"] .* problem.fiber["L"]) .* sol(problem.fiber["L"])
+    solution = solve_disp_mmf(shaped, problem.fiber, problem.sim)["ode_sol"]
+    final_field = cis.(problem.fiber["Dω"] .* problem.fiber["L"]) .*
+        solution(problem.fiber["L"])
 
     cache.signature = signature
     cache.shaped_input = Matrix{ComplexF64}(shaped)
-    cache.ode_solution = sol
+    cache.ode_solution = solution
     cache.final_field = Matrix{ComplexF64}(final_field)
     cache.physical_fields = fields
     return cache.final_field, cache.ode_solution, cache.shaped_input, fields
@@ -473,12 +692,15 @@ end
 
 function _field_objective_from_cost_adjoint(kind::Symbol, cost_adjoint::Function,
                                             log_cost::Bool,
+                                            problem::FiberFieldProblem,
                                             figure_hooks = (:field_summary, :convergence_trace))
     return ObjectiveMap(
+        _OBJECTIVE_BINDING_TOKEN,
         kind;
         cost = field -> first(_maybe_log_cost(cost_adjoint(field)..., log_cost)),
         terminal_adjoint = (field, context) -> last(_maybe_log_cost(cost_adjoint(field)..., log_cost)),
         figure_hooks = Tuple(Symbol(hook) for hook in figure_hooks),
+        problem_sha256 = _resolved_problem_signature(problem),
     )
 end
 
@@ -497,6 +719,7 @@ function raman_band_objective(problem::FiberFieldProblem;
         name,
         field -> _field_spectral_band_cost(field, mask),
         log_cost,
+        problem,
     )
 end
 
@@ -507,6 +730,7 @@ function mode_sum_objective(problem::FiberFieldProblem; log_cost::Bool=false,
         name,
         field -> _field_spectral_band_cost(field, mask),
         log_cost,
+        problem,
         (:field_summary, :mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
     )
 end
@@ -519,6 +743,7 @@ function fundamental_mode_objective(problem::FiberFieldProblem;
         name,
         field -> _field_fundamental_band_cost(field, mask),
         log_cost,
+        problem,
         (:field_summary, :mode_resolved_spectra, :convergence_trace),
     )
 end
@@ -536,6 +761,7 @@ function worst_mode_objective(problem::FiberFieldProblem;
             τ = worst_mode_tau,
         ),
         log_cost,
+        problem,
         (:field_summary, :mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
     )
 end
@@ -548,6 +774,7 @@ function raman_peak_objective(problem::FiberFieldProblem;
         name,
         field -> _field_spectral_peak_cost(field, mask),
         log_cost,
+        problem,
     )
 end
 
@@ -558,6 +785,7 @@ function temporal_width_objective(problem::FiberFieldProblem;
         name,
         field -> _field_temporal_width_cost(field, problem.sim),
         log_cost,
+        problem,
     )
 end
 
@@ -636,8 +864,11 @@ should call `fiber_model(problem)`.
 """
 function spectral_shaper_model(problem::FiberFieldProblem)
     physics = SingleModePhasePhysics(problem, SingleModePhaseCache())
-    return AdjointModel(
-        :spectral_shaper_propagation;
+    problem_source = _resolved_problem_source(problem)
+    return _adjoint_model(
+        :spectral_shaper_propagation,
+        problem_source;
+        run_source = _native_run_source(problem, problem_source),
         forward = (decoded_control, context) -> first(_cached_forward!(physics, decoded_control)),
         physical_gradient = (decoded_control, terminal_seed, context) -> begin
             _, forward_solution, shaped_input, fields = _cached_forward!(physics, decoded_control)
@@ -689,18 +920,65 @@ function spectral_shaper_model(problem::FiberFieldProblem)
     )
 end
 
-function _fiber_metadata_from_problem(problem::FiberFieldProblem, reference_power_w)
-    power_source = reference_power_w === nothing ? problem.reference_power_w : reference_power_w
-    power_source !== nothing || throw(ArgumentError(
-        "solve(problem, ...) needs reference_power_w metadata for this explicit low-level problem; pass `reference_power_w=...` or build the problem from a Fiber"))
-    power = Float64(power_source)
-    isfinite(power) && power > 0 || throw(ArgumentError(
-        "reference_power_w must be positive and finite when solving from a FiberFieldProblem"))
-    return Fiber(;
+function _execution_metadata_from_problem(problem::FiberFieldProblem)
+    recorded = problem.metadata
+    any(ismissing, (
+        recorded.requested_fiber,
+        recorded.requested_pulse,
+        recorded.requested_grid,
+    )) && throw(ArgumentError(
+        "solve(problem, ...) is only available for package-built problems; " *
+        "explicit low-level problems must use solve(fiber_model(problem), ...) " *
+        "and state their metadata explicitly"))
+    _validate_package_problem_snapshot(problem)
+
+    resolved_fiber = Fiber(
         regime = mode_count(problem) == 1 ? :single_mode : :multimode,
-        preset = problem.preset,
+        preset = recorded.preset,
         length_m = Float64(problem.fiber["L"]),
-        power_w = power,
+        power_w = recorded.requested_fiber.power_w,
+        beta_order = Int(problem.sim["β_order"]),
+    )
+    recorded.requested_fiber == resolved_fiber || throw(ArgumentError(
+        "requested fiber metadata disagrees with the resolved problem"))
+
+    resolved_grid = Grid(
+        nt = sample_count(problem),
+        time_window_ps = Float64(problem.sim["time_window"]),
+        policy = :exact,
+    )
+    return (
+        fiber = resolved_fiber,
+        pulse = recorded.requested_pulse,
+        grid = resolved_grid,
+        source_metadata = (
+            requested_fiber = recorded.requested_fiber,
+            requested_pulse = recorded.requested_pulse,
+            requested_grid = recorded.requested_grid,
+            resolved_grid = resolved_grid,
+            wavelength_m = Float64(problem.sim["λ0"]),
+            modes = mode_count(problem),
+            construction_sha256 = recorded.construction_sha256,
+        ),
+    )
+end
+
+_resolved_problem_source(problem::FiberFieldProblem) =
+    ResolvedProblemSource(problem, _resolved_problem_signature(problem))
+
+function _native_run_source(problem::FiberFieldProblem,
+                            problem_source::ResolvedProblemSource)
+    recorded = problem.metadata
+    any(ismissing, (
+        recorded.requested_fiber,
+        recorded.requested_pulse,
+        recorded.requested_grid,
+    )) && return nothing
+    source_metadata = _execution_metadata_from_problem(problem).source_metadata
+    return NativeRunSource(
+        merge(source_metadata, (snapshot_sha256 = problem_source.snapshot_sha256,)),
+        problem_source.problem,
+        problem_source.snapshot_sha256,
     )
 end
 
@@ -711,21 +989,32 @@ Notebook-first convenience path for package-native fiber physics. It builds
 `fiber_model(problem)` and delegates to the same native adjoint execution used
 by `solve(model, control, objective, initial_coordinates; ...)`.
 
-`reference_power_w` is metadata for the experiment record only; the physical
-launch field is already contained in `problem.uω0`.
+Package-built problems retain the exact requested Fiber and Pulse plus the
+resolved Grid used by the simulation. Metadata overrides are rejected.
+Explicit low-level problems use the model-first overload so FiberLab never
+invents high-level metadata for researcher-supplied arrays.
 """
 function solve(problem::FiberFieldProblem,
                control::AbstractControlMap,
                objective::AbstractFiberObjective,
                initial_coordinates;
-               reference_power_w=nothing,
                kwargs...)
+    forbidden = intersect(
+        Set(keys(kwargs)),
+        Set((:fiber, :pulse, :grid, :reference_power_w, :source_metadata, :source_problem)),
+    )
+    isempty(forbidden) || throw(ArgumentError(
+        "solve(problem, ...) does not accept metadata overrides: $(sort!(collect(forbidden)))"))
+    snapshot = deepcopy(problem)
+    metadata = _execution_metadata_from_problem(snapshot)
     return solve(
-        fiber_model(problem),
+        fiber_model(snapshot),
         control,
         objective,
         initial_coordinates;
-        fiber = _fiber_metadata_from_problem(problem, reference_power_w),
+        fiber = metadata.fiber,
+        pulse = metadata.pulse,
+        grid = metadata.grid,
         kwargs...,
     )
 end

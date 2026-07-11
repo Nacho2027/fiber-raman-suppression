@@ -299,7 +299,9 @@ function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
         fiber["one_m_fR"], 1 - fiber["one_m_fR"], sim["Nt"], sim["M"])
     prob_adjoint_disp_mmf = ODEProblem(adjoint_disp_mmf!, λ̃ωL, (fiber["L"], 0), p_adjoint_disp_mmf)
     reltol = Float64(get(fiber, "reltol", 1e-8))
-    sol_adjoint_disp_mmf = solve(prob_adjoint_disp_mmf, Tsit5(), reltol=reltol, saveat=(0, fiber["L"]))
+    abstol = Float64(get(fiber, "abstol", 1e-6))
+    sol_adjoint_disp_mmf = solve(prob_adjoint_disp_mmf, Tsit5(), reltol=reltol,
+        abstol=abstol, saveat=(0, fiber["L"]))
 
     return sol_adjoint_disp_mmf
 end

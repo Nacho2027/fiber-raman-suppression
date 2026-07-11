@@ -77,7 +77,7 @@ from the Julia package.
 - `run_adjoint_step(model, control, objective, coordinates; context=nothing)`
 - `check_adjoint_gradient(model, control, objective, coordinates; context=nothing)`
 - `solve(problem, control, objective, initial_coordinates; kwargs...)`
-- `solve(model, control, objective, initial_coordinates; fiber, kwargs...)`
+- `solve(model, control, objective, initial_coordinates; fiber=nothing, pulse=nothing, grid=nothing, kwargs...)`
 - `solve(experiment; backend=NativeAdjointBackend(model; initial_coordinates=x0))`
 - `NativeAdjointBackend(model; initial_coordinates=x0, bounds=nothing, artifact_writers=Dict(...))`
 - `fiber_problem(fiber; modes=1, pulse=Pulse(), grid=Grid(), kwargs...)`

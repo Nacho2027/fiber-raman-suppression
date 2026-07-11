@@ -180,13 +180,15 @@ function solve_disp_mmf(uω0, fiber, sim)
         sim["M"], sim["attenuator"])
     prob_disp_mmf = ODEProblem(disp_mmf!, uω0, (0, fiber["L"]), p_disp_mmf)
     reltol = Float64(get(fiber, "reltol", 1e-8))
+    abstol = Float64(get(fiber, "abstol", 1e-6))
 
     if isnothing(fiber["zsave"])
-        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=reltol)
+        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=reltol, abstol=abstol)
 
         return Dict("ode_sol" => sol_disp_mmf)
     else
-        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=reltol, saveat=fiber["zsave"])
+        sol_disp_mmf = solve(prob_disp_mmf, Tsit5(), reltol=reltol, abstol=abstol,
+            saveat=fiber["zsave"])
 
         uω_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
         ut_z = zeros(ComplexF64, length(fiber["zsave"]), sim["Nt"], sim["M"])
