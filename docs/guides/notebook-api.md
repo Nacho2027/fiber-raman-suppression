@@ -40,6 +40,73 @@ silent changes to the source contract. This method covers the passive
 single-mode and multimode backend; gain propagation remains a separate
 low-level capability until it has equivalent evidence and tests.
 
+## OSA Spectrum Comparison
+
+Load laboratory columns explicitly; FiberLab never guesses their units or
+meaning:
+
+```julia
+measurement = load_osa_spectrum(
+    "lab-local/measurements/osa_output.csv";
+    wavelength_column = :wavelength_nm,
+    value_column = :power_dbm,
+    value_semantics = :power_dbm_in_rbw,
+    resolution_bandwidth_nm = 0.10,
+    noise_floor_db = -75.0, # use nothing only to record an unknown floor
+    instrument = "lab OSA asset tag",
+    acquired_at = "2026-07-10T14:30:00-07:00",
+    metadata = Dict("calibration_id" => "cal-2026-07"),
+)
+
+forward = propagate(problem)
+comparison = compare_spectrum(
+    forward,
+    measurement;
+    evaluation_band_nm = (first(measurement.wavelength_nm),
+                          last(measurement.wavelength_nm)),
+)
+
+summarize(comparison)
+metrics(comparison)
+verify(comparison)
+paths = write_spectrum_report(
+    comparison;
+    output_dir = "lab-local/reports/run_001",
+    tag = "osa_output",
+)
+display_report(paths)
+```
+
+This first measurement lane is deliberately narrow:
+
+- final, passive, numerically verified, single-mode `PropagationResult` only;
+- vacuum wavelength in nm and either dBm measured in the declared RBW or
+  relative power dB;
+- an assumed Gaussian intensity response whose FWHM is the supplied RBW;
+- linear-domain response processing, no extrapolation, and no fitted
+  wavelength shift;
+- independent area normalization over a predeclared evaluation band, which
+  removes global scale and permits shape claims only;
+- evaluation-band endpoints that coincide with recorded wavelength samples;
+- quantitative metrics only when the noise floor is known, the evaluation band
+  is uncensored, and measurement sampling is no coarser than half an RBW.
+
+Simulation spacing must be no coarser than one third of the RBW. A typical
+12 ps simulation has about 0.67 nm spacing near 1550 nm, so it cannot resolve a
+0.10 nm OSA setting; the comparison rejects it with an estimated minimum time-
+window increase. Preserve the needed temporal resolution when enlarging that
+window. The report records the raw-file SHA, source copy, parser choices,
+propagation trust evidence, assumed ±4σ Gaussian truncation, sampling ratios,
+censor-limit violations, the exact trust-policy thresholds, and any reason
+metrics were withheld. `lab-local/` is ignored by git so raw measurements and
+routine reports do not become commit candidates; deliberately curated evidence
+belongs in an explicitly reviewed location.
+
+Synthetic regression data establish the numerical core, not Rivera Lab file
+compatibility. Do not call this lane lab-ready until an untouched laboratory
+export with real acquisition/RBW metadata has been loaded and its report
+manually inspected.
+
 ## Minimal Run
 
 ```julia

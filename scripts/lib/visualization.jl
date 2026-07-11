@@ -818,79 +818,10 @@ function plot_spectrogram(ut, sim;
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Input/output spectrum comparison (wavelength axis, dB scale)
+# 7. Optimization result — publication quality (phase optimization)
 # ─────────────────────────────────────────────────────────────────────────────
 
-"""
-    plot_spectrum_comparison(uω_in, uω_out, sim; kwargs...)
-
-Plot input and output spectra on wavelength axis with dB scale.
-`uω_in`, `uω_out` are in FFT order, shape (Nt,) or (Nt, M).
-"""
-function plot_spectrum_comparison(uω_in, uω_out, sim;
-    mode_idx=1, dB_range=60.0,
-    wavelength_limits=nothing,
-    figsize=(8, 4), label_in="Input", label_out="Output",
-    band_mask=nothing, raman_threshold=nothing)
-
-    Nt = sim["Nt"]
-    f0 = sim["f0"]
-    Δt = sim["Δt"]
-
-    # Absolute frequencies (fftshifted)
-    f_shifted = f0 .+ fftshift(fftfreq(Nt, 1 / Δt))
-    λ_nm = C_NM_THZ ./ f_shifted
-
-    # Power spectral density (fftshifted)
-    if ndims(uω_in) == 1
-        P_in = abs2.(fftshift(uω_in))
-        P_out = abs2.(fftshift(uω_out))
-    else
-        P_in = abs2.(fftshift(uω_in[:, mode_idx]))
-        P_out = abs2.(fftshift(uω_out[:, mode_idx]))
-    end
-
-    # Normalize to global peak and convert to dB
-    P_ref = max(maximum(P_in), maximum(P_out))
-    P_in_dB = 10 .* log10.(P_in ./ P_ref .+ 1e-30)
-    P_out_dB = 10 .* log10.(P_out ./ P_ref .+ 1e-30)
-
-    fig, ax = subplots(figsize=figsize)
-    ax.plot(λ_nm, P_in_dB, color=COLOR_INPUT, label=label_in, alpha=0.7, linewidth=1.2)
-    ax.plot(λ_nm, P_out_dB, color=COLOR_OUTPUT, label=label_out, alpha=0.8, linewidth=1.2)
-
-    # Raman onset marker: axvline at Stokes onset wavelength
-    if !isnothing(raman_threshold)
-        # Raman Stokes onset wavelength from threshold frequency offset
-        f_raman_onset = f0 + raman_threshold  # THz
-        λ_raman_onset_nm = C_NM_THZ / f_raman_onset
-        ax.axvline(x=λ_raman_onset_nm, color=COLOR_RAMAN, ls="--",
-            alpha=0.7, linewidth=1.0, label="Raman onset")
-    end
-
-    ax.set_xlabel("Wavelength [nm]")
-    ax.set_ylabel("Power [dB]")
-    ax.set_ylim(-dB_range, 3)
-    ax.legend()
-    ax.ticklabel_format(useOffset=false, style="plain", axis="x")
-
-    if !isnothing(wavelength_limits)
-        ax.set_xlim(wavelength_limits...)
-    else
-        # AXIS-02: auto-zoom using the union of input and output spectra.
-        # The union ensures both the input peak and any broadened output signal
-        # are visible within the display window.
-        P_union = max.(P_in, P_out)
-        spec_xlim_comp = _spectral_signal_xlim(P_union, λ_nm)
-        ax.set_xlim(spec_xlim_comp...)
-    end
-
-    fig.tight_layout()
-    return fig, ax
-end
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. Optimization result — publication quality (phase optimization)
 # ─────────────────────────────────────────────────────────────────────────────
 
 """

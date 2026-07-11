@@ -16,6 +16,8 @@ organized around experiments:
 | `Solver` | Optimization method and iteration policy |
 | `Experiment` | Complete runnable FiberLab API object |
 | `ArtifactPolicy` | What evidence, plots, sidecars, and exports should be produced |
+| `MeasuredSpectrum` | A hashed, explicitly parsed OSA wavelength trace with RBW and floor metadata |
+| `SpectrumComparison` | A sealed simulation-to-OSA observation and shape-only comparison policy |
 
 Configs under `configs/experiments/` are serialized experiments. They are useful
 for reproducibility and batch execution, but they should not be treated as the
@@ -23,6 +25,14 @@ conceptual center of the project.
 
 Raman-band suppression is a built-in objective and benchmark. It is kept as
 regression evidence, not as a restriction on the API model.
+
+Measurement support begins with one concrete seam rather than a generic data
+framework. FiberLab can predict a single-mode OSA spectrum from a sealed
+`PropagationResult`, including the frequency-to-vacuum-wavelength Jacobian and
+an assumed Gaussian wavelength-RBW response. Independent area normalization
+removes global scale, so this lane compares spectral shape only; it cannot
+claim absolute power, throughput, calibration accuracy, or scientific
+readiness.
 
 Low-level simulation functions remain available for numerical work. New
 research workflows should start from the FiberLab concepts first, then lower

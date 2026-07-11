@@ -4,6 +4,9 @@
 .codex
 .burst-sync/
 
+# Local laboratory inputs and generated measurement reports
+lab-local/
+
 # Machine-specific MCP server config (paths differ per host)
 .mcp.json
 .stfolder

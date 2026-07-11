@@ -38,6 +38,13 @@ The inherited low-level propagation code remains in `src/` as the physics
 backend. New work should start from the FiberLab concepts: fibers, pulses,
 grids, controls, objectives, solvers, experiments, and artifacts.
 
+FiberLab also has an experimental OSA comparison seam for sealed single-mode
+forward results. It applies the wavelength Jacobian and an explicit Gaussian
+RBW observation model, then produces a hashed shape-only report. See the
+[notebook guide](docs/guides/notebook-api.md#osa-spectrum-comparison) for the
+strict limits; synthetic tests do not yet establish compatibility with a real
+Rivera Lab export.
+
 Python is not a supported API surface.
 
 ## Start

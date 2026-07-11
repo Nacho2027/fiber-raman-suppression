@@ -31,6 +31,7 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        FiberFieldProblem, FiberProblem, FiberLabCheckError, FiberLabResult, FullGridPhase, Grid, Objective,
        NativeAdjointBackend, NativeAdjointResult, NativeArtifactContext,
        ObjectiveMap, PhaseBasis, PositiveScalar, PropagationResult, Pulse,
+       MeasuredSpectrum, SpectrumComparison,
        NoExecutionBackend, ObjectiveContract, ScalarObjective, Solver,
        ScalarControl, SingleModeFiberProblem, LabProfile, TrustCheck, TrustReport,
        assert_adjoint_ready, check, check_adjoint_gradient,
@@ -48,6 +49,7 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        initial_coordinates, phase_control, fourier_basis, polynomial_basis,
        project, pullback, pullback_gradient,
        propagate,
+       spectral_density, load_osa_spectrum, compare_spectrum, write_spectrum_report,
        registered_control_kinds, run_adjoint_step,
        registered_objective_kinds,
        register_control!, register_objective!,
@@ -106,6 +108,7 @@ include("fiberlab/trust.jl")
 include("fiberlab/physics_helpers.jl")
 include("fiberlab/physics_models.jl")
 include("fiberlab/propagation.jl")
+include("fiberlab/spectral_measurements.jl")
 include("fiberlab/design_api.jl")
 include("fiberlab/standard_figures.jl")
 

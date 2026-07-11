@@ -45,6 +45,8 @@ from the Julia package.
 - `NativeAdjointResult`
 - `NativeArtifactContext`
 - `PropagationResult`
+- `MeasuredSpectrum`
+- `SpectrumComparison`
 - `LabProfile`
 - `TrustCheck`
 - `TrustReport`
@@ -85,6 +87,10 @@ from the Julia package.
 - `fiber_problem(experiment; kwargs...)`
 - `fiber_problem(uω0, fiber, sim; kwargs...)`
 - `propagate(problem; saveat=nothing)`
+- `spectral_density(result::PropagationResult)`
+- `load_osa_spectrum(path; wavelength_column, value_column, ...)`
+- `compare_spectrum(result, measurement; evaluation_band_nm=nothing)`
+- `write_spectrum_report(comparison; output_dir, tag="spectrum_comparison")`
 - `FullGridPhase(problem; kwargs...)`
 - `fiber_model(problem)`
 - `sample_count(problem)`
