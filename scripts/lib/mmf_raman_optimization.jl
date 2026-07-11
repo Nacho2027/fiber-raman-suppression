@@ -134,8 +134,7 @@ function mmf_trust_metrics(
     prop = mmf_forward_output(φ, setup.uω0, setup.fiber, setup.sim)
     cost_report = mmf_cost_report(prop.uωf, setup.band_mask; τ = τ)
     # Project convention is `uω = ifft(ut)` and `ut = fft(uω)`. Measure
-    # optimization trust on the raw output field; the legacy attenuator-recovery
-    # check can amplify harmless edge roundoff into false boundary failures.
+    # optimization trust directly on the periodic time-domain grid.
     ut_in = mmf_output_time_field(prop.uω0_shaped)
     ut_out = mmf_output_time_field(prop.uωf)
     input_boundary_ok, input_boundary_edge_fraction = check_raw_temporal_edges(

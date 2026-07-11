@@ -11,7 +11,7 @@ using FFTW
 
 function temporal_peak_scalar_cost(context)
     uωf = context.uωf
-    ut = ifft(uωf, 1)
+    ut = fft(uωf, 1)
     power = vec(sum(abs2.(ut), dims = 2))
     total = sum(power)
     total > 0 || throw(ArgumentError("temporal_peak_scalar requires nonzero output energy"))

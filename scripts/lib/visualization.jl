@@ -333,13 +333,16 @@ end
 
 Compute instantaneous frequency offset Δf(t) in THz from a complex time-domain
 field vector. Extracts temporal phase, unwraps, and differentiates.
-dφ/dt in rad/ps divided by 2π gives THz.
+The project convention is `u(t) ∝ exp(-iΩt)`, so `-dφ/dt / 2π` gives
+the physical frequency offset in THz.
 """
 function compute_instantaneous_frequency(ut, sim)
     dt_ps = (sim["ts"][2] - sim["ts"][1]) * 1e12
     φ_unwrapped = _manual_unwrap(angle.(ut))
-    return _central_diff(φ_unwrapped, dt_ps) ./ (2π)
+    return -_central_diff(φ_unwrapped, dt_ps) ./ (2π)
 end
+
+_spectral_power_from_temporal(ut) = abs2.(ifft(ut))
 
 """
     plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing)
@@ -391,7 +394,7 @@ function plot_phase_diagnostic(φ, uω0_base, sim; save_path=nothing, metadata=n
     φ_wrapped = wrap_phase(φ_shifted[pos_mask][sort_idx])
 
     # Instantaneous frequency from shaped temporal field
-    ut_shaped = ifft(uω0_base .* cis.(φ), 1)
+    ut_shaped = fft(uω0_base .* cis.(φ), 1)
     Δf_inst = compute_instantaneous_frequency(ut_shaped[:, 1], sim)
 
     show_raman_marker = objective_kind in (:raman_band, :raman_peak)
@@ -754,7 +757,7 @@ function plot_spectrogram(ut, sim;
     t_center = (ts_ps[1] + ts_ps[end]) / 2
     gate = exp.(-(ts_ps .- t_center).^2 ./ (2σ^2))
 
-    # STFT: slide gate across time, take FFT at each position
+    # STFT: uω = ifft(ut) under the project Fourier convention.
     n_steps = min(Nt, 512)
     step_indices = round.(Int, range(1, Nt, length=n_steps))
 
@@ -762,7 +765,7 @@ function plot_spectrogram(ut, sim;
     for (j, center) in enumerate(step_indices)
         shifted_gate = circshift(gate, center - Nt ÷ 2)
         windowed = ut .* shifted_gate
-        S[:, j] = abs2.(fft(windowed))
+        S[:, j] = _spectral_power_from_temporal(windowed)
     end
 
     S_max = maximum(S)

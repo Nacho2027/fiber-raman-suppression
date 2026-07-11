@@ -56,7 +56,7 @@ ensure_deterministic_environment()
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup and cost functions are in common.jl:
 #   setup_raman_problem, spectral_band_cost, recommended_time_window,
-#   check_boundary_conditions
+#   check_raw_temporal_edges
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ function raman_cost_surface_spec(;
             objective_kind = objective_kind,
             lambda_gdd = Float64(λ_gdd),
             lambda_boundary = Float64(λ_boundary),
-            boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+            boundary_penalty_measurement = "raw temporal edge fraction of shaped input pulse",
             hvp_safe_for_same_surface = true,
         ),
     )
@@ -666,11 +666,9 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         objective_kind=objective_kind, log_cost=false)
     ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
-    # Boundary check on optimized input pulse. Use the raw time-domain field:
-    # `check_boundary_conditions` divides by the attenuator for legacy callers,
-    # which falsely inflates near-zero edge noise in this trust path.
+    # Boundary check on the optimized input pulse in the periodic FFT window.
     uω0_opt = @. uω0 * cis(φ_after)
-    ut0_opt = ifft(uω0_opt, 1)
+    ut0_opt = fft(uω0_opt, 1)
     bc_input_ok, bc_input_frac = check_raw_temporal_edges(ut0_opt;
         threshold=TRUST_THRESHOLDS.edge_frac_pass)
 

@@ -13,7 +13,6 @@ Shared functions (single source of truth):
   pulse-compression objectives
 - `compute_photon_number` — conserved photon-number invariant for GNLSE checks
 - `temporal_edge_fraction` — measure raw temporal energy near FFT window edges
-- `check_boundary_conditions` — legacy edge check with attenuator recovery
 - `setup_raman_problem` — setup for phase optimization (single-mode fibers)
 - `setup_amplitude_problem` — setup for amplitude optimization (single-mode fibers)
 
@@ -350,10 +349,9 @@ end
 
 Normalized temporal second-moment cost and its gradient.
 
-This is a non-Raman objective for phase-only pulse shaping. It transforms the
-output spectrum to the time domain, centers the plotting/order convention with
-`fftshift`, and minimizes energy away from the center of the simulated temporal
-window:
+This is a non-Raman objective for phase-only pulse shaping. It reconstructs the
+centered time-domain field using the project convention `ut = fft(uω)` and
+minimizes energy away from the center of the simulated temporal window:
 
 ```text
 J = sum((t / (T/2))^2 * |u(t)|^2) / sum(|u(t)|^2)
@@ -367,9 +365,8 @@ function temporal_width_cost(uωf, sim)
     Nt = Int(sim["Nt"])
     @assert size(uωf, 1) == Nt "uωf rows ($(size(uωf,1))) must match sim Nt ($Nt)"
 
-    ut = ifft(uωf, 1)
-    ut_centered = fftshift(ut, 1)
-    E_total = sum(abs2.(ut_centered))
+    ut = fft(uωf, 1)
+    E_total = sum(abs2.(ut))
     @assert E_total > 0 "field must have nonzero temporal energy"
 
     Δt = Float64(sim["Δt"])
@@ -377,10 +374,9 @@ function temporal_width_cost(uωf, sim)
     t = ((collect(0:Nt-1) .- floor(Int, Nt / 2)) .* Δt) ./ half_window
     weights = reshape(t .^ 2, Nt, 1)
 
-    J = sum(weights .* abs2.(ut_centered)) / E_total
-    grad_centered_t = ut_centered .* (weights .- J) ./ E_total
-    grad_t = ifftshift(grad_centered_t, 1)
-    dJ = fft(grad_t, 1) ./ Nt
+    J = sum(weights .* abs2.(ut)) / E_total
+    grad_t = ut .* (weights .- J) ./ E_total
+    dJ = Nt .* ifft(grad_t, 1)
 
     @assert isfinite(J) && J >= 0 "temporal width cost J=$J must be finite and nonnegative"
     @assert all(isfinite, dJ) "gradient contains non-finite values"
@@ -428,9 +424,7 @@ end
     temporal_edge_fraction(ut_z; edge_fraction=0.05)
 
 Measure the raw fraction of temporal-domain field energy in the first and last
-`edge_fraction` of the FFT time grid. This does not apply attenuator recovery
-and is the preferred trust metric for shaped input pulses and solver-returned
-`ut_z` fields.
+`edge_fraction` of the periodic FFT time grid.
 """
 function temporal_edge_fraction(ut_z; edge_fraction=0.05)
     @assert 0 < edge_fraction < 0.5 "edge_fraction must be between 0 and 0.5"
@@ -444,43 +438,12 @@ end
 """
     check_raw_temporal_edges(ut_z; threshold=1e-6, edge_fraction=0.05)
 
-Check raw temporal edge energy without attenuator recovery. Returns
-`(is_ok, edge_fraction)`.
+Check raw temporal edge energy. Returns `(is_ok, edge_fraction)`.
 """
 function check_raw_temporal_edges(ut_z; threshold=1e-6, edge_fraction=0.05)
     @assert threshold > 0 "threshold must be positive"
     frac = temporal_edge_fraction(ut_z; edge_fraction=edge_fraction)
     return frac < threshold, frac
-end
-
-"""
-    check_boundary_conditions(ut_z, sim; threshold=1e-6)
-
-Check that field energy at temporal window edges is negligible.
-Returns (is_ok, edge_fraction) where edge_fraction is the fraction of
-total energy within the first and last 5% of the time grid.
-
-This is retained for legacy callers that intentionally want pre-attenuator
-recovery. For optimization trust reports, prefer `check_raw_temporal_edges` so
-the attenuator does not amplify harmless edge-roundoff into a false boundary
-failure.
-"""
-function check_boundary_conditions(ut_z, sim; threshold=1e-6)
-    @assert threshold > 0 "threshold must be positive"
-
-    Nt = sim["Nt"]
-    n_edge = max(1, Nt ÷ 20)  # 5% of grid on each side
-    ut_physical = ut_z
-    if haskey(sim, "attenuator")
-        attenuator = sim["attenuator"]
-        @assert size(attenuator) == size(ut_z) "attenuator shape must match field shape"
-        # Recover the physical pre-attenuator field before measuring edge energy.
-        ut_physical = ut_z ./ max.(attenuator, sqrt(eps(Float64)))
-    end
-    E_total = sum(abs2.(ut_physical))
-    E_edges = sum(abs2.(ut_physical[1:n_edge, :])) + sum(abs2.(ut_physical[end-n_edge+1:end, :]))
-    edge_frac = E_edges / max(E_total, eps())
-    return edge_frac < threshold, edge_frac
 end
 
 # ─────────────────────────────────────────────────────────────────────────────

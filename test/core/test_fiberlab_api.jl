@@ -1398,13 +1398,6 @@ end
     negative_dt = deepcopy(problem.sim)
     negative_dt["Δt"] *= -1
     @test_throws ArgumentError fiber_field_problem(problem.uω0, problem.fiber, negative_dt)
-    nan_attenuator = deepcopy(problem.sim)
-    nan_attenuator["attenuator"][1, 1] = NaN
-    @test_throws ArgumentError fiber_field_problem(
-        problem.uω0,
-        problem.fiber,
-        nan_attenuator,
-    )
     inconsistent_omega = deepcopy(problem.sim)
     inconsistent_omega["ωs"] = zeros(sample_count(problem))
     @test_throws ArgumentError fiber_field_problem(
@@ -1767,6 +1760,11 @@ end
     @test source_metadata["resolved_grid"]["time_window_ps"] == problem.sim["time_window"]
     @test source_metadata["wavelength_m"] == problem.sim["λ0"]
     @test source_metadata["modes"] == problem.sim["M"]
+    @test source_metadata["raman_response"]["model"] ==
+        "blow_wood_single_damped_oscillator_v1"
+    @test source_metadata["raman_response"]["fraction"] == 0.18
+    @test source_metadata["raman_response"]["tau1_fs"] == 12.2
+    @test source_metadata["raman_response"]["tau2_fs"] == 32.0
     @test source_metadata["construction_sha256"] == problem.metadata.construction_sha256
     @test length(source_metadata["snapshot_sha256"]) == 64
     @test native_sidecar["objective_problem_sha256"] == source_metadata["snapshot_sha256"]
@@ -1839,8 +1837,12 @@ end
     multimode_gamma = zeros(Float64, 2, 2, 2, 2)
     multimode_gamma[1, 1, 1, 1] = 1.0e-3
     multimode_gamma[2, 2, 2, 2] = 0.8e-3
-    multimode_gamma[1, 1, 2, 2] = 0.15e-3
-    multimode_gamma[2, 2, 1, 1] = 0.12e-3
+    for indices in (
+        (1, 1, 2, 2), (1, 2, 1, 2), (1, 2, 2, 1),
+        (2, 1, 1, 2), (2, 1, 2, 1), (2, 2, 1, 1),
+    )
+        multimode_gamma[indices...] = 0.15e-3
+    end
     multimode_fiber = Dict{String,Any}(
         "ϕ" => nothing,
         "Dω" => hcat(zeros(16), 1.0e-4 .* collect(range(-1.0, 1.0; length = 16))),

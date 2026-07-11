@@ -51,6 +51,7 @@ function summarize(problem::FiberFieldProblem)
             missing : problem.metadata.requested_fiber.power_w,
         raman_threshold_thz = problem.raman_threshold_thz,
         band_bins = band_bins,
+        raman_response = _raman_response_metadata(problem.fiber),
     )
 end
 
@@ -385,23 +386,22 @@ function fiber_problem(fiber_spec::Fiber;
         _pulse_shape_string(pulse.shape),
         sim,
     )
-    raman_fiber = get_disp_fiber_params_user_defined(
-        fiber_spec.length_m,
+    raman = _single_oscillator_raman_fields(
         sim;
-        gamma_user = maximum(abs, gamma),
-        betas_user = [0.0],
+        fR = base_preset.fR,
+        τ1 = _SILICA_RAMAN_TAU1_FS,
+        τ2 = _SILICA_RAMAN_TAU2_FS,
     )
     fiber = Dict{String,Any}(
         "ϕ" => nothing,
         "Dω" => dispersion_matrix,
         "γ" => gamma,
         "L" => fiber_spec.length_m,
-        "hRω" => raman_fiber["hRω"],
-        "one_m_fR" => raman_fiber["one_m_fR"],
         "zsave" => nothing,
         "x" => nothing,
         "gain_parameters" => 0.0,
     )
+    merge!(fiber, raman)
     return _fiber_field_problem(
         Matrix{ComplexF64}(uω0),
         fiber,
@@ -428,6 +428,19 @@ fiber_problem(experiment::Experiment; kwargs...) =
 fiber_problem(uω0, fiber, sim; kwargs...) =
     fiber_field_problem(uω0, fiber, sim; kwargs...)
 
+function _real_response_spectrum(response)
+    nt = length(response)
+    scale = max(1.0, maximum(abs, response))
+    tolerance = 1e-12 * scale
+    abs(imag(response[1])) <= tolerance || return false
+    abs(imag(response[nt ÷ 2 + 1])) <= tolerance || return false
+    return all(
+        isapprox(response[index], conj(response[nt - index + 2]); rtol = 1e-12,
+                 atol = tolerance)
+        for index in 2:nt÷2
+    )
+end
+
 """
     fiber_field_problem(uω0, fiber, sim; band_mask=nothing, raman_threshold_thz=nothing, preset=:custom)
 
@@ -442,7 +455,7 @@ function _fiber_field_problem(uω0, fiber, sim;
                               metadata::FiberProblemMetadata,
                               band_mask=nothing,
                               raman_threshold_thz=nothing)
-    required_sim = ("Nt", "M", "Δt", "time_window", "λ0", "ω0", "ωs", "attenuator", "β_order")
+    required_sim = ("Nt", "M", "Δt", "time_window", "λ0", "ω0", "ωs", "β_order")
     all(key -> haskey(sim, key), required_sim) || throw(ArgumentError(
         "simulation dictionary is missing required propagation fields"))
     field = Matrix{ComplexF64}(uω0)
@@ -478,10 +491,6 @@ function _fiber_field_problem(uω0, fiber, sim;
         "simulation ωs is inconsistent with λ0, Nt, and Δt"))
     all(>(0), sim["ωs"]) || throw(ArgumentError(
         "simulation absolute angular frequencies must be positive"))
-    size(sim["attenuator"]) == (nt, m) && all(isfinite, sim["attenuator"]) ||
-        throw(ArgumentError("simulation attenuator must be a finite Nt×M array"))
-    all(value -> 0 <= value <= 1, sim["attenuator"]) || throw(ArgumentError(
-        "simulation attenuator values must lie in [0, 1]"))
     size(field) == (nt, m) || throw(ArgumentError(
         "uω0 size $(size(field)) does not match simulation size ($nt, $m)"))
     all(isfinite, field) || throw(ArgumentError("uω0 must contain only finite values"))
@@ -502,11 +511,37 @@ function _fiber_field_problem(uω0, fiber, sim;
     isfinite(Float64(fiber["L"])) && Float64(fiber["L"]) > 0 || throw(ArgumentError(
         "fiber L must be positive and finite"))
     all(isfinite, fiber["Dω"]) || throw(ArgumentError("fiber Dω must be finite"))
-    all(isfinite, fiber["γ"]) || throw(ArgumentError("fiber γ must be finite"))
+    _validate_real_gamma_storage(fiber["γ"])
     all(isfinite, fiber["hRω"]) || throw(ArgumentError("fiber hRω must be finite"))
+    _real_response_spectrum(fiber["hRω"]) || throw(ArgumentError(
+        "fiber hRω must have raw-FFT Hermitian symmetry for a real time response"))
     one_m_fR = Float64(fiber["one_m_fR"])
     isfinite(one_m_fR) && 0 <= one_m_fR <= 1 || throw(ArgumentError(
         "fiber one_m_fR must be finite and lie in [0, 1]"))
+    raman = _raman_response_metadata(fiber)
+    if !ismissing(raman)
+        !isempty(raman.model) || throw(ArgumentError("Raman response model must be nonempty"))
+        isfinite(raman.fraction) && 0 <= raman.fraction <= 1 || throw(ArgumentError(
+            "Raman fraction must be finite and lie in [0, 1]"))
+        isfinite(raman.tau1_fs) && raman.tau1_fs > 0 || throw(ArgumentError(
+            "Raman tau1_fs must be positive and finite"))
+        isfinite(raman.tau2_fs) && raman.tau2_fs > 0 || throw(ArgumentError(
+            "Raman tau2_fs must be positive and finite"))
+        isapprox(one_m_fR, 1 - raman.fraction; rtol = 0, atol = 8eps(Float64)) ||
+            throw(ArgumentError("fiber one_m_fR disagrees with Raman fraction"))
+        isapprox(fiber["hRω"][1], raman.fraction; rtol = 1e-12, atol = 1e-14) ||
+            throw(ArgumentError("fiber hRω DC value disagrees with Raman fraction"))
+        if raman.model == _RAMAN_RESPONSE_MODEL
+            expected = _single_oscillator_raman_fields(
+                sim;
+                fR = raman.fraction,
+                τ1 = raman.tau1_fs,
+                τ2 = raman.tau2_fs,
+            )["hRω"]
+            isapprox(fiber["hRω"], expected; rtol = 1e-12, atol = 1e-14) ||
+                throw(ArgumentError("fiber hRω disagrees with declared Raman model"))
+        end
+    end
 
     frequency_offset_fft = FFTW.fftfreq(nt, 1 / sim["Δt"])
     resolved_threshold = raman_threshold_thz === nothing ?
@@ -852,7 +887,9 @@ end
 
 Return the package-native adjoint model for a fiber field problem. The decoded
 control may be a phase vector/matrix, or a NamedTuple/Dict with optional
-`phase`, `amplitude`, and `energy` fields.
+`phase`, `amplitude`, and `energy` fields. Multimode adjoints require a fully
+permutation-symmetric nonlinear coupling tensor; forward-only `propagate`
+supports nonsymmetric tensors.
 """
 function fiber_model(problem::FiberFieldProblem)
     return spectral_shaper_model(problem)
@@ -865,6 +902,9 @@ Low-level model constructor used by `fiber_model(problem)`. New notebook code
 should call `fiber_model(problem)`.
 """
 function spectral_shaper_model(problem::FiberFieldProblem)
+    _adjoint_gamma_symmetric(problem.fiber["γ"]) || throw(ArgumentError(
+        "fiber adjoint requires a fully permutation-symmetric gamma tensor; " *
+        "use propagate(problem) for forward-only nonsymmetric models"))
     physics = SingleModePhasePhysics(problem, SingleModePhaseCache())
     problem_source = _resolved_problem_source(problem)
     return _adjoint_model(
@@ -960,6 +1000,7 @@ function _execution_metadata_from_problem(problem::FiberFieldProblem)
             resolved_grid = resolved_grid,
             wavelength_m = Float64(problem.sim["λ0"]),
             modes = mode_count(problem),
+            raman_response = _raman_response_metadata(problem.fiber),
             construction_sha256 = recorded.construction_sha256,
         ),
     )

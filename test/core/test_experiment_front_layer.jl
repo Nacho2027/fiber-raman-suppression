@@ -274,7 +274,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
             J_after = 1e-3,
             iterations = 2,
         ),
-        uω0 = fft(override_temporal, 1),
+        uω0 = ifft(override_temporal, 1),
         sim = Dict{String,Any}("Nt" => Nt_generic, "M" => 1, "Δt" => 2.0 / (Nt_generic - 1), "f0" => 193.4),
     )
     override_artifacts = write_exploratory_artifacts(override_spec, override_bundle)
@@ -283,10 +283,16 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test override_summary.zoom.time_range == [-0.75, 0.75]
     @test override_summary.plots.temporal_pulse.normalize == true
     @test override_summary.plots.spectrum.dynamic_range_dB == 55.0
-    centered_temporal = reshape(ComplexF64.(exp.(-((collect(1:Nt_generic) .- (Nt_generic ÷ 2 + 1)) ./ 5) .^ 2)), Nt_generic, 1)
-    centered_spectrum = fft(centered_temporal, 1)
+    centered_temporal = zeros(ComplexF64, Nt_generic, 1)
+    centered_temporal[Nt_generic ÷ 2 + 3] = 1.0
+    centered_spectrum = ifft(centered_temporal, 1)
     centered_power = _explore_temporal_power(centered_spectrum)
-    @test abs(argmax(centered_power) - (Nt_generic ÷ 2 + 1)) <= 1
+    @test argmax(centered_power) == Nt_generic ÷ 2 + 3
+    @test _explore_axis(Dict("Nt" => 8, "Δt" => 0.25), 8) ==
+        [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]
+    explicit_times = collect(-4:3) .* 1e-12
+    @test _explore_axis(Dict("ts" => explicit_times, "Δt" => 99.0), 8) ≈
+        collect(-4:3)
 
     manifest_dir = mktempdir()
     manifest_artifact = joinpath(manifest_dir, "opt_result.jld2")

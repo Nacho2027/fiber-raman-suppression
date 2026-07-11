@@ -11,7 +11,7 @@ Implements the generalized multimode nonlinear Schrodinger equation (GMMNLSE):
 
 The computation per ODE step proceeds as:
 1. Transform to lab frame: u(ω) = exp(iDz) · ũ(ω)
-2. FFT to time domain, apply attenuator window to suppress boundary artifacts
+2. FFT to the periodic time-domain grid
 3. **Kerr**: δ_K[t,i,j] = Σ_{kl} γ_{ijkl}·(v_k·v_l + w_k·w_l), then η_K = (1-fR)·δ_K·u
 4. **Raman**: convolve δ_K with h_R(ω) in frequency domain, contract with u in time domain
 5. Sum Kerr + Raman, IFFT back, apply self-steepening (ω/ω₀), transform to interaction picture
@@ -23,7 +23,7 @@ The computation per ODE step proceeds as:
 - `z`: current propagation position [m]
 """
 function disp_mmf!(dũω, ũω, p, z)
-    selfsteep, Dω, γ, hRω, one_m_fR, attenuator, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
+    selfsteep, Dω, γ, hRω, one_m_fR, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
 
     @. exp_D_p = cis(Dω * z)
     @. exp_D_m = cis(-Dω * z)
@@ -31,9 +31,8 @@ function disp_mmf!(dũω, ũω, p, z)
     @. uω = exp_D_p * ũω
 
     fft_plan_M! * uω
-    @. ut = attenuator * uω
-    @. v = real(ut)
-    @. w = imag(ut)
+    @. v = real(uω)
+    @. w = imag(uω)
 
     # Kerr nonlinearity: contract γ tensor with field real/imag parts
     @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t, k] * v[t, l] + w[t, k] * w[t, l])
@@ -60,8 +59,15 @@ function disp_mmf!(dũω, ũω, p, z)
     @. dũω = 1im * exp_D_m * ηt
 end
 
+function _validate_real_gamma_storage(γ)
+    eltype(γ) <: Real || throw(ArgumentError(
+        "gamma tensor must use real-valued storage"))
+    all(isfinite, γ) || throw(ArgumentError("gamma tensor must be finite"))
+    return nothing
+end
+
 """
-    get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M, attenuator) -> Tuple
+    get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M) -> Tuple
 
 Pre-allocate all working arrays and FFTW plans for `disp_mmf!`. Returns a single
 tuple `p` passed to the ODE solver as the parameter argument. Pre-allocation avoids
@@ -77,9 +83,9 @@ ODE solver calls `disp_mmf!` hundreds of times per propagation.
 - `one_m_fR`: (1 - fR), Kerr fraction of the nonlinearity
 - `Nt`: number of temporal grid points
 - `M`: number of spatial modes
-- `attenuator`: super-Gaussian temporal window, shape (Nt, M)
 """
-function get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M, attenuator)
+function get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M)
+    _validate_real_gamma_storage(γ)
     selfsteep = fftshift(ωs / ω0)
     fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
     ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
@@ -88,7 +94,6 @@ function get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M, attenuator)
     exp_D_p = zeros(ComplexF64, Nt, M)
     exp_D_m = zeros(ComplexF64, Nt, M)
     uω = zeros(ComplexF64, Nt, M)
-    ut = zeros(ComplexF64, Nt, M)
     v = zeros(Nt, M)
     w = zeros(Nt, M)
     δKt = zeros(Nt, M, M)
@@ -104,7 +109,7 @@ function get_p_disp_mmf(ωs, ω0, Dω, γ, hRω, one_m_fR, Nt, M, attenuator)
     ηRt = zeros(ComplexF64, Nt, M)
     ηt = zeros(ComplexF64, Nt, M)
 
-    p = (selfsteep, Dω, γ, hRω, one_m_fR, attenuator, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
+    p = (selfsteep, Dω, γ, hRω, one_m_fR, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
     return p
 end
 
@@ -176,8 +181,7 @@ The lab-frame field is recovered by undoing the interaction picture transform:
   u(ω,z) = exp(iD(ω)z) · ũ(ω,z)
 """
 function solve_disp_mmf(uω0, fiber, sim)
-    p_disp_mmf = get_p_disp_mmf(sim["ωs"], sim["ω0"], fiber["Dω"], fiber["γ"], fiber["hRω"], fiber["one_m_fR"], sim["Nt"],
-        sim["M"], sim["attenuator"])
+    p_disp_mmf = get_p_disp_mmf(sim["ωs"], sim["ω0"], fiber["Dω"], fiber["γ"], fiber["hRω"], fiber["one_m_fR"], sim["Nt"], sim["M"])
     prob_disp_mmf = ODEProblem(disp_mmf!, uω0, (0, fiber["L"]), p_disp_mmf)
     reltol = Float64(get(fiber, "reltol", 1e-8))
     abstol = Float64(get(fiber, "abstol", 1e-6))

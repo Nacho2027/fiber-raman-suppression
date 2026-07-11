@@ -73,7 +73,7 @@ function add_boundary_phase_penalty!(grad::AbstractMatrix,
     @assert size(grad) == size(uω_shaped) "grad shape $(size(grad)) must match shaped field $(size(uω_shaped))"
     Nt = size(uω_shaped, 1)
     n_edge = max(1, Nt ÷ 20)
-    ut0 = ifft(uω_shaped, 1)
+    ut0 = fft(uω_shaped, 1)
     mask_edge = zeros(Float64, size(uω_shaped))
     mask_edge[1:n_edge, :] .= 1.0
     mask_edge[end - n_edge + 1:end, :] .= 1.0
@@ -83,8 +83,8 @@ function add_boundary_phase_penalty!(grad::AbstractMatrix,
     edge_frac = E_edges / E_total_input
     edge_frac > edge_fraction_floor || return 0.0
 
-    coeff = 2 * λ_boundary / (Nt * E_total_input)
-    grad_boundary_ω = coeff .* imag.(conj.(uω_shaped) .* fft(mask_edge .* ut0, 1))
+    coeff = 2 * λ_boundary * Nt / E_total_input
+    grad_boundary_ω = coeff .* imag.(conj.(uω_shaped) .* ifft(mask_edge .* ut0, 1))
     grad .+= grad_boundary_ω
     return λ_boundary * edge_frac
 end
@@ -103,7 +103,7 @@ function add_shared_boundary_phase_penalty!(grad::AbstractVector,
     Nt = size(uω_shaped, 1)
     @assert length(grad) == Nt "grad length $(length(grad)) must equal Nt=$Nt"
     n_edge = max(1, Nt ÷ 20)
-    ut0 = ifft(uω_shaped, 1)
+    ut0 = fft(uω_shaped, 1)
     mask_edge = zeros(Float64, Nt)
     mask_edge[1:n_edge] .= 1.0
     mask_edge[end - n_edge + 1:end] .= 1.0
@@ -113,9 +113,9 @@ function add_shared_boundary_phase_penalty!(grad::AbstractVector,
     edge_frac = E_edges / E_total_input
     edge_frac > edge_fraction_floor || return 0.0
 
-    coeff = 2 * λ_boundary / (Nt * E_total_input)
-    fft_back = fft(ut0 .* mask_edge, 1)
-    grad .+= coeff .* vec(sum(imag.(conj.(uω_shaped) .* fft_back), dims = 2))
+    coeff = 2 * λ_boundary * Nt / E_total_input
+    temporal_back = ifft(ut0 .* mask_edge, 1)
+    grad .+= coeff .* vec(sum(imag.(conj.(uω_shaped) .* temporal_back), dims = 2))
     return λ_boundary * edge_frac
 end
 

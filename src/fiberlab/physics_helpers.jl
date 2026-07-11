@@ -170,16 +170,15 @@ function _field_temporal_width_cost(uωf, sim)
     nt = Int(sim["Nt"])
     size(uωf, 1) == nt || throw(ArgumentError(
         "field rows $(size(uωf, 1)) do not match Nt=$nt"))
-    ut = ifft(uωf, 1)
-    centered = fftshift(ut, 1)
-    total = sum(abs2, centered)
+    temporal = fft(uωf, 1)
+    total = sum(abs2, temporal)
     total > 0 || throw(ArgumentError("field must have nonzero temporal energy"))
     half_window = max(sim["Δt"] * nt / 2, eps(Float64))
     t = ((collect(0:nt-1) .- floor(Int, nt / 2)) .* sim["Δt"]) ./ half_window
     weights = reshape(t .^ 2, nt, 1)
-    cost = sum(weights .* abs2.(centered)) / total
-    terminal_t = centered .* (weights .- cost) ./ total
-    terminal = fft(ifftshift(terminal_t, 1), 1) ./ nt
+    cost = sum(weights .* abs2.(temporal)) / total
+    terminal_t = temporal .* (weights .- cost) ./ total
+    terminal = nt .* ifft(terminal_t, 1)
     return Float64(cost), terminal
 end
 

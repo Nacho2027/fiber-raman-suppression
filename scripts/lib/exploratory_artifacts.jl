@@ -129,8 +129,12 @@ function _explore_energy_window(
 end
 
 function _explore_axis(sim, n::Int)
+    ts = _explore_sim_get(sim, "ts", nothing)
+    if ts isa AbstractVector && length(ts) == n
+        return Float64.(ts) .* 1e12
+    end
     Δt = Float64(_explore_sim_get(sim, "Δt", 1.0))
-    centered = collect(0:(n - 1)) .- floor((n - 1) / 2)
+    centered = collect(0:(n - 1)) .- n ÷ 2
     return centered .* Δt
 end
 
@@ -154,7 +158,7 @@ function _explore_spectral_db(field)
 end
 
 function _explore_temporal_power(field)
-    return abs2.(ifft(field[:, 1]))
+    return abs2.(fft(field[:, 1]))
 end
 
 function _explore_plot_contract(spec)

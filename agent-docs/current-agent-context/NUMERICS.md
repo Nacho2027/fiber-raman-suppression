@@ -8,7 +8,7 @@ Source artifacts were archived outside the active repo during the repo diet.
 
 The following were surfaced by the independent numerics audit and then fixed immediately after:
 
-- boundary checking now measures pre-attenuator edge fraction rather than only post-absorber residue
+- boundary checking now measures raw edge energy on the periodic FFT time grid
 - `cost_and_gradient(...; log_cost=true)` now applies the optional dB transform after the full regularized scalar objective is assembled, so the returned gradient matches the scalar objective seen by the optimizer
 - `chirp_sensitivity` now returns linear `J`, so plotting converts to dB exactly once
 

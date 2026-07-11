@@ -45,7 +45,7 @@ ensure_deterministic_environment()
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup, cost, and utility functions are in common.jl:
 #   setup_amplitude_problem, spectral_band_cost, recommended_time_window,
-#   check_boundary_conditions
+#   check_raw_temporal_edges
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -683,7 +683,7 @@ function print_solution_report(A_opt, uω0, fiber, sim, band_mask, cost_breakdow
     fiber_check["zsave"] = [fiber["L"]]
     sol = FiberLab.solve_disp_mmf(uω0_shaped, fiber_check, sim)
     utf = sol["ut_z"][end, :, :]
-    bc_ok, edge_frac = check_boundary_conditions(utf, sim)
+    bc_ok, edge_frac = check_raw_temporal_edges(utf)
     status = bc_ok ? "OK" : "WARNING"
 
     # Peak power ratio
@@ -814,7 +814,7 @@ function run_amplitude_optimization(;
     savefig("$(save_prefix)_boundary.png", dpi=300)
     @info "Saved boundary diagnostic to $(save_prefix)_boundary.png"
 
-    bc_ok, edge_frac = check_boundary_conditions(sol_bc["ut_z"][end, :, :], sim)
+    bc_ok, edge_frac = check_raw_temporal_edges(sol_bc["ut_z"][end, :, :])
     if !bc_ok
         @warn @sprintf("Boundary corruption detected (edge energy = %.2e). Consider increasing time_window.", edge_frac)
     end

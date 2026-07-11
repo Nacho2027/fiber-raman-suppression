@@ -21,7 +21,7 @@ help:
 	@echo ""
 	@echo "  make install     Install Julia deps"
 	@echo "  make docs-check  Verify agent/human documentation maps and links"
-	@echo "  make test        Fast Julia regression tier (simulation-free)"
+	@echo "  make test        Local core regressions with small numerical solves"
 	@echo "  make acceptance  Research-engine acceptance harness"
 	@echo "  make lab-ready   Local lab-readiness gate for supported workflows"
 	@echo "  make doctor      Verify tools, docs, and fast Julia tests"
@@ -55,7 +55,7 @@ install-julia:
 	$(JL) -e 'using Pkg; Pkg.instantiate()'
 
 test:
-	TEST_TIER=fast $(JL) test/runtests.jl
+	TEST_TIER=fast $(JL) -t auto test/runtests.jl
 
 test-slow:
 	TEST_TIER=slow $(JL) -t auto test/runtests.jl

@@ -30,3 +30,10 @@ into backend-specific data structures only where necessary. When a researcher
 already has explicit propagation arrays for a custom single-mode or multimode
 setup, `fiber_field_problem` wraps those arrays without changing the optimizer
 or adjoint API.
+
+Forward propagation accepts any finite real nonlinear-coupling tensor with the
+declared shape. The inherited multimode adjoint is narrower: `fiber_model`
+requires `gamma[i,j,k,l]` to be invariant under index permutations, as physical
+real-mode overlap tensors are. FiberLab rejects a nonsymmetric tensor for
+gradient execution instead of returning an unsupported adjoint; the same
+problem remains usable through forward-only `propagate`.

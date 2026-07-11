@@ -401,7 +401,7 @@ output. Replace this body with your physics metric while keeping the same
 using FFTW
 
 function $cost_name(context)
-    ut = ifft(context.uωf, 1)
+    ut = fft(context.uωf, 1)
     power = vec(sum(abs2.(ut), dims = 2))
     total = sum(power)
     total > 0 || throw(ArgumentError("$kind_name requires nonzero output energy"))

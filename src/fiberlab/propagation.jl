@@ -161,6 +161,7 @@ function summarize(result::PropagationResult)
         length_m = Float64(problem.fiber["L"]),
         wavelength_m = Float64(problem.sim["λ0"]),
         modes = mode_count(problem),
+        raman_response = _raman_response_metadata(problem.fiber),
         construction_sha256 = metadata.construction_sha256,
         numerical_sha256 = _numerical_problem_signature(problem),
         resolved_sha256 = result.resolved_sha256,

@@ -59,8 +59,8 @@ const SW_RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
     compute_photon_drift(result, uω0, fiber, sim) -> Float64
 
 Re-propagate the optimized input field through the fiber and compute the
-fractional change in photon number [percent]. Values >5% indicate the time
-window is too small (energy absorbed by the attenuator at the window edge).
+fractional change in photon number [percent]. Large values indicate a numerical
+or containment problem and require inspection.
 
 # Arguments
 - `result`: Optim result from run_optimization

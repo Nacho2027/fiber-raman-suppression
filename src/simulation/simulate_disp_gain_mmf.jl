@@ -20,7 +20,7 @@ which dispatches on the gain model type (constant or YDFA rate equations).
 """
 function disp_gain_smf!(dũ, ũ, p, z)
 
-    selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
+    selfsteep, Dω, γ, hRω, one_m_fR, pGain, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt = p
 
     Pp = ũ[1]  # Pump power (scalar, co-propagating)
     ũω = ũ[2:end]  # Signal field in interaction picture
@@ -34,9 +34,8 @@ function disp_gain_smf!(dũ, ũ, p, z)
     gω, gP = compute_gain(uω, pGain, Pp)
 
     fft_plan_M! * uω
-    @. ut = attenuator * uω
-    @. v = real(ut)
-    @. w = imag(ut)
+    @. v = real(uω)
+    @. w = imag(uω)
 
     # Kerr nonlinearity
     @tullio δKt[t, i, j] = γ[i, j, k, l] * (v[t, k] * v[t, l] + w[t, k] * w[t, l])
@@ -104,25 +103,24 @@ end
 
 
 """
-    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator) -> Tuple
+    get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M) -> Tuple
 
 Pre-allocate parameters for the pump+signal `disp_gain_smf!` ODE. Extends the
-standard `get_p_disp_mmf` tuple with gain model `pGain`, gain work array `gω`,
-and pump gain scalar `gP`.
+standard `get_p_disp_mmf` tuple with gain model `pGain`.
 
 # Arguments
-- `ωs`: angular frequency grid [rad/s], length Nt
-- `ω0`: center angular frequency [rad/s]
+- `ωs`: angular frequency grid [rad/ps], length Nt
+- `ω0`: center angular frequency [rad/ps]
 - `Dω`: dispersion operator, shape (Nt, M)
 - `γ`: nonlinearity tensor, shape (M, M, M, M) [W⁻¹ m⁻¹]
-- `hRω`: Raman response in frequency domain, shape (Nt, M, M)
+- `hRω`: Raman response in frequency domain, length Nt
 - `one_m_fR`: (1 - fR), fractional Kerr weight
 - `pGain`: gain model -- a `Number` for constant gain or `YDFAParams` for rate-equation gain
 - `Nt`: number of temporal grid points
 - `M`: number of spatial modes
-- `attenuator`: time-domain window to suppress boundary artifacts, shape (Nt, M)
 """
-function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, attenuator)
+function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M)
+    _validate_real_gamma_storage(γ)
     selfsteep = fftshift(ωs / ω0)
     fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
     ifft_plan_M! = plan_ifft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
@@ -131,7 +129,6 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, at
     exp_D_p = zeros(ComplexF64, Nt, M)
     exp_D_m = zeros(ComplexF64, Nt, M)
     uω = zeros(ComplexF64, Nt, M)
-    ut = zeros(ComplexF64, Nt, M)
     v = zeros(Nt, M)
     w = zeros(Nt, M)
     δKt = zeros(Nt, M, M)
@@ -146,10 +143,7 @@ function get_p_disp_gain_smf(ωs, ω0, Dω, γ, hRω, one_m_fR, pGain, Nt, M, at
     βR = zeros(Nt, M)
     ηRt = zeros(ComplexF64, Nt, M)
     ηt = zeros(ComplexF64, Nt, M)
-    gω = zeros(Nt, M)
-    gP = 0.0
-
-    p = (selfsteep, Dω, γ, hRω, one_m_fR, attenuator, pGain, gω, gP, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, ut, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
+    p = (selfsteep, Dω, γ, hRω, one_m_fR, pGain, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM!, exp_D_p, exp_D_m, uω, v, w, δKt, δKt_cplx, αK, βK, ηKt, hRω_δRω, hR_conv_δR, δRt, αR, βR, ηRt, ηt)
     return p
 end
 
@@ -216,7 +210,7 @@ function solve_disp_gain_smf(uω0, fiber, sim; pump_power=0.0)
     pGain = haskey(fiber, "gain_parameters") ? fiber["gain_parameters"] : 0.0
 
     p_disp_gain_smf = get_p_disp_gain_smf(sim["ωs"], sim["ω0"], fiber["Dω"], fiber["γ"], fiber["hRω"], fiber["one_m_fR"],
-        pGain, sim["Nt"], sim["M"], sim["attenuator"])
+        pGain, sim["Nt"], sim["M"])
 
     Pp0 = pump_power
     u0 = vcat(Pp0, uω0)

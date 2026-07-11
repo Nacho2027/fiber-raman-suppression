@@ -96,8 +96,8 @@ function get_ydfa_cross_sections(fs; data_dir=@__DIR__,
     λ_em = emission_values["wavelength"] .* 1e-9
     σ_em = emission_values["intensity"] .* scale
 
-    itp_abs = linear_interpolation(λ_abs, σ_abs, extrapolation_bc=Flat())
-    itp_em = linear_interpolation(λ_em, σ_em, extrapolation_bc=Flat())
+    itp_abs = linear_interpolation(λ_abs, σ_abs; extrapolation_bc=Interpolations.Flat())
+    itp_em = linear_interpolation(λ_em, σ_em; extrapolation_bc=Interpolations.Flat())
 
     λ_target = c0 ./ (fs .* 1e12)  # since THz
 

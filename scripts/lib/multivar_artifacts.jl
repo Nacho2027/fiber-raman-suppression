@@ -30,7 +30,7 @@ function _multivar_shaped_input(result_bundle)
 end
 
 function _time_power(field)
-    return abs2.(ifft(field, 1))
+    return abs2.(fft(field, 1))
 end
 
 function _peak_power(field)

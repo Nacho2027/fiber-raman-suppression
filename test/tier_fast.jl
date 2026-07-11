@@ -1,8 +1,8 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# test/tier_fast.jl — Phase 16 fast tier (≤30 s, simulation-free)
+# test/tier_fast.jl — local core regression tier
 # ═══════════════════════════════════════════════════════════════════════════════
-# Pre-commit gate. No forward/adjoint solver calls. Runs on claude-code-host
-# or any dev laptop without needing the burst VM.
+# Pre-commit gate with small forward, adjoint, and gain solves. It runs on a
+# development laptop without remote compute, but may take a few minutes.
 #
 # What this tier catches:
 #   - Key Bug #2 (SPM time-window formula) via recommended_time_window().
@@ -31,6 +31,7 @@ include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
 include(joinpath(@__DIR__, "core", "test_fiberlab_api.jl"))
+include(joinpath(@__DIR__, "core", "test_numerical_kernels.jl"))
 include(joinpath(@__DIR__, "core", "test_propagation.jl"))
 include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
@@ -45,7 +46,7 @@ include(joinpath(@__DIR__, "core", "test_regime_promotion_status.jl"))
 include(joinpath(@__DIR__, "core", "test_slm_replay.jl"))
 include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
 
-@testset "Phase 16 — fast tier" begin
+@testset "Core regression tier" begin
 
     @testset "SPM time window formula (Key Bug #2)" begin
         # Regression for STATE.md "Key Bugs Fixed" #2. Fixed formula:
@@ -273,15 +274,33 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
 
         Nt = size(uω, 1)
         n_edge = max(1, Nt ÷ 20)
-        ut0 = ifft(uω, 1)
+        ut0 = fft(uω, 1)
         mask_edge = zeros(Float64, size(uω))
         mask_edge[1:n_edge, :] .= 1.0
         mask_edge[end-n_edge+1:end, :] .= 1.0
         E_total_input = max(sum(abs2, ut0), eps())
         edge_frac = sum(abs2.(ut0) .* mask_edge) / E_total_input
-        grad_b_ref = (2 * 0.7 / (Nt * E_total_input)) .* imag.(conj.(uω) .* fft(mask_edge .* ut0, 1))
+        grad_b_ref = (2 * 0.7 * Nt / E_total_input) .* imag.(conj.(uω) .* ifft(mask_edge .* ut0, 1))
         @test J_b ≈ 0.7 * edge_frac
         @test grad_b ≈ grad_b_ref
+
+        temporal_interior = zeros(ComplexF64, Nt, 1)
+        temporal_interior[Nt ÷ 2 + 1] = 1
+        interior_spectrum = ifft(temporal_interior, 1)
+        @test add_boundary_phase_penalty!(
+            zeros(Float64, Nt, 1), interior_spectrum, 0.7;
+            edge_fraction_floor = 0.0,
+        ) == 0
+
+        direction = reshape(collect(range(-0.4, 0.6; length = length(uω))), size(uω))
+        step = 1e-6
+        plus_field = uω .* cis.(step .* direction)
+        minus_field = uω .* cis.(-step .* direction)
+        plus_cost = add_boundary_phase_penalty!(
+            zeros(size(grad_b)), plus_field, 0.7; edge_fraction_floor = 0.0)
+        minus_cost = add_boundary_phase_penalty!(
+            zeros(size(grad_b)), minus_field, 0.7; edge_fraction_floor = 0.0)
+        @test (plus_cost - minus_cost) / (2step) ≈ sum(grad_b .* direction) rtol = 1e-6
 
         grad_log = copy(grad_b_ref)
         J_log = apply_log_surface!(grad_log, J_b)

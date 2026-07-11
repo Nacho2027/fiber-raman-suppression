@@ -417,7 +417,7 @@ function run_reduced_phase_optimization(;
     ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
     uω0_opt = @. uω0 * cis(φ_after)
-    ut0_opt = ifft(uω0_opt, 1)
+    ut0_opt = fft(uω0_opt, 1)
     bc_input_ok, bc_input_frac = check_raw_temporal_edges(ut0_opt;
         threshold=TRUST_THRESHOLDS.edge_frac_pass)
 

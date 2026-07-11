@@ -47,6 +47,8 @@ end
 
     summary = summarize(result)
     @test summary.metadata_authority == :authoritative
+    @test summary.raman_response.model == "blow_wood_single_damped_oscillator_v1"
+    @test summary.raman_response.fraction == 0.18
     @test summary.requested_fiber == fiber
     @test summary.requested_pulse == pulse
     @test summary.requested_grid == grid
@@ -147,6 +149,7 @@ end
         @test norm(result.spectra[:, :, index] - expected) / norm(expected) < 1e-12
     end
     @test summarize(result).metadata_authority == :resolved_numerical
+    @test ismissing(summarize(result).raman_response)
     @test ismissing(summarize(result).requested_fiber)
     @test ismissing(summarize(result).requested_pulse)
     evidence = metrics(result)
@@ -171,4 +174,30 @@ end
     invalid_tolerance = deepcopy(problem)
     invalid_tolerance.fiber["reltol"] = 0.0
     @test_throws ArgumentError propagate(invalid_tolerance)
+
+    nonsymmetric_fiber = deepcopy(fiber)
+    nonsymmetric_fiber["γ"][1, 1, 1, 2] = 0.1
+    nonsymmetric = fiber_field_problem(
+        launch, nonsymmetric_fiber, sim; preset = :nonsymmetric_forward)
+    @test propagate(nonsymmetric) isa PropagationResult
+    @test_throws ArgumentError fiber_model(nonsymmetric)
+    forward_solution = FiberLab.solve_disp_mmf(
+        nonsymmetric.uω0, nonsymmetric.fiber, nonsymmetric.sim)["ode_sol"]
+    @test_throws ArgumentError FiberLab.solve_adjoint_disp_mmf(
+        ones(ComplexF64, nt, modes),
+        forward_solution,
+        nonsymmetric.fiber,
+        nonsymmetric.sim,
+    )
+
+    complex_fiber = deepcopy(fiber)
+    complex_fiber["γ"] = complex.(complex_fiber["γ"])
+    @test_throws ArgumentError fiber_field_problem(
+        launch, complex_fiber, sim; preset = :complex_gamma)
+    @test_throws ArgumentError FiberLab.get_p_disp_mmf(
+        sim["ωs"], sim["ω0"], fiber["Dω"], complex_fiber["γ"],
+        fiber["hRω"], fiber["one_m_fR"], nt, modes)
+    @test_throws ArgumentError FiberLab.get_p_adjoint_disp_mmf(
+        forward_solution, fftshift(sim["ωs"] / sim["ω0"]), fiber["Dω"],
+        fiber["hRω"], complex_fiber["γ"], fiber["one_m_fR"], nt, modes)
 end

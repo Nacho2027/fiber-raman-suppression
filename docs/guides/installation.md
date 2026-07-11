@@ -22,7 +22,7 @@ This check uses direct behavior objects:
 using FiberLab
 
 fiber = Fiber(preset = :SMF28_beta2_only, length_m = 1e-4, power_w = 1e-5, beta_order = 2)
-grid = Grid(nt = 16, time_window_ps = 5.0, policy = :exact)
+grid = Grid(nt = 512, time_window_ps = 5.0, policy = :exact)
 problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -0.25)
 
 control = FullGridPhase(problem)

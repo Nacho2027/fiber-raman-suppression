@@ -29,6 +29,9 @@ to store only input and output. The result contains stored samples, not a live
 solver object, so plots and analysis do not rerun the propagation.
 Containment maxima cover the stored positions only; the endpoint-only default
 does not certify unsaved intermediate states.
+The propagation grid is periodic and has no hidden edge absorber. Increase the
+time window until the raw temporal-edge check passes at every position that
+matters to the experiment.
 
 Package-built problems retain authoritative `Fiber`/`Pulse` metadata. Explicit
 array problems record only resolved numerical identity and grid facts. A
@@ -43,7 +46,7 @@ low-level capability until it has equivalent evidence and tests.
 using FiberLab
 
 fiber = Fiber(preset = :SMF28_beta2_only, length_m = 1e-4, power_w = 1e-5, beta_order = 2)
-grid = Grid(nt = 16, time_window_ps = 5.0, policy = :exact)
+grid = Grid(nt = 512, time_window_ps = 5.0, policy = :exact)
 
 problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -0.25)
 summarize(problem)

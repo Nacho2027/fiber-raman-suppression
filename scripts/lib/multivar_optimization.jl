@@ -456,7 +456,7 @@ function cost_and_gradient_multivar(
     # this edge fraction is invariant to E and contributes no E-gradient.
     if cfg.λ_boundary > 0
         J_b = 0.0
-        ut0 = ifft(u_shaped, 1)
+        ut0 = fft(u_shaped, 1)
         n_edge = max(1, Nt ÷ 20)
         mask_edge = zeros(Float64, Nt, M)
         mask_edge[1:n_edge, :] .= 1.0
@@ -467,11 +467,11 @@ function cost_and_gradient_multivar(
 
         if edge_frac > 1e-8
             J_b = cfg.λ_boundary * edge_frac
-            coeff = 2.0 * cfg.λ_boundary / (Nt * E_t_total)
-            fft_edge = fft(mask_edge .* ut0, 1)
+            coeff = 2.0 * cfg.λ_boundary * Nt / E_t_total
+            temporal_back = ifft(mask_edge .* ut0, 1)
 
             if haskey(off.ranges, :phase)
-                g_boundary_phase = coeff .* imag.(conj.(u_shaped) .* fft_edge)
+                g_boundary_phase = coeff .* imag.(conj.(u_shaped) .* temporal_back)
                 g[off.ranges[:phase]] .+= vec(g_boundary_phase)
             end
 
@@ -480,13 +480,13 @@ function cost_and_gradient_multivar(
                 # Since u_shaped = alpha * A * cis(phi) * u0 and A > 0:
                 #   du/dA = u_shaped / A.
                 g_boundary_A = coeff .* (
-                    real.(conj.(fft_edge) .* u_shaped ./ A) .-
+                    real.(conj.(temporal_back) .* u_shaped ./ A) .-
                     edge_frac .* abs2.(u_shaped) ./ A
                 )
                 _accumulate_A_space_gradient!(g, off, g_boundary_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
             elseif haskey(off.ranges, :gain_tilt)
                 g_boundary_A = coeff .* (
-                    real.(conj.(fft_edge) .* u_shaped ./ A) .-
+                    real.(conj.(temporal_back) .* u_shaped ./ A) .-
                     edge_frac .* abs2.(u_shaped) ./ A
                 )
                 _accumulate_A_space_gradient!(g, off, g_boundary_A, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)

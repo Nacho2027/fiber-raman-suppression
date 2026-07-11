@@ -55,7 +55,7 @@ function _mmf_mode_beta2_abs(fiber::Dict, sim::Dict)
 end
 
 function _mmf_peak_power(uω0::AbstractMatrix)
-    ut0 = ifft(uω0, 1)
+    ut0 = fft(uω0, 1)
     return maximum(sum(abs2.(ut0), dims = 2))
 end
 
@@ -119,7 +119,7 @@ step-index preset.
 Returns a NamedTuple with fields:
 - `uω0`            : initial field in frequency domain, shape (Nt, M) [√W]
 - `fiber`          : fiber parameter dict (Dω, γ, hRω, L, one_m_fR, zsave, ϕ, x, ...)
-- `sim`            : simulation parameter dict (ω0, Δt, attenuator, ...)
+- `sim`            : simulation parameter dict (ω0, Δt, time window, ...)
 - `band_mask`      : Bool vector length Nt, true inside the Raman-shifted band
 - `Δf`             : fftshift-ordered frequency grid [THz]
 - `raman_threshold`: cutoff frequency [THz] below which band_mask is true

@@ -101,7 +101,7 @@ function build_numerical_trust_report(;
         trailing_fields = (
             lambda_gdd = Float64(λ_gdd),
             lambda_boundary = Float64(λ_boundary),
-            boundary_penalty_measurement = "pre-attenuator temporal edge fraction of shaped input pulse",
+            boundary_penalty_measurement = "raw temporal edge fraction of shaped input pulse",
             hvp_safe_for_same_surface = true,
         ),
     ) : objective_spec

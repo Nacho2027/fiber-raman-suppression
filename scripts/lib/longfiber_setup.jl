@@ -34,7 +34,7 @@ using Logging
 using LinearAlgebra
 using FiberLab
 
-# scripts/common.jl gives us `FIBER_PRESETS` and `check_boundary_conditions`
+# scripts/common.jl provides shared presets and raw temporal-edge checks.
 include(joinpath(@__DIR__, "common.jl"))
 
 if !(@isdefined _LONGFIBER_SETUP_JL_LOADED)

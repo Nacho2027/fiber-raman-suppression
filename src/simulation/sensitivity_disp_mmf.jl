@@ -31,7 +31,7 @@ solver's interpolant order (4th-order for Tsit5).
 """
 function adjoint_disp_mmf!(dλ̃ω, λ̃ω, p, z)
     p_params, p_fft, p_prealloc, p_calc_δs, p_γ_a_b = p
-    ũω, τω, Dω, hRω, hRωc, γ, one_m_fR, fR, Nt, σ1, σ2 = p_params
+    ũω, τω, Dω, hRω, hRωc, γ, one_m_fR, Nt, σ1 = p_params
     fft_plan_M, ifft_plan_M, fft_plan_M!, ifft_plan_M!, fft_plan_MM!, ifft_plan_MM! = p_fft
     exp_D_p, exp_D_m, λω, λt, λωc, ũω_z, uω, ut, utc, δK1t, δK2t, δK1t_cplx, hRω_δRω, hR_conv_δR, δR1t, δKR1t, sum_res, γ_λt_utc, γ_λt_ut_ut, λ_∂fKR1c∂uc, λc_∂fK∂uc, λ_∂fR2c∂uc, λc_∂fR∂uc = p_prealloc
 
@@ -98,6 +98,17 @@ function calc_λ_∂fR2c∂uc!(dλω, λt, utc, ifft_uω, γ, hωc, σ, fft_plan
     @tullio γ_λt_ut_ut[t, i] = γ_λt_utc[t, i, j] * ifft_uω[t, j]
     fft_plan_M! * γ_λt_ut_ut
     @. dλω = 1im / Nt * exp_D_m * γ_λt_ut_ut
+end
+
+function _adjoint_gamma_symmetric(γ)
+    tolerance = 1e-12 * max(1.0, maximum(abs, γ))
+    return all(CartesianIndices(γ)) do index
+        i, j, k, l = Tuple(index)
+        value = γ[index]
+        isapprox(value, γ[j, i, k, l]; rtol = 1e-12, atol = tolerance) &&
+            isapprox(value, γ[i, k, j, l]; rtol = 1e-12, atol = tolerance) &&
+            isapprox(value, γ[i, j, l, k]; rtol = 1e-12, atol = tolerance)
+    end
 end
 
 """
@@ -204,7 +215,7 @@ function calc_δs!(δ_1, δ_2, u_z, p)
 end
 
 """
-    get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, fR, Nt, M) -> Tuple
+    get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, Nt, M) -> Tuple
 
 Pre-allocate all working arrays and FFT plans for `adjoint_disp_mmf!`. Returns a
 nested tuple structure: (p_params, p_fft, p_prealloc, p_calc_δs, p_γ_a_b).
@@ -216,16 +227,19 @@ nested tuple structure: (p_params, p_fft, p_prealloc, p_calc_δs, p_γ_a_b).
 - `hRω`: Raman response in frequency domain
 - `γ`: nonlinear coefficient tensor, shape (M, M, M, M)
 - `one_m_fR`: (1 - fR)
-- `fR`: fractional Raman contribution
 - `Nt`: number of grid points
 - `M`: number of spatial modes
 
-# Note on σ1, σ2 in p_params
-These are alternating sign vectors exp(iπ·[0,1,0,1,...]) and exp(iπ·[1,0,1,0,...])
-used for frequency-domain shift operations (equivalent to fftshift for even-length arrays).
+# Note on σ1 in p_params
+This alternating sign vector exp(iπ·[0,1,0,1,...]) implements the required
+even-grid frequency shift.
 """
-function get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, fR, Nt, M)
-    p_params = (ũω, τω, Dω, hRω, conj.(hRω), γ, one_m_fR, fR, Nt, exp.(1im * π * repeat([0, 1], Int(Nt / 2))), exp.(1im * π * repeat([1, 0], Int(Nt / 2))))
+function get_p_adjoint_disp_mmf(ũω, τω, Dω, hRω, γ, one_m_fR, Nt, M)
+    _validate_real_gamma_storage(γ)
+    _adjoint_gamma_symmetric(γ) || throw(ArgumentError(
+        "fiber adjoint requires a fully permutation-symmetric gamma tensor"))
+    p_params = (ũω, τω, Dω, hRω, conj.(hRω), γ, one_m_fR, Nt,
+        exp.(1im * π * repeat([0, 1], Nt ÷ 2)))
     fft_plan_M = plan_fft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
     ifft_plan_M = plan_ifft(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
     fft_plan_M! = plan_fft!(zeros(ComplexF64, Nt, M), 1; flags=FFTW.ESTIMATE)
@@ -296,7 +310,7 @@ function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     λ̃ωL = exp.(-1im * fiber["Dω"] * fiber["L"]) .* λωL
 
     p_adjoint_disp_mmf = get_p_adjoint_disp_mmf(ũω, fftshift(sim["ωs"] / sim["ω0"]), fiber["Dω"], fiber["hRω"], fiber["γ"],
-        fiber["one_m_fR"], 1 - fiber["one_m_fR"], sim["Nt"], sim["M"])
+        fiber["one_m_fR"], sim["Nt"], sim["M"])
     prob_adjoint_disp_mmf = ODEProblem(adjoint_disp_mmf!, λ̃ωL, (fiber["L"], 0), p_adjoint_disp_mmf)
     reltol = Float64(get(fiber, "reltol", 1e-8))
     abstol = Float64(get(fiber, "abstol", 1e-6))
