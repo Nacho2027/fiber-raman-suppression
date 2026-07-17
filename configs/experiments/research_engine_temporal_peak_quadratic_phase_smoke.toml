@@ -42,7 +42,6 @@ scalar_x_tol = 1.0e-2
 bundle = "experimental_multivar"
 save_payload = true
 save_sidecar = true
-update_manifest = false
 write_trust_report = false
 write_standard_images = true
 export_phase_handoff = false
@@ -50,9 +49,6 @@ export_phase_handoff = false
 [verification]
 mode = "standard"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

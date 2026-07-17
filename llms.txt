@@ -22,8 +22,8 @@ Compact source map for agents and LLM tools.
 - `test/`: supported regression tests.
 
 Python is not a supported API surface.
-Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`, and
-`.pytest_cache/` are not source structure.
+Ignored local folders such as `.venv/`, `.claude/`, and `.pytest_cache/` are
+not source structure.
 
 ## Core Docs
 
@@ -45,11 +45,6 @@ Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`, and
 
 ## Archive Boundary
 
-Raw results, old notebooks, historical planning, bulky artifacts, and old agent
-topic folders were moved out of the active repo on 2026-05-04:
-
-```text
-/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/
-```
-
-Do not recursively inspect `results/` or archived material by default.
+Raw results, historical planning, and bulky artifacts live outside the active
+tree. Do not recursively inspect `results/` or external vault material by
+default.

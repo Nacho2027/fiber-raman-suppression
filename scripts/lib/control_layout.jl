@@ -19,7 +19,13 @@ function _control_mode_count_hint(spec)
     return "1"
 end
 
-function _control_shape_hint(spec, variable::Symbol)
+function _control_nt_hint(grid_resolution)
+    return ismissing(grid_resolution.resolved) ? missing : grid_resolution.resolved.nt
+end
+
+_control_nt_label(nt) = ismissing(nt) ? "resolved_Nt" : string(nt)
+
+function _control_shape_hint(spec, variable::Symbol, nt)
     contract = variable_contract(variable, spec.problem.regime)
     if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase ||
        contract.backend == :scalar_phase_extension
@@ -29,15 +35,13 @@ function _control_shape_hint(spec, variable::Symbol)
         return string("vector[", length(orders), "]")
     elseif contract.backend in (:vector_phase_extension, :vector_control_extension)
         return string("vector[", get(contract, :dimension, "unknown"), "]")
-    elseif variable == :mode_weights || variable == :mode_coeffs
-        return "mode_count"
     elseif contract.backend == :shared_spectral_phase
-        return string(spec.problem.Nt, " shared across modes")
+        return string(_control_nt_label(nt), " shared across modes")
     end
-    return string(spec.problem.Nt, " x ", _control_mode_count_hint(spec))
+    return string(_control_nt_label(nt), " x ", _control_mode_count_hint(spec))
 end
 
-function _control_length_hint(spec, variable::Symbol)
+function _control_length_hint(spec, variable::Symbol, nt)
     contract = variable_contract(variable, spec.problem.regime)
     if variable == :energy || variable == :gain_tilt || variable == :quadratic_phase ||
        contract.backend == :scalar_phase_extension
@@ -47,16 +51,15 @@ function _control_length_hint(spec, variable::Symbol)
         return string(length(orders))
     elseif contract.backend in (:vector_phase_extension, :vector_control_extension)
         return string(get(contract, :dimension, "unknown"))
-    elseif variable == :mode_weights || variable == :mode_coeffs
-        return "mode_count"
     elseif contract.backend == :shared_spectral_phase
-        return string(spec.problem.Nt)
+        return _control_nt_label(nt)
     end
     mode_count = _control_mode_count_hint(spec)
-    return mode_count == "1" ? string(spec.problem.Nt) : string(spec.problem.Nt, " * ", mode_count)
+    nt_label = _control_nt_label(nt)
+    return mode_count == "1" ? nt_label : string(nt_label, " * ", mode_count)
 end
 
-function control_block_plan(spec, variable::Symbol)
+function control_block_plan(spec, variable::Symbol, nt)
     contract = variable_contract(variable, spec.problem.regime)
     return (
         name = variable,
@@ -67,19 +70,22 @@ function control_block_plan(spec, variable::Symbol)
         parameterization = spec.controls.parameterization,
         supported_parameterizations = contract.parameterizations,
         optimizer_representation = contract.optimizer_representation,
-        shape = _control_shape_hint(spec, variable),
-        length = _control_length_hint(spec, variable),
+        shape = _control_shape_hint(spec, variable, nt),
+        length = _control_length_hint(spec, variable, nt),
         artifact_hooks = contract.artifact_hooks,
         artifact_semantics = contract.artifact_semantics,
     )
 end
 
-function control_layout_plan(spec)
-    blocks = Tuple(control_block_plan(spec, variable) for variable in spec.controls.variables)
-    total_length = if any(block -> occursin("mode_count", block.length), blocks)
+function control_layout_plan(spec; grid_resolution=resolve_experiment_grid(spec))
+    nt = _control_nt_hint(grid_resolution)
+    blocks = Tuple(control_block_plan(spec, variable, nt)
+                   for variable in spec.controls.variables)
+    numeric_lengths = Tuple(tryparse(Int, block.length) for block in blocks)
+    total_length = if any(isnothing, numeric_lengths)
         join((string(block.name, "=", block.length) for block in blocks), "; ")
     else
-        string(sum(parse(Int, block.length) for block in blocks))
+        string(sum(numeric_lengths))
     end
     return (
         variables = spec.controls.variables,
@@ -87,6 +93,7 @@ function control_layout_plan(spec)
         initialization = spec.controls.initialization,
         blocks = blocks,
         total_length = total_length,
+        dimension_authority = ismissing(nt) ? :runtime_modal : :preflight_resolved,
     )
 end
 

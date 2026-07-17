@@ -224,9 +224,10 @@ story before treating the run as scientific evidence.
 Native artifact runs also write a JSON trust report beside the convergence
 trace so lab-realizability checks can be archived with the result.
 
-Built-in writers cover hooks such as `:field_summary`, `:phase_profile`,
-`:group_delay`, `:amplitude_profile`, `:mode_resolved_spectra`,
-`:per_mode_leakage_table`, and scalar energy summaries. Custom writers can be
+Built-in writers cover hooks such as `:spectrum_before_after`,
+`:raman_band_overlay`, `:phase_profile`, `:group_delay`, `:amplitude_mask`,
+`:shaped_input_spectrum`, `:energy_throughput`, `:peak_power`,
+`:mode_resolved_spectra`, and `:per_mode_leakage_table`. Custom writers can be
 attached by hook:
 
 ```julia
@@ -377,7 +378,9 @@ objective = ObjectiveMap(
 )
 ```
 
-The terminal adjoint is required for gradient-based adjoint optimization.
+The terminal adjoint is required for gradient-based adjoint optimization. Set
+`cost_scale=:db` only when the callback itself returns dB values; this prevents
+reports from applying a second logarithm. The default is `:linear`.
 
 ## Multimode
 

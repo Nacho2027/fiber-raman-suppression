@@ -13,6 +13,8 @@ using TOML
 
 include(joinpath(@__DIR__, "run_artifacts.jl"))
 include(joinpath(@__DIR__, "experiment_spec.jl"))
+include(joinpath(@__DIR__, "export_integrity.jl"))
+include(joinpath(@__DIR__, "numerical_trust.jl"))
 include(joinpath(@__DIR__, "results_index_rendering.jl"))
 
 const INDEX_EXPORT_REQUIRED_FILES = (
@@ -20,6 +22,7 @@ const INDEX_EXPORT_REQUIRED_FILES = (
     "metadata.json",
     "README.md",
     "source_run_config.toml",
+    "roundtrip_validation.json",
 )
 
 function _nested_toml_value(data, keys::Tuple, default="")
@@ -116,10 +119,16 @@ function _trust_report_path(dir::AbstractString)
     return abspath(joinpath(dir, first(matches)))
 end
 
-function _export_handoff_complete(dir::AbstractString)
+function _export_handoff_complete(dir::AbstractString, source_artifact::AbstractString)
     export_dir = joinpath(dir, "export_handoff")
     isdir(export_dir) || return (complete = false, path = "")
-    complete = all(name -> isfile(joinpath(export_dir, name)), INDEX_EXPORT_REQUIRED_FILES)
+    files_complete = all(
+        name -> isfile(joinpath(export_dir, name)),
+        INDEX_EXPORT_REQUIRED_FILES,
+    )
+    integrity = validate_export_handoff_integrity(
+        export_dir; source_artifact=source_artifact)
+    complete = files_complete && integrity.complete
     return (complete = complete, path = complete ? abspath(export_dir) : "")
 end
 
@@ -154,8 +163,8 @@ function _manifest_string(object, name::Symbol)
     return string(value)
 end
 
-function _post_run_manifest_missing(items)
-    return [item for item in string.(collect(items)) if item != "no_manifest_update"]
+function _results_manifest_missing(items)
+    return string.(collect(items))
 end
 
 function _run_manifest_metadata(dir::AbstractString)
@@ -168,7 +177,7 @@ function _run_manifest_metadata(dir::AbstractString)
         execution = hasproperty(parsed, :execution) ? parsed.execution : nothing
         artifacts = hasproperty(parsed, :artifacts) ? parsed.artifacts : nothing
         missing_items = if execution !== nothing && hasproperty(execution, :missing)
-            join(_post_run_manifest_missing(execution.missing), ",")
+            join(_results_manifest_missing(execution.missing), ",")
         else
             ""
         end
@@ -231,18 +240,30 @@ function _lab_readiness_status(;
     trust_report_path,
     trust_report_required::Bool=true,
     variable_artifacts_complete=true,
+    index_spec=nothing,
     error="",
 )
     blockers = String[]
+    trust_paths = isempty(trust_report_path) ? String[] : [String(trust_report_path)]
+    trust = trust_readiness(trust_paths; required=trust_report_required)
     isempty(error) || push!(blockers, "artifact_error")
     converged === true || push!(blockers, "not_converged")
     standard_images_complete === true || push!(blockers, "missing_standard_images")
-    trust_report_required && isempty(trust_report_path) && push!(blockers, "missing_trust_report")
+    trust.pass || push!(blockers, trust.blocker)
     variable_artifacts_complete === false && push!(blockers, "missing_variable_artifacts")
     ismissing(variable_artifacts_complete) && push!(blockers, "unknown_variable_artifacts")
+    if isnothing(index_spec)
+        push!(blockers, "missing_or_invalid_run_config")
+    else
+        promotion = experiment_promotion_status(index_spec)
+        promotion.stage == :lab_ready ||
+            push!(blockers, "promotion_stage_$(promotion.stage)")
+    end
     return (
         lab_ready = isempty(blockers),
         readiness = isempty(blockers) ? "ready" : join(blockers, ","),
+        trust_verdict = trust.verdict,
+        trust_pass = trust.pass,
     )
 end
 
@@ -367,7 +388,8 @@ function _safe_run_index_row(path::AbstractString)
         sidecar = _sidecar_metadata(String(summary.artifact))
         trust_report_path = _trust_report_path(summary.artifact_dir)
         extra_artifacts = _index_extra_artifact_status(index_spec, String(summary.artifact))
-        export_handoff = _export_handoff_complete(summary.artifact_dir)
+        export_handoff = _export_handoff_complete(
+            summary.artifact_dir, String(summary.artifact))
         manifest = _run_manifest_metadata(summary.artifact_dir)
         readiness = _lab_readiness_status(
             converged=summary.converged,
@@ -375,6 +397,7 @@ function _safe_run_index_row(path::AbstractString)
             trust_report_path=trust_report_path,
             trust_report_required=_trust_report_required(index_spec),
             variable_artifacts_complete=extra_artifacts.complete,
+            index_spec=index_spec,
         )
         return (
             kind = :run,
@@ -389,7 +412,8 @@ function _safe_run_index_row(path::AbstractString)
             manifest_schema_version = manifest.schema_version,
             run_context = manifest.run_context,
             manifest_command = manifest.command,
-            manifest_compare_ready = manifest.compare_ready,
+            manifest_compare_ready = ismissing(manifest.compare_ready) ? missing :
+                (manifest.compare_ready === true && readiness.lab_ready),
             manifest_missing = manifest.missing,
             manifest_path = manifest.path,
             fiber = summary.fiber_name,
@@ -403,6 +427,8 @@ function _safe_run_index_row(path::AbstractString)
             iterations = summary.iterations,
             standard_images_complete = images.complete,
             trust_report_present = !isempty(trust_report_path),
+            trust_report_verdict = readiness.trust_verdict,
+            trust_report_pass = readiness.trust_pass,
             variable_artifacts_complete = extra_artifacts.complete,
             variable_artifact_hooks = extra_artifacts.hooks,
             variable_artifact_paths = extra_artifacts.paths,
@@ -452,6 +478,8 @@ function _safe_run_index_row(path::AbstractString)
             iterations = missing,
             standard_images_complete = false,
             trust_report_present = false,
+            trust_report_verdict = readiness.trust_verdict,
+            trust_report_pass = readiness.trust_pass,
             variable_artifacts_complete = false,
             variable_artifact_hooks = "",
             variable_artifact_paths = "",
@@ -497,6 +525,8 @@ function _sweep_index_row(path::AbstractString)
         iterations = missing,
         standard_images_complete = missing,
         trust_report_present = missing,
+        trust_report_verdict = missing,
+        trust_report_pass = missing,
         variable_artifacts_complete = missing,
         variable_artifact_hooks = "",
         variable_artifact_paths = "",
@@ -645,7 +675,7 @@ function compare_results_index(index; lab_ready_only::Bool=false,
         row.converged === true ? 0 : 1,
         row.standard_images_complete === true ? 0 : 1,
         row.variable_artifacts_complete === true ? 0 : 1,
-        row.trust_report_present === true ? 0 : 1,
+        row.trust_report_pass === true ? 0 : 1,
         isnan(row.J_after_dB) ? Inf : row.J_after_dB,
         row.id,
     ))

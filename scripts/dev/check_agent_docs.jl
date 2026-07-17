@@ -196,7 +196,7 @@ function _check_no_wikilinks_or_conflicts!(errors::Vector{String}, root::Abstrac
             push!(errors, "$relpath contains Obsidian-style wikilinks; use Markdown links")
         end
         if occursin("sync-conflict", relpath)
-            push!(errors, "Syncthing conflict file present in docs surface: `$relpath`")
+            push!(errors, "sync-conflict file present in docs surface: `$relpath`")
         end
     end
 end

@@ -22,7 +22,7 @@ Read this before moving code.
 | Path | Rule |
 |---|---|
 | `results/` | Generated evidence; use manifests or targeted paths |
-| `.venv/`, `.claude/`, `.burst-sync/`, `.pytest_cache/` | Ignored local tooling; not repo structure |
+| `.venv/`, `.claude/`, `.pytest_cache/` | Ignored local tooling; not repo structure |
 | external cleanup vault | Historical source/results; inspect only for archaeology |
 
 Python is not a supported API surface.

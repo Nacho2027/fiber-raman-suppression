@@ -64,7 +64,7 @@ function render_results_index(index; io::Union{Nothing,IO}=nothing)
             " | ", row.readiness,
             " | ", ismissing(row.standard_images_complete) ? "" : string(row.standard_images_complete),
             " | ", ismissing(row.variable_artifacts_complete) ? "" : string(row.variable_artifacts_complete),
-            " | ", ismissing(row.trust_report_present) ? "" : string(row.trust_report_present),
+            " | ", ismissing(row.trust_report_verdict) ? "" : string(row.trust_report_verdict),
             " | ", ismissing(row.export_handoff_complete) ? "" : string(row.export_handoff_complete),
             " | ", isempty(row.error) ? row.path : row.error,
             " |"))
@@ -105,6 +105,8 @@ function render_results_index_csv(index; io::Union{Nothing,IO}=nothing)
         :variable_artifact_paths,
         :variable_artifacts_missing,
         :trust_report_present,
+        :trust_report_verdict,
+        :trust_report_pass,
         :export_handoff_complete,
         :lab_ready,
         :readiness,
@@ -153,7 +155,7 @@ function render_results_comparison(comparison; io::Union{Nothing,IO}=nothing)
             " | ", row.quality,
             " | ", row.standard_images_complete,
             " | ", row.variable_artifacts_complete,
-            " | ", row.trust_report_present,
+            " | ", row.trust_report_verdict,
             " | ", row.export_handoff_complete,
             " | ", isempty(row.error) ? row.path : row.error,
             " |"))
@@ -183,6 +185,8 @@ function render_results_comparison_csv(comparison; io::Union{Nothing,IO}=nothing
         :standard_images_complete,
         :variable_artifacts_complete,
         :trust_report_present,
+        :trust_report_verdict,
+        :trust_report_pass,
         :export_handoff_complete,
         :path,
     )

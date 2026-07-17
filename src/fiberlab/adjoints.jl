@@ -248,7 +248,7 @@ struct AmplitudeBasis <: AbstractControlMap
                             offset::Real=1.0,
                             scale::Real=1.0,
                             units::AbstractString="relative field amplitude",
-                            figure_hooks=(:amplitude_profile,))
+                            figure_hooks=control_contract(:amplitude).figure_hooks)
         _nonempty_name(name, "control")
         rows, cols = size(basis)
         rows > 0 || throw(ArgumentError("AmplitudeBasis requires at least one grid row"))
@@ -575,7 +575,8 @@ struct AdjointObjective <: AbstractFiberObjective
 end
 
 """
-    ObjectiveMap(name; cost, terminal_adjoint=nothing, figure_hooks=(), description="")
+    ObjectiveMap(name; cost, terminal_adjoint=nothing, figure_hooks=(), cost_scale=:linear,
+                 contract_kind=name, description="")
 
 User-defined objective. Gradient-based adjoint solvers require
 `terminal_adjoint(final_state, context)`, which seeds the adjoint propagation at
@@ -590,23 +591,32 @@ const _OBJECTIVE_BINDING_TOKEN = _ObjectiveBindingToken()
 
 struct ObjectiveMap <: AbstractFiberObjective
     name::Symbol
+    contract_kind::Symbol
     cost::Function
     terminal_adjoint_function::Union{Nothing,Function}
     figure_hooks::Tuple{Vararg{Symbol}}
+    cost_scale::Symbol
     description::String
     _problem_binding::Union{Nothing,_ObjectiveProblemBinding}
 
     function ObjectiveMap(name::Symbol; cost::Function,
                           terminal_adjoint::Union{Nothing,Function}=nothing,
                           figure_hooks=(),
+                          cost_scale::Symbol=:linear,
+                          contract_kind::Symbol=name,
                           description::AbstractString="")
         _nonempty_name(name, "objective")
+        _nonempty_name(contract_kind, "objective contract")
+        cost_scale in (:linear, :db) || throw(ArgumentError(
+            "ObjectiveMap cost_scale must be :linear or :db"))
         hooks = Tuple(Symbol(hook) for hook in figure_hooks)
         return new(
             name,
+            contract_kind,
             cost,
             terminal_adjoint,
             hooks,
+            cost_scale,
             String(description),
             nothing,
         )
@@ -616,22 +626,35 @@ struct ObjectiveMap <: AbstractFiberObjective
                           cost::Function,
                           terminal_adjoint::Union{Nothing,Function}=nothing,
                           figure_hooks=(),
+                          cost_scale::Symbol=:linear,
+                          contract_kind::Symbol=name,
                           description::AbstractString="",
                           problem_sha256::AbstractString)
         token === _OBJECTIVE_BINDING_TOKEN || throw(ArgumentError(
             "problem-bound objectives can only be created by FiberLab"))
         _nonempty_name(name, "objective")
+        _nonempty_name(contract_kind, "objective contract")
+        cost_scale in (:linear, :db) || throw(ArgumentError(
+            "ObjectiveMap cost_scale must be :linear or :db"))
         hooks = Tuple(Symbol(hook) for hook in figure_hooks)
         return new(
             name,
+            contract_kind,
             cost,
             terminal_adjoint,
             hooks,
+            cost_scale,
             String(description),
             _ObjectiveProblemBinding(String(problem_sha256)),
         )
     end
 end
+
+_objective_cost_scale(::AbstractFiberObjective) = :linear
+_objective_cost_scale(objective::ObjectiveMap) = objective.cost_scale
+
+_objective_contract_kind(objective::AbstractFiberObjective) = objective.name
+_objective_contract_kind(objective::ObjectiveMap) = objective.contract_kind
 
 _objective_problem_sha256(::AbstractFiberObjective) = nothing
 function _objective_problem_sha256(objective::ObjectiveMap)

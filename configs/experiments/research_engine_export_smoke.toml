@@ -46,7 +46,6 @@ store_trace = true
 bundle = "standard"
 save_payload = true
 save_sidecar = true
-update_manifest = true
 write_trust_report = true
 write_standard_images = true
 export_phase_handoff = true
@@ -54,9 +53,6 @@ export_phase_handoff = true
 [verification]
 mode = "standard"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

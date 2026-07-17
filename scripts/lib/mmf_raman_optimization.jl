@@ -1,7 +1,7 @@
 """
-Multimode Raman-suppression phase optimizer (Session C, Phase 16 Plan 01).
+Multimode Raman-suppression phase optimizer.
 
-Mirror of `scripts/raman_optimization.jl` for the multimode (M>1) case:
+Multimode (M>1) counterpart to `scripts/lib/raman_optimization.jl`:
 - Spectral phase is SHARED across modes (physically realizable with a single
   pulse shaper): φ::Vector{Float64} of length Nt, broadcast to (Nt, M) inside
   `cost_and_gradient_mmf`.
@@ -10,10 +10,6 @@ Mirror of `scripts/raman_optimization.jl` for the multimode (M>1) case:
   be promoted through the FiberLab API or an explicit extension contract.
 - Uses the existing `FiberLab.solve_disp_mmf` /
   `solve_adjoint_disp_mmf` machinery unchanged.
-
-Protected files (no edits): `scripts/common.jl`, `scripts/raman_optimization.jl`,
-`scripts/sharpness_optimization.jl`, `src/simulation/*.jl`,
-`src/helpers/helpers.jl`, `src/FiberLab.jl`.
 
 Used by the front-layer experiment runner for multimode phase searches.
 """
@@ -62,10 +58,7 @@ end
 include(joinpath(@__DIR__, "mmf_setup.jl"))
 include(joinpath(@__DIR__, "..", "..", "src", "mmf_cost.jl"))
 
-# save_standard_set expects visualization helpers (plot_optimization_result_v2,
-# plot_spectral_evolution, plot_phase_diagnostic) which live in scripts/visualization.jl.
-# That file is in the protected set — we include it read-only. standard_images.jl is
-# the new mandatory wrapper; every driver MUST call save_standard_set after phi_opt.
+# Standard image generation uses the shared visualization helpers.
 include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "objective_surface.jl"))
 include(joinpath(@__DIR__, "regularizers.jl"))
@@ -174,7 +167,7 @@ function mmf_cost_surface_spec(;
 )
     base_cost = variant === :sum ? "J_mmf_sum" :
                 variant === :fundamental ? "J_mmf_fundamental" :
-                variant === :worst_mode ? "J_mmf_worst_mode" :
+                variant === :worst_mode ? "J_mmf_worst_mode_smooth_proxy" :
                 throw(ArgumentError("unknown MMF cost variant :$variant"))
     return build_objective_surface_spec(;
         objective_label = objective_label,
@@ -189,6 +182,14 @@ function mmf_cost_surface_spec(;
             lambda_boundary = Float64(λ_boundary),
         ),
     )
+end
+
+function _mmf_gauge_fix_phase(φ::AbstractVector)
+    centered = FFTW.fftshift(Float64.(collect(φ)))
+    coordinate = collect(eachindex(centered)) .- (length(centered) + 1) / 2
+    intercept = mean(centered)
+    slope = sum(coordinate .* (centered .- intercept)) / sum(abs2, coordinate)
+    return FFTW.ifftshift(centered .- intercept .- slope .* coordinate)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -210,7 +211,9 @@ Forward-adjoint cost + gradient for the multimode Raman problem, with a
 - `fiber`, `sim`, `band_mask`  as returned by `setup_mmf_raman_problem`
 
 # Keyword arguments
-- `variant::Symbol = :sum`             — `:sum | :fundamental | :worst_mode`
+- `variant::Symbol = :sum`             — `:sum | :fundamental | :worst_mode`;
+  worst-mode optimization differentiates the bounded normalized-LSE proxy,
+  while run reporting computes the true maximum leakage
 - `λ_gdd = 0.0`                        — penalty on ∫(d²φ/dω²)² (regularizer)
 - `λ_boundary = 0.0`                   — penalty on input-pulse energy at FFT edges
 - `log_cost::Bool = true`              — optimize 10·log₁₀(J) instead of J
@@ -536,16 +539,8 @@ function plot_mmf_result(
     close(fig)
 
     # (3) Phase (gauge-fixed: remove mean and linear-in-ω slope)
-    function _gauge_fix(φ)
-        Nt_φ = length(φ)
-        Ω    = collect(0:(Nt_φ - 1)) .- Nt_φ ÷ 2
-        mean_φ = mean(φ)
-        # slope from least-squares: φ_lin = a·Ω + b  on the Ω scale
-        a = sum(Ω .* (φ .- mean_φ)) / sum(Ω .^ 2)
-        return φ .- mean_φ .- a .* Ω
-    end
-    φ_before_gf = _gauge_fix(φ_before)
-    φ_after_gf  = _gauge_fix(φ_after)
+    φ_before_gf = _mmf_gauge_fix_phase(φ_before)
+    φ_after_gf  = _mmf_gauge_fix_phase(φ_after)
     φ_before_shifted = fftshift(φ_before_gf)
     φ_after_shifted  = fftshift(φ_after_gf)
 
@@ -565,8 +560,8 @@ function plot_mmf_result(
     # (4) Convergence
     fig, ax = subplots(figsize = (7, 4))
     ax.plot(1:length(opt_result.J_history), opt_result.J_history, lw = 1.3, marker = "o", markersize = 3)
-    ax.set_xlabel("L-BFGS iteration")
-    ax.set_ylabel("J (10·log₁₀ if log_cost=true)")
+    ax.set_xlabel("Objective evaluation")
+    ax.set_ylabel(string(objective_spec.scalar_surface, " [", objective_spec.scale, "]"))
     ax.set_title("Convergence trace " * title_suffix)
     ax.grid(true, alpha = 0.3)
     fig.tight_layout()
@@ -574,147 +569,4 @@ function plot_mmf_result(
     close(fig)
 
     return nothing
-end
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Main entry point
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""
-    run_mmf_baseline(; kwargs...) -> NamedTuple
-
-Convenience wrapper: build the MMF setup, run L-BFGS for `max_iter` iterations,
-produce figures, return the result.
-
-The front-layer multimode execution path runs this
-at the canonical Phase 16 baseline (GRIN-50, L=1m, P=0.05W).
-"""
-function run_mmf_baseline(;
-    preset::Symbol = :GRIN_50,
-    L_fiber::Real = 1.0,
-    P_cont::Real = 0.05,
-    Nt::Int = 2^13,
-    time_window::Real = 10.0,
-    max_iter::Int = 30,
-    variant::Symbol = :sum,
-    log_cost::Bool = true,
-    λ_gdd::Real = 0.0,
-    λ_boundary::Real = 0.0,
-    f_calls_limit::Int = 0,
-    time_limit::Real = NaN,
-    seed::Int = 42,
-    save_dir::String = joinpath(@__DIR__, "..", "..", "results", "raman", "phase16"),
-    tag::String = "",
-)
-    mkpath(save_dir)
-    setup = setup_mmf_raman_problem(;
-        preset = preset,
-        L_fiber = L_fiber,
-        P_cont = P_cont,
-        Nt = Nt,
-        time_window = time_window,
-    )
-
-    uω0      = setup.uω0
-    c_m      = setup.mode_weights
-    fiber    = setup.fiber
-    sim      = setup.sim
-    band_mask = setup.band_mask
-
-    # Reference J at φ=0 (unoptimized)
-    Nt_setup = size(uω0, 1)
-    φ0 = zeros(Float64, Nt_setup)
-    trust_ref = mmf_trust_metrics(φ0, setup)
-    J_ref = trust_ref.cost_report.sum_lin
-    J_ref_dB = trust_ref.cost_report.sum_dB
-    objective_spec = mmf_cost_surface_spec(
-        variant = variant,
-        log_cost = log_cost,
-        λ_gdd = λ_gdd,
-        λ_boundary = λ_boundary,
-    )
-    @info @sprintf("Reference (φ=0): J_lin = %.4e (%.2f dB)", J_ref, J_ref_dB)
-    @info "MMF objective surface: $(objective_spec.scalar_surface)"
-
-    # Optimize
-    t0 = time()
-    opt = optimize_mmf_phase(
-        uω0, c_m, fiber, sim, band_mask;
-        φ0 = φ0,
-        max_iter = max_iter,
-        variant = variant,
-        log_cost = log_cost,
-        λ_gdd = λ_gdd,
-        λ_boundary = λ_boundary,
-        f_calls_limit = f_calls_limit,
-        time_limit = time_limit,
-        seed = seed,
-    )
-    wall_time = time() - t0
-
-    trust_opt = mmf_trust_metrics(opt.φ_opt, setup)
-    J_final_lin_dB = trust_opt.cost_report.sum_dB
-    improvement_dB = J_ref_dB - J_final_lin_dB
-    @info @sprintf(
-        "Baseline done in %.1f s. J_sum: %.2f→%.2f dB (Δ=%.2f dB); J_fund=%.2f dB; J_worst=%.2f dB; edge=%.2e",
-        wall_time,
-        J_ref_dB,
-        J_final_lin_dB,
-        improvement_dB,
-        trust_opt.cost_report.fundamental_dB,
-        trust_opt.cost_report.worst_mode_true_dB,
-        trust_opt.boundary_edge_fraction,
-    )
-
-    # Figures
-    tag_s = isempty(tag) ? @sprintf("%s_L%g_P%g_seed%d", String(preset), L_fiber, P_cont, seed) : tag
-    save_prefix = joinpath(save_dir, "mmf_baseline_" * tag_s)
-    plot_mmf_result(
-        φ0, opt.φ_opt, setup, opt;
-        save_prefix = save_prefix,
-        title_suffix = @sprintf("[%s, L=%gm, P=%gW]", String(preset), L_fiber, P_cont),
-        variant = variant,
-        log_cost = log_cost,
-        λ_gdd = λ_gdd,
-        λ_boundary = λ_boundary,
-    )
-
-    # ── MANDATORY standard image set (AGENTS.md rule, 2026-04-17) ─────────
-    # Every driver producing phi_opt MUST call save_standard_set. Uses the
-    # fundamental-mode slice internally (mode_idx=1) — appropriate for MMF
-    # since LP01 is the dominant detected mode. phi_opt is a Vector{Float64}
-    # (shared across modes); save_standard_set handles Vector input cleanly
-    # (it uses phi[:, 1] indexing which returns the whole vector for 1D inputs).
-    save_standard_set(
-        opt.φ_opt, uω0, fiber, sim,
-        band_mask, setup.Δf, setup.raman_threshold;
-        tag         = lowercase(replace(@sprintf("mmf_%s_l%gm_p%gw_seed%d",
-                                                 String(preset), L_fiber, P_cont, seed),
-                                        "." => "p")),
-        fiber_name  = String(preset),
-        L_m         = L_fiber,
-        P_W         = P_cont,
-        output_dir  = save_dir,
-    )
-
-    return (
-        setup          = setup,
-        opt            = opt,
-        J_ref_lin      = J_ref,
-        J_ref_dB       = J_ref_dB,
-        J_final_lin_dB = J_final_lin_dB,
-        improvement_dB = improvement_dB,
-        wall_time      = wall_time,
-        save_prefix    = save_prefix,
-        trust_ref      = trust_ref,
-        trust_opt      = trust_opt,
-    )
-end
-
-# CLI guard — only execute when run as a script
-if abspath(PROGRAM_FILE) == @__FILE__
-    @info "MMF Raman optimization — Phase 16 baseline"
-    @info "Threads: $(Threads.nthreads())"
-    result = run_mmf_baseline()
-    @info "All figures saved under results/raman/phase16/"
 end

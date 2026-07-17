@@ -9,7 +9,6 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 
 using FiberLab
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
-include(joinpath(_ROOT, "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment()
 include(joinpath(_ROOT, "scripts", "lib", "raman_optimization.jl"))
 

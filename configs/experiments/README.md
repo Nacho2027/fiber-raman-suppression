@@ -11,6 +11,9 @@ TOML files here are read by `./fiberlab` and
 ./fiberlab validate
 ```
 
+Validation covers both listed runnable configs and the checked templates under
+`templates/`.
+
 Supported configs should run through the normal `run` lane. Experimental or
 planning configs should be used through `explore` or dry-run inspection until
 their gates are closed.

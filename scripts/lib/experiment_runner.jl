@@ -1,14 +1,7 @@
 """
-Thin execution layer for validated front-layer experiment specs.
-
-This currently supports the honest first slices only:
-
-- `single_mode`
-- supported variables `[:phase]`
-- experimental variables `[:phase, :amplitude]`, `[:phase, :energy]`, and
-  `[:phase, :amplitude, :energy]`
-- objective `raman_band`
-- solver `lbfgs`
+Execution layer for validated experiment specs. It routes supported
+single-mode, scalar/vector-control, long-fiber, and multimode modes through
+their maintained implementations and emits common evidence artifacts.
 """
 
 if !(@isdefined _EXPERIMENT_RUNNER_JL_LOADED)
@@ -31,7 +24,7 @@ include(joinpath(@__DIR__, "multivar_artifacts.jl"))
 include(joinpath(@__DIR__, "exploratory_artifacts.jl"))
 include(joinpath(@__DIR__, "multivar_optimization.jl"))
 include(joinpath(@__DIR__, "mmf_raman_optimization.jl"))
-include(joinpath(@__DIR__, "..", "workflows", "export_run.jl"))
+include(joinpath(@__DIR__, "export_run.jl"))
 
 function experiment_output_dir(spec;
                                timestamp::AbstractString=Dates.format(now(UTC), "yyyymmdd_HHMMss"),
@@ -87,15 +80,15 @@ function _result_sidecar_path(artifact_path::AbstractString)
 end
 
 function _artifact_report_error(missing)
-    return ArgumentError("experiment artifact validation failed; missing: $(join(missing, ", "))")
+    return ArgumentError("experiment artifact validation failed; missing/invalid: $(join(missing, ", "))")
 end
 
 """
     validate_experiment_artifacts(run_bundle; throw_on_error=true)
 
 Check the files that make a completed front-layer run usable by a lab user.
-This validates existence and naming contracts only; it does not replace
-physics/trust checks or visual inspection of the generated standard images.
+This validates existence, exact naming, and basic nonblank PNG integrity. It
+does not replace physics/trust checks or human visual inspection.
 """
 function validate_experiment_artifacts(run_bundle; throw_on_error::Bool=true)
     spec = run_bundle.spec
@@ -124,10 +117,21 @@ function validate_experiment_artifacts(run_bundle; throw_on_error::Bool=true)
 
     standard_images = spec.artifacts.write_standard_images ?
         standard_image_set_status(artifact_path) :
-        (dir = dirname(artifact_path), present = String[], missing = String[],
-         paths = Dict{String,String}(), complete = true)
-    if !standard_images.complete
-        append!(missing, [string(standard_images.dir, "/", suffix) for suffix in standard_images.missing])
+        (dir = dirname(artifact_path), prefix = _artifact_result_prefix(artifact_path),
+         present = String[], missing = String[],
+         invalid = String[], paths = Dict{String,String}(),
+         invalid_paths = Dict{String,String}(), complete = true)
+    for path in values(standard_images.paths)
+        _push_unique!(checked, path)
+    end
+    for path in values(standard_images.invalid_paths)
+        _push_unique!(checked, path)
+        _push_unique!(missing, path)
+    end
+    for suffix in standard_images.missing
+        path = string(standard_images.prefix, suffix)
+        _push_unique!(checked, path)
+        _push_unique!(missing, path)
     end
 
     extra_artifacts = extra_artifact_hook_file_status(spec, save_prefix)
@@ -168,6 +172,31 @@ function _attach_artifact_validation(run_bundle)
         @warn "Front-layer artifact validation found missing outputs" missing=report.missing
     end
     return (; run_bundle..., artifact_validation = report)
+end
+
+function _trust_validation_for_bundle(run_bundle)
+    spec = run_bundle.spec
+    required = any(request -> request.hook == :trust_report,
+                   experiment_artifact_plan(spec).hooks)
+    path = string(run_bundle.save_prefix, "_trust.md")
+    paths = isfile(path) ? [path] : String[]
+    return trust_readiness(paths; required=required)
+end
+
+function _attach_trust_validation(run_bundle)
+    return (; run_bundle..., trust_validation=_trust_validation_for_bundle(run_bundle))
+end
+
+function _regularizer_evidence(spec)
+    requested = Dict(
+        String(name) => (value === :auto ? "auto" : Float64(value))
+        for (name, value) in spec.objective.regularizers
+    )
+    resolved = Dict(
+        String(name) => resolve_regularizer_lambda(name, value)
+        for (name, value) in spec.objective.regularizers
+    )
+    return (requested=requested, resolved=resolved)
 end
 
 function _attach_exploratory_artifacts(run_bundle)
@@ -300,7 +329,7 @@ function write_longfiber_reach_diagnostic(spec, run_bundle)
         "warnings" => String[
             "Long-fiber runs are length-scaled single-mode physics with exact-grid execution in this front layer.",
             "As L_fiber increases, inspect boundary fractions, temporal-window leakage, solver convergence, and memory/runtime before trusting conclusions.",
-            "Large 10-200 m studies may need dedicated checkpointed workflows even though the config contract is the same.",
+            "Checkpoint/resume is not implemented; long-fiber execution is fresh and exact-grid only.",
         ],
     )
 
@@ -408,7 +437,7 @@ function _export_validation_manifest(run_bundle)
 end
 
 function _post_run_manifest_missing(missing_items)
-    return [item for item in string.(collect(missing_items)) if item != "no_manifest_update"]
+    return String[string(item) for item in missing_items]
 end
 
 function experiment_run_manifest_data(run_bundle;
@@ -420,6 +449,20 @@ function experiment_run_manifest_data(run_bundle;
     artifact_path = abspath(String(run_bundle.artifact_path))
     config_copy = abspath(String(run_bundle.config_copy))
     post_run_missing = _post_run_manifest_missing(check.missing)
+    grid_evidence = _run_grid_evidence(spec, run_bundle)
+    resolved_grid = grid_evidence.resolved
+    trust = hasproperty(run_bundle, :trust_validation) ?
+        run_bundle.trust_validation : _trust_validation_for_bundle(run_bundle)
+    regularizers = _regularizer_evidence(spec)
+    artifacts = _artifact_validation_manifest(run_bundle)
+    metrics = _safe_summary_metrics(artifact_path)
+    artifact_ready = get(artifacts, "validated", false) === true &&
+        get(artifacts, "complete", false) === true
+    convergence_ready = get(metrics, "converged", nothing) === true
+    trust.pass || _push_unique!(post_run_missing, trust.blocker)
+    artifact_ready || _push_unique!(post_run_missing, "artifact_validation_failed")
+    convergence_ready || _push_unique!(post_run_missing, "not_converged")
+    compare_ready = check.compare_ready && trust.pass && artifact_ready && convergence_ready
 
     return Dict{String,Any}(
         "schema_version" => "run_manifest_v1",
@@ -440,8 +483,10 @@ function experiment_run_manifest_data(run_bundle;
             "preset" => string(spec.problem.preset),
             "L_fiber" => spec.problem.L_fiber,
             "P_cont" => spec.problem.P_cont,
-            "Nt" => spec.problem.Nt,
-            "time_window" => spec.problem.time_window,
+            "Nt" => resolved_grid === nothing ? nothing : resolved_grid["nt"],
+            "time_window" => resolved_grid === nothing ? nothing : resolved_grid["time_window_ps"],
+            "requested_grid" => grid_evidence.requested,
+            "resolved_grid" => resolved_grid,
         ),
         "controls" => Dict{String,Any}(
             "variables" => String.(string.(spec.controls.variables)),
@@ -451,6 +496,8 @@ function experiment_run_manifest_data(run_bundle;
         "objective" => Dict{String,Any}(
             "kind" => string(spec.objective.kind),
             "log_cost" => spec.objective.log_cost,
+            "regularizers_requested" => regularizers.requested,
+            "regularizers_resolved" => regularizers.resolved,
         ),
         "solver" => Dict{String,Any}(
             "kind" => string(spec.solver.kind),
@@ -463,7 +510,14 @@ function experiment_run_manifest_data(run_bundle;
             "confidence" => string(check.stage),
             "run_path" => string(check.run_path),
             "missing" => String.(post_run_missing),
-            "compare_ready" => check.compare_ready,
+            "compare_ready" => compare_ready,
+        ),
+        "trust" => Dict{String,Any}(
+            "required" => trust.verdict != "NOT_REQUIRED",
+            "verdict" => trust.verdict,
+            "pass" => trust.pass,
+            "blocker" => trust.blocker,
+            "reports" => trust.report_paths,
         ),
         "pre_run_check" => Dict{String,Any}(
             "pass" => check.pass,
@@ -472,9 +526,9 @@ function experiment_run_manifest_data(run_bundle;
             "artifact_hooks" => String.(string.(check.artifact_hooks)),
             "missing" => String.(string.(check.missing)),
         ),
-        "artifacts" => _artifact_validation_manifest(run_bundle),
+        "artifacts" => artifacts,
         "export_handoff" => _export_validation_manifest(run_bundle),
-        "metrics" => _safe_summary_metrics(artifact_path),
+        "metrics" => metrics,
         "git" => _git_manifest_summary(),
     )
 end
@@ -494,6 +548,32 @@ end
 function _attach_run_manifest(run_bundle; run_context::Symbol=:unknown, run_command::AbstractString="")
     path = write_experiment_run_manifest(run_bundle; run_context=run_context, run_command=run_command)
     return (; run_bundle..., run_manifest_path = path)
+end
+
+function _finalize_experiment_run(run_bundle;
+                                  run_context::Symbol=:unknown,
+                                  run_command::AbstractString="")
+    artifacts = hasproperty(run_bundle, :artifact_validation) ?
+        run_bundle : _attach_artifact_validation(run_bundle)
+    checked = _attach_trust_validation(artifacts)
+    manifested = _attach_run_manifest(
+        checked;
+        run_context=run_context,
+        run_command=run_command,
+    )
+    if checked.spec.verification.block_on_failed_checks && !checked.trust_validation.pass
+        throw(ArgumentError(
+            "numerical trust validation failed: $(checked.trust_validation.blocker) " *
+            "(verdict=$(checked.trust_validation.verdict)); manifest written to $(manifested.run_manifest_path)"))
+    end
+    experiment_export_requested(checked.spec) || return manifested
+
+    exported = _attach_export_handoff(manifested)
+    return _attach_run_manifest(
+        exported;
+        run_context=run_context,
+        run_command=run_command,
+    )
 end
 
 _experiment_status_word(ok::Bool) = ok ? "complete" : "incomplete"
@@ -532,8 +612,12 @@ end
 function supported_experiment_run_kwargs(spec)
     validate_experiment_spec(spec)
 
-    λ_gdd = get(spec.objective.regularizers, :gdd, 0.0)
-    λ_boundary = get(spec.objective.regularizers, :boundary, 0.0)
+    resolved_regularizers = Dict(
+        name => resolve_regularizer_lambda(name, value)
+        for (name, value) in spec.objective.regularizers
+    )
+    λ_gdd = get(resolved_regularizers, :gdd, 0.0)
+    λ_boundary = get(resolved_regularizers, :boundary, 0.0)
     mode = experiment_execution_mode(spec)
 
     fiber_name = spec.problem.regime == :multimode ?
@@ -553,7 +637,8 @@ function supported_experiment_run_kwargs(spec)
         pulse_shape = spec.problem.pulse_shape,
         raman_threshold = spec.problem.raman_threshold,
         max_iter = spec.solver.max_iter,
-        validate = spec.solver.validate_gradient || spec.verification.gradient_check,
+        validate = spec.solver.validate_gradient,
+        store_trace = spec.solver.store_trace,
         objective_kind = spec.objective.kind,
         λ_gdd = λ_gdd,
         λ_boundary = Float64(λ_boundary),
@@ -591,7 +676,6 @@ function supported_experiment_run_kwargs(spec)
             λ_energy = λ_energy,
             λ_tikhonov = Float64(get(spec.objective.regularizers, :tikhonov, 0.0)),
             λ_tv = Float64(get(spec.objective.regularizers, :tv, 0.0)),
-            λ_flat = Float64(get(spec.objective.regularizers, :flat, 0.0)),
         )
     end
     if mode == :vector_search
@@ -606,7 +690,6 @@ function supported_experiment_run_kwargs(spec)
             λ_energy = λ_energy,
             λ_tikhonov = Float64(get(spec.objective.regularizers, :tikhonov, 0.0)),
             λ_tv = Float64(get(spec.objective.regularizers, :tv, 0.0)),
-            λ_flat = Float64(get(spec.objective.regularizers, :flat, 0.0)),
         )
     end
 
@@ -618,7 +701,6 @@ function supported_experiment_run_kwargs(spec)
         λ_energy = λ_energy,
         λ_tikhonov = Float64(get(spec.objective.regularizers, :tikhonov, 0.0)),
         λ_tv = Float64(get(spec.objective.regularizers, :tv, 0.0)),
-        λ_flat = Float64(get(spec.objective.regularizers, :flat, 0.0)),
     )
 end
 
@@ -1079,10 +1161,10 @@ function run_scalar_gain_tilt_search(;
     λ_energy::Real=0.0,
     λ_tikhonov::Real=0.0,
     λ_tv::Real=0.0,
-    λ_flat::Real=0.0,
     log_cost::Bool=true,
     objective_kind::Symbol=:raman_band,
     validate::Bool=false,
+    store_trace::Bool=true,
     solver_reltol::Real=1e-8,
     solver_f_abstol=:auto,
     solver_g_abstol=:auto,
@@ -1121,7 +1203,6 @@ function run_scalar_gain_tilt_search(;
         λ_energy = Float64(λ_energy),
         λ_tikhonov = Float64(λ_tikhonov),
         λ_tv = Float64(λ_tv),
-        λ_flat = Float64(λ_flat),
     )
 
     trace = Float64[]
@@ -1170,7 +1251,7 @@ function run_scalar_gain_tilt_search(;
         Optim.Brent();
         iterations = max_iter,
         abs_tol = Float64(scalar_x_tol),
-        store_trace = false,
+        store_trace = store_trace,
     )
 
     physical_scalar = Float64(Optim.minimizer(result))
@@ -1314,10 +1395,10 @@ function run_vector_phase_extension_search(;
     λ_energy::Real=0.0,
     λ_tikhonov::Real=0.0,
     λ_tv::Real=0.0,
-    λ_flat::Real=0.0,
     log_cost::Bool=false,
     objective_kind::Symbol=:temporal_peak_scalar,
     validate::Bool=false,
+    store_trace::Bool=true,
     solver_reltol::Real=1e-8,
     solver_f_abstol=:auto,
     solver_g_abstol=:auto,
@@ -1355,7 +1436,6 @@ function run_vector_phase_extension_search(;
         λ_energy = Float64(λ_energy),
         λ_tikhonov = Float64(λ_tikhonov),
         λ_tv = Float64(λ_tv),
-        λ_flat = Float64(λ_flat),
     )
 
     trace = Float64[]
@@ -1403,7 +1483,7 @@ function run_vector_phase_extension_search(;
         objective_for_vector,
         x0,
         Optim.NelderMead(),
-        Optim.Options(iterations=max_iter, x_abstol=Float64(vector_x_tol), store_trace=false),
+        Optim.Options(iterations=max_iter, x_abstol=Float64(vector_x_tol), store_trace=store_trace),
     )
 
     x_opt = clamp.(Float64.(Optim.minimizer(result)), lower, upper)
@@ -1516,12 +1596,12 @@ end
 function _save_multivar_standard_images(spec, result_bundle)
     outcome = result_bundle.outcome
     alpha = Float64(get(outcome.diagnostics, :alpha, 1.0))
-    uω0_for_images = alpha .* outcome.A_opt .* result_bundle.uω0
+    uω0_after = alpha .* outcome.A_opt .* result_bundle.uω0
     Δf = fftshift(FFTW.fftfreq(result_bundle.sim["Nt"], 1 / result_bundle.sim["Δt"]))
 
     save_standard_set(
         outcome.φ_opt,
-        uω0_for_images,
+        result_bundle.uω0,
         result_bundle.fiber,
         result_bundle.sim,
         result_bundle.band_mask,
@@ -1534,6 +1614,10 @@ function _save_multivar_standard_images(spec, result_bundle)
         output_dir = dirname(result_bundle.save_prefix),
         lambda0_nm = Float64(get(result_bundle.meta, :lambda0_nm, 1550.0)),
         fwhm_fs = Float64(get(result_bundle.meta, :fwhm_fs, 185.0)),
+        objective_kind = spec.objective.kind,
+        uω0_after = uω0_after,
+        objective_values = (result_bundle.J_before, result_bundle.J_after_lin),
+        objective_label = experiment_objective_contract(spec).description,
     )
 end
 
@@ -1553,6 +1637,44 @@ function _safe_mmf_converged(result)
     end
 end
 
+function _mmf_primary_metrics(cost_report, variant::Symbol)
+    variant == :sum && return (
+        linear=Float64(cost_report.sum_lin), dB=Float64(cost_report.sum_dB))
+    if variant == :fundamental
+        isfinite(cost_report.fundamental_lin) || throw(ArgumentError(
+            "fundamental-mode objective requires nonzero launch energy in mode 1"))
+        return (linear=Float64(cost_report.fundamental_lin),
+                dB=Float64(cost_report.fundamental_dB))
+    end
+    variant == :worst_mode && return (
+        linear=Float64(cost_report.worst_mode_lin),
+        dB=Float64(cost_report.worst_mode_dB))
+    throw(ArgumentError("unsupported MMF objective variant `$(variant)`"))
+end
+
+function _mmf_standard_mode_views(reference_report, optimized_report, variant::Symbol)
+    variant == :sum && return (:sum, :sum)
+    variant == :fundamental && return (1, 1)
+    variant == :worst_mode || throw(ArgumentError(
+        "unsupported MMF objective variant `$(variant)`"))
+    worst_mode(report) = begin
+        active = findall(isfinite, report.per_mode_lin)
+        isempty(active) && throw(ArgumentError(
+            "worst-mode view requires a nonzero-energy mode"))
+        active[argmax(report.per_mode_lin[active])]
+    end
+    return (worst_mode(reference_report), worst_mode(optimized_report))
+end
+
+function _safe_mmf_iterations(opt)
+    isnothing(opt.result) && return 0
+    try
+        return Optim.iterations(opt.result)
+    catch
+        return 0
+    end
+end
+
 function _write_mmf_per_mode_leakage_csv(path::AbstractString, trust_ref, trust_opt, mode_weights)
     mkpath(dirname(path))
     open(path, "w") do io
@@ -1561,15 +1683,18 @@ function _write_mmf_per_mode_leakage_csv(path::AbstractString, trust_ref, trust_
         per_ref_dB = trust_ref.cost_report.per_mode_dB
         per_opt_lin = trust_opt.cost_report.per_mode_lin
         per_opt_dB = trust_opt.cost_report.per_mode_dB
-        worst_idx = argmax(per_opt_lin)
+        active_after = findall(isfinite, per_opt_lin)
+        worst_idx = isempty(active_after) ? 0 :
+            active_after[argmax(per_opt_lin[active_after])]
         for m in eachindex(per_opt_lin)
+            csv_value(value) = isfinite(value) ? string(Float64(value)) : ""
             println(io, join((
                 m,
                 Float64(abs2(mode_weights[m])),
-                Float64(per_ref_lin[m]),
-                Float64(per_ref_dB[m]),
-                Float64(per_opt_lin[m]),
-                Float64(per_opt_dB[m]),
+                csv_value(per_ref_lin[m]),
+                csv_value(per_ref_dB[m]),
+                csv_value(per_opt_lin[m]),
+                csv_value(per_opt_dB[m]),
                 m == 1,
                 m == worst_idx,
             ), ","))
@@ -1579,6 +1704,9 @@ function _write_mmf_per_mode_leakage_csv(path::AbstractString, trust_ref, trust_
 end
 
 function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setup, opt, trust_ref, trust_opt, variant::Symbol, wall_time_s::Real)
+    reference = _mmf_primary_metrics(trust_ref.cost_report, variant)
+    optimized = _mmf_primary_metrics(trust_opt.cost_report, variant)
+    regularizers = _regularizer_evidence(spec)
     payload = Dict{String,Any}(
         "schema_version" => "1.0",
         "artifact_schema" => "mmf_front_layer_v1",
@@ -1591,7 +1719,13 @@ function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setu
         "objective" => Dict(
             "kind" => string(spec.objective.kind),
             "variant" => string(variant),
+            "reported_metric" => variant == :worst_mode ?
+                "true_maximum_active_mode_leakage" : string(variant),
+            "optimization_metric" => variant == :worst_mode ?
+                "normalized_logsumexp_smooth_proxy" : string(variant),
             "log_cost" => spec.objective.log_cost,
+            "regularizers_requested" => regularizers.requested,
+            "regularizers_resolved" => regularizers.resolved,
         ),
         "grid" => Dict(
             "Nt" => size(setup.uω0, 1),
@@ -1612,11 +1746,12 @@ function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setu
             "mode_weights" => Dict("storage_key" => "mode_weights", "shape" => [length(setup.mode_weights)], "units" => "complex normalized launch coefficients"),
         ),
         "metrics" => Dict(
-            "J_before" => trust_ref.cost_report.sum_lin,
-            "J_after" => trust_opt.cost_report.sum_lin,
-            "delta_J_dB" => trust_opt.cost_report.sum_dB - trust_ref.cost_report.sum_dB,
+            "J_before" => reference.linear,
+            "J_after" => optimized.linear,
+            "delta_J_dB" => optimized.dB - reference.dB,
             "converged" => _safe_mmf_converged(opt.result),
-            "iterations" => length(opt.J_history),
+            "iterations" => _safe_mmf_iterations(opt),
+            "objective_evaluations" => length(opt.J_history),
             "wall_time_s" => Float64(wall_time_s),
         ),
     )
@@ -1642,9 +1777,10 @@ function run_mmf_front_layer_phase_search(;
     λ_gdd::Real,
     λ_boundary::Real,
     log_cost::Bool,
+    store_trace::Bool,
     kwargs...,
 )
-    _ = (β_order, kwargs)
+    _ = kwargs
     variant = _mmf_objective_variant(objective_kind)
     setup = setup_mmf_raman_problem(;
         preset = fiber_preset,
@@ -1674,12 +1810,35 @@ function run_mmf_front_layer_phase_search(;
         log_cost = log_cost,
         λ_gdd = λ_gdd,
         λ_boundary = λ_boundary,
-        f_calls_limit = max(1, max_iter),
-        store_trace = true,
+        store_trace = store_trace,
         verbose = false,
     )
     wall_time_s = time() - t0
     trust_opt = mmf_trust_metrics(opt.φ_opt, setup)
+    reference_metrics = _mmf_primary_metrics(trust_ref.cost_report, variant)
+    optimized_metrics = _mmf_primary_metrics(trust_opt.cost_report, variant)
+    optimization_surface_final, optimization_gradient = cost_and_gradient_mmf(
+        opt.φ_opt,
+        setup.mode_weights,
+        setup.uω0,
+        setup.fiber,
+        setup.sim,
+        setup.band_mask;
+        variant = variant,
+        λ_gdd = λ_gdd,
+        λ_boundary = λ_boundary,
+        log_cost = log_cost,
+    )
+    _, physical_gradient = cost_and_gradient_mmf(
+        opt.φ_opt,
+        setup.mode_weights,
+        setup.uω0,
+        setup.fiber,
+        setup.sim,
+        setup.band_mask;
+        variant = variant,
+        log_cost = false,
+    )
 
     plot_mmf_result(
         φ0,
@@ -1717,14 +1876,13 @@ function run_mmf_front_layer_phase_search(;
         P_W = P_cont,
         output_dir = dirname(String(save_prefix)),
         n_z_samples = 8,
-        also_unshaped = false,
+        also_unshaped = true,
+        objective_kind = objective_kind,
+        objective_values = (reference_metrics.linear, optimized_metrics.linear),
+        objective_label = experiment_objective_contract(spec).description,
+        mode_idx = _mmf_standard_mode_views(
+            trust_ref.cost_report, trust_opt.cost_report, variant),
     )
-    # Full MMF unshaped waterfalls are expensive and currently less stable
-    # through the PyPlot/PyCall stack. For the front-layer smoke artifact
-    # contract, reuse the MMF total-spectrum before/after panel as the
-    # unshaped comparison slot until a native MMF waterfall writer is promoted.
-    unshaped_path = string(save_prefix, "_evolution_unshaped.png")
-    isfile(unshaped_path) || cp(string(save_prefix, "_total_spectrum.png"), unshaped_path; force=true)
 
     artifact_paths = artifact_paths_for_prefix(save_prefix)
     artifact_path = artifact_paths.jld2
@@ -1751,20 +1909,28 @@ function run_mmf_front_layer_phase_search(;
         E_ref = Float64(E_ref),
         c_opt = ComplexF64.(setup.mode_weights),
         uomega0 = ComplexF64.(setup.uω0),
-        J_before = Float64(trust_ref.cost_report.sum_lin),
-        J_after = Float64(trust_opt.cost_report.sum_lin),
-        delta_J_dB = Float64(trust_opt.cost_report.sum_dB - trust_ref.cost_report.sum_dB),
-        grad_norm = NaN,
+        objective_variant = String(variant),
+        reported_metric = variant == :worst_mode ?
+            "true_maximum_active_mode_leakage" : String(variant),
+        optimization_metric = variant == :worst_mode ?
+            "normalized_logsumexp_smooth_proxy" : String(variant),
+        J_before = reference_metrics.linear,
+        J_after = optimized_metrics.linear,
+        delta_J_dB = optimized_metrics.dB - reference_metrics.dB,
+        grad_norm = norm(optimization_gradient),
+        physical_grad_norm = norm(physical_gradient),
+        optimization_surface_final = optimization_surface_final,
         converged = _safe_mmf_converged(opt.result),
-        iterations = length(opt.J_history),
+        iterations = _safe_mmf_iterations(opt),
+        objective_evaluations = length(opt.J_history),
         wall_time_s = Float64(wall_time_s),
         convergence_history = Float64.(opt.J_history),
         band_mask = Bool.(setup.band_mask),
         sim_Dt = Float64(setup.sim["Δt"]),
         sim_omega0 = Float64(setup.sim["ω0"]),
         mode_weights = ComplexF64.(setup.mode_weights),
-        ref_per_mode_leakage = Float64.(trust_ref.cost_report.per_mode_lin),
-        opt_per_mode_leakage = Float64.(trust_opt.cost_report.per_mode_lin),
+        ref_per_mode_leakage = collect(trust_ref.cost_report.per_mode_lin),
+        opt_per_mode_leakage = collect(trust_opt.cost_report.per_mode_lin),
         boundary_edge_fraction = Float64(trust_opt.boundary_edge_fraction),
         run_tag = Dates.format(now(), "yyyymmdd_HHMMss"),
     )
@@ -1789,9 +1955,9 @@ function run_mmf_front_layer_phase_search(;
         sidecar_path = sidecar_path,
         saved = (jld2 = artifact_path, json = sidecar_path),
         variable_artifacts = (paths = (mode_resolved_plot, leakage_csv), hooks = (:mode_resolved_spectra, :per_mode_leakage_table)),
-        J_before = trust_ref.cost_report.sum_lin,
-        J_after_lin = trust_opt.cost_report.sum_lin,
-        ΔJ_dB = trust_opt.cost_report.sum_dB - trust_ref.cost_report.sum_dB,
+        J_before = reference_metrics.linear,
+        J_after_lin = optimized_metrics.linear,
+        ΔJ_dB = optimized_metrics.dB - reference_metrics.dB,
         wall_time_s = wall_time_s,
     )
 end
@@ -1803,10 +1969,10 @@ function run_supported_experiment(spec;
                                   allow_high_resource::Bool=false)
     validate_experiment_spec(spec)
     mode = experiment_execution_mode(spec)
-    if mode == :long_fiber_phase && spec.verification.mode == :burst_required && !allow_high_resource
+    if mode == :long_fiber_phase && spec.verification.mode == :high_resource && !allow_high_resource
         throw(ArgumentError(
             "this long_fiber config declares high-resource verification; pass --heavy-ok on suitable compute, or create a smaller standard-verification long-fiber config"))
-    elseif mode == :multimode_phase && spec.verification.mode == :burst_required && !allow_high_resource
+    elseif mode == :multimode_phase && spec.verification.mode == :high_resource && !allow_high_resource
         throw(ArgumentError(
             "this multimode config declares high-resource verification; pass --heavy-ok on suitable compute, or create a smaller standard-verification MMF config"))
     elseif mode == :amp_on_phase
@@ -1829,7 +1995,7 @@ function run_supported_experiment(spec;
         )
 
         artifact_path = string(save_prefix, "_result.jld2")
-        bundle = _attach_longfiber_reach_diagnostic(_attach_export_handoff(_attach_exploratory_artifacts((
+        bundle = _attach_longfiber_reach_diagnostic(_attach_exploratory_artifacts((
             spec = spec,
             output_dir = output_dir,
             save_prefix = save_prefix,
@@ -1842,8 +2008,8 @@ function run_supported_experiment(spec;
             sim = sim,
             band_mask = band_mask,
             Δf = Δf,
-        ))))
-        return _attach_run_manifest(_attach_artifact_validation(bundle); run_context=run_context, run_command=run_command)
+        )))
+        return _finalize_experiment_run(_attach_artifact_validation(bundle); run_context=run_context, run_command=run_command)
     end
 
     if mode == :reduced_phase
@@ -1867,7 +2033,7 @@ function run_supported_experiment(spec;
             band_mask = band_mask,
             Δf = Δf,
         ))
-        return _attach_run_manifest(_attach_artifact_validation(bundle); run_context=run_context, run_command=run_command)
+        return _finalize_experiment_run(_attach_artifact_validation(bundle); run_context=run_context, run_command=run_command)
     end
 
     if mode == :multimode_phase
@@ -1876,7 +2042,7 @@ function run_supported_experiment(spec;
             spec = spec,
             save_prefix = save_prefix,
         )
-        return _attach_run_manifest(_attach_artifact_validation(_attach_exploratory_artifacts((
+        return _finalize_experiment_run(_attach_artifact_validation(_attach_exploratory_artifacts((
             spec = spec,
             output_dir = output_dir,
             save_prefix = save_prefix,
@@ -1910,7 +2076,7 @@ function run_supported_experiment(spec;
         _save_multivar_standard_images(spec, scalar_bundle)
         Δf = fftshift(FFTW.fftfreq(scalar_run.sim["Nt"], 1 / scalar_run.sim["Δt"]))
 
-        return _attach_run_manifest(_attach_artifact_validation(_attach_exploratory_artifacts((
+        return _finalize_experiment_run(_attach_artifact_validation(_attach_exploratory_artifacts((
             spec = spec,
             output_dir = output_dir,
             save_prefix = save_prefix,
@@ -1942,7 +2108,7 @@ function run_supported_experiment(spec;
         _save_multivar_standard_images(spec, vector_bundle)
         Δf = fftshift(FFTW.fftfreq(vector_run.sim["Nt"], 1 / vector_run.sim["Δt"]))
 
-        return _attach_run_manifest(_attach_artifact_validation(_attach_exploratory_artifacts((
+        return _finalize_experiment_run(_attach_artifact_validation(_attach_exploratory_artifacts((
             spec = spec,
             output_dir = output_dir,
             save_prefix = save_prefix,
@@ -1972,7 +2138,7 @@ function run_supported_experiment(spec;
     _save_multivar_standard_images(spec, mv_bundle)
     Δf = fftshift(FFTW.fftfreq(mv_run.sim["Nt"], 1 / mv_run.sim["Δt"]))
 
-    return _attach_run_manifest(_attach_artifact_validation(_attach_exploratory_artifacts((
+    return _finalize_experiment_run(_attach_artifact_validation(_attach_exploratory_artifacts((
         spec = spec,
         output_dir = output_dir,
         save_prefix = save_prefix,

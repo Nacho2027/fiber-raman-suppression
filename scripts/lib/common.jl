@@ -14,7 +14,6 @@ Shared functions (single source of truth):
 - `compute_photon_number` — conserved photon-number invariant for GNLSE checks
 - `temporal_edge_fraction` — measure raw temporal energy near FFT window edges
 - `setup_raman_problem` — setup for phase optimization (single-mode fibers)
-- `setup_amplitude_problem` — setup for amplitude optimization (single-mode fibers)
 
 All fiber parameters in this module are for single-mode (M=1) propagation using
 `get_disp_fiber_params_user_defined`. GRIN multimode fiber code lives in
@@ -34,14 +33,14 @@ using Logging
 using FiberLab
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Fiber presets — named single-mode fiber parameter sets
+# Package-owned single-mode fiber presets
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
     FIBER_PRESETS
 
-Dictionary of named single-mode fiber parameter presets. Each entry is a
-NamedTuple with fields: `name`, `gamma`, `betas`, `fR`, `description`.
+Alias of `FiberLab.SINGLE_MODE_FIBER_PRESETS`. Each entry is a NamedTuple
+with fields `name`, `gamma`, `betas`, and `fR`.
 
 All parameters are in SI units:
 - `gamma`: nonlinear coefficient [W⁻¹m⁻¹]
@@ -50,41 +49,20 @@ All parameters are in SI units:
 
 Available presets: :SMF28, :SMF28_beta2_only, :HNLF, :HNLF_zero_disp
 """
-const FIBER_PRESETS = Dict(
-    :SMF28 => (
-        name = "SMF-28",
-        gamma = 1.1e-3,
-        betas = [-2.17e-26, 1.2e-40],
-        fR = 0.18,
-        description = "Corning SMF-28 @ 1550nm (β₂ + β₃)"
-    ),
-    :SMF28_beta2_only => (
-        name = "SMF-28 (β₂ only)",
-        gamma = 1.1e-3,
-        betas = [-2.17e-26],
-        fR = 0.18,
-        description = "Corning SMF-28 @ 1550nm, no TOD"
-    ),
-    :HNLF => (
-        name = "HNLF",
-        gamma = 10.0e-3,
-        betas = [-0.5e-26, 1.0e-40],
-        fR = 0.18,
-        description = "Highly Nonlinear Fiber @ 1550nm (β₂ + β₃)"
-    ),
-    :HNLF_zero_disp => (
-        name = "HNLF (zero-disp)",
-        gamma = 10.0e-3,
-        betas = [-0.1e-26, 3.0e-40],
-        fR = 0.18,
-        description = "HNLF near zero-dispersion wavelength"
-    ),
-)
+const FIBER_PRESETS = FiberLab.SINGLE_MODE_FIBER_PRESETS
 
 const _PEAK_POWER_FACTORS = Dict(
     "sech_sq" => 0.881374,
-    "gaussian" => 0.939437,
+    "gauss" => 0.939437,
 )
+
+function canonical_pulse_shape(shape::AbstractString)
+    normalized = lowercase(strip(String(shape)))
+    normalized == "gaussian" && return "gauss"
+    normalized in ("gauss", "sech_sq") || throw(ArgumentError(
+        "unsupported pulse shape `$shape`; expected `sech_sq`, `gauss`, or alias `gaussian`"))
+    return normalized
+end
 
 """
     get_fiber_preset(name::Symbol) -> NamedTuple
@@ -127,7 +105,7 @@ Convert average power to pulse peak power using the same pulse-shape factors as
 `FiberLab.get_initial_state`.
 
 - `sech_sq`: `0.881374 * P_cont / (pulse_fwhm * pulse_rep_rate)`
-- `gaussian`: `0.939437 * P_cont / (pulse_fwhm * pulse_rep_rate)`
+- `gauss` (alias `gaussian`): `0.939437 * P_cont / (pulse_fwhm * pulse_rep_rate)`
 """
 function peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
                                        pulse_shape::AbstractString="sech_sq")
@@ -135,9 +113,7 @@ function peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
     @assert pulse_fwhm > 0 "pulse_fwhm must be positive"
     @assert pulse_rep_rate > 0 "pulse_rep_rate must be positive"
 
-    factor = get(_PEAK_POWER_FACTORS, pulse_shape, nothing)
-    factor === nothing && throw(ArgumentError(
-        "unsupported pulse_shape `$pulse_shape` for average→peak power conversion"))
+    factor = _PEAK_POWER_FACTORS[canonical_pulse_shape(pulse_shape)]
     return factor * P_cont / (pulse_fwhm * pulse_rep_rate)
 end
 
@@ -248,32 +224,6 @@ function recommended_time_window(L_fiber; safety_factor=2.0, beta2=20e-27,
 
     total_ps = walk_off_ps + spm_ps + pulse_extent
     return max(5, ceil(Int, total_ps * safety_factor))
-end
-
-"""
-    nt_for_window(time_window_ps; dt_min_ps=0.0105)
-
-Return the smallest power-of-2 Nt that maintains at least `dt_min_ps` temporal
-resolution for the given time window.
-
-Default `dt_min_ps=0.0105` corresponds to ≈10.5 fs resolution, sufficient to
-resolve femtosecond pulse structures without over-sampling.
-
-# Arguments
-- `time_window_ps`: total simulation time window in picoseconds (must be > 0)
-- `dt_min_ps`: minimum temporal step size in ps (default 0.0105)
-
-# Returns
-- Power-of-2 integer Nt ≥ ceil(time_window_ps / dt_min_ps)
-"""
-function nt_for_window(time_window_ps; dt_min_ps=0.0105)
-    @assert time_window_ps > 0 "time_window_ps must be positive, got $time_window_ps"
-    nt_min = ceil(Int, time_window_ps / dt_min_ps)
-    nt = 1
-    while nt < nt_min
-        nt <<= 1
-    end
-    return nt
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -472,21 +422,24 @@ function _validate_single_mode_setup(;
     @assert length(betas_user) ≥ 1 "need at least β₂"
 end
 
-function _auto_size_single_mode_grid(Nt, time_window, L_fiber, P_cont,
+function _auto_size_single_mode_grid(λ0, Nt, time_window, L_fiber, P_cont,
                                      pulse_fwhm, pulse_rep_rate, pulse_shape,
                                      gamma_user, betas_user)
     P_peak = peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
         pulse_shape=pulse_shape)
     tw_rec = recommended_time_window(L_fiber;
         beta2=abs(betas_user[1]), gamma=gamma_user, P_peak=P_peak)
-    if time_window < tw_rec
-        Nt_rec = nt_for_window(tw_rec)
-        @info @sprintf("Auto-sizing: time_window %d→%d ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
-            time_window, tw_rec, Nt, max(Nt, Nt_rec), L_fiber, P_cont)
-        time_window = tw_rec
-        Nt = max(Nt, Nt_rec)
+    resolved = FiberLab.resolve_sampling_grid(
+        Grid(nt=Nt, time_window_ps=time_window, policy=:auto_if_undersized);
+        wavelength_m=λ0,
+        minimum_time_window_ps=tw_rec,
+    )
+    resolved_window, resolved_nt = resolved.time_window_ps, resolved.nt
+    if resolved_window != time_window || resolved_nt != Nt
+        @info @sprintf("Auto-sizing: time_window %g→%g ps, Nt %d→%d (for L=%.1fm P=%.3fW)",
+            time_window, resolved_window, Nt, resolved_nt, L_fiber, P_cont)
     end
-    return Nt, time_window, tw_rec
+    return resolved_nt, resolved_window, tw_rec
 end
 
 """
@@ -515,6 +468,7 @@ function _setup_single_mode_problem(;
     fiber_preset::Union{Nothing, Symbol},
     auto_size::Bool=true,
 )
+    pulse_shape = canonical_pulse_shape(pulse_shape)
     gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
     _validate_single_mode_setup(;
         λ0, M, Nt, time_window, L_fiber, P_cont, pulse_fwhm, gamma_user, betas_user,
@@ -523,7 +477,7 @@ function _setup_single_mode_problem(;
     tw_rec = time_window
     if auto_size
         Nt, time_window, tw_rec = _auto_size_single_mode_grid(
-            Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
+            λ0, Nt, time_window, L_fiber, P_cont, pulse_fwhm, pulse_rep_rate,
             pulse_shape, gamma_user, betas_user,
         )
     end
@@ -565,14 +519,14 @@ When `fiber_preset` is provided, its `gamma`, `betas`, and `fR` override the
 corresponding keyword arguments. Explicit kwargs take precedence when
 `fiber_preset` is `nothing` (the default).
 
-Defaults: Nt=2^14, time_window=10.0, β_order=2, P_cont=0.05, betas_user=[-2.6e-26].
+Defaults: Nt=2^10, time_window=10.0, β_order=2, P_cont=0.05, betas_user=[-2.6e-26].
 
 Returns (uω0, fiber, sim, band_mask, Δf, raman_threshold).
 """
 function setup_raman_problem(;
     λ0 = 1550e-9,
     M = 1,
-    Nt = 2^14,
+    Nt = 2^10,
     time_window = 10.0,
     β_order = 2,
     L_fiber = 1.0,
@@ -615,7 +569,7 @@ Returns (uω0, fiber, sim, band_mask, Δf, raman_threshold).
 function setup_raman_problem_exact(;
     λ0 = 1550e-9,
     M = 1,
-    Nt = 2^14,
+    Nt = 2^10,
     time_window = 10.0,
     β_order = 2,
     L_fiber = 1.0,
@@ -640,57 +594,5 @@ function setup_raman_problem_exact(;
     return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
 end
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Setup: amplitude optimization (single-mode fibers)
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""
-    setup_amplitude_problem(; kwargs...)
-
-Create all objects needed for amplitude optimization from single-mode fiber
-parameters. Uses `get_disp_fiber_params_user_defined` with M=1 (bypasses GRIN).
-
-When `fiber_preset` is provided, its `gamma`, `betas`, and `fR` override the
-corresponding keyword arguments.
-
-Defaults: Nt=2^13, time_window=10.0, β_order=3, P_cont=0.05,
-          betas_user=[-2.6e-26, 1.2e-40].
-
-Returns (uω0, fiber, sim, band_mask, Δf, raman_threshold).
-"""
-function setup_amplitude_problem(;
-    λ0 = 1550e-9,
-    M = 1,
-    Nt = 2^13,
-    time_window = 10.0,
-    β_order = 3,
-    L_fiber = 1.0,
-    P_cont = 0.05,
-    pulse_fwhm = 185e-15,
-    pulse_rep_rate = 80.5e6,
-    pulse_shape = "sech_sq",
-    raman_threshold = -5.0,
-    gamma_user = 0.0013,
-    betas_user = [-2.6e-26, 1.2e-40],
-    fR = 0.18,
-    fiber_preset::Union{Nothing, Symbol} = nothing
-)
-    setup = _setup_single_mode_problem(;
-        λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
-        pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
-        fR, fiber_preset,
-    )
-
-    # Soliton order for diagnostics
-    β2 = setup.betas_user[1]
-    T0 = pulse_fwhm / (2 * acosh(sqrt(2)))
-    P_peak = peak_power_from_average_power(P_cont, pulse_fwhm, pulse_rep_rate;
-        pulse_shape=pulse_shape)
-    N_sol = sqrt(setup.gamma_user * P_peak * T0^2 / abs(β2))
-
-    @debug "Setup (amplitude)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] N_soliton=round(N_sol, digits=2) raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] time_window=setup.sim["Δt"]*setup.sim["Nt"] tw_recommended=setup.tw_rec fiber_preset=fiber_preset
-
-    return setup.uω0, setup.fiber, setup.sim, setup.band_mask, setup.Δf, setup.raman_threshold
-end
 
 end # include guard

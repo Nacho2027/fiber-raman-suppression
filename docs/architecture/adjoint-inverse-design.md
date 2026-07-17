@@ -9,16 +9,17 @@ contracts available to notebook code.
 
 An adjoint experiment has one execution contract:
 
-```text
-optimizer coordinates
-  -> control decode
-  -> forward fiber propagation
-  -> objective cost
-  -> objective terminal adjoint
-  -> adjoint propagation
-  -> physical gradient
-  -> control pullback
-  -> optimizer update
+```mermaid
+flowchart LR
+    Q["Optimizer coordinates"] --> C["Control decode"]
+    C --> F["Forward fiber propagation"]
+    F --> O["Objective cost + terminal seed"]
+    O --> A["Adjoint propagation"]
+    A --> G["Physical gradient"]
+    G --> P["Control pullback"]
+    P --> U["Optimizer update"]
+    U -. "iterate" .-> Q
+    F --> E["Evidence: metrics, trust, figures"]
 ```
 
 New controls and objectives enter through this contract.

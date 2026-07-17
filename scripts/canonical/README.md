@@ -8,9 +8,8 @@ for repeatable checks, old command workflows, and lab handoff automation.
 Useful commands:
 
 ```bash
-julia -t auto --project=. scripts/canonical/optimize_raman.jl --list
 julia -t auto --project=. scripts/canonical/run_experiment.jl --list
-julia -t auto --project=. scripts/canonical/run_sweep.jl --list
+julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --list
 julia --project=. scripts/canonical/inspect_run.jl results/raman/<run_id>/
 ```
 

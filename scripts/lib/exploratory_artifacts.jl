@@ -34,6 +34,57 @@ function _explore_get(object, name::Symbol, default=nothing)
     return hasproperty(object, name) ? getproperty(object, name) : default
 end
 
+function _run_grid_evidence(spec, result_bundle)
+    requested = Dict{String,Any}(
+        "nt" => Int(spec.problem.Nt),
+        "time_window_ps" => Float64(spec.problem.time_window),
+        "policy" => string(spec.problem.grid_policy),
+    )
+    sim = _explore_get(result_bundle, :sim, nothing)
+    if sim !== nothing && haskey(sim, "Nt") && haskey(sim, "Δt")
+        nt = Int(sim["Nt"])
+        dt_ps = Float64(sim["Δt"])
+        time_window_ps = nt * dt_ps
+        f0_thz = haskey(sim, "f0") ? Float64(sim["f0"]) : nothing
+        fmin_thz = if haskey(sim, "fs")
+            minimum(Float64.(sim["fs"]))
+        elseif f0_thz === nothing
+            nothing
+        else
+            f0_thz - nt / (2time_window_ps)
+        end
+        return (
+            requested=requested,
+            resolved=Dict{String,Any}(
+                "nt" => nt,
+                "time_window_ps" => time_window_ps,
+                "dt_ps" => dt_ps,
+                "f0_thz" => f0_thz,
+                "minimum_absolute_frequency_thz" => fmin_thz,
+                "minimum_frequency_fraction" =>
+                    f0_thz === nothing || fmin_thz === nothing ? nothing : fmin_thz / f0_thz,
+                "source" => "runtime_sim",
+            ),
+        )
+    end
+
+    resolution = resolve_experiment_grid(spec)
+    ismissing(resolution.resolved) && return (requested=requested, resolved=nothing)
+    grid = resolution.resolved
+    return (
+        requested=requested,
+        resolved=Dict{String,Any}(
+            "nt" => grid.nt,
+            "time_window_ps" => grid.time_window_ps,
+            "dt_ps" => grid.time_window_ps / grid.nt,
+            "f0_thz" => nothing,
+            "minimum_absolute_frequency_thz" => nothing,
+            "minimum_frequency_fraction" => nothing,
+            "source" => "preflight",
+        ),
+    )
+end
+
 function _explore_sim_get(sim, key::String, default)
     if sim isa AbstractDict
         haskey(sim, key) && return sim[key]
@@ -295,6 +346,8 @@ end
 function _write_exploratory_summary(path::AbstractString, spec, result_bundle, zoom)
     trace = _explore_trace(result_bundle)
     plots = _explore_plot_contract(spec)
+    grid_evidence = _run_grid_evidence(spec, result_bundle)
+    resolved_grid = grid_evidence.resolved
     payload = Dict{String,Any}(
         "schema_version" => "exploratory_artifacts_v1",
         "config" => Dict{String,Any}(
@@ -306,8 +359,10 @@ function _write_exploratory_summary(path::AbstractString, spec, result_bundle, z
             "preset" => string(spec.problem.preset),
             "L_fiber" => spec.problem.L_fiber,
             "P_cont" => spec.problem.P_cont,
-            "Nt" => spec.problem.Nt,
-            "time_window" => spec.problem.time_window,
+            "Nt" => resolved_grid === nothing ? nothing : resolved_grid["nt"],
+            "time_window" => resolved_grid === nothing ? nothing : resolved_grid["time_window_ps"],
+            "requested_grid" => grid_evidence.requested,
+            "resolved_grid" => resolved_grid,
         ),
         "controls" => Dict{String,Any}(
             "variables" => [String(v) for v in spec.controls.variables],

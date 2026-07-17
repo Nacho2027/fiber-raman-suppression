@@ -739,8 +739,11 @@ function _native_real_profile(value)
         return profile
     end
     if value isa AbstractMatrix
-        profile = Float64.(vec(sum(value; dims = 2)))
-        all(isfinite, profile) || return nothing
+        matrix = Float64.(value)
+        all(isfinite, matrix) || return nothing
+        size(matrix, 2) > 0 || return nothing
+        profile = vec(matrix[:, 1])
+        all(column -> column == profile, eachcol(matrix)) || return nothing
         return profile
     end
     return nothing
@@ -762,11 +765,15 @@ end
 function _save_native_line_plot(path::AbstractString, y;
                                 title::AbstractString,
                                 ylabel::AbstractString,
-                                xlabel::AbstractString="sample")
+                                xlabel::AbstractString="sample",
+                                x=nothing)
     isempty(y) && return nothing
+    coordinates = x === nothing ? collect(1:length(y)) : Float64.(collect(x))
+    length(coordinates) == length(y) || throw(ArgumentError(
+        "native line-plot coordinate length does not match data length"))
     fig = figure(figsize = (7, 3))
     try
-        PyPlot.plot(collect(1:length(y)), y, lw = 1.4)
+        PyPlot.plot(coordinates, y, lw = 1.4)
         PyPlot.title(title)
         PyPlot.xlabel(xlabel)
         PyPlot.ylabel(ylabel)
@@ -780,29 +787,179 @@ function _save_native_line_plot(path::AbstractString, y;
     return path
 end
 
-function _save_native_mode_plot(path::AbstractString, power::AbstractMatrix;
-                                title::AbstractString)
+function _save_native_mode_spectrum_plot(path::AbstractString,
+                                         power::AbstractMatrix,
+                                         problem)
     isempty(power) && return nothing
+    size(power, 1) == sample_count(problem) || return nothing
+    centered = FFTW.fftshift(power, 1)
+    reference = max(maximum(centered), eps())
+    power_db = 10 .* log10.(centered ./ reference .+ 1e-30)
     fig = figure(figsize = (7, 3.5))
     try
-        x = collect(1:size(power, 1))
-        for mode_index in axes(power, 2)
-            linestyle = mode_index == first(axes(power, 2)) ? "-" : "--"
-            PyPlot.plot(x, power[:, mode_index], lw = 1.2,
+        x = problem.frequency_offset_thz
+        for mode_index in axes(power_db, 2)
+            linestyle = mode_index == first(axes(power_db, 2)) ? "-" : "--"
+            PyPlot.plot(x, power_db[:, mode_index], lw = 1.2,
                         linestyle = linestyle,
                         alpha = 0.85,
                         label = string("mode ", mode_index))
         end
-        size(power, 2) <= 12 && PyPlot.legend(fontsize = 8, loc = "best")
-        PyPlot.title(title)
-        PyPlot.xlabel("sample")
-        PyPlot.ylabel("power")
+        if problem.band_mask !== nothing
+            PyPlot.fill_between(
+                x, -60.0, 3.0;
+                where = FFTW.fftshift(problem.band_mask),
+                color = "tab:red",
+                alpha = 0.12,
+                label = "objective band",
+            )
+        end
+        size(power_db, 2) <= 12 && PyPlot.legend(fontsize = 8, loc = "best")
+        PyPlot.title("Mode-resolved output spectrum")
+        PyPlot.xlabel("frequency offset [THz]")
+        PyPlot.ylabel("power [dB, shared reference]")
+        PyPlot.ylim(-60, 3)
         PyPlot.grid(true, alpha = 0.25)
         PyPlot.tight_layout()
         PyPlot.savefig(path, dpi = 140)
     finally
         PyPlot.close(fig)
     end
+    return path
+end
+
+function _native_initial_forward_state(result::NativeAdjointResult)
+    control = result.plan.experiment.control
+    evaluation = evaluate_control(control, result.x_initial)
+    return _run_model_forward(
+        result.backend.model,
+        _decoded_value(evaluation),
+        result.backend.context,
+    )
+end
+
+function _write_native_spectrum_comparison(context::NativeArtifactContext,
+                                           result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
+    initial_power = _native_field_power_profile(_native_initial_forward_state(result))
+    final_power = _native_field_power_profile(result.final_step.forward_state)
+    initial_power === nothing && return nothing
+    final_power === nothing && return nothing
+    length(initial_power) == sample_count(problem) || return nothing
+    length(final_power) == sample_count(problem) || return nothing
+
+    x = problem.frequency_offset_thz
+    initial_centered = FFTW.fftshift(Float64.(initial_power))
+    final_centered = FFTW.fftshift(Float64.(final_power))
+    reference = max(maximum(initial_centered), maximum(final_centered), eps())
+    initial_db = 10 .* log10.(initial_centered ./ reference .+ 1e-30)
+    final_db = 10 .* log10.(final_centered ./ reference .+ 1e-30)
+    path = joinpath(context.output_dir, string(context.tag, "_spectrum_before_after.png"))
+    fig, axis = PyPlot.subplots(figsize = (8, 4))
+    try
+        axis.plot(x, initial_db, label = "initial design", linestyle = "--", linewidth = 1.2)
+        axis.plot(x, final_db, label = "optimized design", linewidth = 1.4)
+        mask = problem.band_mask
+        if mask !== nothing
+            centered_mask = FFTW.fftshift(mask)
+            axis.fill_between(
+                x, -60.0, 3.0;
+                where = centered_mask,
+                color = "tab:red",
+                alpha = 0.12,
+                label = "objective band",
+            )
+            if _objective_contract_kind(result.final_step.objective) == :raman_peak && any(centered_mask)
+                candidates = findall(centered_mask)
+                peak_index = candidates[argmax(final_centered[candidates])]
+                axis.axvline(x[peak_index]; color = "tab:red", linestyle = ":",
+                             linewidth = 1.0, label = "optimized band peak")
+            end
+        end
+        axis.set_xlabel("frequency offset [THz]")
+        axis.set_ylabel("power [dB, shared reference]")
+        axis.set_ylim(-60, 3)
+        axis.set_title("Output spectrum before and after optimization")
+        axis.grid(true; alpha = 0.25)
+        axis.legend(fontsize = 8, loc = "best")
+        fig.tight_layout()
+        fig.savefig(path; dpi = 160)
+    finally
+        PyPlot.close(fig)
+    end
+    return path
+end
+
+function _write_native_amplitude_diagnostic(context::NativeArtifactContext,
+                                            result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
+    fields = try
+        _single_mode_fields(decoded_final(result), problem)
+    catch
+        return nothing
+    end
+    size(fields.amplitude, 1) == sample_count(problem) || return nothing
+    shaped = fields.alpha .* fields.amplitude .* problem.uω0
+    reference_power = FFTW.fftshift(_native_field_power_profile(problem.uω0))
+    shaped_power = FFTW.fftshift(_native_field_power_profile(shaped))
+    power_reference = max(maximum(reference_power), maximum(shaped_power), eps())
+    x = problem.frequency_offset_thz
+    path = joinpath(context.output_dir, string(context.tag, "_amplitude_mask.png"))
+    fig, axes = PyPlot.subplots(2, 1, figsize = (8, 6), sharex = true)
+    try
+        shared_profile = _native_real_profile(fields.amplitude)
+        if shared_profile === nothing
+            for mode in Base.axes(fields.amplitude, 2)
+                axes[1].plot(x, FFTW.fftshift(view(fields.amplitude, :, mode));
+                             linewidth = 1.1, label = "mode $(mode)")
+            end
+            axes[1].legend(fontsize = 8, loc = "best")
+        else
+            axes[1].plot(x, FFTW.fftshift(shared_profile);
+                         color = "black", linewidth = 1.3, label = "shared mask")
+        end
+        axes[1].axhline(1.0; color = "gray", linestyle = "--", alpha = 0.6)
+        axes[1].set_ylabel("field amplitude")
+        axes[1].set_title("Decoded amplitude mask and shaped launch")
+        axes[2].plot(x, 10 .* log10.(reference_power ./ power_reference .+ 1e-30);
+                     label = "reference launch", linestyle = "--")
+        axes[2].plot(x, 10 .* log10.(shaped_power ./ power_reference .+ 1e-30);
+                     label = "shaped launch")
+        axes[2].set_xlabel("frequency offset [THz]")
+        axes[2].set_ylabel("power [dB]")
+        axes[2].set_ylim(-60, 3)
+        axes[2].legend(fontsize = 8, loc = "best")
+        for axis in axes
+            axis.grid(true; alpha = 0.25)
+        end
+        fig.tight_layout()
+        fig.savefig(path; dpi = 160)
+    finally
+        PyPlot.close(fig)
+    end
+    return path
+end
+
+function _write_native_peak_power(context::NativeArtifactContext,
+                                  result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
+    fields = try
+        _single_mode_fields(decoded_final(result), problem)
+    catch
+        return nothing
+    end
+    shaped = fields.alpha .* fields.amplitude .* cis.(fields.phase) .* problem.uω0
+    reference_temporal = FFTW.fft(problem.uω0, 1)
+    shaped_temporal = FFTW.fft(shaped, 1)
+    path = joinpath(context.output_dir, string(context.tag, "_peak_power.json"))
+    write_json_file(path, Dict(
+        "reference_peak_power" => maximum(vec(sum(abs2, reference_temporal; dims = 2))),
+        "shaped_peak_power" => maximum(vec(sum(abs2, shaped_temporal; dims = 2))),
+        "units" => "solver temporal-power units",
+    ))
     return path
 end
 
@@ -821,14 +978,12 @@ end
 
 function _write_native_mode_resolved_spectra(context::NativeArtifactContext,
                                              result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
     power = _native_mode_power_matrix(result.final_step.forward_state)
     power === nothing && return nothing
     path = joinpath(context.output_dir, string(context.tag, "_mode_resolved_spectra.png"))
-    return _save_native_mode_plot(
-        path,
-        power;
-        title = "Mode-resolved final field power",
-    )
+    return _save_native_mode_spectrum_plot(path, power, problem)
 end
 
 function _write_native_per_mode_summary(context::NativeArtifactContext,
@@ -850,6 +1005,42 @@ function _write_native_per_mode_summary(context::NativeArtifactContext,
     return path
 end
 
+function _native_run_problem(result::NativeAdjointResult)
+    source = result.backend.run_source
+    source === nothing && return nothing
+    source.problem isa FiberFieldProblem || return nothing
+    return source.problem
+end
+
+function _write_native_per_mode_leakage(context::NativeArtifactContext,
+                                        result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
+    mask = problem.band_mask
+    mask === nothing && return nothing
+    power = _native_mode_power_matrix(result.final_step.forward_state)
+    power === nothing && return nothing
+    size(power, 1) == length(mask) || return nothing
+
+    path = joinpath(context.output_dir, string(context.tag, "_per_mode_leakage.csv"))
+    open(path, "w") do io
+        println(io, "mode,band_power,total_power,leakage_fraction")
+        for mode_index in axes(power, 2)
+            mode_power = @view power[:, mode_index]
+            band_power = sum(@view mode_power[mask])
+            total_power = sum(mode_power)
+            leakage = total_power > 0 ? band_power / total_power : missing
+            println(io, join((
+                mode_index,
+                band_power,
+                total_power,
+                ismissing(leakage) ? "" : leakage,
+            ), ","))
+        end
+    end
+    return path
+end
+
 function _write_native_phase_profile(context::NativeArtifactContext,
                                      result::NativeAdjointResult)
     profile = _native_real_profile(_native_decoded_control_value(result, :phase))
@@ -863,19 +1054,70 @@ function _write_native_phase_profile(context::NativeArtifactContext,
     )
 end
 
-function _write_native_group_delay(context::NativeArtifactContext,
-                                   result::NativeAdjointResult)
+function _native_unwrap_phase(profile)
+    unwrapped = Float64.(angle.(cis.(profile)))
+    for index in 2:length(unwrapped)
+        delta = unwrapped[index] - unwrapped[index - 1]
+        delta > π && (unwrapped[index:end] .-= 2π)
+        delta < -π && (unwrapped[index:end] .+= 2π)
+    end
+    return unwrapped
+end
+
+function _native_group_delay_data(result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
     profile = _native_real_profile(_native_decoded_control_value(result, :phase))
     profile === nothing && return nothing
+    length(profile) == length(problem.frequency_offset_thz) || return nothing
     length(profile) > 1 || return nothing
-    group_delay = diff(profile)
-    path = joinpath(context.output_dir, string(context.tag, "_group_delay.png"))
-    return _save_native_line_plot(
-        path,
-        group_delay;
-        title = "Decoded phase finite difference",
-        ylabel = "delta phase",
+
+    angular_frequency = Float64.(problem.sim["\u03c9s"])
+    length(angular_frequency) == length(profile) || return nothing
+    all(diff(angular_frequency) .> 0) || return nothing
+    phase_unwrapped = _native_unwrap_phase(FFTW.fftshift(profile))
+    group_delay_ps = similar(phase_unwrapped)
+    group_delay_ps[1] = (phase_unwrapped[2] - phase_unwrapped[1]) /
+        (angular_frequency[2] - angular_frequency[1])
+    group_delay_ps[end] = (phase_unwrapped[end] - phase_unwrapped[end - 1]) /
+        (angular_frequency[end] - angular_frequency[end - 1])
+    for index in 2:(length(profile) - 1)
+        group_delay_ps[index] =
+            (phase_unwrapped[index + 1] - phase_unwrapped[index - 1]) /
+            (angular_frequency[index + 1] - angular_frequency[index - 1])
+    end
+    return (
+        frequency_offset_thz = problem.frequency_offset_thz,
+        phase_unwrapped_rad = phase_unwrapped,
+        group_delay_fs = 1e3 .* group_delay_ps,
     )
+end
+
+function _write_native_group_delay(context::NativeArtifactContext,
+                                   result::NativeAdjointResult)
+    data = _native_group_delay_data(result)
+    data === nothing && return nothing
+    plot_path = joinpath(context.output_dir, string(context.tag, "_group_delay.png"))
+    csv_path = joinpath(context.output_dir, string(context.tag, "_group_delay.csv"))
+    _save_native_line_plot(
+        plot_path,
+        data.group_delay_fs;
+        title = "Decoded spectral-phase group delay",
+        xlabel = "frequency offset [THz]",
+        ylabel = "group delay [fs]",
+        x = data.frequency_offset_thz,
+    )
+    open(csv_path, "w") do io
+        println(io, "frequency_offset_THz,phase_unwrapped_rad,group_delay_fs")
+        for row in zip(
+            data.frequency_offset_thz,
+            data.phase_unwrapped_rad,
+            data.group_delay_fs,
+        )
+            println(io, join(row, ","))
+        end
+    end
+    return Dict(:group_delay => plot_path, :group_delay_data => csv_path)
 end
 
 function _write_native_amplitude_profile(context::NativeArtifactContext,
@@ -901,6 +1143,25 @@ function _write_native_scalar_summary(context::NativeArtifactContext,
     return path
 end
 
+function _write_native_energy_throughput(context::NativeArtifactContext,
+                                         result::NativeAdjointResult)
+    problem = _native_run_problem(result)
+    problem === nothing && return nothing
+    fields = try
+        _single_mode_fields(decoded_final(result), problem)
+    catch
+        return nothing
+    end
+    reference_energy = sum(abs2, problem.uω0)
+    reference_energy > 0 || return nothing
+    shaped_without_phase = fields.alpha .* fields.amplitude .* problem.uω0
+    throughput = sum(abs2, shaped_without_phase) / reference_energy
+    isfinite(throughput) || return nothing
+    path = joinpath(context.output_dir, string(context.tag, "_energy_throughput.txt"))
+    write(path, string("energy_throughput = ", throughput, "\n"))
+    return path
+end
+
 function _native_scalar_artifact_value(value)
     if value isa Real
         scalar = Float64(value)
@@ -918,15 +1179,20 @@ end
 
 const _NATIVE_DEFAULT_ARTIFACT_WRITERS = Dict{Symbol,Function}(
     :field_summary => _write_native_field_summary,
+    :spectrum_before_after => _write_native_spectrum_comparison,
+    :raman_band_overlay => _write_native_spectrum_comparison,
+    :raman_peak_marker => _write_native_spectrum_comparison,
     :mode_resolved_spectra => _write_native_mode_resolved_spectra,
     :mode_resolved_summary => _write_native_per_mode_summary,
-    :per_mode_leakage_table => _write_native_per_mode_summary,
+    :per_mode_leakage_table => _write_native_per_mode_leakage,
     :phase_profile => _write_native_phase_profile,
     :group_delay => _write_native_group_delay,
     :amplitude_profile => _write_native_amplitude_profile,
-    :amplitude_mask => _write_native_amplitude_profile,
+    :amplitude_mask => _write_native_amplitude_diagnostic,
+    :shaped_input_spectrum => _write_native_amplitude_diagnostic,
     :energy_scale => (context, result) -> _write_native_scalar_summary(context, result, :energy),
-    :energy_throughput => (context, result) -> _write_native_scalar_summary(context, result, :energy),
+    :energy_throughput => _write_native_energy_throughput,
+    :peak_power => _write_native_peak_power,
 )
 
 const _NATIVE_BUILTIN_ARTIFACT_HOOKS = Set((:convergence_trace, :trust_report))
@@ -995,6 +1261,15 @@ function _write_native_hook_artifacts(plan::ExperimentPlan, result::NativeAdjoin
     extra_hooks = setdiff(Set(keys(result.backend.artifact_writers)), requested_hooks)
     isempty(extra_hooks) || throw(ArgumentError(
         "native artifact writers were provided for hooks not requested by the control/objective: $(collect(extra_hooks))"))
+    if result.backend.strict_artifacts
+        written_hooks = union(Set(keys(paths)), _NATIVE_BUILTIN_ARTIFACT_HOOKS)
+        missing_hooks = setdiff(requested_hooks, written_hooks)
+        isempty(missing_hooks) || throw(FiberLabBackendError(
+            plan,
+            result.backend,
+            "NativeAdjointBackend strict artifact write failed. Requested hooks produced no truthful artifact: $(collect(missing_hooks)). Supply a writer with the required physical context, remove the hooks, or set strict_artifacts=false.",
+        ))
+    end
     return paths
 end
 
@@ -1030,6 +1305,7 @@ function _write_native_artifacts(plan::ExperimentPlan, result::NativeAdjointResu
         "controls" => [String(variable) for variable in plan.variables],
         "control" => String(plan.variables[1]),
         "objective" => String(plan.objective),
+        "objective_cost_scale" => String(_objective_cost_scale(result.final_step.objective)),
         "objective_problem_sha256" => _objective_problem_sha256(result.final_step.objective),
         "resolved_problem_sha256" => result.backend.model.problem_source === nothing ?
             nothing : result.backend.model.problem_source.snapshot_sha256,
@@ -1069,6 +1345,15 @@ function execute(plan::ExperimentPlan, backend::NativeAdjointBackend)
     objective = _native_objective(plan)
     expected_dimension = dimension(control)
     gradient_check = _native_gradient_check(plan, backend, control, objective)
+    initial_step, _, initial_entry = _native_step_gradient(
+        backend.model,
+        control,
+        objective,
+        backend.initial_coordinates,
+        backend.context,
+        expected_dimension,
+        backend.feasibility,
+    )
 
     function cost_function(x)
         return _native_cost(
@@ -1114,14 +1399,27 @@ function execute(plan::ExperimentPlan, backend::NativeAdjointBackend)
         backend.feasibility,
     )
     trace = _trace_from_optim(optim_result)
-    isempty(trace) && push!(trace, final_entry)
+    initial_entry = merge(initial_entry, (iteration = 0,))
+    final_entry = merge(final_entry, (iteration = Optim.iterations(optim_result),))
+    if isempty(trace)
+        push!(trace, initial_entry)
+    else
+        trace[1] = merge(initial_entry, (iteration = trace[1].iteration,))
+    end
+    if x_final == backend.initial_coordinates
+        trace[end] = merge(final_entry, (iteration = trace[end].iteration,))
+    elseif length(trace) == 1
+        push!(trace, final_entry)
+    else
+        trace[end] = merge(final_entry, (iteration = trace[end].iteration,))
+    end
 
     provisional_result = NativeAdjointResult(
         plan,
         backend,
         copy(backend.initial_coordinates),
         x_final,
-        first(trace).cost,
+        initial_step.cost,
         final_step.cost,
         trace,
         final_step,
@@ -1370,12 +1668,13 @@ figure_paths(result::NativeAdjointResult) = copy(result.artifact_paths)
 decoded_final(result::NativeAdjointResult) = _decoded_value(result.final_step.control_evaluation)
 
 function metrics(result::NativeAdjointResult)
-    final_gradient_norm = isempty(result.convergence_trace) ?
-        norm(gradient_vector(result.final_step)) :
-        last(result.convergence_trace).gradient_norm
+    final_gradient_norm = norm(gradient_vector(result.final_step))
+    physical_cost_final = objective_value(
+        result.final_step.objective, result.final_step.forward_state)
     return (
         cost_initial = result.cost_initial,
         cost_final = result.cost_final,
+        physical_cost_final = physical_cost_final,
         delta_cost = result.cost_final - result.cost_initial,
         iterations = max(length(result.convergence_trace) - 1, 0),
         converged = result.converged,

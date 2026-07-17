@@ -95,7 +95,7 @@ function phase_control(problem::FiberFieldProblem;
                 lower = first(bounds),
                 upper = last(bounds),
                 units = "rad",
-                figure_hooks = (:phase_profile, :group_delay),
+                figure_hooks = control_contract(:phase).figure_hooks,
             )
     end
     basis_matrix = Matrix{Float64}(basis)
@@ -107,7 +107,7 @@ function phase_control(problem::FiberFieldProblem;
             lower = first(bounds),
             upper = last(bounds),
             units = "rad",
-            figure_hooks = (:phase_profile, :group_delay),
+            figure_hooks = control_contract(:phase).figure_hooks,
         )
 end
 
@@ -153,7 +153,7 @@ function amplitude_control(problem::FiberFieldProblem;
         lower = first(bounds),
         upper = last(bounds),
         units = "relative field amplitude",
-        figure_hooks = (:amplitude_profile,),
+        figure_hooks = control_contract(:amplitude).figure_hooks,
     )
 end
 
@@ -163,7 +163,11 @@ end
 Construct a positive scalar control for relative pulse energy.
 """
 energy_control(; name::Symbol=:energy) =
-    PositiveScalar(name; units = "relative pulse energy", figure_hooks = (:energy_scale,))
+    PositiveScalar(
+        name;
+        units = "relative pulse energy",
+        figure_hooks = control_contract(:energy).figure_hooks,
+    )
 
 """
     bounded_profile_control(name, basis; lower, upper)

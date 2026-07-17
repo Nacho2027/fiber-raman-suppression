@@ -372,6 +372,7 @@ function run_reduced_phase_optimization(;
     do_plots=true,
     log_cost::Bool=true,
     objective_kind::Symbol=:raman_band,
+    store_trace::Bool=true,
     solver_reltol=1e-8,
     solver_f_abstol=:auto,
     solver_g_abstol=:auto,
@@ -385,7 +386,7 @@ function run_reduced_phase_optimization(;
     Nt = sim["Nt"]
     M = sim["M"]
 
-    λ_gdd_val = λ_gdd === :auto ? 1e-4 : Float64(λ_gdd)
+    λ_gdd_val = resolve_regularizer_lambda(:gdd, λ_gdd)
     result, control = optimize_reduced_phase_coefficients(
         uω0, fiber, sim, band_mask;
         basis_orders=basis_orders,
@@ -395,7 +396,7 @@ function run_reduced_phase_optimization(;
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
         log_cost=log_cost,
-        store_trace=true,
+        store_trace=store_trace,
         solver_f_abstol=solver_f_abstol,
         solver_g_abstol=solver_g_abstol,
     )
@@ -406,13 +407,21 @@ function run_reduced_phase_optimization(;
     φ_after = built_after.phase
     J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask;
         objective_kind=objective_kind, log_cost=false)
-    J_after, grad_after = reduced_phase_adjoint_cost_gradient(
+    J_after, physical_grad_after = reduced_phase_adjoint_cost_gradient(
         Optim.minimizer(result), uω0, fiber, sim, band_mask;
         control=control,
         objective_kind=objective_kind,
         λ_gdd=0.0,
         λ_boundary=0.0,
         log_cost=false,
+    )
+    _, optimization_grad_after = reduced_phase_adjoint_cost_gradient(
+        Optim.minimizer(result), uω0, fiber, sim, band_mask;
+        control=control,
+        objective_kind=objective_kind,
+        λ_gdd=λ_gdd_val,
+        λ_boundary=λ_boundary,
+        log_cost=log_cost,
     )
     ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
@@ -456,6 +465,7 @@ function run_reduced_phase_optimization(;
         edge_output_frac=bc_output_frac,
         energy_drift=photon_drift,
         gradient_validation=nothing,
+        gradient_required=validate,
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
@@ -477,7 +487,8 @@ function run_reduced_phase_optimization(;
         J_before = J_before,
         J_after = J_after,
         delta_J_dB = ΔJ_dB,
-        grad_norm = norm(grad_after),
+        grad_norm = norm(optimization_grad_after),
+        physical_grad_norm = norm(physical_grad_after),
         converged = Optim.converged(result),
         iterations = Optim.iterations(result),
         wall_time_s = elapsed,
@@ -496,14 +507,13 @@ function run_reduced_phase_optimization(;
     )
     jld2_path = "$(save_prefix)_result.jld2"
     sidecar_path = FiberLab.save_run(jld2_path, result_payload)
-    manifest_path = joinpath("results", "raman", "manifest.json")
-    update_manifest_entry(manifest_path, build_raman_manifest_entry(result_payload, jld2_path))
-
     if do_plots
         plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
             band_mask, Δf, raman_threshold;
             save_path="$(save_prefix).png", metadata=run_meta,
-            objective_kind=objective_kind)
+            objective_kind=objective_kind,
+            objective_values=(J_before, J_after),
+            objective_label=_single_mode_objective_label(objective_kind))
         close("all")
     end
     save_standard_set(φ_after, uω0, fiber, sim,
@@ -515,7 +525,9 @@ function run_reduced_phase_optimization(;
         output_dir = dirname(save_prefix) == "" ? "." : dirname(save_prefix),
         lambda0_nm = run_meta.lambda0_nm,
         fwhm_fs = run_meta.fwhm_fs,
-        objective_kind = objective_kind)
+        objective_kind = objective_kind,
+        objective_values = (J_before, J_after),
+        objective_label = _single_mode_objective_label(objective_kind))
 
     return result, uω0, fiber, sim, band_mask, Δf
 end

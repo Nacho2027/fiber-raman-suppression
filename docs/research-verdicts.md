@@ -11,7 +11,7 @@ archive.
 | Multivar joint phase/amplitude/energy | Keep as continuous adjoint-compatible control blocks for explicit experiments. | `scripts/lib/multivar_optimization.jl`. |
 | Amp-on-phase refinement | Optional, staged, experimental comparison workflow. | `scripts/lib/amp_on_phase_refinement.jl` and canonical refinement wrapper. |
 | Multimode phase optimization | Keep as promoted experimental capability. | `scripts/lib/mmf_setup.jl` and `scripts/lib/mmf_raman_optimization.jl`. |
-| Long-fiber phase optimization | Keep as promoted high-resource capability. | Front-layer long-fiber configs plus `scripts/lib/longfiber_setup.jl`. |
+| Long-fiber phase optimization | Keep as promoted high-resource capability. | Exact-grid front-layer configs through the shared single-mode runtime. |
 | OSA spectrum comparison | Keep as an experimental, synthetic-tested shape-comparison core. Not Rivera-compatible or lab-ready until an untouched real export is checked. | `src/fiberlab/spectral_measurements.jl`. |
 | Old phase/cost/trust/sweep campaigns | Closed or superseded. Do not keep active drivers. | Archive only. |
 | Old Python API | Removed. | None. Julia is the supported API surface. |

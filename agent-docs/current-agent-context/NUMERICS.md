@@ -10,7 +10,6 @@ The following were surfaced by the independent numerics audit and then fixed imm
 
 - boundary checking now measures raw edge energy on the periodic FFT time grid
 - `cost_and_gradient(...; log_cost=true)` now applies the optional dB transform after the full regularized scalar objective is assembled, so the returned gradient matches the scalar objective seen by the optimizer
-- `chirp_sensitivity` now returns linear `J`, so plotting converts to dB exactly once
 
 Regression coverage for these fixes now lives in the fast Julia tier.
 
@@ -22,11 +21,22 @@ Regression coverage for these fixes now lives in the fast Julia tier.
 - Historical bugs came from mixing those implicitly.
 - Future agents should treat `log_cost=true` vs `log_cost=false` as an interface choice that must be documented whenever costs, gradients, HVPs, trust metrics, or diagnostics are compared.
 
-### Hessian tooling is not automatically the optimizer Hessian
+### Curvature tooling must name its objective
 
-- The Phase 13 matrix-free Hessian tooling was historically pointed at the linear physics cost.
-- That makes it useful, but not automatically the curvature of every regularized dB-scale optimizer objective.
+- A Hessian-vector product for the linear physics cost is not automatically
+  the curvature of a regularized dB-scale optimizer objective.
 - Any future Newton, trust-region, or curvature-based work should state explicitly which scalar objective its HVP oracle represents.
+
+### Sampling and runtime are part of the physics contract
+
+- Longer fibers and higher powers need larger temporal windows as spectral
+  broadening grows. Route supported runs through the shared grid resolver;
+  do not revive hand-sized campaign grids.
+- Keep FFTW internal threading at one for current grids unless a new benchmark
+  demonstrates a benefit. Parallelize independent experiments or sweep cases.
+- Copy mutable fiber state per concurrent solve.
+- In multimode runs, Kerr tensor contractions can dominate FFT work; state the
+  mode count whenever making performance claims.
 
 ### Very low-signal regimes still deserve caution
 
@@ -40,8 +50,7 @@ Regression coverage for these fixes now lives in the fast Julia tier.
 
 ### Reduced-basis extension remains high leverage
 
-- The audit correctly highlighted that reduced-basis machinery already exists on the amplitude side.
-- For future agent work, "reduced basis for phase" should be treated as an extension of existing machinery, not a greenfield idea.
+- Reduced spectral phase is a supported control map; extend that contract rather than creating a parallel optimizer.
 
 ## Practical agent rule
 

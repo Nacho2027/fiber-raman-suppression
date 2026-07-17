@@ -14,23 +14,25 @@ Julia-first command router.
 Common commands:
   configs                         List experiment configs
   capabilities                    Show regimes, controls, objectives, artifacts
-  plan SPEC                       Dry-run an experiment config
-  run SPEC                        Run an experiment config
-  latest SPEC                     Inspect latest run for a config
-  layout SPEC                     Show optimizer-vector layout
-  artifacts SPEC                  Show expected artifacts
-  compute-plan SPEC               Show compute guidance
+  plan [SPEC]                     Dry-run an experiment config
+  run SPEC                        Run a local experiment config
+  run --heavy-ok SPEC             Explicitly launch a high-resource config
+  latest [SPEC]                   Inspect latest run for a config
+  layout [SPEC]                   Show optimizer-vector layout
+  artifacts [SPEC]                Show expected artifacts
+  compute-plan [SPEC]             Show compute guidance
   objectives [--validate]         List or validate objectives
   variables [--validate]          List or validate variables
+  extensions                     Validate objective and variable extensions
   validate                        Validate configs, sweeps, objectives, variables
   ready config SPEC               Lab-readiness check for a config
   ready latest SPEC [--require-export]
   ready run PATH [--require-export]
   check config SPEC               Config check
   inspect run PATH                Inspect a completed run
-  sweep list|validate|plan|run|latest [SPEC]
+  sweep list|validate|plan|latest [SPEC]; sweep run SPEC
   explore list|plan|run|compare ...
-  scaffold objective|variable|exploration|scalar-config|vector-config ...
+  scaffold objective|variable|exploration ...
   index [OPTIONS] [ROOT...]
 EOF
 }
@@ -73,22 +75,11 @@ case "$cmd" in
   capabilities)
     run_julia scripts/canonical/run_experiment.jl --capabilities "$@"
     ;;
-  playbook)
-    cat <<'EOF'
-Start with:
-  ./fiberlab configs
-  ./fiberlab capabilities
-  ./fiberlab plan research_engine_poc
-  ./fiberlab run research_engine_poc
-
-Use Julia configs and maintained scripts as the supported surface. Notebook and
-Python APIs are not canonical.
-EOF
-    ;;
   plan)
     run_julia scripts/canonical/run_experiment.jl --dry-run "$@"
     ;;
   run)
+    [[ $# -gt 0 ]] || { echo "usage: ./fiberlab run SPEC" >&2; exit 2; }
     run_julia scripts/canonical/run_experiment.jl "$@"
     ;;
   latest)
@@ -160,7 +151,10 @@ EOF
       list) run_julia scripts/canonical/run_experiment_sweep.jl --list "$@" ;;
       validate) run_julia scripts/canonical/run_experiment_sweep.jl --validate-all "$@" ;;
       plan) run_julia scripts/canonical/run_experiment_sweep.jl --dry-run "$@" ;;
-      run) run_julia scripts/canonical/run_experiment_sweep.jl --execute "$@" ;;
+      run)
+        [[ $# -gt 0 ]] || { echo "usage: ./fiberlab sweep run SPEC" >&2; exit 2; }
+        run_julia scripts/canonical/run_experiment_sweep.jl --execute "$@"
+        ;;
       latest) run_julia scripts/canonical/run_experiment_sweep.jl --latest "$@" ;;
       *) echo "usage: ./fiberlab sweep list|validate|plan|run|latest [SPEC]" >&2; exit 2 ;;
     esac
@@ -189,9 +183,7 @@ EOF
       objective) run_julia scripts/canonical/scaffold_objective.jl "$@" ;;
       variable) run_julia scripts/canonical/scaffold_variable.jl "$@" ;;
       exploration) run_julia scripts/canonical/scaffold_exploration.jl "$@" ;;
-      scalar-config) run_julia scripts/canonical/scaffold_scalar_config.jl "$@" ;;
-      vector-config) run_julia scripts/canonical/scaffold_vector_config.jl "$@" ;;
-      *) echo "usage: ./fiberlab scaffold objective|variable|exploration|scalar-config|vector-config ..." >&2; exit 2 ;;
+      *) echo "usage: ./fiberlab scaffold objective|variable|exploration ..." >&2; exit 2 ;;
     esac
     ;;
   index)

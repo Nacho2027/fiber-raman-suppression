@@ -136,7 +136,6 @@ function run_amp_on_phase_refinement(;
         λ_energy = Float64(lambda_energy),
         λ_tikhonov = 0.0,
         λ_tv = 0.0,
-        λ_flat = 0.0,
         log_cost = false,
     )
 
@@ -172,13 +171,17 @@ function run_amp_on_phase_refinement(;
 
     uω0_amp_base = @. α * outcome.A_opt * uω0
     save_standard_set(
-        φ_phase, uω0_amp_base, fiber, sim,
+        φ_phase, uω0, fiber, sim,
         band_mask, Δf, -5.0;
         tag = "amp_on_phase",
         fiber_name = "SMF28",
         L_m = kw.L_fiber,
         P_W = kw.P_cont,
         output_dir = output_dir,
+        phi_before = φ_phase,
+        uω0_after = uω0_amp_base,
+        objective_values = (10.0 ^ (J_phase_dB / 10.0),
+                            10.0 ^ (J_amp_dB / 10.0)),
     )
 
     summary_path = joinpath(output_dir, "amp_on_phase_summary.md")

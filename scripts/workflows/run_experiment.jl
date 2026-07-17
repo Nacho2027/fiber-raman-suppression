@@ -2,10 +2,8 @@
 Run one validated front-layer experiment config.
 
 Usage:
-    julia --project=. -t auto scripts/canonical/run_experiment.jl
     julia --project=. -t auto scripts/canonical/run_experiment.jl research_engine_poc
     julia --project=. -t auto scripts/canonical/run_experiment.jl path/to/experiment.toml
-    julia --project=. -t auto scripts/canonical/run_experiment.jl smf28_L2m_P0p2W
     julia --project=. -t auto scripts/canonical/run_experiment.jl --list
     julia --project=. -t auto scripts/canonical/run_experiment.jl --capabilities
     julia --project=. -t auto scripts/canonical/run_experiment.jl --objectives
@@ -24,11 +22,8 @@ Usage:
     julia --project=. -t auto scripts/canonical/run_experiment.jl --heavy-ok spec
     julia --project=. -t auto scripts/canonical/run_experiment.jl --latest [spec]
 
-The current implementation is intentionally narrow:
-
-- supported execution path: single-mode, phase-only Raman optimization
-- supported input sources: front-layer configs under `configs/experiments/*.toml`
-  plus adapted legacy canonical run configs under `configs/runs/*.toml`
+Configs under `configs/experiments/` select validated execution modes. Heavy
+long-fiber and multimode runs require explicit acknowledgement.
 """
 
 ENV["MPLBACKEND"] = "Agg"
@@ -40,17 +35,12 @@ include(joinpath(@__DIR__, "export_run.jl"))
 include(joinpath(@__DIR__, "inspect_run.jl"))
 ensure_deterministic_environment()
 
-function _print_available_experiment_configs()
-    println("Front-layer experiment configs:")
-    for id in approved_experiment_config_ids()
-        spec = load_experiment_spec(id)
-        println("  ", spec.id, "  —  ", spec.description, "  [", spec.maturity, "]")
-    end
-    println()
-    println("Adapted canonical run configs:")
-    for id in approved_run_config_ids()
-        spec = load_experiment_spec(id)
-        println("  ", spec.id, "  —  ", spec.description, "  [", spec.maturity, "]")
+function _print_available_experiment_configs(; io::IO=stdout)
+    println(io, "Front-layer experiment configs:")
+    for config_id in approved_experiment_config_ids()
+        spec = load_experiment_spec(config_id)
+        println(io, "  ", config_id, "  —  ", spec.description,
+            "  [experiment_id=", spec.id, ", ", spec.maturity, "]")
     end
 end
 
@@ -116,11 +106,7 @@ end
 
 function run_experiment_main(args=ARGS)
     if isempty(args)
-        spec = load_experiment_spec()
-        command = "./fiberlab run $(experiment_cli_spec_hint(spec))"
-        result = run_supported_experiment(spec; run_context=:run, run_command=command)
-        render_experiment_completion_summary(result)
-        return result
+        error("usage: scripts/canonical/run_experiment.jl spec (execution requires an explicit config)")
     end
 
     if args[1] == "--list"
@@ -308,10 +294,10 @@ function run_experiment_main(args=ARGS)
             latest_experiment_output_dir(spec)
         catch err
             err isa ArgumentError || rethrow()
-            println(stderr, "No completed runs found for $(spec.id) under $(spec.output_root).")
-            println(stderr, "Run it first with: julia -t auto --project=. scripts/canonical/run_experiment.jl ",
-                isempty(args[2:end]) ? DEFAULT_EXPERIMENT_SPEC : args[2])
-            return nothing
+            hint = isempty(args[2:end]) ? DEFAULT_EXPERIMENT_SPEC : args[2]
+            throw(ArgumentError(
+                "no completed runs found for $(spec.id) under $(spec.output_root); " *
+                "run it first with `./fiberlab run $hint`"))
         end
         println("Latest run for $(spec.id): ", latest_dir)
         summary = inspect_run_summary(latest_dir)
@@ -324,15 +310,22 @@ function run_experiment_main(args=ARGS)
 
     spec = load_experiment_spec(args[1])
     mode = experiment_execution_mode(spec)
-    if mode in (:long_fiber_phase, :multimode_phase, :amp_on_phase)
-        regime_label = mode == :long_fiber_phase ? "Long-fiber" :
-            mode == :multimode_phase ? "Multimode" : "Amp-on-phase"
-        workflow_label = mode == :long_fiber_phase ? "burst long-fiber" :
-            mode == :multimode_phase ? "multimode baseline" : "staged amp-on-phase refinement"
+    if mode in (:long_fiber_phase, :multimode_phase)
+        regime_label = mode == :long_fiber_phase ? "Long-fiber" : "Multimode"
         error(
-            "$(regime_label) front-layer configs are validation/dry-run only on this machine. " *
-            "Inspect the plan with `julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(args[1])`, " *
-            "then stage execution through the dedicated $(workflow_label) workflow.")
+            "$(regime_label) execution requires explicit high-resource acknowledgement. " *
+            "Inspect `./fiberlab compute-plan $(args[1])`, then run " *
+            "`./fiberlab run --heavy-ok $(args[1])` on suitable compute.")
+    elseif mode == :amp_on_phase
+        error(
+            "Amp-on-phase refinement uses its dedicated staged workflow. " *
+            "Inspect and run the command from `./fiberlab compute-plan $(args[1])`.")
+    end
+    if spec.maturity != "supported"
+        error(
+            "Direct execution is reserved for supported configs; `$(spec.id)` is $(spec.maturity). " *
+            "Run this experimental config explicitly with " *
+            "`./fiberlab explore run $(experiment_cli_spec_hint(spec)) --local-smoke`.")
     end
     command = "./fiberlab run $(experiment_cli_spec_hint(spec))"
     result = run_supported_experiment(spec; run_context=:run, run_command=command)

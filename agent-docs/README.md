@@ -8,9 +8,7 @@ not a second documentation system.
 - [`../AGENTS.md`](../AGENTS.md): mandatory operating rules.
 - [`../llms.txt`](../llms.txt): compact source map.
 - [`current-agent-context/INDEX.md`](current-agent-context/INDEX.md): durable
-  numerics, methodology, and compute cautions.
-- [`repo-diet.md`](repo-diet.md): temporary cleanup checkpoint for the active
-  repo diet.
+  package, numerical, multimode, and multivariable context.
 
 ## Policy
 
@@ -19,8 +17,5 @@ not a second documentation system.
 - Promote human-facing guidance to `docs/`.
 - Delete or collapse stale agent notes once the task is closed.
 
-Older agent topic folders were moved out of the active repo on 2026-05-04:
-
-```text
-/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/agent-docs-old-topics/
-```
+Older agent topics belong in Git history or the external results vault, not in
+the active tree.

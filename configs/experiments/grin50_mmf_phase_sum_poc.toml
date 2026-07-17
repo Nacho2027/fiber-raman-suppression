@@ -46,17 +46,13 @@ store_trace = true
 bundle = "mmf_planning"
 save_payload = true
 save_sidecar = true
-update_manifest = false
 write_trust_report = false
 write_standard_images = true
 export_phase_handoff = false
 
 [verification]
-mode = "burst_required"
+mode = "high_resource"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

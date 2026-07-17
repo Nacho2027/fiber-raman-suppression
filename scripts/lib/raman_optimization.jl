@@ -5,9 +5,8 @@ surface.
 This file provides `run_optimization`, cost/gradient helpers, result payload
 assembly, and plotting glue for single-mode spectral-phase optimization.
 
-When executed directly it still runs the historical five-run comparison suite,
-but the supported public single-run entry point is now
-`scripts/canonical/optimize_raman.jl`.
+Execution belongs to the experiment runtime under
+`scripts/canonical/run_experiment.jl`; this file is library code only.
 
 # Inputs
 - Config constants at top of file (fiber preset, L, P, pulse FWHM, max_iter).
@@ -20,7 +19,6 @@ but the supported public single-run entry point is now
   convergence history in dB, grid, fiber dict, metadata).
 - `results/raman/<run_id>/_result.json` — JSON sidecar with scalar metadata.
 - `results/raman/<run_id>/*.png` — three figures (spectral, phase, evolution).
-- `results/raman/manifest.json` — append-safe index of all runs.
 
 # Runtime
 ~5 minutes on a 4-core laptop for the canonical SMF-28 config (L=2 m, P=0.2 W,
@@ -37,15 +35,12 @@ using Statistics
 using FFTW
 using Logging
 ENV["MPLBACKEND"] = "Agg"  # Non-interactive backend for headless execution
-using PyPlot
 using FiberLab
 using Optim
 using JLD2
 using JSON3
 
 include(joinpath(@__DIR__, "common.jl"))
-include(joinpath(@__DIR__, "canonical_runs.jl"))
-include(joinpath(@__DIR__, "manifest_io.jl"))
 include(joinpath(@__DIR__, "objective_surface.jl"))
 include(joinpath(@__DIR__, "regularizers.jl"))
 include(joinpath(@__DIR__, "visualization.jl"))
@@ -218,7 +213,7 @@ function optimize_spectral_phase(uω0_base, fiber, sim, band_mask;
     # Optim.jl interface: combined cost + gradient
     # NOTE: Both cost and gradient must be on the same scale for L-BFGS.
     # log_cost=true: cost in dB, gradient scaled by chain rule — keeps ∇J ~ O(1)
-    # log_cost=false: cost and gradient both linear (legacy behavior)
+    # log_cost=false keeps both cost and gradient on the linear scale.
     default_f_tol = log_cost ? 0.01 : 1e-10  # 0.01 dB vs 1e-10 linear
     f_tol = solver_f_abstol === :auto ? default_f_tol : Float64(solver_f_abstol)
     options = if solver_g_abstol === :auto
@@ -319,183 +314,12 @@ function validate_gradient(uω0_base, fiber, sim, band_mask;
     )
 end
 
-"""
-    validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
-                             λ_gdd=0.0, λ_boundary=0.0, log_cost=true,
-                             eps_range=10.0 .^ (-2:-0.5:-6))
-
-Directional Taylor-remainder check for the exact scalar objective returned by
-`cost_and_gradient`. For a consistent `(J, ∇J)` pair, the remainder
-
-    |J(φ + εv) - J(φ) - ε ∇J(φ)⋅v|
-
-should decay like `O(ε²)` over the truncation-error regime.
-"""
-function validate_gradient_taylor(φ, v, uω0, fiber, sim, band_mask;
-    objective_kind::Symbol=:raman_band,
-    λ_gdd::Real=0.0,
-    λ_boundary::Real=0.0,
-    log_cost::Bool=true,
-    eps_range::AbstractVector{<:Real}=10.0 .^ (-2:-0.5:-6))
-
-    @assert size(φ) == size(v) "φ and v must have the same shape"
-    @assert any(abs.(v) .> 0) "v must be nonzero"
-
-    J0, grad0 = cost_and_gradient(φ, uω0, fiber, sim, band_mask;
-        objective_kind=objective_kind,
-        λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
-    dir0 = sum(grad0 .* v)
-
-    eps_values = collect(Float64.(eps_range))
-    remainders = Float64[]
-    for ε in eps_values
-        Jp, _ = cost_and_gradient(φ .+ ε .* v, uω0, fiber, sim, band_mask;
-            objective_kind=objective_kind,
-            λ_gdd=λ_gdd, λ_boundary=λ_boundary, log_cost=log_cost)
-        push!(remainders, abs(Jp - J0 - ε * dir0))
-    end
-
-    valid = findall(>(0.0), remainders)
-    @assert length(valid) >= 3 "Need at least 3 positive Taylor remainders to fit a slope"
-    fit_idx = valid[1:min(end, 4)]
-    xs = log10.(eps_values[fit_idx])
-    ys = log10.(remainders[fit_idx])
-    slope = (ys[end] - ys[1]) / (xs[end] - xs[1])
-
-    return (
-        eps_values = eps_values,
-        remainders = remainders,
-        slope = slope,
-        slope_region = (first(fit_idx), last(fit_idx)),
-        base_cost = J0,
-        base_directional_derivative = dir0,
-    )
-end
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 7b. Visualization helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""Plot spectra, temporal pulse shapes, and spectral phase before and after optimization.
-DEPRECATED: Use plot_optimization_result_v2 from visualization.jl instead.
-"""
-function plot_optimization_result(φ_before, φ_after, uω0_base, fiber, sim, band_mask, Δf, raman_threshold)
-    return plot_optimization_result_v2(φ_before, φ_after, uω0_base, fiber, sim,
-        band_mask, Δf, raman_threshold)
-end
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. Chirp sensitivity analysis
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""
-    chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
-                      gdd_range, tod_range)
-
-Evaluate how the optimized cost J degrades when the input pulse acquires
-additional quadratic chirp (GDD) or cubic chirp (TOD) on top of the
-optimized spectral phase.
-
-GDD adds φ_chirp(ω) = ½ · GDD · (2π·Δf)², TOD adds ⅙ · TOD · (2π·Δf)³.
-Units: GDD in [ps²], TOD in [ps³].
-"""
-function chirp_sensitivity(φ_opt, uω0, fiber, sim, band_mask;
-    gdd_range = range(-0.05, 0.05, length=21),
-    tod_range = range(-0.005, 0.005, length=21))
-
-    # PRECONDITIONS
-    @assert size(φ_opt) == size(uω0) "φ_opt shape must match uω0"
-    @assert length(gdd_range) > 0 "gdd_range must not be empty"
-    @assert length(tod_range) > 0 "tod_range must not be empty"
-
-    Δf_fft = fftfreq(sim["Nt"], 1 / sim["Δt"])
-    ω_fft = 2π .* Δf_fft  # angular frequency offset [rad/ps]
-    M = sim["M"]
-
-    # GDD sweep: φ_chirp(ω) = ½ · GDD · ω²
-    ω2 = ω_fft .^ 2
-    J_gdd = zeros(length(gdd_range))
-    for (i, gdd) in enumerate(gdd_range)
-        φ_perturbed = φ_opt .+ 0.5 .* gdd .* ω2 .* ones(1, M)
-        J_gdd[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
-    end
-
-    # TOD sweep: φ_chirp(ω) = ⅙ · TOD · ω³
-    ω3 = ω_fft .^ 3
-    J_tod = zeros(length(tod_range))
-    for (i, tod) in enumerate(tod_range)
-        φ_perturbed = φ_opt .+ (tod / 6.0) .* ω3 .* ones(1, M)
-        J_tod[i], _ = cost_and_gradient(φ_perturbed, uω0, fiber, sim, band_mask; log_cost=false)
-    end
-
-    return gdd_range, J_gdd, tod_range, J_tod
-end
-
-"""
-    plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix)
-
-Plot chirp sensitivity curves for GDD and TOD perturbations.
-
-Shows J(GDD) and J(TOD) vs perturbation magnitude, with a dot at the zero-perturbation
-point (not an axhline — which would imply a constant 'optimum' value).
-If GDD curve is monotonic, warns that regularization may be constraining phase freedom.
-"""
-function plot_chirp_sensitivity(gdd_range, J_gdd, tod_range, J_tod; save_prefix="chirp_sensitivity")
-    PyPlot.matplotlib.ticker.FormatStrFormatter  # ensure FormatStrFormatter is accessible
-
-    fig, (ax1, ax2) = subplots(1, 2, figsize=(10, 4))
-
-    gdd_fs2 = gdd_range .* 1e3  # convert ps² → fs²
-    J_gdd_dB = FiberLab.lin_to_dB.(J_gdd)
-    J_tod_dB = FiberLab.lin_to_dB.(J_tod)
-
-    # Center index for zero-perturbation point
-    center_idx_gdd = div(length(gdd_range) + 1, 2)
-    center_idx_tod = div(length(tod_range) + 1, 2)
-
-    # GDD panel
-    ax1.plot(gdd_fs2, J_gdd_dB, "b.-", linewidth=1.2, markersize=4)
-    # Zero perturbation marker — avoids misleading horizontal 'Optimum' line
-    ax1.plot([gdd_fs2[center_idx_gdd]], [J_gdd_dB[center_idx_gdd]],
-        "ro", markersize=8, label="Zero perturbation")
-    ax1.set_xlabel("GDD perturbation [fs²]")
-    ax1.set_ylabel("J [dB]")
-    ax1.set_title("Sensitivity to quadratic chirp (GDD)")
-    ax1.ticklabel_format(useOffset=false, style="plain")
-    ax1.legend()
-
-    # Detect if GDD curve is monotonic (suggests regularization may be constraining phase freedom)
-    gdd_monotonic = issorted(J_gdd_dB) || issorted(J_gdd_dB, rev=true)
-    if gdd_monotonic
-        @warn "GDD sensitivity curve is monotonic — regularization may be constraining phase freedom"
-        ax1.set_title("GDD sensitivity (monotonic — regularization may be constraining)")
-    end
-
-    # TOD panel with FormatStrFormatter for large-exponent axis labels
-    tod_fs3 = tod_range .* 1e6  # convert ps³ → fs³
-    fmt = PyPlot.matplotlib.ticker.FormatStrFormatter("%.1e")
-    ax2.xaxis.set_major_formatter(fmt)
-    ax2.plot(tod_fs3, J_tod_dB, "r.-", linewidth=1.2, markersize=4)
-    ax2.plot([tod_fs3[center_idx_tod]], [J_tod_dB[center_idx_tod]],
-        "bo", markersize=8, label="Zero perturbation")
-    ax2.set_xlabel("TOD perturbation [fs³]")
-    ax2.set_ylabel("J [dB]")
-    ax2.set_title("Sensitivity to cubic chirp (TOD)")
-    # Note: ticklabel_format requires ScalarFormatter, but ax2 uses FormatStrFormatter (line 347)
-    # so we skip it here — the FormatStrFormatter already handles display correctly
-    ax2.legend()
-
-    fig.tight_layout()
-    savefig("$(save_prefix).png", dpi=150)
-    @info "Saved chirp sensitivity plot to $(save_prefix).png"
-    return fig
-end
 
 """
     build_raman_result_payload(; kwargs...) -> NamedTuple
 
 Assemble the canonical JLD2 payload written by `run_optimization`. This keeps
-the output schema in one testable place while preserving the historical key
+the output schema in one testable place while preserving the stable key
 names consumed by downstream analysis scripts.
 """
 function build_raman_result_payload(;
@@ -509,6 +333,7 @@ function build_raman_result_payload(;
     J_after::Real,
     delta_J_dB::Real,
     grad_norm::Real,
+    physical_grad_norm::Real=grad_norm,
     converged::Bool,
     iterations::Integer,
     wall_time_s::Real,
@@ -544,6 +369,7 @@ function build_raman_result_payload(;
         J_after = Float64(J_after),
         delta_J_dB = Float64(delta_J_dB),
         grad_norm = Float64(grad_norm),
+        physical_grad_norm = Float64(physical_grad_norm),
         converged = converged,
         iterations = Int(iterations),
         wall_time_s = Float64(wall_time_s),
@@ -567,44 +393,14 @@ function build_raman_result_payload(;
     )
 end
 
-"""
-    build_raman_manifest_entry(payload, jld2_path) -> Dict{String,Any}
-
-Create the canonical manifest row corresponding to a Raman result payload.
-"""
-function build_raman_manifest_entry(payload::NamedTuple, jld2_path::AbstractString)
-    return Dict{String,Any}(
-        "fiber_name" => payload.fiber_name,
-        "L_m" => payload.L_m,
-        "P_cont_W" => payload.P_cont_W,
-        "lambda0_nm" => payload.lambda0_nm,
-        "J_before" => payload.J_before,
-        "J_before_dB" => FiberLab.lin_to_dB(payload.J_before),
-        "J_after" => payload.J_after,
-        "J_after_dB" => FiberLab.lin_to_dB(payload.J_after),
-        "delta_J_dB" => payload.delta_J_dB,
-        "converged" => payload.converged,
-        "iterations" => payload.iterations,
-        "wall_time_s" => payload.wall_time_s,
-        "Nt" => payload.Nt,
-        "time_window_ps" => payload.time_window_ps,
-        "grad_norm" => payload.grad_norm,
-        "E_conservation" => payload.E_conservation,
-        "photon_number_drift" => payload.photon_number_drift,
-        "bc_ok" => payload.bc_input_ok && payload.bc_output_ok,
-        "trust_overall" => payload.trust_report["overall_verdict"],
-        "trust_report_md" => payload.trust_report_md,
-        "result_file" => String(jld2_path),
-    )
-end
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. Run a single optimization for given parameters
 # ─────────────────────────────────────────────────────────────────────────────
 
 function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt", φ0=nothing,
     λ_gdd=:auto, λ_boundary=1.0, fiber_name="Custom", do_plots=true,
-    log_cost::Bool=true, objective_kind::Symbol=:raman_band, solver_reltol=1e-8,
+    log_cost::Bool=true, objective_kind::Symbol=:raman_band, store_trace::Bool=true,
+    solver_reltol=1e-8,
     solver_f_abstol=:auto, solver_g_abstol=:auto, problem_setup=setup_raman_problem, kwargs...)
     t_start = time()
     uω0, fiber, sim, band_mask, Δf, raman_threshold = problem_setup(; kwargs...)
@@ -624,14 +420,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     )
     Nt = sim["Nt"]; M = sim["M"]
 
-    # GDD penalty weight: use a light default that prevents the dominant
-    # temporal broadening without constraining useful phase structure.
-    # λ_gdd = 1e-4 was validated in prior runs (annealing Stage 1).
-    if λ_gdd === :auto
-        λ_gdd_val = 1e-4
-    else
-        λ_gdd_val = Float64(λ_gdd)
-    end
+    λ_gdd_val = resolve_regularizer_lambda(:gdd, λ_gdd)
     objective_spec = raman_cost_surface_spec(
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
@@ -653,7 +442,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     result = optimize_spectral_phase(uω0, fiber, sim, band_mask;
         max_iter=max_iter, φ0=φ0, objective_kind=objective_kind,
         λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
-        store_trace=true, log_cost=log_cost,
+        store_trace=store_trace, log_cost=log_cost,
         solver_f_abstol=solver_f_abstol, solver_g_abstol=solver_g_abstol)
 
     φ_before = zeros(Nt, M)
@@ -662,8 +451,11 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     # ── Run summary table ──
     J_before, _ = cost_and_gradient(φ_before, uω0, fiber, sim, band_mask;
         objective_kind=objective_kind, log_cost=false)
-    J_after, grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask;
+    J_after, physical_grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask;
         objective_kind=objective_kind, log_cost=false)
+    _, optimization_grad_after = cost_and_gradient(φ_after, uω0, fiber, sim, band_mask;
+        objective_kind=objective_kind, λ_gdd=λ_gdd_val, λ_boundary=λ_boundary,
+        log_cost=log_cost)
     ΔJ_dB = FiberLab.lin_to_dB(J_after) - FiberLab.lin_to_dB(J_before)
 
     # Boundary check on the optimized input pulse in the periodic FFT window.
@@ -685,7 +477,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     photon_drift = photon_number_drift(uω0_opt, uωf, sim)
 
     # Gradient norm (convergence quality)
-    grad_norm = norm(grad_after)
+    grad_norm = norm(optimization_grad_after)
+    physical_grad_norm = norm(physical_grad_after)
 
     # Peak power
     P_peak_in = maximum(abs2.(ut0_opt))
@@ -698,7 +491,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     ┌─────────────────────────────────────────────────┐
     │  RUN SUMMARY: %s
     ├─────────────────────────────────────────────────┤
-    │  Fiber        L = %.1f m, γ = %.2e W⁻¹m⁻¹
+    │  Fiber        L = %s, γ = %.2e W⁻¹m⁻¹
     │  Grid         Nt = %d, time_window = %.1f ps
     │  Regulariz.   λ_gdd = %.2e, λ_boundary = %.1f
     │  Objective    %s
@@ -706,7 +499,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     ├─────────────────────────────────────────────────┤
     │  J (before)   %.4e  (%.1f dB)
     │  J (after)    %.4e  (%.1f dB)
-    │  ΔJ           %.1f dB
+    │  ΔJ           %s
     │  ‖∇J‖         %.2e
     ├─────────────────────────────────────────────────┤
     │  Peak power   in: %s → out: %s
@@ -716,14 +509,14 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     │  Boundary (output)  %.2e  %s
     └─────────────────────────────────────────────────┘""",
         save_prefix,
-        fiber["L"], fiber["γ"][1],
+        FiberLab._format_length_m(fiber["L"]), fiber["γ"][1],
         Nt, tw_ps,
         λ_gdd_val, λ_boundary,
         objective_spec.scalar_surface,
         Optim.iterations(result), elapsed,
         J_before, FiberLab.lin_to_dB(J_before),
         J_after, FiberLab.lin_to_dB(J_after),
-        ΔJ_dB,
+        FiberLab._format_delta_db(ΔJ_dB),
         grad_norm,
         _format_power_watts(P_peak_in), _format_power_watts(P_peak_out),
         photon_drift, photon_drift * 100,
@@ -741,6 +534,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         edge_output_frac=bc_output_frac,
         energy_drift=photon_drift,
         gradient_validation=grad_validation,
+        gradient_required=validate,
         log_cost=log_cost,
         λ_gdd=λ_gdd_val,
         λ_boundary=λ_boundary,
@@ -769,6 +563,7 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         J_after = J_after,
         delta_J_dB = ΔJ_dB,
         grad_norm = grad_norm,
+        physical_grad_norm = physical_grad_norm,
         converged = Optim.converged(result),
         iterations = Optim.iterations(result),
         wall_time_s = elapsed,
@@ -788,12 +583,6 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
     sidecar_path = FiberLab.save_run(jld2_path, result_payload)
     @info "Saved JSON sidecar to $sidecar_path"
 
-    # ── Manifest update (XRUN-01) ──
-    manifest_path = joinpath("results", "raman", "manifest.json")
-    manifest_entry = build_raman_manifest_entry(result_payload, jld2_path)
-    manifest_count = update_manifest_entry(manifest_path, manifest_entry)
-    @info "Updated manifest at $manifest_path ($(manifest_count) runs)"
-
     if do_plots
         # ── Plots ──
         @info "Plotting"
@@ -802,7 +591,9 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         plot_optimization_result_v2(φ_before, φ_after, uω0, fiber, sim,
             band_mask, Δf, raman_threshold;
             save_path="$(save_prefix).png", metadata=run_meta,
-            objective_kind=objective_kind)
+            objective_kind=objective_kind,
+            objective_values=(J_before, J_after),
+            objective_label=_single_mode_objective_label(objective_kind))
 
         # Evolution: solve both via propagate_and_plot_evolution (handles deepcopy + zsave),
         # then merge into a single 2×2 figure (ORG-01, ORG-02)
@@ -823,11 +614,12 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         @info "Phase Diagnostic"
         plot_phase_diagnostic(φ_after, uω0, sim;
             save_path="$(save_prefix)_phase.png", metadata=run_meta,
-            objective_kind=objective_kind)
+            objective_kind=objective_kind,
+            raman_threshold_thz=raman_threshold)
         close("all")
     end # do_plots
 
-    # Mandatory standard image set (AGENTS.md project rule, post-2026-04-17).
+    # Mandatory standard image set (AGENTS.md project rule).
     save_standard_set(φ_after, uω0, fiber, sim,
         band_mask, Δf, raman_threshold;
         tag = basename(save_prefix),
@@ -837,74 +629,9 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         output_dir = dirname(save_prefix) == "" ? "." : dirname(save_prefix),
         lambda0_nm = run_meta.lambda0_nm,
         fwhm_fs = run_meta.fwhm_fs,
-        objective_kind = objective_kind)
+        objective_kind = objective_kind,
+        objective_values = (J_before, J_after),
+        objective_label = _single_mode_objective_label(objective_kind))
 
     return result, uω0, fiber, sim, band_mask, Δf
-end
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 10. Historical comparison-suite runs (only when script is executed directly)
-#
-# Five configurations spanning moderate to extreme Raman shifting:
-#   Run 1: SMF-28 baseline       (L=1m,  P=0.05W, N~2.3)
-#   Run 2: SMF-28 high power     (L=2m,  P=0.30W, N~5.6)
-#   Run 3: HNLF short fiber      (L=1m,  P=0.05W, N~6.9 from high gamma)
-#   Run 4: HNLF moderate fiber   (L=2m,  P=0.05W, strong Raman)
-#   Run 5: SMF-28 long fiber     (L=5m,  P=0.15W, cold start)
-# Chirp sensitivity analysis on the strongest maintained HNLF run (Run 4).
-# ─────────────────────────────────────────────────────────────────────────────
-
-using Interpolations
-using Dates
-
-function main()
-
-@info "═══════════════════════════════════════════"
-@info "  Raman Phase Optimization — Heavy-Duty Runs"
-@info "═══════════════════════════════════════════"
-
-RUN_TAG = Dates.format(now(), "yyyymmdd_HHMMss")
-mkpath("results/images")  # ensure summary output directory exists
-# ── Output directories ──
-# Primary: results/raman/<fiber>/<params>/ (per-run detailed output)
-# Summary: results/images/ (flat directory for quick-access plots)
-suite_results = Dict{Symbol,Any}()
-for spec in canonical_raman_run_specs()
-    dir = canonical_run_output_dir(spec.fiber_slug, spec.params_slug)
-    @info "\n▶ $(spec.label) → $dir"
-    suite_results[spec.id] = run_optimization(;
-        spec.kwargs...,
-        save_prefix=joinpath(dir, "opt"),
-    )
-
-    if spec.id == :smf28_L1m_P005W
-        cp(joinpath(dir, "opt.png"), "results/images/raman_opt_L1m_SMF28.png", force=true)
-    end
-    GC.gc()
-end
-
-result4, uω0_4, fiber_4, sim_4, band_mask_4, Δf_4 = suite_results[:hnlf_L2m_P005W]
-φ_opt_4 = reshape(result4.minimizer, sim_4["Nt"], sim_4["M"])
-
-# ─── Chirp sensitivity on the strongest maintained HNLF run (Run 4: L=2m) ──
-@info "\n▶ Chirp Sensitivity (Run 4: HNLF L=2m)"
-gdd_r, J_gdd, tod_r, J_tod = chirp_sensitivity(
-    φ_opt_4, uω0_4, fiber_4, sim_4, band_mask_4;
-    gdd_range=range(-2e-2, 2e-2, length=101)
-)
-plot_chirp_sensitivity(gdd_r, J_gdd, tod_r, J_tod;
-    save_prefix="results/images/chirp_sens_HNLF_L2m")
-
-# Phase diagnostics are now generated per-run inside run_optimization
-
-@info "═══ All runs complete ═══"
-@info "Output directory structure:"
-for spec in canonical_raman_run_specs()
-    @info "  $(joinpath("results", "raman", spec.fiber_slug, spec.params_slug))/   — $(spec.label)"
-end
-
-end # function main
-
-if abspath(PROGRAM_FILE) == @__FILE__
-    main()
 end

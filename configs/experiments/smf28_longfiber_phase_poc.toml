@@ -1,5 +1,5 @@
 id = "smf28_longfiber_phase_poc"
-description = "Experimental long-fiber front-layer config: phase-only SMF-28 Raman run intended for burst execution planning."
+description = "Experimental long-fiber front-layer config: phase-only SMF-28 Raman run intended for high-resource execution planning."
 maturity = "experimental"
 output_root = "results/raman/longfiber"
 output_tag = "smf28_longfiber_phase_poc"
@@ -47,17 +47,13 @@ store_trace = true
 bundle = "standard"
 save_payload = true
 save_sidecar = true
-update_manifest = true
 write_trust_report = true
 write_standard_images = true
 export_phase_handoff = false
 
 [verification]
-mode = "burst_required"
+mode = "high_resource"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

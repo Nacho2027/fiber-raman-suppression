@@ -5,7 +5,7 @@ Usage:
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --list
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --validate-all
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --dry-run [sweep]
-    julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute [sweep]
+    julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute sweep
     julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --latest [sweep]
 
 This command defaults to planning. Execution is explicit and currently limited
@@ -45,9 +45,29 @@ function _sweep_case_artifact_status(run_bundle)
     )
 end
 
+function experiment_sweep_execution_status(results)
+    complete = count(result -> result.status == :complete, results)
+    failed = count(result -> result.status == :failed, results)
+    skipped = count(result -> result.status == :skipped, results)
+    return (
+        pass = failed == 0 && skipped == 0,
+        total = length(results),
+        complete = complete,
+        failed = failed,
+        skipped = skipped,
+    )
+end
+
 function execute_experiment_sweep(sweep_spec;
                                   timestamp::AbstractString=Dates.format(now(UTC), "yyyymmdd_HHMMss"))
     expanded = expand_experiment_sweep(sweep_spec)
+    sweep_spec.maturity == "supported" || throw(ArgumentError(
+        "experimental sweep `$(sweep_spec.id)` is planning-only; promote it before execution"))
+    experimental_cases = [case.label for case in expanded.cases
+                          if case.spec.maturity != "supported"]
+    isempty(experimental_cases) || throw(ArgumentError(
+        "sweep `$(sweep_spec.id)` contains experimental cases and is planning-only: " *
+        join(experimental_cases, ", ")))
     sweep_dir = experiment_sweep_output_dir(sweep_spec; timestamp=timestamp)
     cp(sweep_spec.config_path, joinpath(sweep_dir, "sweep_config.toml"); force=true)
 
@@ -67,7 +87,12 @@ function execute_experiment_sweep(sweep_spec;
         end
 
         try
-            run_bundle = run_supported_experiment(case.spec; timestamp=timestamp)
+            run_bundle = run_supported_experiment(
+                case.spec;
+                timestamp=timestamp,
+                run_context=:sweep,
+                run_command="./fiberlab sweep run $(sweep_spec.id)",
+            )
             summary = canonical_run_summary(run_bundle.artifact_path)
             artifact_status = _sweep_case_artifact_status(run_bundle)
             push!(results, (;
@@ -93,6 +118,7 @@ function execute_experiment_sweep(sweep_spec;
     end
 
     summary_files = write_experiment_sweep_summary_files(sweep_spec, Tuple(results), sweep_dir)
+    status = experiment_sweep_execution_status(results)
     return (
         sweep_spec = sweep_spec,
         output_dir = sweep_dir,
@@ -100,6 +126,7 @@ function execute_experiment_sweep(sweep_spec;
         summary_json_path = summary_files.summary_json_path,
         summary_csv_path = summary_files.summary_csv_path,
         results = Tuple(results),
+        status = status,
     )
 end
 
@@ -141,17 +168,20 @@ function run_experiment_sweep_main(args=ARGS)
     end
 
     if args[1] == "--execute"
-        length(args) in (1, 2) || error("usage: scripts/canonical/run_experiment_sweep.jl --execute [sweep]")
+        length(args) == 2 || error("usage: scripts/canonical/run_experiment_sweep.jl --execute sweep")
         spec_name = _load_or_default_sweep(args[2:end])
         sweep_spec = load_experiment_sweep_spec(spec_name)
         result = execute_experiment_sweep(sweep_spec)
-        println("Experiment sweep complete")
+        println(result.status.pass ? "Experiment sweep complete" : "Experiment sweep incomplete")
+        println("Cases: complete=$(result.status.complete) failed=$(result.status.failed) skipped=$(result.status.skipped) total=$(result.status.total)")
         println("Output directory: ", result.output_dir)
         println("Summary: ", result.summary_path)
         println("Summary JSON: ", result.summary_json_path)
         println("Summary CSV: ", result.summary_csv_path)
         println()
         print(read(result.summary_path, String))
+        result.status.pass || error(
+            "experiment sweep incomplete: failed=$(result.status.failed), skipped=$(result.status.skipped); summary=$(result.summary_path)")
         return result
     end
 
@@ -163,9 +193,9 @@ function run_experiment_sweep_main(args=ARGS)
             latest_experiment_sweep_output_dir(sweep_spec)
         catch err
             err isa ArgumentError || rethrow()
-            println(stderr, "No completed sweeps found for $(sweep_spec.id) under $(sweep_spec.output_root).")
-            println(stderr, "Run it first with: julia -t auto --project=. scripts/canonical/run_experiment_sweep.jl --execute ", spec_name)
-            return nothing
+            throw(ArgumentError(
+                "no completed sweeps found for $(sweep_spec.id) under $(sweep_spec.output_root); " *
+                "run it first with `./fiberlab sweep run $spec_name`"))
         end
         summary_path = joinpath(latest_dir, "SWEEP_SUMMARY.md")
         println("Latest sweep for $(sweep_spec.id): ", latest_dir)
@@ -180,7 +210,7 @@ function run_experiment_sweep_main(args=ARGS)
     end
 
     length(args) == 1 || error(
-        "usage: scripts/canonical/run_experiment_sweep.jl [sweep | --dry-run [sweep] | --execute [sweep] | --latest [sweep] | --list | --validate-all]")
+        "usage: scripts/canonical/run_experiment_sweep.jl [sweep | --dry-run [sweep] | --execute sweep | --latest [sweep] | --list | --validate-all]")
     sweep_spec = load_experiment_sweep_spec(args[1])
     println(render_experiment_sweep_plan(sweep_spec))
     return sweep_spec

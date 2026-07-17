@@ -4,7 +4,7 @@
 # Selects one of three test tiers via the TEST_TIER environment variable.
 #
 #   TEST_TIER=fast  → local core regressions with small solves (default; `make test`)
-#   TEST_TIER=slow  → ~5 min, burst-VM territory (`make test-slow`)
+#   TEST_TIER=slow  → ~5 min, higher-resource regressions (`make test-slow`)
 #   TEST_TIER=full  → ~20 min, all regression tests + cross-process bit-identity
 #                     (`make test-full`)
 #

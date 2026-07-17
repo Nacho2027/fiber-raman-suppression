@@ -20,6 +20,16 @@ Useful commands:
 ./fiberlab latest <config>
 ```
 
+`./fiberlab run` accepts only supported configs. Execute an intentionally
+experimental local smoke through the explicit policy gate:
+
+```bash
+./fiberlab explore run <experimental-config> --local-smoke
+```
+
+High-resource long-fiber and multimode configs instead require the command
+shown by `./fiberlab compute-plan <config>`.
+
 Validation:
 
 ```bash

@@ -130,14 +130,14 @@ const ARTIFACT_HOOK_SPECS = Dict{Symbol,Any}(
         filename_hint = "{tag}_mode_resolved_spectra.png",
         default_view = "mode spectra; show all modes for small M, otherwise top/worst modes plus aggregate",
         override_key = "plots.modes",
-        implemented = false,
+        implemented = true,
     ),
     :per_mode_leakage_table => (
         kind = :table,
         filename_hint = "{tag}_per_mode_leakage.csv",
         default_view = "mode index, leakage metric, and worst/fundamental labels",
         override_key = "plots.modes",
-        implemented = false,
+        implemented = true,
     ),
     :mode_weight_bar_chart => (
         kind = :plot,
@@ -166,6 +166,13 @@ const ARTIFACT_HOOK_SPECS = Dict{Symbol,Any}(
         default_view = "FWHM, RMS width, peak power, and time-bandwidth product",
         override_key = "plots.temporal_pulse",
         implemented = false,
+    ),
+    :longfiber_reach_diagnostic => (
+        kind = :metric,
+        filename_hint = "{tag}_longfiber_reach.json",
+        default_view = "resolved grid, reach, dispersion, nonlinearity, and long-fiber risk context",
+        override_key = "plots.longfiber_reach",
+        implemented = true,
     ),
 )
 
@@ -261,7 +268,7 @@ function regime_artifact_hooks(spec)
     elseif spec.problem.regime == :long_fiber
         return (:standard_image_set, :trust_report, :longfiber_reach_diagnostic)
     elseif spec.problem.regime == :multimode
-        return (:mode_resolved_spectra, :per_mode_leakage_table)
+        return (:standard_image_set, :mode_resolved_spectra, :per_mode_leakage_table)
     end
     return Symbol[]
 end

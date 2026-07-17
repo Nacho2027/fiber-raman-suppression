@@ -162,29 +162,6 @@ function update_run_manifest_entry(path::AbstractString,
 end
 
 """
-    load_canonical_runs(manifest_path) -> Vector{Dict{String,Any}}
-
-Load the canonical Raman run manifest and merge each manifest row with the
-corresponding JLD2 payload fields. Missing payload files are skipped with a
-warning.
-"""
-function load_canonical_runs(manifest_path::AbstractString)
-    manifest = read_run_manifest(manifest_path)
-    runs = Dict{String,Any}[]
-    for entry in manifest
-        jld2_path = get(entry, "result_file", nothing)
-        if !(jld2_path isa AbstractString) || !isfile(jld2_path)
-            @warn "Missing JLD2 file, skipping manifest entry" path=jld2_path
-            continue
-        end
-        payload = JLD2.load(jld2_path)
-        merged = merge(Dict{String,Any}(entry), Dict{String,Any}(payload))
-        push!(runs, merged)
-    end
-    return runs
-end
-
-"""
     save_run(path, result; schema_version=OUTPUT_FORMAT_SCHEMA_VERSION)
 
 Write a Raman-suppression optimization run to the canonical two-file format.

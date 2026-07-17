@@ -23,15 +23,15 @@ end
 const CONTROL_CONTRACTS = Dict{Symbol,ControlContract}(
     :phase => ControlContract(:phase, true, "rad", (:phase_profile, :group_delay)),
     :reduced_phase => ControlContract(:reduced_phase, true, "rad", (:phase_profile, :group_delay)),
-    :amplitude => ControlContract(:amplitude, true, "dimensionless transmission", (:amplitude_mask,)),
-    :energy => ControlContract(:energy, true, "relative pulse energy", (:energy_scale, :energy_throughput)),
-    :gain_tilt => ControlContract(:gain_tilt, true, "dimensionless bounded transmission slope", (:gain_tilt_profile,)),
+    :amplitude => ControlContract(:amplitude, true, "dimensionless transmission", (:amplitude_mask, :shaped_input_spectrum, :energy_throughput)),
+    :energy => ControlContract(:energy, true, "relative pulse energy", (:energy_scale, :peak_power)),
+    :gain_tilt => ControlContract(:gain_tilt, true, "dimensionless bounded transmission slope", (:gain_tilt_profile, :energy_throughput)),
 )
 
 const OBJECTIVE_CONTRACTS = Dict{Symbol,ObjectiveContract}(
     :raman_band => ObjectiveContract(:raman_band, true, (:spectrum_before_after, :raman_band_overlay, :convergence_trace)),
     :raman_peak => ObjectiveContract(:raman_peak, true, (:spectrum_before_after, :raman_peak_marker, :convergence_trace)),
-    :temporal_width => ObjectiveContract(:temporal_width, true, (:temporal_pulse_before_after, :pulse_width_metrics, :convergence_trace)),
+    :temporal_width => ObjectiveContract(:temporal_width, true, (:spectrum_before_after, :convergence_trace)),
     :mmf_sum => ObjectiveContract(:mmf_sum, true, (:mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace)),
     :mmf_fundamental => ObjectiveContract(:mmf_fundamental, true, (:mode_resolved_spectra, :convergence_trace)),
     :mmf_worst_mode => ObjectiveContract(:mmf_worst_mode, true, (:mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace)),

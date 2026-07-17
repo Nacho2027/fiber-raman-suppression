@@ -7,6 +7,11 @@ execution, then delegates to an explicit backend adapter.
 
 struct ExperimentPlan
     experiment::Union{Experiment,NativeExperiment}
+    requested_grid::Union{Missing,Grid}
+    initial_grid::Union{Missing,Grid}
+    resolved_grid::Union{Missing,Grid}
+    grid_authority::Symbol
+    grid_error::String
     config_text::String
     backend::Symbol
     requires_adjoint::Bool
@@ -85,7 +90,49 @@ _control_kinds(control::AbstractControlMap) = (control.name,)
 _objective_kind(objective::Objective) = objective.kind
 _objective_kind(objective::AbstractFiberObjective) = objective.name
 _config_runner_supported(experiment::Experiment) =
+    experiment.fiber.regime == :single_mode &&
     experiment.control isa Control && experiment.objective isa Objective
+
+function _plan_grid_resolution(experiment::Experiment)
+    requested = experiment.grid
+    experiment.fiber.regime in (:single_mode, :long_fiber, :multimode) ||
+        return requested, missing, missing, :invalid,
+            "unsupported fiber regime `$(experiment.fiber.regime)`"
+    single_mode_backend = experiment.fiber.regime in (:single_mode, :long_fiber)
+    grid_fiber = experiment.fiber.regime == :long_fiber ? Fiber(
+        regime=:single_mode,
+        preset=experiment.fiber.preset,
+        length_m=experiment.fiber.length_m,
+        power_w=experiment.fiber.power_w,
+        beta_order=experiment.fiber.beta_order,
+    ) : experiment.fiber
+    initial = try
+        single_mode_backend ?
+            resolve_grid(grid_fiber, experiment.pulse, requested) :
+            resolve_sampling_grid(requested)
+    catch err
+        return requested, missing, missing, :invalid, sprint(showerror, err)
+    end
+    if single_mode_backend
+        authority = experiment.fiber.regime == :long_fiber ?
+            :long_fiber_analytic : :single_mode_analytic
+        return requested, initial, initial, authority, ""
+    elseif requested.policy in (:exact, :fixed)
+        return requested, initial, initial, :user_exact, ""
+    end
+    return requested, initial, missing, :runtime_physics, ""
+end
+
+function _plan_grid_resolution(experiment::NativeExperiment)
+    ismissing(experiment.grid) &&
+        return missing, missing, missing, :unavailable, ""
+    grid = experiment.grid
+    valid = grid.nt >= 4 && ispow2(grid.nt) && isfinite(grid.time_window_ps) &&
+            grid.time_window_ps > 0
+    return valid ? (grid, grid, grid, :resolved_numerical, "") :
+        (grid, missing, missing, :invalid,
+         "grid nt must be a power of two ≥ 4 and time_window_ps must be positive and finite")
+end
 
 function _experiment_config_text_or_empty(experiment::Experiment)
     _config_runner_supported(experiment) || return ""
@@ -156,8 +203,15 @@ end
 Build a simulation-free execution plan from a FiberLab experiment.
 """
 function plan(experiment::Experiment)
+    requested_grid, initial_grid, resolved_grid, grid_authority, grid_error =
+        _plan_grid_resolution(experiment)
     return ExperimentPlan(
         experiment,
+        requested_grid,
+        initial_grid,
+        resolved_grid,
+        grid_authority,
+        grid_error,
         _experiment_config_text_or_empty(experiment),
         _config_runner_supported(experiment) ? :config_runner : :api_native,
         _gradient_solver(experiment.solver.kind),
@@ -172,8 +226,15 @@ function plan(experiment::Experiment)
 end
 
 function plan(experiment::NativeExperiment)
+    requested_grid, initial_grid, resolved_grid, grid_authority, grid_error =
+        _plan_grid_resolution(experiment)
     return ExperimentPlan(
         experiment,
+        requested_grid,
+        initial_grid,
+        resolved_grid,
+        grid_authority,
+        grid_error,
         "",
         :api_native,
         _gradient_solver(experiment.solver.kind),
@@ -202,11 +263,9 @@ function _check_plan(plan::ExperimentPlan)
         push!(messages, "experiment id cannot be empty"))
     isempty(plan.variables) && (_push_unique!(blockers, :missing_controls);
         push!(messages, "at least one control variable is required"))
-    if !ismissing(experiment.grid) &&
-            (experiment.grid.nt <= 0 || !isfinite(experiment.grid.time_window_ps) ||
-             experiment.grid.time_window_ps <= 0)
+    if !isempty(plan.grid_error)
         _push_unique!(blockers, :invalid_grid)
-        push!(messages, "grid size and time window must be positive and finite")
+        push!(messages, plan.grid_error)
     end
     if !ismissing(experiment.fiber) &&
             (!isfinite(experiment.fiber.length_m) || experiment.fiber.length_m <= 0 ||
@@ -223,6 +282,12 @@ function _check_plan(plan::ExperimentPlan)
     end
     experiment.solver.max_iter > 0 || (_push_unique!(blockers, :invalid_solver);
         push!(messages, "solver.max_iter must be positive"))
+    if experiment isa Experiment && experiment.fiber.regime != :single_mode &&
+            experiment.control isa Control && experiment.objective isa Objective
+        _push_unique!(blockers, :unsupported_symbolic_regime)
+        push!(messages,
+            "symbolic package Experiments currently support single_mode only; use a validated front-layer config for long_fiber/multimode runs or a NativeExperiment with explicit behavior maps")
+    end
 
     for assumption in plan.defaults
         if assumption.level in (:auto, :review, :scientific_target)

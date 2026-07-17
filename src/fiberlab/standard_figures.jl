@@ -1,15 +1,18 @@
-function save_standard_set end
-function plot_merged_evolution end
-
-const _STANDARD_IMAGE_HELPERS_LOADED = Ref(false)
+function _standard_design_inputs(problem::FiberFieldProblem, decoded)
+    fields = _single_mode_fields(decoded, problem)
+    return (
+        phase = Matrix{Float64}(fields.phase),
+        input = Matrix{ComplexF64}(
+            fields.alpha .* fields.amplitude .* problem.uω0),
+    )
+end
 
 """
     standard_figures(problem, result; output_dir=nothing, tag=nothing, kwargs...)
 
 Write the lab-standard post-run figure set for a native FiberLab optimization
-result. The renderer is intentionally problem/result based: it uses the decoded
-physical controls from `result`, applies them to `problem.uω0`, and then calls
-the same standard-image path used by the historical optimization drivers.
+result. Both columns use the exact decoded initial/final designs and the
+matching physical objective values stored by native execution.
 """
 function standard_figures(problem::FiberFieldProblem,
                           result::NativeAdjointResult;
@@ -45,20 +48,28 @@ function standard_figures(problem::FiberFieldProblem,
         String(output_dir)
     target_tag = tag === nothing ? _standard_tag(result) : String(tag)
 
-    fields = _single_mode_fields(decoded_final(result), problem)
-    phase = Matrix{Float64}(fields.phase)
-    base_field = Matrix{ComplexF64}(fields.alpha .* fields.amplitude .* problem.uω0)
-    objective_kind = result.final_step.objective.name
+    control = result.plan.experiment.control
+    initial_design = _standard_design_inputs(
+        problem, _decoded_value(evaluate_control(control, result.x_initial)))
+    final_design = _standard_design_inputs(problem, decoded_final(result))
+    phase_before = initial_design.phase
+    phase_after = final_design.phase
+    input_before = initial_design.input
+    input_after = final_design.input
+    objective_kind = _objective_contract_kind(result.final_step.objective)
+    initial_state = _native_initial_forward_state(result)
+    physical_objective_values = (
+        objective_value(result.final_step.objective, initial_state),
+        objective_value(result.final_step.objective, result.final_step.forward_state),
+    )
     band_mask = _standard_band_mask(problem, objective_kind)
     raman_threshold = _standard_raman_threshold(problem)
     lambda0_nm = Float64(problem.sim["λ0"]) * 1e9
     fwhm_fs = _standard_pulse(problem).fwhm_s * 1e15
 
-    _ensure_standard_image_helpers_loaded()
-    standard_paths = Base.invokelatest(
-        save_standard_set,
-        phase,
-        base_field,
+    standard_paths = save_standard_set(
+        phase_after,
+        input_before,
         problem.fiber,
         problem.sim,
         band_mask,
@@ -74,10 +85,18 @@ function standard_figures(problem::FiberFieldProblem,
         n_z_samples = n_z_samples,
         also_unshaped = also_unshaped,
         objective_kind = objective_kind,
+        phi_before = phase_before,
+        uω0_after = input_after,
+        objective_values = physical_objective_values,
+        objective_scale = _objective_cost_scale(result.final_step.objective),
+        objective_label = replace(String(result.final_step.objective.name), "_" => " "),
+        mode_idx = :sum,
     )
     comparison_path = _write_evolution_comparison(
-        phase,
-        base_field,
+        phase_before,
+        phase_after,
+        input_before,
+        input_after,
         problem;
         output_dir = target_dir,
         tag = target_tag,
@@ -161,7 +180,9 @@ function _standard_band_mask(problem::FiberFieldProblem, objective_kind::Symbol)
         "build the problem with `band_mask` or `raman_threshold_thz`"))
 end
 
-function _write_evolution_comparison(phase, base_field, problem::FiberFieldProblem;
+function _write_evolution_comparison(phase_before, phase_after,
+                                     input_before, input_after,
+                                     problem::FiberFieldProblem;
                                      output_dir::AbstractString,
                                      tag::AbstractString,
                                      n_z_samples::Int,
@@ -169,9 +190,10 @@ function _write_evolution_comparison(phase, base_field, problem::FiberFieldProbl
                                      fwhm_fs::Real)
     fiber_evo = deepcopy(problem.fiber)
     fiber_evo["zsave"] = collect(range(0.0, problem.fiber["L"], length = n_z_samples))
-    shaped = @. base_field * cis(phase)
-    sol_opt = solve_disp_mmf(shaped, fiber_evo, problem.sim)
-    sol_unshaped = solve_disp_mmf(base_field, fiber_evo, problem.sim)
+    reference_launch = @. input_before * cis(phase_before)
+    optimized_launch = @. input_after * cis(phase_after)
+    optimized_solution = solve_disp_mmf(optimized_launch, fiber_evo, problem.sim)
+    reference_solution = solve_disp_mmf(reference_launch, fiber_evo, problem.sim)
     metadata = (
         fiber_name = String(problem.metadata.preset),
         L_m = Float64(problem.fiber["L"]),
@@ -180,15 +202,14 @@ function _write_evolution_comparison(phase, base_field, problem::FiberFieldProbl
         fwhm_fs = Float64(fwhm_fs),
     )
     path = joinpath(output_dir, "$(tag)_evolution_comparison.png")
-    renderer = getfield(@__MODULE__, :plot_merged_evolution)
-    Base.invokelatest(
-        renderer,
-        sol_opt,
-        sol_unshaped,
+    plot_merged_evolution(
+        optimized_solution,
+        reference_solution,
         problem.sim,
         fiber_evo;
         metadata = metadata,
         save_path = path,
+        mode_idx = :sum,
     )
     PyPlot.close("all")
     return path
@@ -209,7 +230,7 @@ function _write_metric_summary(result::NativeAdjointResult;
         axs[1].set_yscale("log")
     end
     axs[1].set_xlabel("Iteration")
-    axs[1].set_ylabel("Objective")
+    axs[1].set_ylabel("Total optimization surface")
     axs[1].set_title("Optimization trace")
     axs[1].grid(true, alpha = 0.3)
 
@@ -223,7 +244,7 @@ function _write_metric_summary(result::NativeAdjointResult;
         NaN
     title = isfinite(delta_db) ? @sprintf("Objective change: %.2f dB", delta_db) : "Objective change"
     axs[2].set_title(title)
-    axs[2].set_ylabel("Objective")
+    axs[2].set_ylabel("Total optimization surface")
     if !isempty(gradients)
         axs[2].text(
             0.5,
@@ -239,17 +260,6 @@ function _write_metric_summary(result::NativeAdjointResult;
     fig.savefig(path, dpi = 300, bbox_inches = "tight")
     PyPlot.close(fig)
     return path
-end
-
-function _ensure_standard_image_helpers_loaded()
-    _STANDARD_IMAGE_HELPERS_LOADED[] && return nothing
-    root = normpath(joinpath(@__DIR__, "..", ".."))
-    isdefined(@__MODULE__, :_VISUALIZATION_JL_LOADED) ||
-        include(joinpath(root, "scripts", "lib", "visualization.jl"))
-    isdefined(@__MODULE__, :_STANDARD_IMAGES_JL_LOADED) ||
-        include(joinpath(root, "scripts", "lib", "standard_images.jl"))
-    _STANDARD_IMAGE_HELPERS_LOADED[] = true
-    return nothing
 end
 
 standard_report(problem::FiberFieldProblem, result::NativeAdjointResult; kwargs...) =

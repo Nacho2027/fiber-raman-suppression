@@ -2,8 +2,6 @@ using FFTW
 using LinearAlgebra
 using Printf
 
-include(joinpath(@__DIR__, "..", "..", "scripts", "lib", "visualization.jl"))
-
 @testset "YDFA gain initialization and propagation" begin
     sim = FiberLab.get_disp_sim_params(1030e-9, 1, 32, 5.0, 2)
     gain = FiberLab.get_YDFAParams(sim)
@@ -33,8 +31,7 @@ end
     temporal = fft(spectrum)
     expected_thz = FFTW.fftfreq(sim["Nt"], 1 / sim["Δt"])[tone_bin]
 
-    @test argmax(_spectral_power_from_temporal(temporal)) == tone_bin
-    @test compute_instantaneous_frequency(temporal, sim) ≈
+    @test FiberLab.compute_instantaneous_frequency(temporal, sim) ≈
         fill(expected_thz, sim["Nt"]) atol = 1e-12
 end
 
@@ -45,6 +42,15 @@ end
     @test_throws ArgumentError FiberLab.get_disp_sim_params(1550e-9, 1, 2, 3.0, 2)
     @test_throws ArgumentError FiberLab.get_disp_sim_params(1550e-9, 1, 64, -3.0, 2)
     @test_throws ArgumentError FiberLab.get_disp_sim_params(1550e-9, 1, 64, 3.0, 1)
+    optical_grid_error = try
+        FiberLab.get_disp_sim_params(1550e-9, 1, 8192, 12.0, 2)
+        nothing
+    catch error
+        error
+    end
+    @test optical_grid_error isa ArgumentError
+    @test occursin("requires time_window >", sprint(showerror, optical_grid_error))
+    @test occursin("use at least 21.178 ps", sprint(showerror, optical_grid_error))
 
     mutated = FiberLab.get_disp_sim_params(1550e-9, 1, 64, 3.0, 2)
     mutated["Δt"] = -mutated["Δt"]
@@ -247,6 +253,38 @@ end
     finite_difference = (plus - minus) / (2step)
     adjoint_direction = 2real(sum(conj.(terminal) .* direction))
     @test finite_difference ≈ adjoint_direction rtol = 1e-6 atol = 1e-8
+end
+
+@testset "Default-grid launch and Raman-convolution convergence" begin
+    for wavelength_m in (1550e-9, 1030e-9)
+        grid = resolve_sampling_grid(Grid(); wavelength_m=wavelength_m)
+        @test grid == Grid(nt=1024, time_window_ps=10.0, policy=:exact)
+        sim = FiberLab.get_disp_sim_params(
+            wavelength_m, 1, grid.nt, grid.time_window_ps, 2)
+        @test all(>(0), sim["fs"])
+        @test minimum(sim["fs"]) / sim["f0"] > 0.7
+    end
+
+    function launch_and_raman(nt)
+        sim = FiberLab.get_disp_sim_params(1550e-9, 1, nt, 10.0, 2)
+        fiber = FiberLab.get_disp_fiber_params_user_defined(
+            1e-5, sim; fR=0.18, gamma_user=0.0, betas_user=[0.0])
+        _, uω = FiberLab.get_initial_state(
+            ones(1), 0.05, 185e-15, 80.5e6, "sech_sq", sim)
+        intensity = abs2.(fft(uω, 1)[:, 1])
+        raman = real.(fftshift(ifft(fiber["hRω"] .* fft(ComplexF64.(intensity)))))
+        return intensity, raman
+    end
+
+    intensity_1024, raman_1024 = launch_and_raman(1024)
+    intensity_2048, raman_2048 = launch_and_raman(2048)
+    matching = 1:2:2048
+    @test maximum(abs.(intensity_1024 .- intensity_2048[matching])) /
+          maximum(intensity_2048) < 1e-13
+    @test maximum(abs.(raman_1024 .- raman_2048[matching])) /
+          maximum(abs, raman_2048) < 1e-12
+    @test norm(raman_1024 .- raman_2048[matching]) /
+          norm(raman_2048[matching]) < 1e-12
 end
 
 @testset "Analytic continuous-wave Kerr propagation" begin

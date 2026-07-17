@@ -11,6 +11,16 @@ function meshgrid(x, y)
     return X, Y
 end
 
+function _validate_positive_frequency_grid(λ0, Nt, time_window)
+    f0 = 2.99792458e8 / λ0 / 1e12
+    minimum_window = Nt / (2 * f0)
+    safe_window = (floor(Int, minimum_window * 1000) + 1) / 1000
+    time_window > minimum_window || throw(ArgumentError(@sprintf(
+        "simulation bandwidth reaches nonpositive absolute optical frequencies: Nt=%d at λ0=%.4g nm requires time_window > %.9g ps (use at least %.3f ps); increase the window or use fewer samples",
+        Nt, λ0 * 1e9, minimum_window, safe_window)))
+    return nothing
+end
+
 """
     lin_to_dB(x) -> Float64
 
@@ -59,11 +69,12 @@ function get_disp_sim_params(λ0, M, Nt, time_window, β_order)
     c0 = 2.99792458e8 # m/s
     h = 6.62607e-34 # Js
     f0 = c0 / λ0 / 1e12 # THz
+    _validate_positive_frequency_grid(λ0, Nt, time_window)
     Δt = time_window / Nt
     ts = 1e-12 * [-time_window / 2 + i * Δt for i in 0:Nt-1] # s
     fs = f0 .+ fftshift(fftfreq(Nt, 1 / Δt)) # THz
     all(>(0), fs) || throw(ArgumentError(
-        "simulation bandwidth reaches nonpositive absolute optical frequencies"))
+        "simulation frequency construction violated the positive-frequency grid invariant"))
     ω0 = 2 * π * f0 # rad / ps
     ωs = 2 * π * fs # rad / ps
     ε = 1e-12 * Δt / (h * 1e12 * f0)
@@ -133,7 +144,8 @@ end
 
 """
     get_disp_fiber_params(L, radius, core_NA, alpha, nx, sim, fiber_fname;
-                          spatial_window=100, fR=0.18, τ1=12.2, τ2=32) -> Dict
+                          spatial_window=100, Δf=1.0,
+                          fR=0.18, τ1=12.2, τ2=32) -> Dict
 
 Build fiber parameter dictionary for GRIN multimode fibers by solving the eigenvalue
 problem for spatial modes (or loading cached results from an NPZ file).
@@ -149,6 +161,8 @@ problem for spatial modes (or loading cached results from an NPZ file).
 
 # Keyword arguments
 - `spatial_window`: spatial grid extent [μm] (default 100)
+- `Δf`: modal-dispersion frequency step [THz] used by the mode solver
+  (default 1.0)
 - `fR`: fractional Raman contribution (default 0.18 for silica)
 - `τ1`, `τ2`: Raman response time constants [fs] (default 12.2, 32 for silica)
 
@@ -166,6 +180,7 @@ quadrature error.
 """
 function get_disp_fiber_params(L, radius, core_NA, alpha, nx, sim, fiber_fname;
                                spatial_window=100,
+                               Δf=1.0,
                                fR=_SILICA_RAMAN_FRACTION,
                                τ1=_SILICA_RAMAN_TAU1_FS,
                                τ2=_SILICA_RAMAN_TAU2_FS)
@@ -187,7 +202,9 @@ function get_disp_fiber_params(L, radius, core_NA, alpha, nx, sim, fiber_fname;
         x = fiber["x"]
     else
         @debug "Computing fiber params for nx=$nx, M=$(sim["M"])"
-        βn_ω, Dω, γ, ϕ, x = get_params(f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, Δt, β_order)
+        βn_ω, Dω, γ, ϕ, x = get_params(
+            f0, c0, nx, spatial_window, radius, core_NA, alpha, M, Nt, Δt,
+            β_order; Δf=Δf)
         npzwrite(fiber_fname, Dict("gamma" => γ, "phi" => ϕ, "x" => x, "D_w" => Dω, "betas" => βn_ω))
     end
     return merge(Dict{String,Any}(

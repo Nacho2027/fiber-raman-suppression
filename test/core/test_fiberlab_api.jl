@@ -1,3 +1,5 @@
+using FFTW
+
 struct TestFiberDesign
     core_radius_um::Float64
     numerical_aperture::Float64
@@ -27,6 +29,8 @@ end
     @test occursin("variables = [\"phase\"]", text)
     @test occursin("kind = \"raman_band\"", text)
     @test occursin("max_iter = 7", text)
+    @test FiberLab._raman_marker_wavelength_nm(193.4, -5.0) ≈
+          FiberLab.C_NM_THZ / 188.4
 end
 
 @testset "FiberLab adjoint contracts" begin
@@ -151,6 +155,17 @@ end
     )
     @test has_terminal_adjoint(mapped_objective)
     @test objective_value(mapped_objective, field) ≈ sum(abs2, field)
+    @test FiberLab._objective_cost_scale(mapped_objective) == :linear
+    @test FiberLab._objective_cost_scale(ObjectiveMap(
+        :db_cost;
+        cost = _ -> -12.0,
+        cost_scale = :db,
+    )) == :db
+    @test_throws ArgumentError ObjectiveMap(
+        :bad_cost_scale;
+        cost = _ -> 0.0,
+        cost_scale = :logarithmic,
+    )
     @test terminal_adjoint(mapped_objective, field) == 2 .* field
     @test assert_adjoint_ready(mapped_objective, custom_control, Solver(kind = :lbfgs))
     @test_throws MethodError ObjectiveMap(
@@ -595,7 +610,7 @@ end
     @test occursin("\"convergence_trace_file\"", native_sidecar)
     @test occursin("\"metadata_authority\": \"user_asserted\"", native_sidecar)
 
-    figure_control = FullGridPhase(4)
+    figure_control = FullGridPhase(4; figure_hooks = (:phase_profile,))
     figure_objective = ObjectiveMap(
         :field_summary_objective;
         cost = state -> sum(abs2, state),
@@ -629,15 +644,13 @@ end
     @test isfile(default_figures[:field_summary])
     @test isfile(default_figures[:convergence_trace])
     @test isfile(default_figures[:phase_profile])
-    @test isfile(default_figures[:group_delay])
     @test FiberLab._native_png_passes_audit(default_figures[:field_summary])
     @test FiberLab._native_png_passes_audit(default_figures[:phase_profile])
-    @test FiberLab._native_png_passes_audit(default_figures[:group_delay])
     default_figure_verification = verify(default_figure_result)
     @test default_figure_verification.artifact_complete
     @test default_figure_verification.artifact_files_exist
     @test Set(default_figure_verification.requested_artifact_hooks) ==
-          Set((:field_summary, :convergence_trace, :phase_profile, :group_delay))
+          Set((:field_summary, :convergence_trace, :phase_profile))
     @test isempty(default_figure_verification.missing_artifact_hooks)
 
     invalid_png_dir = mktempdir()
@@ -669,10 +682,8 @@ end
     @test isfile(direct_figures[:field_summary])
     @test isfile(direct_figures[:convergence_trace])
     @test isfile(direct_figures[:phase_profile])
-    @test isfile(direct_figures[:group_delay])
     @test FiberLab._native_png_passes_audit(direct_figures[:field_summary])
     @test FiberLab._native_png_passes_audit(direct_figures[:phase_profile])
-    @test FiberLab._native_png_passes_audit(direct_figures[:group_delay])
     @test verify(direct_figure_result).artifact_complete
 
     trust_required_result = solve(
@@ -711,7 +722,7 @@ end
         :mode_resolved_summary_objective;
         cost = state -> sum(abs2, state),
         terminal_adjoint = (state, context) -> 2 .* state,
-        figure_hooks = (:mode_resolved_spectra, :per_mode_leakage_table),
+        figure_hooks = (:mode_resolved_summary,),
     )
     multimode_figure_model = AdjointModel(
         :mode_resolved_identity;
@@ -727,6 +738,10 @@ end
         solver = Solver(kind = :lbfgs, max_iter = 1),
         maturity = :supported,
     )
+    custom_multimode_plan = plan(multimode_figure_experiment)
+    @test custom_multimode_plan.backend == :api_native
+    @test custom_multimode_plan.grid_authority == :runtime_physics
+    @test isempty(custom_multimode_plan.grid_error)
     multimode_figure_dir = mktempdir()
     multimode_figure_result = solve(
         multimode_figure_experiment;
@@ -738,16 +753,33 @@ end
         ),
     )
     multimode_figures = figure_paths(multimode_figure_result)
-    @test isfile(multimode_figures[:mode_resolved_spectra])
-    @test isfile(multimode_figures[:per_mode_leakage_table])
-    @test FiberLab._native_png_passes_audit(multimode_figures[:mode_resolved_spectra])
+    @test isfile(multimode_figures[:mode_resolved_summary])
     @test occursin("mode,total_power,peak_power",
-                   read(multimode_figures[:per_mode_leakage_table], String))
+                   read(multimode_figures[:mode_resolved_summary], String))
     multimode_verification = verify(multimode_figure_result)
     @test multimode_verification.artifact_complete
     @test Set(multimode_verification.requested_artifact_hooks) ==
-          Set((:mode_resolved_spectra, :per_mode_leakage_table, :phase_profile, :group_delay))
+          Set((:mode_resolved_summary, :phase_profile))
     @test isempty(multimode_verification.missing_artifact_hooks)
+
+    semantic_artifact_control = FullGridPhase(4)
+    semantic_artifact_experiment = Experiment(
+        fiber,
+        semantic_artifact_control,
+        figure_objective;
+        id = "native_generic_semantic_artifact_rejected",
+        solver = Solver(kind = :lbfgs, max_iter = 1),
+        maturity = :supported,
+    )
+    @test_throws FiberLabBackendError solve(
+        semantic_artifact_experiment;
+        backend = NativeAdjointBackend(
+            figure_model;
+            initial_coordinates = [0.5, -0.25, 0.1, -0.05],
+            write_artifacts = true,
+            output_dir = mktempdir(),
+        ),
+    )
 
     converged = solve(
         experiment;
@@ -1382,6 +1414,65 @@ end
     @test auto_problem.metadata.requested_grid == auto_grid
     @test auto_problem.sim["Nt"] > auto_grid.nt
     @test auto_problem.sim["time_window"] > auto_grid.time_window_ps
+
+    default_grid = Grid()
+    default_problem = fiber_problem(
+        fiber;
+        grid = default_grid,
+        raman_threshold_thz = -0.25,
+    )
+    @test default_grid == Grid(nt = 1024, time_window_ps = 10.0,
+                               policy = :auto_if_undersized)
+    @test all(>(0), default_problem.sim["fs"])
+
+    resolved_grid = resolve_grid(
+        Fiber(preset = :SMF28, length_m = 2.0, power_w = 0.2),
+        Pulse(),
+        Grid(nt = 8192, time_window_ps = 12.0),
+    )
+    @test resolved_grid == Grid(nt = 8192, time_window_ps = 27.0, policy = :exact)
+    wide_auto_grid = resolve_grid(
+        Fiber(preset = :SMF28, length_m = 1.0, power_w = 0.05),
+        Pulse(),
+        Grid(nt = 16, time_window_ps = 100.0, policy = :auto_if_undersized),
+    )
+    @test wide_auto_grid == Grid(nt = 16384, time_window_ps = 100.0, policy = :exact)
+    @test resolve_grid(
+        fiber,
+        pulse,
+        Grid(nt = 16, time_window_ps = 100.0, policy = :exact),
+    ) == Grid(nt = 16, time_window_ps = 100.0, policy = :exact)
+    @test_throws ArgumentError resolve_grid(
+        fiber, pulse, Grid(nt = 2, time_window_ps = 10.0, policy = :exact))
+    @test_throws ArgumentError resolve_grid(
+        fiber, pulse, Grid(nt = 1024, time_window_ps = Inf, policy = :exact))
+    hnlf_auto_grid = resolve_grid(
+        Fiber(preset = :HNLF, length_m = 0.5, power_w = 0.01),
+        Pulse(),
+        Grid(nt = 8192, time_window_ps = 10.0),
+    )
+    @test hnlf_auto_grid.nt == 8192
+    @test hnlf_auto_grid.time_window_ps > 10.0
+    hnlf_auto_sim = FiberLab.get_disp_sim_params(
+        1550e-9, 1, hnlf_auto_grid.nt, hnlf_auto_grid.time_window_ps, 2)
+    @test minimum(hnlf_auto_sim["fs"]) / hnlf_auto_sim["f0"] >= 0.1
+    @test_throws ArgumentError resolve_grid(
+        Fiber(preset = :HNLF, length_m = 0.5, power_w = 0.01),
+        Pulse(),
+        Grid(nt = 8192, time_window_ps = 10.0, policy = :exact),
+    )
+    incompatible_grid_error = try
+        resolve_sampling_grid(
+            Grid(nt = 1024, time_window_ps = 20.0);
+            wavelength_m = 10_000e-9,
+        )
+        nothing
+    catch err
+        err
+    end
+    @test incompatible_grid_error isa ArgumentError
+    @test occursin("auto grid constraints are incompatible",
+                   sprint(showerror, incompatible_grid_error))
     @test_throws ArgumentError fiber_problem(Fiber(
         preset = :SMF28_beta2_only,
         length_m = 1e-4,
@@ -1455,6 +1546,15 @@ end
     control = FullGridPhase(problem)
     @test dimension(control) == sample_count(problem)
     objective = raman_band_objective(problem; log_cost = false)
+    for (named_objective, contract_kind) in (
+        (raman_band_objective(problem; name = :custom_band), :raman_band),
+        (raman_peak_objective(problem; name = :custom_peak), :raman_peak),
+        (temporal_width_objective(problem; name = :custom_width), :temporal_width),
+    )
+        @test named_objective.contract_kind == contract_kind
+        @test named_objective.figure_hooks ==
+              FiberLab.objective_contract(contract_kind).figure_hooks
+    end
     model = fiber_model(problem)
     @test model isa AdjointModel
     @test length(problem.metadata.construction_sha256) == 64
@@ -1496,6 +1596,7 @@ end
         max_iter = 1,
         gradient_tolerance = 1e99,
         write_artifacts = true,
+        strict_artifacts = false,
         output_dir = mktempdir(),
         maturity = :supported,
     )
@@ -1503,6 +1604,8 @@ end
     @test ismissing(explicit_result.plan.experiment.pulse)
     @test explicit_result.plan.experiment.grid ==
         Grid(nt = problem.sim["Nt"], time_window_ps = problem.sim["time_window"], policy = :exact)
+    @test !haskey(figure_paths(explicit_result), :group_delay)
+    @test :group_delay in verify(explicit_result).missing_artifact_hooks
     @test explicit_result.plan.experiment.metadata_authority == :resolved_numerical
     explicit_sidecar = FiberLab.JSON3.read(
         read(explicit_result.sidecar_path, String),
@@ -1578,6 +1681,27 @@ end
     )
     @test gradient_check.pass
 
+    expected_group_delay_fs = 250.0
+    linear_phase_centered = (expected_group_delay_fs / 1e3) .* (problem.sim["ωs"] .- problem.sim["ω0"])
+    group_delay_result = solve(
+        problem,
+        control,
+        objective,
+        FFTW.ifftshift(linear_phase_centered);
+        id = "native_physical_group_delay_units",
+        max_iter = 1,
+        gradient_tolerance = 1e99,
+        write_artifacts = true,
+        output_dir = mktempdir(),
+        maturity = :supported,
+    )
+    group_delay_csv = figure_paths(group_delay_result)[:group_delay_data]
+    group_delay_values = [
+        parse(Float64, split(row, ',')[3])
+        for row in readlines(group_delay_csv)[2:end]
+    ]
+    @test group_delay_values ≈ fill(expected_group_delay_fs, sample_count(problem))
+
     basis = hcat(
         ones(sample_count(problem)),
         range(-1.0, 1.0; length = sample_count(problem)),
@@ -1609,6 +1733,12 @@ end
     @test length(initial_coordinates(demo_control)) == dimension(demo_control)
     demo_decoded = decode(demo_control, initial_coordinates(demo_control))
     @test hasproperty(demo_decoded, :phase)
+    @test Set(figure_hooks(demo_control, objective)) == Set((
+        FiberLab.objective_contract(:raman_band).figure_hooks...,
+        FiberLab.control_contract(:phase).figure_hooks...,
+        FiberLab.control_contract(:amplitude).figure_hooks...,
+        FiberLab.control_contract(:energy).figure_hooks...,
+    ))
     @test hasproperty(demo_decoded, :amplitude)
     @test hasproperty(demo_decoded, :energy)
     @test all(abs.(demo_decoded.phase) .<= 0.1)
@@ -1707,12 +1837,13 @@ end
             z = basis * context.coordinates
             0.01 .* (transpose(basis) * (Float64.(collect(physical_gradient)) .* (1 .- tanh.(z).^2)))
         end,
-        figure_hooks = (:amplitude_profile,),
+        figure_hooks = control_contract(:amplitude).figure_hooks,
     )
     multivar_artifact_control = ControlSpace(
         :phase => bounded_phase_control,
         :amplitude => bounded_amplitude_control,
-        :energy => PositiveScalar(:energy; figure_hooks = (:energy_scale,)),
+        :energy => PositiveScalar(
+            :energy; figure_hooks = control_contract(:energy).figure_hooks),
     )
     multivar_artifact_result = solve(
         problem,
@@ -1728,17 +1859,32 @@ end
         gradient_tolerance = 1e99,
     )
     multivar_artifacts = figure_paths(multivar_artifact_result)
-    @test isfile(multivar_artifacts[:field_summary])
+    @test isfile(multivar_artifacts[:spectrum_before_after])
+    @test isfile(multivar_artifacts[:raman_band_overlay])
     @test isfile(multivar_artifacts[:convergence_trace])
     @test isfile(multivar_artifacts[:phase_profile])
     @test isfile(multivar_artifacts[:group_delay])
-    @test isfile(multivar_artifacts[:amplitude_profile])
+    @test isfile(multivar_artifacts[:group_delay_data])
+    @test isfile(multivar_artifacts[:amplitude_mask])
+    @test isfile(multivar_artifacts[:shaped_input_spectrum])
     @test isfile(multivar_artifacts[:energy_scale])
-    @test FiberLab._native_png_passes_audit(multivar_artifacts[:field_summary])
+    @test isfile(multivar_artifacts[:energy_throughput])
+    @test isfile(multivar_artifacts[:peak_power])
+    @test FiberLab._native_png_passes_audit(multivar_artifacts[:spectrum_before_after])
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:phase_profile])
     @test FiberLab._native_png_passes_audit(multivar_artifacts[:group_delay])
-    @test FiberLab._native_png_passes_audit(multivar_artifacts[:amplitude_profile])
+    @test FiberLab._native_png_passes_audit(multivar_artifacts[:amplitude_mask])
     @test verify(multivar_artifact_result).artifact_complete
+    @test last(multivar_artifact_result.convergence_trace).cost ==
+          multivar_artifact_result.cost_final
+    @test last(multivar_artifact_result.convergence_trace).gradient_norm ≈
+          norm(gradient_vector(multivar_artifact_result.final_step))
+    @test metrics(multivar_artifact_result).gradient_norm_final ≈
+          norm(gradient_vector(multivar_artifact_result.final_step))
+    group_delay_rows = readlines(multivar_artifacts[:group_delay_data])
+    @test first(group_delay_rows) ==
+          "frequency_offset_THz,phase_unwrapped_rad,group_delay_fs"
+    @test length(group_delay_rows) == sample_count(problem) + 1
     @test multivar_artifact_result.backend.run_source.problem !== problem
     @test FiberLab._same_resolved_problem(
         problem,
@@ -1799,6 +1945,26 @@ end
     )
     run_snapshot.uω0[1, 1] = original_launch_value
 
+    initial_design = FiberLab._standard_design_inputs(
+        problem,
+        decode(multivar_artifact_result.plan.experiment.control,
+               multivar_artifact_result.x_initial),
+    )
+    @test any(!iszero, initial_design.phase)
+    initial_design_output = FiberLab._forward_propagation(
+        problem,
+        initial_design.input .* cis.(initial_design.phase),
+    ).output
+    @test initial_design_output ≈
+          FiberLab._native_initial_forward_state(multivar_artifact_result)
+    @test objective_value(
+        multivar_artifact_result.final_step.objective,
+        initial_design_output,
+    ) ≈ objective_value(
+        multivar_artifact_result.final_step.objective,
+        FiberLab._native_initial_forward_state(multivar_artifact_result),
+    )
+
     standard_artifacts = standard_figures(
         problem,
         multivar_artifact_result;
@@ -1818,6 +1984,32 @@ end
     @test FiberLab._native_png_passes_audit(standard_artifacts.phase_profile)
     @test FiberLab._native_png_passes_audit(standard_artifacts.evolution)
     @test FiberLab._native_png_passes_audit(standard_artifacts.phase_diagnostic)
+
+    log_artifact_dir = mktempdir()
+    log_result = solve(
+        problem,
+        control,
+        raman_band_objective(problem; log_cost = true),
+        coordinates;
+        id = "native_log_cost_standard_figures",
+        max_iter = 1,
+        write_artifacts = true,
+        output_dir = log_artifact_dir,
+        maturity = :supported,
+        gradient_tolerance = 1e99,
+    )
+    @test FiberLab._objective_cost_scale(log_result.final_step.objective) == :db
+    @test log_result.cost_initial < 0
+    @test isfile(figure_paths(log_result)[:spectrum_before_after])
+    @test isfile(figure_paths(log_result)[:raman_band_overlay])
+    log_standard = standard_figures(
+        problem,
+        log_result;
+        output_dir = mktempdir(),
+        n_z_samples = 2,
+        also_unshaped = false,
+    )
+    @test FiberLab._native_png_passes_audit(log_standard.phase_profile)
 
     multimode_sim = FiberLab.get_disp_sim_params(1550e-9, 2, 16, 5.0, 2)
     _, multimode_uω0 = FiberLab.get_initial_state(
@@ -1870,6 +2062,16 @@ end
         gamma_tensor = multimode_gamma,
         band_mask = FFTW.fftfreq(16, 1 / multimode_sim["Δt"]) .< -0.25,
     )
+    @test_throws ArgumentError fiber_problem(
+        Fiber(regime = :multimode, preset = :test_two_mode,
+              length_m = 1e-4, power_w = 1e-5);
+        modes = 2,
+        grid = Grid(nt=16, time_window_ps=5.0, policy=:auto_if_undersized),
+        initial_modes = [1 / sqrt(2), 1im / sqrt(2)],
+        dispersion = multimode_fiber["Dω"],
+        gamma_tensor = multimode_gamma,
+        band_mask = FFTW.fftfreq(16, 1 / multimode_sim["Δt"]) .< -0.25,
+    )
     @test explicit_multimode_problem isa FiberProblem
     @test multimode_problem isa FiberFieldProblem
     @test size(multimode_problem.uω0) == (16, 2)
@@ -1878,6 +2080,53 @@ end
     @test ismissing(explicit_multimode_problem.metadata.requested_fiber)
     @test multimode_problem.metadata.requested_fiber.regime == :multimode
     @test multimode_problem.metadata.preset == :test_two_mode
+    for (named_objective, contract_kind) in (
+        (mode_sum_objective(multimode_problem; name = :custom_sum), :mmf_sum),
+        (fundamental_mode_objective(multimode_problem; name = :custom_fundamental), :mmf_fundamental),
+        (worst_mode_objective(multimode_problem; name = :custom_worst), :mmf_worst_mode),
+    )
+        @test named_objective.contract_kind == contract_kind
+        @test named_objective.figure_hooks ==
+              FiberLab.objective_contract(contract_kind).figure_hooks
+    end
+
+    active_second_mode = zeros(ComplexF64, sample_count(multimode_problem), 2)
+    active_second_mode[:, 2] .= multimode_problem.uω0[:, 2]
+    diagnostic_phase = zeros(sample_count(multimode_problem), 2)
+    diagnostic_phase[:, 2] .= range(-0.2, 0.2; length = sample_count(multimode_problem))
+    diagnostic_figure, diagnostic_axes = FiberLab.plot_phase_diagnostic(
+        diagnostic_phase,
+        active_second_mode,
+        multimode_problem.sim;
+        mode_idx = 2,
+    )
+    diagnostic_support = Float64.(collect(
+        diagnostic_axes[3, 2].lines[1].get_ydata()))
+    @test any(isfinite, diagnostic_support)
+    @test maximum(diagnostic_support) ≈ 0 atol = 1e-12
+    @test occursin("mode 2", String(diagnostic_axes[1, 1].get_title()))
+    FiberLab.PyPlot.close(diagnostic_figure)
+
+    comparison_figure = FiberLab.plot_optimization_result_v2(
+        zeros(sample_count(multimode_problem), 2),
+        zeros(sample_count(multimode_problem), 2),
+        multimode_problem.uω0,
+        multimode_problem.fiber,
+        multimode_problem.sim,
+        multimode_problem.band_mask,
+        FFTW.fftshift(FFTW.fftfreq(
+            sample_count(multimode_problem), 1 / multimode_problem.sim["Δt"])),
+        -0.25;
+        objective_values = (0.1, 0.1),
+        mode_idx = (1, 2),
+    )
+    comparison_titles = String[
+        String(axis.get_title()) for axis in comparison_figure.axes
+    ]
+    @test "Before optimization — mode 1" in comparison_titles
+    @test "After optimization — mode 2" in comparison_titles
+    FiberLab.PyPlot.close(comparison_figure)
+
     @test_throws ArgumentError fiber_problem(
         Fiber(regime = :multimode, preset = :custom, length_m = 1e-4, power_w = 1e-5);
         modes = 2,
@@ -1941,6 +2190,20 @@ end
         rtol = 5e-2,
     )
     @test multimode_fundamental_check.pass
+    proxy_mask = Bool[true, true, false, false]
+    proxy_field = ComplexF64[
+        1 0 0;
+        0 0 0;
+        0 1 0;
+        0 0 0
+    ]
+    proxy_cost, proxy_terminal = FiberLab._field_worst_mode_band_cost(
+        proxy_field, proxy_mask; τ=50.0)
+    @test 1 - log(2) / 50 <= proxy_cost <= 1
+    @test all(iszero, proxy_terminal[:, 3])
+    unit_proxy_cost, _ = FiberLab._field_worst_mode_band_cost(
+        hcat(proxy_field[:, 1], proxy_field[:, 3]), proxy_mask; τ=50.0)
+    @test unit_proxy_cost == 1.0
     multimode_worst_check = check_adjoint_gradient(
         multimode_model,
         multimode_control,
@@ -1976,7 +2239,10 @@ end
     multimode_artifact_control = ControlSpace(
         :phase => multimode_bounded_phase,
         :amplitude => multimode_bounded_amplitude,
-        :energy => PositiveScalar(:energy; figure_hooks = (:energy_scale,)),
+        :energy => PositiveScalar(
+            :energy;
+            figure_hooks = (:energy_scale, :energy_throughput),
+        ),
     )
     multimode_artifact_result = solve(
         multimode_model,
@@ -1999,7 +2265,6 @@ end
         gradient_tolerance = 1e99,
     )
     multimode_artifacts = figure_paths(multimode_artifact_result)
-    @test isfile(multimode_artifacts[:field_summary])
     @test isfile(multimode_artifacts[:mode_resolved_spectra])
     @test isfile(multimode_artifacts[:per_mode_leakage_table])
     @test isfile(multimode_artifacts[:convergence_trace])
@@ -2007,13 +2272,52 @@ end
     @test isfile(multimode_artifacts[:group_delay])
     @test isfile(multimode_artifacts[:amplitude_profile])
     @test isfile(multimode_artifacts[:energy_scale])
-    @test FiberLab._native_png_passes_audit(multimode_artifacts[:field_summary])
+    @test isfile(multimode_artifacts[:energy_throughput])
     @test FiberLab._native_png_passes_audit(multimode_artifacts[:mode_resolved_spectra])
     @test FiberLab._native_png_passes_audit(multimode_artifacts[:phase_profile])
+
+    public_multimode_control = controls(
+        phase_control(multimode_problem; basis = demo_basis, bounds = (-0.1, 0.1)),
+        amplitude_control(multimode_problem; basis = demo_basis, bounds = (0.9, 1.1)),
+        energy_control(),
+    )
+    public_multimode_result = solve(
+        multimode_problem,
+        public_multimode_control,
+        mode_sum_objective(multimode_problem; log_cost = false),
+        initial_coordinates(public_multimode_control);
+        id = "public_multimode_artifact_contract",
+        max_iter = 1,
+        write_artifacts = true,
+        output_dir = mktempdir(),
+        maturity = :supported,
+        step_size = 1e-3,
+        gradient_tolerance = 1e99,
+    )
+    public_multimode_artifacts = figure_paths(public_multimode_result)
+    @test isfile(public_multimode_artifacts[:amplitude_mask])
+    @test isfile(public_multimode_artifacts[:shaped_input_spectrum])
+    @test verify(public_multimode_result).artifact_complete
     @test FiberLab._native_png_passes_audit(multimode_artifacts[:group_delay])
     @test FiberLab._native_png_passes_audit(multimode_artifacts[:amplitude_profile])
-    @test occursin("mode,total_power,peak_power",
+    @test occursin("mode,band_power,total_power,leakage_fraction",
                    read(multimode_artifacts[:per_mode_leakage_table], String))
+    leakage_rows = split.(readlines(multimode_artifacts[:per_mode_leakage_table])[2:end], ',')
+    final_power = abs2.(multimode_artifact_result.final_step.forward_state)
+    for (mode, row) in enumerate(leakage_rows)
+        band_power = sum(final_power[multimode_problem.band_mask, mode])
+        total_power = sum(final_power[:, mode])
+        @test parse(Float64, row[2]) ≈ band_power
+        @test parse(Float64, row[3]) ≈ total_power
+        @test parse(Float64, row[4]) ≈ band_power / total_power
+    end
+    throughput_line = strip(read(multimode_artifacts[:energy_throughput], String))
+    throughput = parse(Float64, split(throughput_line, " = ")[2])
+    decoded_controls = decoded_final(multimode_artifact_result)
+    expected_throughput = decoded_controls.energy *
+        sum(abs2.(decoded_controls.amplitude .* multimode_problem.uω0)) /
+        sum(abs2, multimode_problem.uω0)
+    @test throughput ≈ expected_throughput
     @test verify(multimode_artifact_result).artifact_complete
 
     result = solve(
@@ -2335,6 +2639,11 @@ end
 
     experiment_plan = plan(experiment)
     @test experiment_plan.experiment === experiment
+    @test experiment_plan.requested_grid == experiment.grid
+    @test experiment_plan.initial_grid == resolve_grid(fiber, experiment.pulse, experiment.grid)
+    @test experiment_plan.resolved_grid == resolve_grid(fiber, experiment.pulse, experiment.grid)
+    @test experiment_plan.grid_authority == :single_mode_analytic
+    @test isempty(experiment_plan.grid_error)
     @test experiment_plan.backend == :config_runner
     @test experiment_plan.requires_adjoint
     @test experiment_plan.variables == (:phase,)
@@ -2358,6 +2667,39 @@ end
     dry_report = solve(experiment; dry_run = true)
     @test dry_report isa CheckReport
     @test dry_report.pass
+
+    unsafe_exact = Experiment(
+        fiber,
+        Control(variables = (:phase,)),
+        Objective(kind = :raman_band);
+        id = "unsafe_exact_grid",
+        grid = Grid(nt = 8192, time_window_ps = 12.0, policy = :exact),
+        solver = Solver(kind = :lbfgs, max_iter = 1),
+        maturity = :supported,
+    )
+    unsafe_plan = plan(unsafe_exact)
+    @test unsafe_plan.requested_grid == unsafe_exact.grid
+    @test ismissing(unsafe_plan.initial_grid)
+    @test ismissing(unsafe_plan.resolved_grid)
+    @test occursin("nonpositive absolute optical frequencies", unsafe_plan.grid_error)
+    @test :invalid_grid in check(unsafe_plan).blockers
+    @test_throws FiberLabCheckError solve(unsafe_exact; dry_run = true)
+
+    multimode_plan = plan(Experiment(
+        Fiber(regime=:multimode, preset=:GRIN_50, length_m=2.0, power_w=0.5),
+        Control(variables=(:phase,)),
+        Objective(kind=:raman_band);
+        id="multimode_grid_authority",
+        grid=Grid(nt=4096, time_window_ps=12.0, policy=:auto_if_undersized),
+        solver=Solver(kind=:lbfgs, max_iter=1),
+        maturity=:supported,
+    ))
+    @test multimode_plan.initial_grid == Grid(
+        nt=4096, time_window_ps=12.0, policy=:exact)
+    @test ismissing(multimode_plan.resolved_grid)
+    @test multimode_plan.grid_authority == :runtime_physics
+    @test multimode_plan.backend == :api_native
+    @test :unsupported_symbolic_regime in check(multimode_plan).blockers
 
     @test_throws FiberLabBackendError solve(experiment)
     @test_throws FiberLabBackendError solve(experiment; backend = NoExecutionBackend())
@@ -2462,7 +2804,7 @@ end
 
     hooks = FiberLab.figure_hooks((:phase, :energy), :raman_band)
     @test :phase_profile in hooks
-    @test :energy_throughput in hooks
+    @test :peak_power in hooks
     @test :raman_band_overlay in hooks
     @test FiberLab.control_contract(:unknown_control) === nothing
     @test FiberLab.objective_contract(:unknown_objective) === nothing

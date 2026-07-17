@@ -38,9 +38,9 @@ end
     @test long_status.stage == :planning
     @test long_status.executable == false
     @test long_status.local_execution_allowed == false
-    @test :burst_required in long_status.blockers
+    @test :high_resource in long_status.blockers
     @test :front_layer_execution_blocked in long_status.blockers
-    @test :unimplemented_artifacts in long_status.blockers
+    @test !(:unimplemented_artifacts in long_status.blockers)
     @test occursin("Promotion stage: planning", render_experiment_plan(long_spec))
     @test occursin("Promotion blockers:", render_experiment_plan(long_spec))
     @test occursin("Promotion status:", render_experiment_compute_plan(long_spec))
@@ -50,9 +50,9 @@ end
     @test mmf_status.stage == :planning
     @test mmf_status.executable == false
     @test mmf_status.local_execution_allowed == false
-    @test :burst_required in mmf_status.blockers
+    @test :high_resource in mmf_status.blockers
     @test :front_layer_execution_blocked in mmf_status.blockers
-    @test :unimplemented_artifacts in mmf_status.blockers
+    @test !(:unimplemented_artifacts in mmf_status.blockers)
     @test occursin("Promotion stage: planning", render_experiment_plan(mmf_spec))
     @test occursin("Promotion blockers:", render_experiment_plan(mmf_spec))
 

@@ -12,6 +12,7 @@ Options:
 """
 
 include(joinpath(@__DIR__, "..", "lib", "experiment_spec.jl"))
+include(joinpath(@__DIR__, "..", "lib", "numerical_trust.jl"))
 include(joinpath(@__DIR__, "inspect_run.jl"))
 
 function _lab_ready_usage()
@@ -71,10 +72,16 @@ function _lab_ready_config_report(spec)
     blockers = String[]
     validation_error = ""
     mode = :unknown
+    promotion_stage = :invalid
 
     try
         validate_experiment_spec(spec)
         mode = experiment_execution_mode(spec)
+        status = experiment_promotion_status(spec)
+        artifact_plan = experiment_artifact_plan(spec)
+        promotion_stage = status.stage
+        status.stage == :lab_ready || push!(blockers, "promotion_stage_$(status.stage)")
+        artifact_plan.implemented || push!(blockers, "artifact_plan_not_implemented")
     catch err
         validation_error = sprint(showerror, err)
         push!(blockers, "config_validation_failed")
@@ -99,6 +106,7 @@ function _lab_ready_config_report(spec)
         target = spec.id,
         config_path = spec.config_path,
         mode = mode,
+        promotion_stage = promotion_stage,
         maturity = spec.maturity,
         regime = spec.problem.regime,
         variables = spec.controls.variables,
@@ -162,13 +170,19 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
     sidecar_path = _sidecar_for_artifact(String(summary.artifact))
     run_spec = _lab_ready_run_spec(summary.run_config)
     trust_required = _lab_ready_trust_required(run_spec)
+    trust = trust_readiness(summary.trust_reports; required=trust_required)
     extra_artifacts = _lab_ready_extra_artifacts(run_spec, String(summary.artifact))
 
     _push_blocker!(blockers, isfile(String(summary.artifact)), "missing_result_artifact")
     _push_blocker!(blockers, isfile(sidecar_path), "missing_json_sidecar")
     _push_blocker!(blockers, !ismissing(summary.run_config), "missing_run_config")
-    _push_blocker!(blockers, !trust_required || !isempty(summary.trust_reports), "missing_trust_report")
-    _push_blocker!(blockers, summary.standard_images.complete, "missing_standard_images")
+    if !isnothing(run_spec)
+        promotion = experiment_promotion_status(run_spec)
+        promotion.stage == :lab_ready || push!(blockers, "promotion_stage_$(promotion.stage)")
+    end
+    trust.pass || push!(blockers, trust.blocker)
+    isempty(summary.standard_images.missing) || push!(blockers, "missing_standard_images")
+    isempty(summary.standard_images.invalid) || push!(blockers, "invalid_standard_images")
     _push_blocker!(blockers, extra_artifacts.complete, "missing_variable_artifacts")
     _push_blocker!(blockers, summary.converged === true, "not_converged")
     _push_blocker!(blockers, isfinite(Float64(summary.J_after_dB)), "missing_objective_metric")
@@ -177,6 +191,8 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
             push!(blockers, "missing_export_handoff")
         elseif !summary.export_handoff.phase_csv_valid
             push!(blockers, "invalid_export_phase_csv")
+        elseif !summary.export_handoff.integrity_valid
+            push!(blockers, "invalid_export_integrity")
         end
     end
 
@@ -189,8 +205,11 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
         run_config = summary.run_config,
         trust_reports = Tuple(summary.trust_reports),
         trust_report_required = trust_required,
+        trust_verdict = trust.verdict,
+        trust_pass = trust.pass,
         standard_images_complete = summary.standard_images.complete,
         standard_images_missing = Tuple(summary.standard_images.missing),
+        standard_images_invalid = Tuple(summary.standard_images.invalid),
         variable_artifacts_complete = extra_artifacts.complete,
         variable_artifact_hooks = Tuple(extra_artifacts.hooks),
         variable_artifact_paths = Tuple(extra_artifacts.checked),
@@ -201,6 +220,8 @@ function lab_ready_run_report(path::AbstractString; require_export::Bool=false)
         export_phase_csv_valid = summary.export_handoff.phase_csv_valid,
         export_phase_csv_rows = summary.export_handoff.phase_csv_rows,
         export_phase_csv_errors = Tuple(summary.export_handoff.phase_csv_errors),
+        export_integrity_valid = summary.export_handoff.integrity_valid,
+        export_integrity_errors = Tuple(summary.export_handoff.integrity_errors),
         converged = summary.converged,
         quality = summary.quality,
         J_after_dB = summary.J_after_dB,
@@ -260,6 +281,7 @@ function render_lab_ready_report(report; io::IO=stdout)
     if report.kind == :config
         println(io, "- Config path: `", report.config_path, "`")
         println(io, "- Execution mode: `", report.mode, "`")
+        println(io, "- Promotion stage: `", report.promotion_stage, "`")
         println(io, "- Maturity: `", report.maturity, "`")
         println(io, "- Regime: `", report.regime, "`")
         println(io, "- Variables: `", join(string.(report.variables), ","), "`")
@@ -280,9 +302,13 @@ function render_lab_ready_report(report; io::IO=stdout)
         println(io, "- Run config: `", ismissing(report.run_config) ? "missing" : report.run_config, "`")
         println(io, "- Trust report required: `", report.trust_report_required, "`")
         println(io, "- Trust reports: `", isempty(report.trust_reports) ? "none" : join(report.trust_reports, ","), "`")
+        println(io, "- Trust verdict: `", report.trust_verdict, "`")
         println(io, "- Standard images complete: `", report.standard_images_complete, "`")
         if !isempty(report.standard_images_missing)
             println(io, "- Standard images missing: `", join(report.standard_images_missing, ","), "`")
+        end
+        if !isempty(report.standard_images_invalid)
+            println(io, "- Standard images invalid: `", join(report.standard_images_invalid, ","), "`")
         end
         println(io, "- Variable artifacts complete: `", report.variable_artifacts_complete, "`")
         if !isempty(report.variable_artifact_hooks)
@@ -296,6 +322,10 @@ function render_lab_ready_report(report; io::IO=stdout)
         println(io, "- Export phase CSV rows: `", report.export_phase_csv_rows, "`")
         if !isempty(report.export_phase_csv_errors)
             println(io, "- Export phase CSV errors: `", join(report.export_phase_csv_errors, ","), "`")
+        end
+        println(io, "- Export integrity valid: `", report.export_integrity_valid, "`")
+        if !isempty(report.export_integrity_errors)
+            println(io, "- Export integrity errors: `", join(report.export_integrity_errors, ","), "`")
         end
         println(io, "- Converged: `", report.converged, "`")
         println(io, "- Quality: `", report.quality, "`")

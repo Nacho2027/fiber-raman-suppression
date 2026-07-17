@@ -8,7 +8,31 @@ include(joinpath(_ROOT, "scripts", "workflows", "lab_ready.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "scaffold_objective.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
 
+if !(@isdefined _write_valid_test_png)
+    function _write_valid_test_png(path::AbstractString)
+        pixels = zeros(Float64, 8, 8)
+        pixels[3:6, 3:6] .= 1.0
+        FiberLab.PyPlot.imsave(path, pixels; cmap="viridis")
+        return path
+    end
+end
+
 @testset "Experiment front layer" begin
+    listed_configs = sprint(io -> _print_available_experiment_configs(; io=io))
+    for config_id in approved_experiment_config_ids()
+        spec = load_experiment_spec(config_id)
+        @test experiment_cli_spec_hint(spec) == config_id
+        @test load_experiment_spec(experiment_cli_spec_hint(spec)).config_path == spec.config_path
+        @test occursin("  $(config_id)  —", listed_configs)
+    end
+    @test_throws ErrorException run_experiment_main(String[])
+    legacy_message = try
+        load_experiment_spec("smf28_L2m_P0p2W")
+        ""
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("migration: use maintained config `research_engine_poc`", legacy_message)
     @test "research_engine_poc" in approved_experiment_config_ids()
     @test "research_engine_smoke" in approved_experiment_config_ids()
     @test "research_engine_export_smoke" in approved_experiment_config_ids()
@@ -32,6 +56,16 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test spec.objective.kind == :raman_band
     @test spec.solver.kind == :lbfgs
     @test spec.export_plan.profile == :neutral_csv_v1
+    grid_resolution = resolve_experiment_grid(spec)
+    @test grid_resolution.requested == Grid(
+        nt = 8192, time_window_ps = 12.0, policy = :auto_if_undersized)
+    @test grid_resolution.resolved == Grid(
+        nt = 8192, time_window_ps = 27.0, policy = :exact)
+    @test occursin("resolved Nt=8192 tw=27.0ps", render_experiment_plan(spec))
+    undersized_spec = merge(spec, (problem=merge(spec.problem, (Nt=1024,)),))
+    @test resolve_experiment_grid(undersized_spec).resolved.nt == 4096
+    @test control_layout_plan(undersized_spec).total_length == "4096"
+    @test occursin("optimizer_length=4096", render_experiment_plan(undersized_spec))
     @test :phase in registered_variable_kinds(:single_mode)
     phase_variable_contract = variable_contract(:phase, :single_mode)
     @test phase_variable_contract.kind == :phase
@@ -79,6 +113,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test :J_after_dB in band_contract.metrics
     @test :spectrum_before_after in band_contract.artifact_hooks
     @test :gdd in band_contract.allowed_regularizers
+    @test !(:flat in band_contract.allowed_regularizers)
     artifact_plan = experiment_artifact_plan(spec)
     @test artifact_plan.implemented
     @test :standard_image_set in Tuple(request.hook for request in artifact_plan.hooks)
@@ -94,6 +129,21 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test (:phase,) in peak_contract.supported_variables
     @test (:reduced_phase,) in peak_contract.supported_variables
     @test peak_contract.allowed_regularizers == (:gdd, :boundary)
+    for (kind, regime) in (
+        (:raman_band, :single_mode),
+        (:raman_peak, :single_mode),
+        (:temporal_width, :single_mode),
+        (:mmf_sum, :multimode),
+        (:mmf_fundamental, :multimode),
+        (:mmf_worst_mode, :multimode),
+    )
+        @test objective_contract(kind, regime).artifact_hooks ==
+              FiberLab.objective_contract(kind).figure_hooks
+    end
+    for kind in (:phase, :reduced_phase, :amplitude, :energy, :gain_tilt)
+        @test variable_contract(kind, :single_mode).artifact_hooks ==
+              FiberLab.control_contract(kind).figure_hooks
+    end
     capabilities = sprint(io -> render_experiment_capabilities(; io=io))
     @test occursin("Experiment capabilities", capabilities)
     @test occursin("single_mode", capabilities)
@@ -166,6 +216,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     rendered_gain_tilt_check = sprint(io -> render_research_config_check(gain_tilt_check; io=io))
     @test occursin("Run path: `./fiberlab explore run research_engine_gain_tilt_smoke --local-smoke`", rendered_gain_tilt_check)
     @test occursin("Compare-ready metadata: `false`", rendered_gain_tilt_check)
+    @test_throws ErrorException run_experiment_main(["research_engine_gain_tilt_smoke"])
 
     scalar_search_spec = load_experiment_spec("research_engine_gain_tilt_scalar_search_smoke")
     @test scalar_search_spec.id == "smf28_gain_tilt_scalar_search_smoke"
@@ -215,7 +266,8 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test !mmf_check.pass
     @test mmf_check.run_path == :explore_heavy_dry_run
     @test :requires_dedicated_workflow in mmf_check.missing
-    @test :artifact_plan_not_implemented in mmf_check.missing
+    @test mmf_check.artifact_plan_implemented
+    @test !(:artifact_plan_not_implemented in mmf_check.missing)
     rendered_mmf_check = sprint(io -> render_research_config_check(mmf_check; io=io))
     @test occursin("Run path: `./fiberlab explore run grin50_mmf_phase_sum_poc --heavy-ok --dry-run`", rendered_mmf_check)
 
@@ -257,6 +309,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test generic_summary.config.id == "smf28_phase_temporal_width_smoke"
     @test "phase" in collect(generic_summary.controls.variables)
     @test generic_summary.objective.kind == "temporal_width"
+    @test generic_summary.problem.requested_grid.nt == generic_spec.problem.Nt
+    @test generic_summary.problem.resolved_grid.nt == Nt_generic
+    @test generic_summary.problem.resolved_grid.source == "runtime_sim"
     @test generic_summary.zoom.time_window_samples >= 1
     override_dir = mktempdir()
     override_spec = load_experiment_spec("research_engine_gain_tilt_scalar_search_smoke")
@@ -322,6 +377,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test manifest_data["schema_version"] == "run_manifest_v1"
     @test manifest_data["run_context"] == "explore_local_smoke"
     @test manifest_data["config"]["id"] == "smf28_phase_gain_tilt_smoke"
+    @test manifest_data["problem"]["requested_grid"]["time_window_ps"] ==
+          manifest_bundle.spec.problem.time_window
+    @test manifest_data["problem"]["resolved_grid"]["time_window_ps"] == 5.0
+    @test manifest_data["problem"]["Nt"] ==
+          manifest_data["problem"]["resolved_grid"]["nt"]
     @test manifest_data["artifacts"]["complete"] == true
     @test manifest_data["pre_run_check"]["compare_ready"] == false
     manifest_path = write_experiment_run_manifest(
@@ -397,7 +457,10 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("notebook_control", read(cli_variable_scaffold.toml_path, String))
     validation_report = validate_all_experiment_configs()
     @test validation_report.complete
-    @test validation_report.total == length(approved_experiment_config_ids())
+    @test validation_report.total == length(experiment_config_validation_targets())
+    @test Set(("templates/single_mode_phase_template",
+               "templates/multimode_phase_planning_template")) ⊆
+          Set(experiment_config_validation_targets())
     @test validation_report.failed == 0
     rendered_validation = sprint(io -> render_experiment_validation_report(validation_report; io=io))
     @test occursin("Experiment config validation", rendered_validation)
@@ -519,6 +582,9 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test smoke_kwargs.Nt == 1024
     @test smoke_kwargs.L_fiber == 0.05
     @test smoke_kwargs.P_cont == 0.001
+    @test smoke_kwargs.store_trace == smoke_spec.solver.store_trace
+    no_trace_spec = (; smoke_spec..., solver=(; smoke_spec.solver..., store_trace=false))
+    @test !supported_experiment_run_kwargs(no_trace_spec).store_trace
 
     export_spec = load_experiment_spec("research_engine_export_smoke")
     @test export_spec.id == "smf28_phase_export_smoke"
@@ -541,19 +607,20 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test long_spec.controls.variables == (:phase,)
     @test long_spec.controls.policy == :fresh
     @test long_spec.objective.kind == :raman_band
-    @test long_spec.verification.mode == :burst_required
+    @test long_spec.verification.mode == :high_resource
     @test experiment_execution_mode(long_spec) == :long_fiber_phase
     @test experiment_objective_contract(long_spec).regime == :long_fiber
     @test (:phase,) in validate_experiment_spec(long_spec).variables
+    @test experiment_artifact_plan(long_spec).implemented
     rendered_long = render_experiment_plan(long_spec)
     @test occursin("Execution: mode=long_fiber_phase", rendered_long)
-    @test occursin("burst_required=true", rendered_long)
+    @test occursin("high_resource=true", rendered_long)
     @test occursin("regime=long_fiber", rendered_long)
     long_compute_plan = render_experiment_compute_plan(long_spec)
     @test occursin("Compute plan: smf28_longfiber_phase_poc", long_compute_plan)
     @test occursin("Provider-neutral path", long_compute_plan)
     @test occursin("No command in this plan is launched automatically", long_compute_plan)
-    @test occursin("scripts/canonical/run_experiment.jl --heavy-ok", long_compute_plan)
+    @test occursin("./fiberlab run --heavy-ok", long_compute_plan)
     @test_throws ArgumentError run_supported_experiment(long_spec; timestamp="test")
     @test_throws ErrorException run_experiment_main(["smf28_longfiber_phase_poc"])
 
@@ -566,18 +633,130 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test mmf_spec.controls.parameterization == :shared_across_modes
     @test mmf_spec.objective.kind == :mmf_sum
     @test mmf_spec.artifacts.bundle == :mmf_planning
-    @test mmf_spec.verification.mode == :burst_required
+    @test mmf_spec.verification.mode == :high_resource
     @test experiment_execution_mode(mmf_spec) == :multimode_phase
     @test experiment_objective_contract(mmf_spec).regime == :multimode
     @test (:phase,) in validate_experiment_spec(mmf_spec).variables
+    @test experiment_artifact_plan(mmf_spec).implemented
+    @test :standard_image_set in
+          Tuple(request.hook for request in experiment_artifact_plan(mmf_spec).hooks)
+    fake_cost_report = (
+        sum_lin=0.1, sum_dB=-10.0,
+        fundamental_lin=0.2, fundamental_dB=-6.9897,
+        worst_mode_lin=0.3, worst_mode_dB=-5.2288,
+        worst_mode_smooth_proxy_lin=0.29,
+        worst_mode_smooth_proxy_dB=-5.376,
+    )
+    @test _mmf_primary_metrics(fake_cost_report, :sum).linear == 0.1
+    @test _mmf_primary_metrics(fake_cost_report, :fundamental).linear == 0.2
+    @test _mmf_primary_metrics(fake_cost_report, :worst_mode).linear == 0.3
+    mmf_band = Bool[true, true, false, false]
+    zero_leakage_field = ComplexF64[
+        0 0 0;
+        0 0 0;
+        1 2 0;
+        0 0 0
+    ]
+    zero_proxy, _ = mmf_cost_worst_mode(zero_leakage_field, mmf_band)
+    zero_report = mmf_cost_report(zero_leakage_field, mmf_band)
+    @test zero_proxy == 0.0
+    @test zero_report.worst_mode_lin == 0.0
+
+    unit_leakage_field = ComplexF64[
+        1 0 0;
+        0 0 0;
+        0 0 0;
+        0 0 0
+    ]
+    unit_proxy, unit_gradient = mmf_cost_worst_mode(unit_leakage_field, mmf_band)
+    unit_report = mmf_cost_report(unit_leakage_field, mmf_band)
+    @test unit_proxy == 1.0
+    @test unit_report.worst_mode_lin == 1.0
+    @test isnan(unit_report.per_mode_lin[2])
+    @test isnan(unit_report.per_mode_dB[2])
+    @test all(iszero, unit_gradient[:, 2:3])
+
+    inactive_fundamental_field = ComplexF64[
+        0 0;
+        0 0;
+        0 1;
+        0 0
+    ]
+    inactive_fundamental_report = mmf_cost_report(
+        inactive_fundamental_field, mmf_band)
+    @test inactive_fundamental_report.sum_lin == 0.0
+    @test inactive_fundamental_report.worst_mode_lin == 0.0
+    @test isnan(inactive_fundamental_report.fundamental_lin)
+    @test_throws ArgumentError _mmf_primary_metrics(
+        inactive_fundamental_report, :fundamental)
+    @test maximum(abs, _mmf_gauge_fix_phase(
+        3 .* 2π .* FFTW.fftfreq(16, 1.0))) < 1e-12
+
+    mixed_leakage_field = ComplexF64[
+        1 0 0;
+        0 0 0;
+        0 1 0;
+        0 0 0
+    ]
+    mixed_proxy, mixed_gradient = mmf_cost_worst_mode(
+        mixed_leakage_field, mmf_band; τ=50.0)
+    mixed_report = mmf_cost_report(mixed_leakage_field, mmf_band; τ=50.0)
+    @test 1 - log(2) / 50 <= mixed_proxy <= 1
+    @test mixed_report.worst_mode_lin == 1.0
+    @test mixed_report.worst_mode_smooth_proxy_lin == mixed_proxy
+    @test mixed_report.active_mode_count == 2
+    @test _mmf_primary_metrics(mixed_report, :worst_mode).linear == 1.0
+    @test _mmf_standard_mode_views(mixed_report, unit_report, :sum) == (:sum, :sum)
+    @test _mmf_standard_mode_views(mixed_report, unit_report, :fundamental) == (1, 1)
+    @test _mmf_standard_mode_views(mixed_report, unit_report, :worst_mode) == (1, 1)
+    switching_before = (per_mode_lin = [0.1, 0.9, NaN],)
+    switching_after = (per_mode_lin = [0.2, 0.3, 0.8],)
+    @test _mmf_standard_mode_views(
+        switching_before, switching_after, :worst_mode) == (2, 3)
+    @test all(iszero, mixed_gradient[:, 3])
+    @test _safe_mmf_iterations((result=nothing,)) == 0
     rendered_mmf = render_experiment_plan(mmf_spec)
     @test occursin("Execution: mode=multimode_phase", rendered_mmf)
-    @test occursin("burst_required=true", rendered_mmf)
+    @test occursin("high_resource=true", rendered_mmf)
     @test occursin("regime=multimode", rendered_mmf)
+    mmf_layout = control_layout_plan(mmf_spec)
+    @test mmf_layout.total_length == "phase=resolved_Nt"
+    @test mmf_layout.dimension_authority == :runtime_modal
+    @test only(mmf_layout.blocks).shape == "resolved_Nt shared across modes"
+    @test occursin("optimizer_length=phase=resolved_Nt", rendered_mmf)
+    mmf_sampling_request = merge(
+        mmf_spec,
+        (problem=merge(mmf_spec.problem, (Nt=8192, time_window=10.0)),),
+    )
+    mmf_sampling_grid = resolve_experiment_grid(mmf_sampling_request)
+    @test mmf_sampling_grid.requested == Grid(
+        nt=8192, time_window_ps=10.0, policy=:auto_if_undersized)
+    @test mmf_sampling_grid.initial.nt == 8192
+    @test mmf_sampling_grid.initial.time_window_ps > 10.0
+    @test ismissing(mmf_sampling_grid.resolved)
+    @test validate_experiment_spec(mmf_sampling_request) isa NamedTuple
+    mmf_exact_spec = merge(
+        mmf_spec,
+        (problem=merge(mmf_spec.problem, (grid_policy=:exact,)),),
+    )
+    mmf_exact_grid = resolve_experiment_grid(mmf_exact_spec)
+    @test mmf_exact_grid.resolved == mmf_exact_grid.initial
+    @test mmf_exact_grid.authority == :user_exact
+    @test control_layout_plan(mmf_exact_spec).total_length == "4096"
+    mmf_preset = get_mmf_fiber_preset(:GRIN_50)
+    cache_sim = FiberLab.get_disp_sim_params(1550e-9, mmf_preset.M, 16, 5.0,
+                                             mmf_preset.β_order)
+    cache_path = _mmf_modal_cache_path("cache", :GRIN_50, mmf_preset, cache_sim)
+    changed_wavelength_sim = FiberLab.get_disp_sim_params(
+        1540e-9, mmf_preset.M, 16, 5.0, mmf_preset.β_order)
+    @test cache_path != _mmf_modal_cache_path(
+        "cache", :GRIN_50, mmf_preset, changed_wavelength_sim)
+    @test cache_path != _mmf_modal_cache_path(
+        "cache", :GRIN_50, merge(mmf_preset, (nx=mmf_preset.nx + 2,)), cache_sim)
     mmf_compute_plan = render_experiment_compute_plan(mmf_spec)
     @test occursin("Compute plan: grin50_mmf_phase_sum_poc", mmf_compute_plan)
     @test occursin("Provider-neutral path", mmf_compute_plan)
-    @test occursin("scripts/canonical/run_experiment.jl --heavy-ok", mmf_compute_plan)
+    @test occursin("./fiberlab run --heavy-ok", mmf_compute_plan)
     explore_plan_spec = run_experiment_main(["--explore-plan", "grin50_mmf_phase_sum_poc"])
     @test explore_plan_spec.id == mmf_spec.id
     @test_throws ErrorException run_experiment_main(["--explore-run", "--local-smoke", "grin50_mmf_phase_sum_poc"])
@@ -647,15 +826,6 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     gain_tilt_explore_dry = run_experiment_main(["--explore-run", "--local-smoke", "--dry-run", "research_engine_gain_tilt_smoke"])
     @test gain_tilt_explore_dry.id == "smf28_phase_gain_tilt_smoke"
 
-    adapted = load_experiment_spec("smf28_L2m_P0p2W")
-    @test adapted.schema == :canonical_run_adapter
-    @test adapted.id == "smf28_L2m_P0p2W"
-    @test adapted.problem.regime == :single_mode
-    @test adapted.controls.variables == (:phase,)
-    @test adapted.objective.kind == :raman_band
-    @test adapted.problem.preset == :SMF28
-    @test adapted.maturity == "supported"
-
     rendered = render_experiment_plan(spec)
     @test occursin("Experiment spec: smf28_phase_lbfgs_poc", rendered)
     @test occursin("Execution: mode=phase_only", rendered)
@@ -670,8 +840,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test cli_artifact_plan.implemented
     local_compute_plan = render_experiment_compute_plan(spec)
     @test occursin("Local command", local_compute_plan)
-    @test occursin("run_experiment.jl research_engine_poc", local_compute_plan)
-    @test !occursin("Optional Rivera Lab burst helper", local_compute_plan)
+    @test occursin("./fiberlab run research_engine_poc", local_compute_plan)
 
     rendered_mv = render_experiment_plan(mv_spec)
     @test occursin("Execution: mode=multivar", rendered_mv)
@@ -696,7 +865,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     write(trust_path, "# trust\n")
     write(config_copy, "id = \"smf28_phase_lbfgs_poc\"\n")
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
-        write(string(save_prefix, suffix), "")
+        _write_valid_test_png(string(save_prefix, suffix))
     end
 
     fake_bundle = (
@@ -712,6 +881,17 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test artifact_report.standard_images.complete
     @test artifact_report.sidecar_path == sidecar_path
     @test artifact_report.trust_report_path == trust_path
+
+    corrupt_standard_image = string(save_prefix, first(REQUIRED_STANDARD_IMAGE_SUFFIXES))
+    write(corrupt_standard_image, "not a png")
+    invalid_artifact_report = validate_experiment_artifacts(
+        fake_bundle; throw_on_error=false)
+    @test !invalid_artifact_report.complete
+    @test corrupt_standard_image in invalid_artifact_report.checked
+    @test corrupt_standard_image in invalid_artifact_report.missing
+    @test first(REQUIRED_STANDARD_IMAGE_SUFFIXES) in
+          invalid_artifact_report.standard_images.invalid
+    _write_valid_test_png(corrupt_standard_image)
 
     completed_bundle = (; fake_bundle..., artifact_validation = artifact_report)
     cli_summary = sprint(io -> render_experiment_completion_summary(completed_bundle; io=io))
@@ -796,7 +976,7 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     write(mv_sidecar_path, "{}\n")
     write(mv_config_copy, "id = \"smf28_phase_amplitude_energy_poc\"\n")
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
-        write(string(artifact_prefix, suffix), "")
+        _write_valid_test_png(string(artifact_prefix, suffix))
     end
     mv_validation_bundle = (
         spec = mv_spec,
@@ -860,6 +1040,34 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     )
     @test_throws ArgumentError validate_experiment_spec(unknown_regularizer)
 
+    phase_with_amplitude_penalty = (
+        spec...,
+        objective = (
+            spec.objective...,
+            regularizers = Dict{Symbol,Any}(:tikhonov => 1.0),
+        ),
+    )
+    @test_throws ArgumentError validate_experiment_spec(phase_with_amplitude_penalty)
+
+    multivar_with_amplitude_penalties = (
+        mv_spec...,
+        objective = (
+            mv_spec.objective...,
+            regularizers = Dict{Symbol,Any}(:tikhonov => 0.2, :tv => 0.1),
+        ),
+    )
+    @test validate_experiment_spec(multivar_with_amplitude_penalties) isa NamedTuple
+
+    energy_without_amplitude = (
+        mv_spec...,
+        controls = (mv_spec.controls..., variables = (:phase, :energy)),
+        objective = (
+            mv_spec.objective...,
+            regularizers = Dict{Symbol,Any}(:energy => 1.0),
+        ),
+    )
+    @test validate_experiment_spec(energy_without_amplitude) isa NamedTuple
+
     peak_multivar = (
         mv_spec...,
         objective = (mv_spec.objective..., kind = :raman_peak),
@@ -872,11 +1080,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     )
     @test_throws ArgumentError validate_experiment_spec(long_export)
 
-    long_not_burst = (
+    long_not_high_resource = (
         long_spec...,
         verification = (long_spec.verification..., mode = :standard),
     )
-    @test_throws ArgumentError validate_experiment_spec(long_not_burst)
+    @test_throws ArgumentError validate_experiment_spec(long_not_high_resource)
 
     mmf_export = (
         mmf_spec...,
@@ -884,11 +1092,11 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     )
     @test_throws ArgumentError validate_experiment_spec(mmf_export)
 
-    mmf_not_burst = (
+    mmf_not_high_resource = (
         mmf_spec...,
         verification = (mmf_spec.verification..., mode = :standard),
     )
-    @test validate_experiment_spec(mmf_not_burst) isa NamedTuple
+    @test validate_experiment_spec(mmf_not_high_resource) isa NamedTuple
 
     mv_export = (
         mv_spec...,
@@ -941,6 +1149,15 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     )
     @test_throws ArgumentError latest_experiment_output_dir(empty_latest_spec)
 
+    empty_latest_config = joinpath(mktempdir(), "empty_latest.toml")
+    empty_latest_text = replace(
+        read(spec.config_path, String),
+        "output_root = \"results/raman\"" =>
+            "output_root = \"$(replace(mktempdir(), "\\" => "\\\\"))\"",
+    )
+    write(empty_latest_config, empty_latest_text)
+    @test_throws ArgumentError run_experiment_main(["--latest", empty_latest_config])
+
     wrapper = read(joinpath(_ROOT, "scripts", "canonical", "run_experiment.jl"), String)
     @test occursin("workflows\", \"run_experiment.jl", wrapper)
     @test occursin("run_experiment_main(ARGS)", wrapper)
@@ -962,6 +1179,4 @@ include(joinpath(_ROOT, "scripts", "workflows", "scaffold_variable.jl"))
     @test occursin("--latest", workflow)
     @test occursin("--compute-plan", workflow)
 
-    optimize_workflow = read(joinpath(_ROOT, "scripts", "workflows", "optimize_raman.jl"), String)
-    @test occursin("artifact_validation", optimize_workflow)
 end

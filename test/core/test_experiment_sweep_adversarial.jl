@@ -43,6 +43,27 @@ function _expect_sweep_rejected(base_id::AbstractString, expected::AbstractStrin
 end
 
 @testset "Experiment sweep adversarial coverage" begin
+    @test_throws ErrorException run_experiment_sweep_main(["--execute"])
+    empty_latest = _mutated_sweep_config(
+        "smf28_power_micro_sweep",
+        "output_root = \"results/raman/sweeps/front_layer\"" =>
+            "output_root = \"$(replace(mktempdir(), "\\" => "\\\\"))\"",
+    )
+    @test_throws ArgumentError run_experiment_sweep_main(["--latest", empty_latest])
+    complete_status = experiment_sweep_execution_status((
+        (status=:complete,),
+        (status=:complete,),
+    ))
+    @test complete_status.pass
+    @test complete_status.complete == 2
+    failed_status = experiment_sweep_execution_status((
+        (status=:complete,),
+        (status=:failed,),
+        (status=:skipped,),
+    ))
+    @test !failed_status.pass
+    @test failed_status.failed == 1
+    @test failed_status.skipped == 1
     @testset "Approved sweep expands through the same config contracts" begin
         ids = approved_experiment_sweep_config_ids()
         @test "smf28_power_micro_sweep" in ids
@@ -95,7 +116,7 @@ end
             "values = [0.001, 0.002, 0.003]" => "values = [\"raman_band\", \"made_up_cost\"]")
     end
 
-    @testset "Planning-only sweeps stay inspectable but do not execute cases" begin
+    @testset "Planning-only sweeps stay inspectable and execution fails closed" begin
         path = _mutated_sweep_config(
             "smf28_power_micro_sweep",
             "base_experiment = \"research_engine_smoke\"" => "base_experiment = \"smf28_longfiber_phase_poc\"",
@@ -107,11 +128,9 @@ end
         @test length(expanded.cases) == 2
         @test all(case -> experiment_execution_mode(case.spec) == :long_fiber_phase, expanded.cases)
 
-        result = execute_experiment_sweep(sweep_spec; timestamp="adversarial_no_compute")
-        @test all(row -> row.status == :skipped, result.results)
-        @test all(row -> occursin("planning-only", row.error), result.results)
-        @test isfile(result.summary_path)
-        @test isfile(result.summary_json_path)
-        @test isfile(result.summary_csv_path)
+        @test_throws ArgumentError execute_experiment_sweep(
+            sweep_spec;
+            timestamp="adversarial_no_compute",
+        )
     end
 end

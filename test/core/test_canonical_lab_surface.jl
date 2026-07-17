@@ -9,33 +9,18 @@ include(joinpath(_ROOT, "scripts", "workflows", "lab_ready.jl"))
 include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
 
 @testset "Canonical lab-facing surface" begin
-    @test "smf28_L2m_P0p2W" in approved_run_config_ids()
-    @test "smf28_hnlf_default" in approved_sweep_config_ids()
-
-    run_spec = load_canonical_run_config("smf28_L2m_P0p2W")
-    @test run_spec.id == "smf28_L2m_P0p2W"
-    @test run_spec.kwargs.fiber_name == "SMF-28"
-    @test run_spec.kwargs.P_cont == 0.2
-    @test run_spec.kwargs.β_order == 3
-
-    sweep_spec = load_canonical_sweep_config("smf28_hnlf_default")
-    @test sweep_spec.id == "smf28_hnlf_default"
-    @test sweep_spec.Nt_floor == 8192
-    @test length(sweep_spec.fibers) == 2
-    @test sweep_spec.fibers[1].name == "SMF-28"
-    @test sweep_spec.multistart.enabled
-
-    optimize_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "optimize_raman.jl"), String)
-    @test occursin("workflows\", \"optimize_raman.jl", optimize_wrapper)
-    @test occursin("canonical_optimize_main(ARGS)", optimize_wrapper)
-
-    sweep_wrapper = read(joinpath(_ROOT, "scripts", "canonical", "run_sweep.jl"), String)
-    @test occursin("workflows\", \"run_sweep.jl", sweep_wrapper)
-    @test occursin("run_sweep_main(ARGS)", sweep_wrapper)
-
     tmp = mktempdir()
     run_dir = joinpath(tmp, "run")
     mkpath(run_dir)
+
+    export_frequency = FFTW.fftfreq(8, 1 / 0.01)
+    export_delay_ps = 0.001
+    phase_turns = [0, 3, -2, 5, -4, 1, -3, 2]
+    phase_storage = export_delay_ps .* 2π .* export_frequency .+ 2π .* phase_turns
+    exported_phase = _phase_export_data(phase_storage)
+    @test all(-π .<= exported_phase.wrapped .<= π)
+    @test _group_delay_fs(exported_phase.unwrapped, 2π / (8 * 0.01)) ≈
+          fill(1.0, 8) atol=1e-10
 
     payload = (
         fiber_name = "SMF-28",
@@ -78,22 +63,19 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     open(sidecar_path, "w") do io
         JSON3.pretty(io, sidecar_payload)
     end
-    write(joinpath(run_dir, "opt_trust.md"), "# trust\n")
-    write(joinpath(run_dir, "run_config.toml"), """
-id = "smf28_L2m_P0p2W"
-
-[problem]
-regime = "single_mode"
-
-[controls]
-variables = ["phase"]
-
-[objective]
-kind = "raman_band"
-
-[solver]
-kind = "lbfgs"
-""")
+    write(joinpath(run_dir, "opt_trust.md"),
+        "# Numerical Trust Report\n\n- Overall verdict: **PASS**\n")
+    supported_config = read(
+        resolve_experiment_config_path("research_engine_poc"), String)
+    write(
+        joinpath(run_dir, "run_config.toml"),
+        replace(
+            supported_config,
+            "id = \"smf28_phase_lbfgs_poc\"" =>
+                "id = \"smf28_L2m_P0p2W\"";
+            count = 1,
+        ),
+    )
     run_manifest_path = joinpath(run_dir, "run_manifest.json")
     open(run_manifest_path, "w") do io
         JSON3.pretty(io, Dict(
@@ -102,7 +84,7 @@ kind = "lbfgs"
             "command" => "./fiberlab explore run sample --local-smoke",
             "execution" => Dict(
                 "compare_ready" => true,
-                "missing" => ["experimental_maturity", "no_manifest_update", "no_export_handoff"],
+                "missing" => ["experimental_maturity", "no_export_handoff"],
             ),
             "artifacts" => Dict(
                 "complete" => true,
@@ -113,6 +95,22 @@ kind = "lbfgs"
     end
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
         write(joinpath(run_dir, "opt" * suffix), "")
+    end
+
+    invalid_image_summary = inspect_run_summary(run_dir)
+    @test !invalid_image_summary.standard_images.complete
+    @test sort(invalid_image_summary.standard_images.invalid) ==
+        sort(collect(REQUIRED_STANDARD_IMAGE_SUFFIXES))
+
+    seed_png = joinpath(tmp, "nonblank.png")
+    figure, axis = FiberLab.PyPlot.subplots(figsize=(2, 2))
+    axis.plot([0.0, 1.0], [0.0, 1.0], color="tab:blue")
+    axis.set_xlabel("x")
+    axis.set_ylabel("y")
+    figure.savefig(seed_png, dpi=72)
+    FiberLab.PyPlot.close(figure)
+    for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
+        cp(seed_png, joinpath(run_dir, "opt" * suffix); force=true)
     end
 
     summary = inspect_run_summary(run_dir)
@@ -239,13 +237,13 @@ kind = "lbfgs"
     write(joinpath(mv_dir, "opt_slm.json"), "{\"generated_at\":\"2026-04-27T00:00:00\"}\n")
     cp(resolve_experiment_config_path("smf28_phase_amplitude_energy_poc"), joinpath(mv_dir, "run_config.toml"); force=true)
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
-        write(joinpath(mv_dir, "opt" * suffix), "")
+        cp(seed_png, joinpath(mv_dir, "opt" * suffix); force=true)
     end
-    write(joinpath(mv_dir, "opt_amplitude_mask.png"), "")
+    cp(seed_png, joinpath(mv_dir, "opt_amplitude_mask.png"); force=true)
     write(joinpath(mv_dir, "opt_energy_metrics.json"), "{\"schema_version\":\"multivar_energy_metrics_v1\"}\n")
     write(joinpath(mv_dir, "opt_pulse_metrics.json"), "{\"schema_version\":\"multivar_pulse_metrics_v1\"}\n")
     write(joinpath(mv_dir, "opt_explore_summary.json"), "{\"schema_version\":\"exploratory_artifacts_v1\"}\n")
-    write(joinpath(mv_dir, "opt_explore_overview.png"), "")
+    cp(seed_png, joinpath(mv_dir, "opt_explore_overview.png"); force=true)
 
     mv_index = build_results_index([mv_tmp])
     @test mv_index.total == 1
@@ -259,8 +257,8 @@ kind = "lbfgs"
     @test occursin("opt_amplitude_mask.png", mv_row.variable_artifact_paths)
     @test isempty(mv_row.variable_artifacts_missing)
     @test !mv_row.trust_report_present
-    @test mv_row.lab_ready
-    @test mv_row.readiness == "ready"
+    @test !mv_row.lab_ready
+    @test occursin("promotion_stage_smoke", mv_row.readiness)
     @test occursin("2026-04-27", mv_row.timestamp_utc)
     rendered_mv_index = render_results_index(mv_index)
     @test occursin("Variable Artifacts", rendered_mv_index)
@@ -270,7 +268,8 @@ kind = "lbfgs"
     @test filter_results_index(mv_index; contains="pulse_metrics").total == 1
 
     mv_gate = lab_ready_run_report(mv_dir)
-    @test mv_gate.pass
+    @test !mv_gate.pass
+    @test "promotion_stage_smoke" in mv_gate.blockers
     @test mv_gate.trust_report_required == false
     @test isempty(mv_gate.trust_reports)
     @test mv_gate.variable_artifacts_complete
@@ -304,44 +303,6 @@ kind = "lbfgs"
     @test raw_frac < 1e-20
     @test raw_ok
 
-    aggregate = Dict{String,Any}(
-        "L_vals" => [1.0, 2.0],
-        "P_vals" => [0.05, 0.10],
-        "J_after_grid" => [1e-4 1e-5; NaN 1e-3],
-        "converged_grid" => [true false; false true],
-        "window_limited_grid" => [false false; true false],
-        "drift_pct_grid" => [0.1 0.2; NaN 0.4],
-        "N_sol_grid" => [2.0 3.0; NaN 4.0],
-        "Nt_grid" => [8192 8192; 0 16384],
-        "time_window_grid" => [10.0 20.0; NaN 30.0],
-    )
-    points = sweep_aggregate_points(aggregate)
-    @test length(points) == 4
-    @test points[1].L == 1.0
-    @test points[1].P == 0.05
-    @test points[1].quality == "GOOD"
-    @test points[3].quality == "CRASHED"
-    @test points[3].window_limited
-
-    sorted_points = sort_sweep_points_by_suppression!(copy(points))
-    @test sorted_points[1].J_after == 1e-5
-    @test isnan(sorted_points[end].J_dB)
-
-    ms_points = multistart_result_points([
-        (start_idx = 1, sigma = 0.0, J_final = 1e-4, converged = true),
-        (start_idx = 2, sigma = 0.5, J_final = -42.0, converged = false),
-        (start_idx = 3, sigma = 1.0, J_final = NaN, converged = false),
-    ])
-    @test length(ms_points) == 3
-    @test ms_points[1].J_dB ≈ FiberLab.lin_to_dB(1e-4)
-    @test ms_points[2].J_dB == -42.0
-    @test isnan(ms_points[3].J_dB)
-
-    ms_spread = multistart_spread_summary(ms_points)
-    @test ms_spread.n_valid == 2
-    @test ms_spread.best_dB == -42.0
-    @test ms_spread.worst_dB ≈ FiberLab.lin_to_dB(1e-4)
-    @test occursin("single basin", ms_spread.landscape)
 
     rendered = sprint(io -> render_run_summary(summary; io=io))
     @test occursin("Standard image set complete: true", rendered)
@@ -365,19 +326,79 @@ kind = "lbfgs"
 
     export_dir = joinpath(run_dir, "export_handoff")
     exported = export_run_bundle(run_dir, export_dir)
+    @test_throws ArgumentError _export_bundle_path(export_dir, "../escape.csv")
+    @test_throws ArgumentError _export_bundle_path(export_dir, abspath(artifact))
     @test isfile(exported.phase_csv)
     @test isfile(exported.metadata_json)
+    @test isfile(exported.roundtrip_json)
     @test isfile(exported.readme)
     @test isfile(joinpath(export_dir, "source_run_config.toml"))
+    @test isfile(joinpath(export_dir, "source_trust_report.md"))
+    @test isfile(joinpath(export_dir, "source_run_manifest.json"))
 
     metadata = JSON3.read(read(exported.metadata_json, String))
     @test String(metadata.export_schema_version) == EXPORT_SCHEMA_VERSION
     @test String(metadata.fiber_name) == "SMF-28"
     @test metadata.converged == true
+    @test String(metadata.source_artifact) == basename(artifact)
+    @test metadata.source_artifact_included == false
+    @test String(metadata.source_artifact_sha256) == export_file_sha256(artifact)
+    @test !hasproperty(metadata, :source_dir)
+    @test !hasproperty(metadata, :sidecar)
+    @test String(metadata.run_context) == "explore_local_smoke"
+    @test String(metadata.trust_verdict) == "PASS"
+    @test String(metadata.provenance.source_config) == "source_run_config.toml"
+    @test String(metadata.provenance.source_trust_report) == "source_trust_report.md"
+    @test String(metadata.provenance.source_run_manifest) == "source_run_manifest.json"
+    @test String(metadata.integrity.phase_profile.sha256) == export_file_sha256(exported.phase_csv)
+    @test String(metadata.integrity.source_config.sha256) ==
+        export_file_sha256(joinpath(export_dir, "source_run_config.toml"))
+    @test String(metadata.integrity.source_trust_report.sha256) ==
+        export_file_sha256(joinpath(export_dir, "source_trust_report.md"))
+    @test String(metadata.integrity.source_run_manifest.sha256) ==
+        export_file_sha256(joinpath(export_dir, "source_run_manifest.json"))
+
+    original_metadata = read(exported.metadata_json, String)
+    metadata_without_phase_digest = JSON3.read(
+        original_metadata, Dict{String,Any})
+    delete!(metadata_without_phase_digest["integrity"], "phase_profile")
+    open(exported.metadata_json, "w") do io
+        JSON3.pretty(io, metadata_without_phase_digest)
+    end
+    missing_digest_status = export_handoff_status(
+        run_dir; source_artifact=artifact)
+    @test !missing_digest_status.integrity_valid
+    @test "phase_profile:missing_integrity_entry" in
+          missing_digest_status.integrity_errors
+    @test !_export_handoff_complete(run_dir, artifact).complete
+    write(exported.metadata_json, original_metadata)
+
+    original_artifact = read(artifact)
+    open(artifact, "a") do io
+        write(io, UInt8(0))
+    end
+    mutated_source_status = export_handoff_status(
+        run_dir; source_artifact=artifact)
+    @test !mutated_source_status.integrity_valid
+    @test "source_artifact:sha256_mismatch" in
+          mutated_source_status.integrity_errors
+    @test !_export_handoff_complete(run_dir, artifact).complete
+    write(artifact, original_artifact)
+
+    roundtrip_bytes = read(exported.roundtrip_json)
+    rm(exported.roundtrip_json)
+    @test !export_handoff_status(run_dir; source_artifact=artifact).complete
+    @test !_export_handoff_complete(run_dir, artifact).complete
+    write(exported.roundtrip_json, roundtrip_bytes)
 
     csv_lines = readlines(exported.phase_csv)
     @test startswith(first(csv_lines), "index,frequency_offset_THz")
     @test length(csv_lines) == 9
+    csv_fields = split.(csv_lines[2:end], ',')
+    exported_frequencies = parse.(Float64, getindex.(csv_fields, 2))
+    exported_wrapped_phase = parse.(Float64, getindex.(csv_fields, 5))
+    @test issorted(exported_frequencies)
+    @test all(-π .<= exported_wrapped_phase .<= π)
 
     export_readme = read(exported.readme, String)
     @test occursin("Experimental Handoff Bundle", export_readme)
@@ -388,6 +409,7 @@ kind = "lbfgs"
     @test summary_with_export.export_handoff.metadata_json == exported.metadata_json
     @test summary_with_export.export_handoff.source_config == joinpath(export_dir, "source_run_config.toml")
     @test summary_with_export.export_handoff.phase_csv_valid
+    @test summary_with_export.export_handoff.integrity_valid
     @test summary_with_export.export_handoff.phase_csv_rows == 8
     @test isempty(summary_with_export.export_handoff.phase_csv_errors)
 
@@ -402,6 +424,20 @@ kind = "lbfgs"
     @test exported_gate.export_phase_csv_valid
     @test exported_gate.export_phase_csv_rows == 8
 
+    untampered_phase_csv = read(exported.phase_csv, String)
+    hash_tampered_lines = readlines(exported.phase_csv)
+    hash_tampered_fields = split(hash_tampered_lines[2], ",")
+    hash_tampered_fields[5] = "0.123456789"
+    hash_tampered_lines[2] = join(hash_tampered_fields, ",")
+    write(exported.phase_csv, join(hash_tampered_lines, "\n") * "\n")
+    hash_tampered_summary = inspect_run_summary(run_dir)
+    @test hash_tampered_summary.export_handoff.phase_csv_valid
+    @test !hash_tampered_summary.export_handoff.integrity_valid
+    hash_tampered_gate = lab_ready_run_report(run_dir; require_export=true)
+    @test !hash_tampered_gate.pass
+    @test "invalid_export_integrity" in hash_tampered_gate.blockers
+    write(exported.phase_csv, untampered_phase_csv)
+
     write(exported.phase_csv, """
 index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_rad,phase_unwrapped_rad,group_delay_fs
 1,0.0,193.4,1550.0,0.0,0.0,0.0
@@ -411,7 +447,9 @@ index,frequency_offset_THz,absolute_frequency_THz,wavelength_nm,phase_wrapped_ra
     @test !invalid_export_summary.export_handoff.complete
     @test invalid_export_summary.export_handoff.files_complete
     @test !invalid_export_summary.export_handoff.phase_csv_valid
+    @test !invalid_export_summary.export_handoff.integrity_valid
     @test any(contains("invalid_absolute_frequency_THz"), invalid_export_summary.export_handoff.phase_csv_errors)
+    @test any(contains("phase_profile:sha256_mismatch"), invalid_export_summary.export_handoff.integrity_errors)
 
     invalid_export_gate = lab_ready_run_report(run_dir; require_export=true)
     @test !invalid_export_gate.pass

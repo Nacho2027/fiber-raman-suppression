@@ -1,7 +1,8 @@
 # Public API
 
-The high-level FiberLab API is defined in `src/fiberlab/api.jl` and exported
-from the Julia package.
+The high-level FiberLab API is implemented under `src/fiberlab/` and exported
+from the Julia package. The constructors below are the maintained notebook
+surface; config-backed commands are a reproducibility bridge, not a second API.
 
 ## Core Types
 
@@ -84,6 +85,8 @@ from the Julia package.
 - `solve(experiment; backend=NativeAdjointBackend(model; initial_coordinates=x0))`
 - `NativeAdjointBackend(model; initial_coordinates=x0, bounds=nothing, artifact_writers=Dict(...))`
 - `fiber_problem(fiber; modes=1, pulse=Pulse(), grid=Grid(), kwargs...)`
+- `resolve_grid(fiber, pulse=Pulse(), grid=Grid(); wavelength_m=1550e-9)`
+- `resolve_sampling_grid(grid; wavelength_m=1550e-9, minimum_time_window_ps=0, max_time_step_ps=0.0105, minimum_frequency_fraction=0.1)`
 - `fiber_problem(experiment; kwargs...)`
 - `fiber_problem(uω0, fiber, sim; kwargs...)`
 - `propagate(problem; saveat=nothing)`
@@ -92,6 +95,14 @@ from the Julia package.
 - `compare_spectrum(result, measurement; evaluation_band_nm=nothing)`
 - `write_spectrum_report(comparison; output_dir, tag="spectrum_comparison")`
 - `FullGridPhase(problem; kwargs...)`
+- `polynomial_basis(problem, powers=0:3)`
+- `fourier_basis(problem, harmonics=8)`
+- `phase_control(problem; basis=nothing, bounds=nothing, name=:phase)`
+- `amplitude_control(problem; basis=polynomial_basis(problem, 0:2), bounds=(0.8, 1.2), name=:amplitude)`
+- `energy_control(; name=:energy)`
+- `bounded_profile_control(name, basis; lower, upper, units="", figure_hooks=())`
+- `controls(control_maps...)`
+- `initial_coordinates(control)`
 - `fiber_model(problem)`
 - `sample_count(problem)`
 - `mode_count(problem)`
@@ -113,12 +124,16 @@ from the Julia package.
 - `objective_contract(kind)`
 - `registered_control_kinds()`
 - `registered_objective_kinds()`
+- `ObjectiveMap(name; cost, terminal_adjoint=nothing, figure_hooks=(), cost_scale=:linear)`
 - `register_control!(kind; has_pullback=true, units="", figure_hooks=())`
 - `register_objective!(kind; has_terminal_adjoint=true, figure_hooks=())`
 - `figure_hooks(control_kinds, objective_kind)`
 - `terminal_adjoint(objective, final_state, context)`
 - `assert_adjoint_ready(objective, control_map, solver)`
 - `figure_paths(result)`
+- `standard_figures(problem, result; output_dir=nothing, tag=nothing, n_z_samples=32, also_unshaped=true)`
+- `standard_report(problem, result; kwargs...)`
+- `display_report(report)`
 - `verify(result)`
 - `trust_check(model, control, objective, coordinates; profile=nothing, gradient_check=false)`
 - `trust_check(result; profile=nothing)`

@@ -46,7 +46,7 @@ function _wavelength_axis_nm(sim)
     f0 = sim["f0"]
     Δt = sim["Δt"]
     f_shifted = f0 .+ fftshift(FFTW.fftfreq(Nt, 1 / Δt))
-    return C_NM_THZ ./ f_shifted
+    return FiberLab.C_NM_THZ ./ f_shifted
 end
 
 function _spectral_db(field)

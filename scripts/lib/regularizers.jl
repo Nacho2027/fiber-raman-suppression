@@ -11,6 +11,20 @@ const _REGULARIZERS_JL_LOADED = true
 
 using FFTW
 
+const DEFAULT_GDD_LAMBDA = 1e-4
+
+function resolve_regularizer_lambda(name::Symbol, value)
+    if value === :auto
+        name == :gdd || throw(ArgumentError(
+            "regularizer `$(name)` does not implement lambda=:auto"))
+        return DEFAULT_GDD_LAMBDA
+    end
+    numeric = Float64(value)
+    isfinite(numeric) && numeric >= 0 || throw(ArgumentError(
+        "regularizer `$(name)` lambda must be nonnegative and finite"))
+    return numeric
+end
+
 """
     add_gdd_penalty!(grad, φ, Δt, λ_gdd) -> Float64
 
@@ -19,44 +33,40 @@ contribution. The stencil is
 `λ_gdd * (φ[i+1] - 2φ[i] + φ[i-1])^2 / Δω^3`, with
 `Δω = 2π / (Nt * Δt)`.
 """
-function add_gdd_penalty!(grad::AbstractMatrix, φ::AbstractMatrix,
-                          Δt::Real, λ_gdd::Real)
+function _add_gdd_penalty_centered!(grad, φ, Δt::Real, λ_gdd::Real)
     λ_gdd > 0 || return 0.0
     @assert size(grad) == size(φ) "grad shape $(size(grad)) must match φ shape $(size(φ))"
     Nt = size(φ, 1)
+    isfinite(Δt) && Δt > 0 || throw(ArgumentError("Δt must be positive and finite"))
     Δω = 2π / (Nt * Δt)
     inv_Δω3 = 1.0 / Δω^3
+    φ_centered = FFTW.fftshift(φ, 1)
+    grad_centered = zeros(Float64, size(grad))
+    φ_columns = reshape(φ_centered, Nt, :)
+    grad_columns = reshape(grad_centered, Nt, :)
     J_gdd = 0.0
-    @inbounds for m in 1:size(φ, 2)
+    @inbounds for m in axes(φ_columns, 2)
         for i in 2:(Nt - 1)
-            d2 = φ[i + 1, m] - 2φ[i, m] + φ[i - 1, m]
+            d2 = φ_columns[i + 1, m] - 2φ_columns[i, m] + φ_columns[i - 1, m]
             J_gdd += λ_gdd * inv_Δω3 * d2^2
             coeff = 2 * λ_gdd * inv_Δω3 * d2
-            grad[i - 1, m] += coeff
-            grad[i,     m] -= 2 * coeff
-            grad[i + 1, m] += coeff
+            grad_columns[i - 1, m] += coeff
+            grad_columns[i,     m] -= 2 * coeff
+            grad_columns[i + 1, m] += coeff
         end
     end
+    grad .+= FFTW.ifftshift(grad_centered, 1)
     return J_gdd
+end
+
+function add_gdd_penalty!(grad::AbstractMatrix, φ::AbstractMatrix,
+                          Δt::Real, λ_gdd::Real)
+    return _add_gdd_penalty_centered!(grad, φ, Δt, λ_gdd)
 end
 
 function add_gdd_penalty!(grad::AbstractVector, φ::AbstractVector,
                           Δt::Real, λ_gdd::Real)
-    λ_gdd > 0 || return 0.0
-    @assert length(grad) == length(φ) "grad length $(length(grad)) must match φ length $(length(φ))"
-    Nt = length(φ)
-    Δω = 2π / (Nt * Δt)
-    inv_Δω3 = 1.0 / Δω^3
-    J_gdd = 0.0
-    @inbounds for i in 2:(Nt - 1)
-        d2 = φ[i + 1] - 2φ[i] + φ[i - 1]
-        J_gdd += λ_gdd * inv_Δω3 * d2^2
-        coeff = 2 * λ_gdd * inv_Δω3 * d2
-        grad[i - 1] += coeff
-        grad[i]     -= 2 * coeff
-        grad[i + 1] += coeff
-    end
-    return J_gdd
+    return _add_gdd_penalty_centered!(grad, φ, Δt, λ_gdd)
 end
 
 """

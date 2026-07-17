@@ -42,7 +42,6 @@ const OBJECTIVE_CONTRACTS = (
             :energy,
             :tikhonov,
             :tv,
-            :flat,
         ),
     ),
     (
@@ -109,7 +108,7 @@ const OBJECTIVE_CONTRACTS = (
         maturity = "experimental",
         supported_variables = ((:phase,),),
         metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :fundamental_mode_leakage),
-        artifact_hooks = (:mode_resolved_spectra, :fundamental_mode_overlay, :convergence_trace),
+        artifact_hooks = (:mode_resolved_spectra, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,
@@ -119,11 +118,11 @@ const OBJECTIVE_CONTRACTS = (
         kind = :mmf_worst_mode,
         regime = :multimode,
         backend = :mmf_raman_optimization,
-        description = "Worst-mode multimode Raman leakage diagnostic objective.",
+        description = "True worst-mode Raman leakage reporting with a bounded normalized-LSE optimization proxy.",
         maturity = "experimental",
         supported_variables = ((:phase,),),
         metrics = (:J_before_dB, :J_after_dB, :delta_J_dB, :worst_mode_leakage),
-        artifact_hooks = (:mode_resolved_spectra, :worst_mode_table, :convergence_trace),
+        artifact_hooks = (:mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
         allowed_regularizers = (
             :gdd,
             :boundary,

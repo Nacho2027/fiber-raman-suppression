@@ -1,14 +1,8 @@
 """
-Thin front-layer experiment spec loading and validation.
-
-This file intentionally implements only the first honest supported slice:
-
-- front-layer TOML loading from `configs/experiments/*.toml`
-- legacy adaptation from `configs/runs/*.toml`
-- capability validation for the supported single-mode phase-only surface
-
-The goal is to let researchers control common choices from config without
-editing optimizer internals, while keeping the physics/math in code.
+Front-layer experiment loading, capability validation, grid preflight, and
+planning across supported single-mode and experimental long-fiber/multimode
+regimes. Configs select implemented contracts; physics and mathematics remain
+in code.
 """
 
 if !(@isdefined _EXPERIMENT_SPEC_JL_LOADED)
@@ -16,14 +10,57 @@ const _EXPERIMENT_SPEC_JL_LOADED = true
 
 using TOML
 
-include(joinpath(@__DIR__, "canonical_runs.jl"))
+include(joinpath(@__DIR__, "common.jl"))
 include(joinpath(@__DIR__, "objective_registry.jl"))
 include(joinpath(@__DIR__, "variable_registry.jl"))
+include(joinpath(@__DIR__, "mmf_fiber_presets.jl"))
+include(joinpath(@__DIR__, "regularizers.jl"))
+
+"""Resolve the inexpensive numerical-grid portion of an experiment preflight."""
+function resolve_experiment_grid(spec)
+    requested = Grid(
+        nt=Int(spec.problem.Nt),
+        time_window_ps=Float64(spec.problem.time_window),
+        policy=spec.problem.grid_policy,
+    )
+    if spec.problem.regime in (:single_mode, :long_fiber)
+        fiber = Fiber(
+            regime=:single_mode,
+            preset=spec.problem.preset,
+            length_m=spec.problem.L_fiber,
+            power_w=spec.problem.P_cont,
+            beta_order=spec.problem.β_order,
+        )
+        pulse = Pulse(
+            fwhm_s=spec.problem.pulse_fwhm,
+            rep_rate_hz=spec.problem.pulse_rep_rate,
+            shape=Symbol(spec.problem.pulse_shape),
+        )
+        resolved = resolve_grid(fiber, pulse, requested)
+        return (requested=requested, initial=resolved, resolved=resolved,
+                authority=:single_mode_analytic)
+    end
+
+    # MMF auto-sizing needs modal dispersion from the eigensolver. Validate the
+    # carrier-safe initial grid here; the heavy path records its final grid.
+    preset = get_mmf_fiber_preset(spec.problem.preset)
+    spec.problem.β_order == preset.β_order || throw(ArgumentError(
+        "problem.beta_order=$(spec.problem.β_order) does not match multimode preset `$(spec.problem.preset)` beta_order=$(preset.β_order)"))
+    initial = resolve_sampling_grid(requested)
+    FiberLab.get_disp_sim_params(1550e-9, 1, initial.nt,
+                                 initial.time_window_ps, preset.β_order)
+    resolved = requested.policy in (:exact, :fixed) ? initial : missing
+    authority = ismissing(resolved) ? :multimode_runtime : :user_exact
+    return (requested=requested, initial=initial, resolved=resolved,
+            authority=authority)
+end
+
 include(joinpath(@__DIR__, "control_layout.jl"))
 include(joinpath(@__DIR__, "artifact_plan.jl"))
 
 const EXPERIMENT_CONFIG_DIR = normpath(joinpath(@__DIR__, "..", "..", "configs", "experiments"))
-const DEFAULT_EXPERIMENT_SPEC = DEFAULT_CANONICAL_RUN_ID
+const EXPERIMENT_TEMPLATE_DIR = joinpath(EXPERIMENT_CONFIG_DIR, "templates")
+const DEFAULT_EXPERIMENT_SPEC = "research_engine_poc"
 
 const EXPORT_PROFILE_CONTRACTS = Dict{Symbol,Any}(
     :neutral_csv_v1 => (
@@ -64,6 +101,19 @@ end
 
 approved_experiment_config_ids() = _approved_experiment_ids(EXPERIMENT_CONFIG_DIR)
 
+const LEGACY_EXPERIMENT_HINTS = Dict(
+    "smf28_L2m_P0p2W" => "use maintained config `research_engine_poc`",
+    "hnlf_L0p5m_P0p01W" => "copy `templates/single_mode_phase_template` and set preset=\"HNLF\", L_fiber=0.5, P_cont=0.01",
+)
+
+function experiment_config_validation_targets()
+    templates = isdir(EXPERIMENT_TEMPLATE_DIR) ?
+        [joinpath("templates", replace(file, ".toml" => ""))
+         for file in sort(readdir(EXPERIMENT_TEMPLATE_DIR)) if endswith(file, ".toml")] :
+        String[]
+    return vcat(approved_experiment_config_ids(), templates)
+end
+
 registered_experiment_regimes() = (:single_mode, :long_fiber, :multimode)
 
 const EXPERIMENT_PROMOTION_STAGES = (:planning, :smoke, :validated, :lab_ready)
@@ -89,8 +139,10 @@ function resolve_experiment_config_path(spec::AbstractString)
     isfile(candidate) && return candidate
 
     available = join(approved_experiment_config_ids(), ", ")
+    hint = get(LEGACY_EXPERIMENT_HINTS, replace(basename(spec), ".toml" => ""), "")
+    suffix = isempty(hint) ? "" : "; migration: $hint"
     throw(ArgumentError(
-        "could not resolve experiment config `$spec` under `$EXPERIMENT_CONFIG_DIR`; available ids: [$available]"))
+        "could not resolve experiment config `$spec` under `$EXPERIMENT_CONFIG_DIR`; available ids: [$available]$suffix"))
 end
 
 _normalize_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
@@ -183,6 +235,13 @@ function _plot_contract_from_parsed(parsed)
     )
 end
 
+function _reject_unknown_config_keys(section, allowed, label::AbstractString)
+    unknown = sort!(setdiff(String.(collect(keys(section))), String.(collect(allowed))))
+    isempty(unknown) || throw(ArgumentError(
+        "$label contains unsupported keys: $(join(unknown, ", "))"))
+    return nothing
+end
+
 function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::AbstractString)
     problem = parsed["problem"]
     controls = parsed["controls"]
@@ -191,6 +250,53 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
     artifacts = get(parsed, "artifacts", Dict{String,Any}())
     verification = get(parsed, "verification", Dict{String,Any}())
     export_cfg = get(parsed, "export", Dict{String,Any}())
+
+    _reject_unknown_config_keys(parsed, (
+        "id", "description", "maturity", "output_root", "output_tag",
+        "save_prefix_basename", "problem", "controls", "objective", "solver",
+        "artifacts", "verification", "export", "plots",
+    ), "experiment config")
+    _reject_unknown_config_keys(problem, (
+        "regime", "preset", "L_fiber", "P_cont", "beta_order", "Nt",
+        "time_window", "grid_policy", "pulse_fwhm", "pulse_rep_rate",
+        "pulse_shape", "raman_threshold",
+    ), "[problem]")
+    _reject_unknown_config_keys(controls, (
+        "variables", "parameterization", "initialization", "policy",
+        "policy_options",
+    ), "[controls]")
+    _reject_unknown_config_keys(objective, (
+        "kind", "log_cost", "regularizer",
+    ), "[objective]")
+    for regularizer in get(objective, "regularizer", Any[])
+        _reject_unknown_config_keys(regularizer, ("name", "lambda"),
+                                    "[[objective.regularizer]]")
+    end
+    _reject_unknown_config_keys(solver, (
+        "kind", "max_iter", "validate_gradient", "store_trace", "reltol",
+        "f_abstol", "g_abstol", "scalar_lower", "scalar_upper",
+        "scalar_x_tol", "vector_initial", "vector_lower", "vector_upper",
+        "vector_x_tol",
+    ), "[solver]")
+    _reject_unknown_config_keys(artifacts, (
+        "bundle", "save_payload", "save_sidecar",
+        "write_trust_report", "write_standard_images", "export_phase_handoff",
+    ), "[artifacts]")
+    _reject_unknown_config_keys(verification, (
+        "mode", "block_on_failed_checks", "artifact_validation",
+    ), "[verification]")
+    _reject_unknown_config_keys(export_cfg, (
+        "enabled", "profile", "include_unwrapped_phase", "include_group_delay",
+    ), "[export]")
+    plots = get(parsed, "plots", Dict{String,Any}())
+    _reject_unknown_config_keys(plots, ("temporal_pulse", "spectrum"), "[plots]")
+    _reject_unknown_config_keys(get(plots, "temporal_pulse", Dict{String,Any}()), (
+        "time_range", "normalize", "energy_low", "energy_high",
+        "margin_fraction",
+    ), "[plots.temporal_pulse]")
+    _reject_unknown_config_keys(get(plots, "spectrum", Dict{String,Any}()), (
+        "dynamic_range_dB",
+    ), "[plots.spectrum]")
 
     regularizers = haskey(objective, "regularizer") ?
         _regularizer_dict(objective["regularizer"]) :
@@ -218,7 +324,7 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             grid_policy = _normalize_symbol(get(problem, "grid_policy", "auto_if_undersized")),
             pulse_fwhm = Float64(get(problem, "pulse_fwhm", 185e-15)),
             pulse_rep_rate = Float64(get(problem, "pulse_rep_rate", 80.5e6)),
-            pulse_shape = String(get(problem, "pulse_shape", "sech_sq")),
+            pulse_shape = canonical_pulse_shape(String(get(problem, "pulse_shape", "sech_sq"))),
             raman_threshold = Float64(get(problem, "raman_threshold", -5.0)),
         ),
         controls = (
@@ -253,7 +359,6 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             bundle = _normalize_symbol(get(artifacts, "bundle", "standard")),
             save_payload = Bool(get(artifacts, "save_payload", true)),
             save_sidecar = Bool(get(artifacts, "save_sidecar", true)),
-            update_manifest = Bool(get(artifacts, "update_manifest", true)),
             write_trust_report = Bool(get(artifacts, "write_trust_report", true)),
             write_standard_images = Bool(get(artifacts, "write_standard_images", true)),
             export_phase_handoff = Bool(get(artifacts, "export_phase_handoff", false)),
@@ -261,9 +366,6 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
         verification = (
             mode = _normalize_symbol(get(verification, "mode", "standard")),
             block_on_failed_checks = Bool(get(verification, "block_on_failed_checks", true)),
-            gradient_check = Bool(get(verification, "gradient_check", false)),
-            taylor_check = Bool(get(verification, "taylor_check", false)),
-            exact_grid_replay = Bool(get(verification, "exact_grid_replay", false)),
             artifact_validation = Bool(get(verification, "artifact_validation", true)),
         ),
         export_plan = (
@@ -276,112 +378,12 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
     )
 end
 
-function experiment_spec_from_canonical_run(spec::AbstractString=DEFAULT_CANONICAL_RUN_ID)
-    path = resolve_run_config_path(spec)
-    parsed = TOML.parsefile(path)
-    run_table = parsed["run"]
-    run_spec = load_canonical_run_config(spec)
-
-    regularizers = Dict{Symbol,Any}()
-    regularizers[:gdd] = get(run_spec.kwargs, :λ_gdd, :auto)
-    regularizers[:boundary] = get(run_spec.kwargs, :λ_boundary, 1.0)
-
-    return (
-        schema = :canonical_run_adapter,
-        id = String(run_spec.id),
-        description = String(run_spec.description),
-        maturity = "supported",
-        config_path = path,
-        output_root = String(run_spec.output_root),
-        output_tag = String(run_spec.output_tag),
-        save_prefix_basename = String(run_spec.save_prefix_basename),
-        problem = (
-            regime = :single_mode,
-            preset = Symbol(String(run_table["fiber_preset"])),
-            L_fiber = Float64(run_spec.kwargs.L_fiber),
-            P_cont = Float64(run_spec.kwargs.P_cont),
-            β_order = Int(run_spec.kwargs.β_order),
-            Nt = Int(run_spec.kwargs.Nt),
-            time_window = Float64(run_spec.kwargs.time_window),
-            grid_policy = :auto_if_undersized,
-            pulse_fwhm = Float64(run_spec.kwargs.pulse_fwhm),
-            pulse_rep_rate = Float64(run_spec.kwargs.pulse_rep_rate),
-            pulse_shape = String(run_spec.kwargs.pulse_shape),
-            raman_threshold = Float64(run_spec.kwargs.raman_threshold),
-        ),
-        controls = (
-            variables = (:phase,),
-            parameterization = :full_grid,
-            initialization = :zero,
-            policy = :direct,
-            policy_options = Dict{Symbol,Any}(),
-        ),
-        objective = (
-            kind = :raman_band,
-            log_cost = Bool(run_spec.kwargs.log_cost),
-            regularizers = regularizers,
-        ),
-        solver = (
-            kind = :lbfgs,
-            max_iter = Int(run_spec.kwargs.max_iter),
-            validate_gradient = Bool(run_spec.kwargs.validate),
-            store_trace = true,
-            reltol = Float64(run_spec.kwargs.solver_reltol),
-            f_abstol = :auto,
-            g_abstol = :auto,
-            scalar_lower = :auto,
-            scalar_upper = :auto,
-            scalar_x_tol = :auto,
-            vector_initial = :auto,
-            vector_lower = :auto,
-            vector_upper = :auto,
-            vector_x_tol = :auto,
-        ),
-        artifacts = (
-            bundle = :standard,
-            save_payload = true,
-            save_sidecar = true,
-            update_manifest = true,
-            write_trust_report = true,
-            write_standard_images = true,
-            export_phase_handoff = false,
-        ),
-        verification = (
-            mode = :standard,
-            block_on_failed_checks = true,
-            gradient_check = Bool(run_spec.kwargs.validate),
-            taylor_check = false,
-            exact_grid_replay = false,
-            artifact_validation = true,
-        ),
-        export_plan = (
-            enabled = false,
-            profile = :neutral_csv_v1,
-            include_unwrapped_phase = true,
-            include_group_delay = true,
-        ),
-        plots = _plot_contract_from_parsed(Dict{String,Any}()),
-    )
-end
-
 function load_experiment_spec(spec::AbstractString=DEFAULT_EXPERIMENT_SPEC)
-    if isfile(spec)
-        path = abspath(spec)
-        parsed = TOML.parsefile(path)
-        if haskey(parsed, "problem")
-            return _front_layer_spec_from_parsed(parsed, path)
-        elseif haskey(parsed, "run")
-            return experiment_spec_from_canonical_run(path)
-        end
-        throw(ArgumentError("config `$path` is neither a front-layer experiment spec nor a canonical run config"))
-    end
-
-    if spec in approved_experiment_config_ids()
-        path = resolve_experiment_config_path(spec)
-        return _front_layer_spec_from_parsed(TOML.parsefile(path), path)
-    end
-
-    return experiment_spec_from_canonical_run(spec)
+    path = resolve_experiment_config_path(spec)
+    parsed = TOML.parsefile(path)
+    haskey(parsed, "problem") || throw(ArgumentError(
+        "config `$path` is not an experiment spec with a [problem] section"))
+    return _front_layer_spec_from_parsed(parsed, path)
 end
 
 function experiment_capability_profile(regime::Symbol)
@@ -415,8 +417,8 @@ function experiment_capability_profile(regime::Symbol)
             solvers = (:lbfgs,),
             parameterizations = (:full_grid,),
             initializations = (:zero,),
-            policies = (:fresh, :resume, :resume_check),
-            grid_policies = (:exact, :auto_if_undersized),
+            policies = (:fresh,),
+            grid_policies = (:exact,),
             artifact_bundles = (:standard,),
             export_profiles = Tuple(registered_export_profiles()),
         )
@@ -489,26 +491,24 @@ function experiment_promotion_status(spec)
 
     artifact_plan.implemented || _push_blocker!(blockers, :unimplemented_artifacts)
     spec.maturity == "supported" || _push_blocker!(blockers, :experimental_maturity)
-    spec.verification.mode == :burst_required && _push_blocker!(blockers, :burst_required)
+    spec.verification.mode == :high_resource && _push_blocker!(blockers, :high_resource)
 
     front_layer_executable = mode in (:phase_only, :reduced_phase, :multivar, :scalar_search, :vector_search) ||
-        (mode == :long_fiber_phase && spec.verification.mode != :burst_required) ||
-        (mode == :multimode_phase && spec.verification.mode != :burst_required)
+        (mode == :long_fiber_phase && spec.verification.mode != :high_resource) ||
+        (mode == :multimode_phase && spec.verification.mode != :high_resource)
     if !front_layer_executable
         _push_blocker!(blockers, mode == :amp_on_phase ? :dedicated_workflow_only : :front_layer_execution_blocked)
     end
 
     if mode == :multivar || mode == :scalar_search || mode == :vector_search
         spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
-        spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
     elseif mode == :amp_on_phase
         _push_blocker!(blockers, :no_front_layer_execution)
         spec.artifacts.write_trust_report || _push_blocker!(blockers, :no_trust_report)
-        spec.artifacts.update_manifest || _push_blocker!(blockers, :no_manifest_update)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
-    elseif (mode == :long_fiber_phase && spec.verification.mode == :burst_required) ||
-            (mode == :multimode_phase && spec.verification.mode == :burst_required)
+    elseif (mode == :long_fiber_phase && spec.verification.mode == :high_resource) ||
+            (mode == :multimode_phase && spec.verification.mode == :high_resource)
         _push_blocker!(blockers, :no_local_smoke)
         experiment_export_requested(spec) || _push_blocker!(blockers, :no_export_handoff)
     elseif mode == :long_fiber_phase
@@ -539,7 +539,7 @@ function experiment_promotion_status(spec)
         stage = stage,
         mode = mode,
         executable = front_layer_executable,
-        local_execution_allowed = front_layer_executable && spec.verification.mode != :burst_required,
+        local_execution_allowed = front_layer_executable && spec.verification.mode != :high_resource,
         artifact_plan_implemented = artifact_plan.implemented,
         blockers = Tuple(blockers),
         requirements = Tuple(requirements),
@@ -569,13 +569,13 @@ function experiment_explore_run_policy(spec; local_smoke::Bool=false, heavy_ok::
     status.stage != :lab_ready && _push_blocker!(warnings, Symbol(string("stage_", status.stage)))
 
     if action == :front_layer
-        if spec.verification.mode == :burst_required && !heavy_ok
+        if spec.verification.mode == :high_resource && !heavy_ok
             _push_blocker!(blockers, :requires_heavy_ok)
         end
         if spec.maturity != "supported" && !local_smoke && !heavy_ok
             _push_blocker!(blockers, :requires_local_smoke)
         end
-        spec.verification.mode == :burst_required && _push_blocker!(warnings, :heavy_compute)
+        spec.verification.mode == :high_resource && _push_blocker!(warnings, :heavy_compute)
     else
         if !heavy_ok
             _push_blocker!(blockers, :requires_heavy_ok)
@@ -664,10 +664,7 @@ function research_config_check_report(spec)
             status.local_execution_allowed || _push_unique_symbol!(missing, :requires_dedicated_workflow)
     end
 
-    compare_ready = validation_ok &&
-        spec.artifacts.save_payload &&
-        spec.artifacts.save_sidecar &&
-        spec.artifacts.update_manifest
+    compare_ready = validation_ok && isempty(missing)
     run_path = validation_ok ?
         _research_run_path(spec, mode, status) :
         (kind = :blocked, command = "fix config validation errors before running")
@@ -743,13 +740,52 @@ function _validate_objective_regularizers(spec, objective_contract)
     for (name, lambda) in spec.objective.regularizers
         name in allowed || throw(ArgumentError(
             "regularizer `$(name)` is not allowed for objective `$(spec.objective.kind)`; allowed regularizers: $(collect(objective_contract.allowed_regularizers))"))
-        lambda == :auto && continue
-        lambda isa Real || throw(ArgumentError(
+        (lambda === :auto || lambda isa Real) || throw(ArgumentError(
             "regularizer `$(name)` lambda must be numeric or \"auto\""))
-        numeric = Float64(lambda)
-        isfinite(numeric) && numeric >= 0 || throw(ArgumentError(
-            "regularizer `$(name)` lambda must be nonnegative and finite"))
+        resolve_regularizer_lambda(name, lambda)
     end
+    return nothing
+end
+
+function _execution_regularizer_capabilities(spec, objective_contract, mode::Symbol)
+    variables = Set(spec.controls.variables)
+    if mode in (:phase_only, :reduced_phase, :long_fiber_phase, :multimode_phase)
+        return Set((:gdd, :boundary))
+    end
+    if mode in (:multivar, :amp_on_phase)
+        supported = Set{Symbol}()
+        :phase in variables && union!(supported, (:gdd, :boundary))
+        :energy in variables && push!(supported, :energy)
+        if !isempty(intersect(variables, Set((:amplitude, :gain_tilt))))
+            union!(supported, (:boundary, :energy, :tikhonov, :tv))
+        end
+        return supported
+    end
+    if mode == :scalar_search
+        if spec.controls.variables == (:gain_tilt,)
+            return objective_contract.backend == :raman_optimization ?
+                Set((:boundary, :energy, :tikhonov, :tv)) : Set((:energy,))
+        end
+        return Set{Symbol}()
+    end
+    if mode == :vector_search
+        return spec.controls.variables == (:phase_amp_energy_control,) ?
+            Set((:energy,)) : Set{Symbol}()
+    end
+    return Set{Symbol}()
+end
+
+function _validate_execution_regularizers(spec, objective_contract, mode::Symbol)
+    supported = _execution_regularizer_capabilities(spec, objective_contract, mode)
+    active = Symbol[
+        name for (name, value) in spec.objective.regularizers
+        if resolve_regularizer_lambda(name, value) > 0
+    ]
+    unsupported = sort!(collect(setdiff(Set(active), supported)); by=string)
+    isempty(unsupported) || throw(ArgumentError(
+        "regularizers $(unsupported) are not implemented for execution mode `$(mode)` " *
+        "with controls $(spec.controls.variables); active supported regularizers: " *
+        "$(sort!(collect(supported); by=string))"))
     return nothing
 end
 
@@ -820,12 +856,23 @@ function validate_experiment_spec(spec)
     end
 
     spec.problem.Nt > 0 || throw(ArgumentError("problem.Nt must be positive"))
+    spec.problem.Nt >= 4 && ispow2(spec.problem.Nt) || throw(ArgumentError(
+        "problem.Nt must be a power of two ≥ 4"))
     _require_positive_finite(spec.problem.time_window, "problem.time_window")
     _require_positive_finite(spec.problem.L_fiber, "problem.L_fiber")
     _require_positive_finite(spec.problem.P_cont, "problem.P_cont")
     _require_positive_finite(spec.problem.pulse_fwhm, "problem.pulse_fwhm")
     _require_positive_finite(spec.problem.pulse_rep_rate, "problem.pulse_rep_rate")
     spec.problem.β_order > 0 || throw(ArgumentError("problem.beta_order must be positive"))
+    isfinite(spec.problem.raman_threshold) && spec.problem.raman_threshold < 0 ||
+        throw(ArgumentError(
+            "problem.raman_threshold must be finite and negative (a Stokes frequency offset in THz)"))
+    grid_resolution = resolve_experiment_grid(spec)
+    sampling_grid = grid_resolution.initial
+    minimum_offset = minimum(FFTW.fftfreq(
+        sampling_grid.nt, sampling_grid.nt / sampling_grid.time_window_ps))
+    minimum_offset < spec.problem.raman_threshold || throw(ArgumentError(
+        "problem.raman_threshold selects no bins on the resolved sampling grid"))
     spec.solver.max_iter > 0 || throw(ArgumentError("solver.max_iter must be positive"))
     _require_positive_finite(spec.solver.reltol, "solver.reltol")
     _require_auto_or_positive_finite(spec.solver.f_abstol, "solver.f_abstol")
@@ -840,6 +887,15 @@ function validate_experiment_spec(spec)
     _validate_plot_contract(spec)
 
     mode = experiment_execution_mode(spec)
+    _validate_execution_regularizers(spec, objective_contract, mode)
+    gradient_supported = mode in (:phase_only, :long_fiber_phase, :multivar)
+    spec.solver.validate_gradient && !gradient_supported && throw(ArgumentError(
+        "solver.validate_gradient=true is not implemented for execution mode `$mode`"))
+    tolerance_supported = mode in (:phase_only, :long_fiber_phase, :reduced_phase)
+    custom_tolerances = spec.solver.reltol != 1e-8 ||
+        spec.solver.f_abstol !== :auto || spec.solver.g_abstol !== :auto
+    custom_tolerances && !tolerance_supported && throw(ArgumentError(
+        "custom solver reltol/f_abstol/g_abstol are not implemented for execution mode `$mode`"))
     if spec.solver.kind == :bounded_scalar
         scalar_extension_ok = length(spec.controls.variables) == 1 &&
             variable_contract(only(spec.controls.variables), spec.problem.regime).backend == :scalar_phase_extension
@@ -911,7 +967,7 @@ function validate_experiment_spec(spec)
     if mode == :phase_only || mode == :reduced_phase
         if !(spec.artifacts.bundle == :standard &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
-             spec.artifacts.update_manifest && spec.artifacts.write_trust_report &&
+             spec.artifacts.write_trust_report &&
              spec.artifacts.write_standard_images)
             throw(ArgumentError(
                 "phase-like adjoint execution currently requires the full standard artifact bundle"))
@@ -923,9 +979,9 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "multivar execution currently requires the experimental multivar artifact bundle with standard images"))
         end
-        if spec.artifacts.update_manifest || spec.artifacts.write_trust_report
+        if spec.artifacts.write_trust_report
             throw(ArgumentError(
-                "multivar front-layer execution does not yet support manifest updates or trust-report writing"))
+                "multivar front-layer execution does not yet support trust-report writing"))
         end
         if experiment_export_requested(spec)
             throw(ArgumentError(
@@ -934,15 +990,15 @@ function validate_experiment_spec(spec)
     elseif mode == :long_fiber_phase
         spec.maturity == "experimental" || throw(ArgumentError(
             "long_fiber front-layer configs must be marked experimental"))
-        spec.verification.mode in (:standard, :burst_required) || throw(ArgumentError(
-            "long_fiber front-layer configs must use verification.mode=\"standard\" or \"burst_required\""))
+        spec.verification.mode in (:standard, :high_resource) || throw(ArgumentError(
+            "long_fiber front-layer configs must use verification.mode=\"standard\" or \"high_resource\""))
         if spec.verification.mode == :standard
             spec.problem.Nt <= 4096 || throw(ArgumentError(
-                "standard long_fiber front-layer smoke requires Nt <= 4096; mark larger grids verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+                "standard long_fiber front-layer smoke requires Nt <= 4096; mark larger grids verification.mode=\"high_resource\" and use the provider-neutral compute plan"))
             spec.problem.L_fiber <= 10.0 || throw(ArgumentError(
-                "standard long_fiber front-layer smoke requires L_fiber <= 10 m; mark longer studies verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+                "standard long_fiber front-layer smoke requires L_fiber <= 10 m; mark longer studies verification.mode=\"high_resource\" and use the provider-neutral compute plan"))
             spec.solver.max_iter <= 5 || throw(ArgumentError(
-                "standard long_fiber front-layer smoke requires solver.max_iter <= 5; mark larger studies verification.mode=\"burst_required\" and use the provider-neutral compute plan"))
+                "standard long_fiber front-layer smoke requires solver.max_iter <= 5; mark larger studies verification.mode=\"high_resource\" and use the provider-neutral compute plan"))
         end
         if experiment_export_requested(spec)
             throw(ArgumentError(
@@ -950,7 +1006,7 @@ function validate_experiment_spec(spec)
         end
         if !(spec.artifacts.bundle == :standard &&
              spec.artifacts.save_payload && spec.artifacts.save_sidecar &&
-             spec.artifacts.update_manifest && spec.artifacts.write_trust_report &&
+             spec.artifacts.write_trust_report &&
              spec.artifacts.write_standard_images)
             throw(ArgumentError(
                 "long_fiber execution currently requires the full standard artifact bundle"))
@@ -968,9 +1024,9 @@ function validate_experiment_spec(spec)
             throw(ArgumentError(
                 "multimode planning currently requires the mmf_planning artifact bundle with standard images"))
         end
-        if spec.artifacts.update_manifest || spec.artifacts.write_trust_report
+        if spec.artifacts.write_trust_report
             throw(ArgumentError(
-                "multimode front-layer execution does not yet support manifest updates or trust-report writing"))
+                "multimode front-layer execution does not yet support trust-report writing"))
         end
     end
 
@@ -987,12 +1043,16 @@ function experiment_plan_lines(spec)
     mode = experiment_execution_mode(spec)
     export_supported = mode == :phase_only
     export_requested = experiment_export_requested(spec)
-    burst_required = spec.verification.mode == :burst_required
+    high_resource = spec.verification.mode == :high_resource
     objective_contract = experiment_objective_contract(spec)
     export_contract = export_profile_contract(spec.export_plan.profile)
     layout = control_layout_plan(spec)
     artifact_plan = experiment_artifact_plan(spec)
     promotion_status = experiment_promotion_status(spec)
+    grid_resolution = resolve_experiment_grid(spec)
+    grid_summary = ismissing(grid_resolution.resolved) ?
+        "requested Nt=$(grid_resolution.requested.nt) tw=$(grid_resolution.requested.time_window_ps)ps; initial sampling Nt=$(grid_resolution.initial.nt) tw=$(grid_resolution.initial.time_window_ps)ps; final grid resolved after modal setup" :
+        "requested Nt=$(grid_resolution.requested.nt) tw=$(grid_resolution.requested.time_window_ps)ps; resolved Nt=$(grid_resolution.resolved.nt) tw=$(grid_resolution.resolved.time_window_ps)ps"
     layout_summary = join((string(block.name, ":", block.shape, ":", block.units)
         for block in layout.blocks), "; ")
     artifact_hook_summary = isempty(artifact_plan.hooks) ?
@@ -1017,17 +1077,17 @@ function experiment_plan_lines(spec)
         "Maturity: $(spec.maturity)",
         "Schema: $(spec.schema)",
         "Config path: $(spec.config_path)",
-        "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested) burst_required=$(burst_required)",
+        "Execution: mode=$(mode) export_supported=$(export_supported) export_requested=$(export_requested) high_resource=$(high_resource)",
         "Promotion stage: $(promotion_status.stage)",
         "Promotion blockers: $(_promotion_blocker_summary(promotion_status))",
-        "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W Nt=$(spec.problem.Nt) tw=$(spec.problem.time_window)ps grid=$(spec.problem.grid_policy)",
+        "Problem: regime=$(spec.problem.regime) preset=$(spec.problem.preset) L=$(spec.problem.L_fiber)m P=$(spec.problem.P_cont)W grid=$(spec.problem.grid_policy) $(grid_summary)",
         "Controls: variables=$(collect(spec.controls.variables)) parameterization=$(spec.controls.parameterization) initialization=$(spec.controls.initialization) policy=$(spec.controls.policy) policy_options=$(policy_option_summary)",
         "Control layout: optimizer_length=$(layout.total_length) blocks=$(layout_summary)",
         "Objective: kind=$(spec.objective.kind) backend=$(objective_contract.backend) log_cost=$(spec.objective.log_cost) regularizers=$(reg_summary)",
         "Solver: kind=$(spec.solver.kind) max_iter=$(spec.solver.max_iter) validate_gradient=$(spec.solver.validate_gradient)$(solver_suffix)",
         "Artifacts: bundle=$(spec.artifacts.bundle) export_enabled=$(spec.export_plan.enabled) export_profile=$(export_contract.profile)",
         "Artifact plan: implemented_now=$(artifact_plan.implemented) hooks=$(artifact_hook_summary)",
-        "Verification: mode=$(spec.verification.mode) gradient_check=$(spec.verification.gradient_check) artifact_validation=$(spec.verification.artifact_validation)",
+        "Verification: mode=$(spec.verification.mode) artifact_validation=$(spec.verification.artifact_validation)",
     ]
 end
 
@@ -1042,7 +1102,7 @@ function render_experiment_capabilities(; io::IO=stdout)
         stage_summary =
             regime == :single_mode ? "lab_ready for validated benchmark configs; smoke for experimental multivariable" :
             regime == :multimode ? "smoke for validated shared-phase MMF checks; high-resource configs use dedicated workflows" :
-            "planning/dedicated workflow until long-fiber execution is merged into the core single-mode path"
+            "experimental smoke/high-resource capability through exact-grid single-mode execution"
         println(io, "    current_stage=", stage_summary)
         println(io, "    variables=", _objective_tuple_summary(caps.variables))
         println(io, "    objectives=", join(string.(caps.objectives), ", "))
@@ -1060,12 +1120,12 @@ function render_experiment_capabilities(; io::IO=stdout)
     println(io, "  single_mode multivariable controls are experimental.")
     println(io, "  use `fiberlab explore` for intentional experimental exploration runs.")
     println(io, "  multimode shared-phase smoke configs can execute through the front layer.")
-    println(io, "  long_fiber should converge toward the core single-mode path with explicit length-scaling checks.")
+    println(io, "  long_fiber uses the shared single-mode runtime with exact-grid and length-scaling checks.")
     println(io, "  Configs select from these contracts; new physics and new controls still belong in code first.")
     return nothing
 end
 
-function validate_all_experiment_configs(; ids=approved_experiment_config_ids())
+function validate_all_experiment_configs(; ids=experiment_config_validation_targets())
     reports = []
     for id in ids
         try
@@ -1134,8 +1194,10 @@ function experiment_compute_plan_lines(spec)
     mode = experiment_execution_mode(spec)
     promotion_status = experiment_promotion_status(spec)
     spec_hint = experiment_cli_spec_hint(spec)
-    dry_run_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run $(spec_hint)"
-    local_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl $(spec_hint)"
+    dry_run_cmd = "./fiberlab plan $(spec_hint)"
+    local_cmd = spec.maturity == "supported" ?
+        "./fiberlab run $(spec_hint)" :
+        "./fiberlab explore run $(spec_hint) --local-smoke"
 
     lines = String[
         "Compute plan: $(spec.id)",
@@ -1160,7 +1222,7 @@ function experiment_compute_plan_lines(spec)
                 "  Increase L_fiber, Nt, time_window, or max_iter only when you are prepared for the added CPU/memory cost.",
             ])
         else
-            lf_cmd = "julia -t auto --project=. scripts/canonical/run_experiment.jl --heavy-ok $(spec_hint)"
+            lf_cmd = "./fiberlab run --heavy-ok $(spec_hint)"
             append!(lines, [
                 "Provider-neutral path:",
                 "  1. Use any machine or cluster environment with enough CPU time and memory for the configured grid.",
@@ -1188,7 +1250,7 @@ function experiment_compute_plan_lines(spec)
                 "  2. Clone/sync this repository and instantiate the Julia project.",
                 "  3. Run the dry-run command above to confirm the config on that machine.",
                 "  4. Launch through the canonical front-layer CLI after explicitly acknowledging heavy compute:",
-                "     julia -t auto --project=. scripts/canonical/run_experiment.jl --heavy-ok $(spec_hint)",
+                "     ./fiberlab run --heavy-ok $(spec_hint)",
                 "  5. Copy result artifacts back under the declared output root: $(spec.output_root)",
             ])
         end
@@ -1204,7 +1266,7 @@ function experiment_compute_plan_lines(spec)
             "  $(refine_cmd)",
             "Provider-neutral path:",
             "  This config selects the staged amp-on-phase policy, not naive joint optimization.",
-            "  Run the dedicated refinement workflow on a workstation, burst VM, or cluster node with the Julia environment installed.",
+            "  Run the dedicated refinement workflow on a suitable workstation or cluster node with the Julia environment installed.",
             "  Inspect the generated phase-only and amp-on-phase standard images before treating the result as complete.",
         ])
     else

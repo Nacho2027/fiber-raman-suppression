@@ -12,6 +12,7 @@
 
 using Test
 using Dates
+using LinearAlgebra
 using Printf
 
 const _ROOT = normpath(joinpath(@__DIR__, ".."))
@@ -24,9 +25,8 @@ const _ROOT = normpath(joinpath(@__DIR__, ".."))
 # visible in the including scope (matches test/core/test_determinism.jl pattern).
 using FiberLab
 include(joinpath(_ROOT, "scripts", "lib", "common.jl"))
-include(joinpath(_ROOT, "scripts", "lib", "canonical_runs.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "experiment_spec.jl"))
-include(joinpath(_ROOT, "scripts", "lib", "manifest_io.jl"))
+include(joinpath(_ROOT, "scripts", "lib", "mmf_setup.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "objective_surface.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "regularizers.jl"))
 include(joinpath(@__DIR__, "core", "test_repo_structure.jl"))
@@ -36,6 +36,7 @@ include(joinpath(@__DIR__, "core", "test_propagation.jl"))
 include(joinpath(@__DIR__, "core", "test_spectral_measurements.jl"))
 include(joinpath(@__DIR__, "core", "test_canonical_lab_surface.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_front_layer.jl"))
+include(joinpath(@__DIR__, "core", "test_trust_readiness.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_sweep_sidecars.jl"))
 include(joinpath(@__DIR__, "core", "test_research_engine_acceptance.jl"))
 include(joinpath(@__DIR__, "core", "test_experiment_config_adversarial.jl"))
@@ -45,7 +46,6 @@ include(joinpath(@__DIR__, "core", "test_non_raman_objective_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_gain_tilt_variable_integration.jl"))
 include(joinpath(@__DIR__, "core", "test_regime_promotion_status.jl"))
 include(joinpath(@__DIR__, "core", "test_slm_replay.jl"))
-include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
 
 @testset "Core regression tier" begin
 
@@ -130,6 +130,10 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
     end
 
     @testset "Single-mode setup contract" begin
+        _, _, default_sim, _, _, _ = setup_raman_problem()
+        @test default_sim["Nt"] == 1024
+        @test default_sim["time_window"] == 10.0
+
         kwargs = (
             λ0 = 1550e-9,
             M = 1,
@@ -146,20 +150,25 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
         )
 
         uω0_r, fiber_r, sim_r, band_r, Δf_r, thr_r = setup_raman_problem(; kwargs...)
-        uω0_a, fiber_a, sim_a, band_a, Δf_a, thr_a = setup_amplitude_problem(; kwargs...)
 
         @test size(uω0_r) == (sim_r["Nt"], sim_r["M"])
-        @test sim_r["Nt"] == sim_a["Nt"]
-        @test sim_r["M"] == sim_a["M"]
-        @test sim_r["Δt"] == sim_a["Δt"]
-        @test fiber_r["L"] == fiber_a["L"]
-        @test fiber_r["γ"] == fiber_a["γ"]
-        @test fiber_r["Dω"] == fiber_a["Dω"]
-        @test uω0_r == uω0_a
-        @test band_r == band_a
-        @test Δf_r == Δf_a
-        @test thr_r == thr_a == kwargs.raman_threshold
+        @test size(fiber_r["Dω"]) == (sim_r["Nt"], sim_r["M"])
+        @test length(Δf_r) == sim_r["Nt"]
+        @test thr_r == kwargs.raman_threshold
         @test any(band_r)
+
+        wide_auto = merge(kwargs, (Nt = 16, time_window = 100.0))
+        _, _, wide_auto_sim, _, _, _ = setup_raman_problem(; wide_auto...)
+        _, _, wide_exact_sim, _, _, _ = setup_raman_problem_exact(; wide_auto...)
+        @test wide_auto_sim["Nt"] == 16384
+        @test wide_auto_sim["time_window"] == 100.0
+        @test wide_exact_sim["Nt"] == 16
+
+        @test _resolved_mmf_grid(16, 100.0) == (16384, 100.0)
+        @test _resolved_mmf_grid(1024, 10.0, 40.0) == (4096, 40.0)
+        @test _canonical_mmf_pulse_shape("gaussian") == "gauss"
+        @test _canonical_mmf_pulse_shape("gauss") == "gauss"
+        @test _canonical_mmf_pulse_shape("sech_sq") == "sech_sq"
     end
 
     @testset "Average-to-peak power conversion" begin
@@ -170,6 +179,8 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
         P_peak_sech = peak_power_from_average_power(P_cont, fwhm, rep_rate)
         P_peak_gauss = peak_power_from_average_power(P_cont, fwhm, rep_rate;
             pulse_shape="gaussian")
+        @test P_peak_gauss == peak_power_from_average_power(
+            P_cont, fwhm, rep_rate; pulse_shape="gauss")
         @test P_peak_sech ≈ 0.881374 * P_cont / (fwhm * rep_rate)
         @test P_peak_gauss ≈ 0.939437 * P_cont / (fwhm * rep_rate)
 
@@ -222,29 +233,6 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
         @test any(band_auto) && any(band_exact)
     end
 
-    @testset "Canonical run registry" begin
-        specs = canonical_raman_run_specs()
-        ids = [spec.id for spec in specs]
-
-        @test length(specs) == 5
-        @test ids == [
-            :smf28_L1m_P005W,
-            :smf28_L2m_P030W,
-            :hnlf_L1m_P005W,
-            :hnlf_L2m_P005W,
-            :smf28_L5m_P015W,
-        ]
-        @test [spec.fiber_preset for spec in specs] == [
-            :SMF28, :SMF28, :HNLF, :HNLF, :SMF28,
-        ]
-        @test specs[1].kwargs.fiber_name == "SMF-28"
-        @test specs[3].kwargs.fiber_name == "HNLF"
-        @test specs[4].kwargs.max_iter == 100
-        @test specs[5].kwargs.P_cont == 0.15
-        @test canonical_run_output_dir("tmpfiber", "L1m_P1W"; create=false) ==
-              joinpath("results", "raman", "tmpfiber", "L1m_P1W")
-    end
-
     @testset "Regularizer helper formulas" begin
         φ = reshape(collect(range(-0.2, stop=0.3, length=18)), 6, 3)
         Δt = 0.0125
@@ -254,20 +242,45 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
 
         Δω = 2π / (size(φ, 1) * Δt)
         inv_Δω3 = 1.0 / Δω^3
+        φ_centered = fftshift(φ, 1)
+        grad_ref_centered = zeros(size(φ))
         J_ref = 0.0
-        grad_ref = zeros(size(φ))
-        for m in 1:size(φ, 2)
+        for m in axes(φ, 2)
             for i in 2:(size(φ, 1) - 1)
-                d2 = φ[i+1, m] - 2φ[i, m] + φ[i-1, m]
+                d2 = φ_centered[i+1, m] - 2φ_centered[i, m] + φ_centered[i-1, m]
                 J_ref += λ_gdd * inv_Δω3 * d2^2
                 coeff = 2 * λ_gdd * inv_Δω3 * d2
-                grad_ref[i-1, m] += coeff
-                grad_ref[i, m] -= 2 * coeff
-                grad_ref[i+1, m] += coeff
+                grad_ref_centered[i-1, m] += coeff
+                grad_ref_centered[i, m] -= 2 * coeff
+                grad_ref_centered[i+1, m] += coeff
             end
         end
+        grad_ref = ifftshift(grad_ref_centered, 1)
         @test J_helper ≈ J_ref
         @test grad ≈ grad_ref
+
+        linear_phase = 3 .* 2π .* FFTW.fftfreq(16, 1.0)
+        linear_grad = zeros(16)
+        roundoff = 100eps(Float64)
+        @test add_gdd_penalty!(linear_grad, linear_phase, 1.0, λ_gdd) ≤ roundoff
+        @test norm(linear_grad) ≤ roundoff
+
+        for trial_phase in (
+            collect(range(-0.4, 0.7; length=16)),
+            reshape(collect(range(-0.4, 0.7; length=32)), 16, 2),
+        )
+            trial_grad = zeros(size(trial_phase))
+            add_gdd_penalty!(trial_grad, trial_phase, 0.1, 0.3)
+            index = 5
+            step = 1e-6
+            plus = copy(trial_phase)
+            minus = copy(trial_phase)
+            plus[index] += step
+            minus[index] -= step
+            J_plus = add_gdd_penalty!(zeros(size(plus)), plus, 0.1, 0.3)
+            J_minus = add_gdd_penalty!(zeros(size(minus)), minus, 0.1, 0.3)
+            @test trial_grad[index] ≈ (J_plus - J_minus) / (2step) rtol=1e-5 atol=1e-7
+        end
 
         uω = ComplexF64[sin(i / 3) + im*cos(i / 5) for i in 1:16, _ in 1:2]
         grad_b = zeros(Float64, size(uω))
@@ -334,14 +347,14 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
     @testset "Manifest append/replace helper" begin
         mktempdir() do dir
             path = joinpath(dir, "manifest.json")
-            n1 = update_manifest_entry(path, Dict{String,Any}(
+            n1 = update_run_manifest_entry(path, Dict{String,Any}(
                 "result_file" => "a.jld2", "J_after_dB" => -10.0))
-            n2 = update_manifest_entry(path, Dict{String,Any}(
+            n2 = update_run_manifest_entry(path, Dict{String,Any}(
                 "result_file" => "b.jld2", "J_after_dB" => -20.0))
-            n3 = update_manifest_entry(path, Dict{String,Any}(
+            n3 = update_run_manifest_entry(path, Dict{String,Any}(
                 "result_file" => "a.jld2", "J_after_dB" => -30.0))
 
-            manifest = read_manifest(path)
+            manifest = read_run_manifest(path)
             @test n1 == 1
             @test n2 == 2
             @test n3 == 2
@@ -409,12 +422,10 @@ include(joinpath(@__DIR__, "core", "test_exploration_contract_runner.jl"))
             @test n1 == 1
             @test n2 == 2
 
-            runs = load_canonical_runs(manifest_path)
-            @test length(runs) == 2
-            @test runs[1]["result_file"] == path_a
-            @test runs[1]["run_tag"] == "a"
-            @test runs[2]["run_tag"] == "b"
-            @test runs[2]["J_after"] == payload_b.J_after
+            manifest = read_run_manifest(manifest_path)
+            @test length(manifest) == 2
+            @test manifest[1]["result_file"] == path_a
+            @test manifest[2]["result_file"] == path_b
         end
     end
 

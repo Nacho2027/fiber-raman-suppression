@@ -99,6 +99,11 @@ end
     @test state.scalar_controls["cubic_phase_scalar"] == 1.5
     @test state.A == ones(16, 1)
     @test maximum(abs.(state.φ)) ≈ 1.5
+    phase = vec(state.φ) ./ 1.5
+    @test phase[2] ≈ -phase[end]
+    @test phase[3] ≈ -phase[end - 1]
+    @test phase[9] == 0.0
+    @test phase[3] / phase[2] ≈ 8.0
     @test state.gain_tilt == 0.0
     @test state.diagnostics[:extension_variable] == :cubic_phase_scalar
 end

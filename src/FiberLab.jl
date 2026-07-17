@@ -7,7 +7,6 @@ multimode fiber systems, with support for:
 - **Kerr + Raman nonlinearity** in the interaction picture (split-step via ODE solver)
 - **Adjoint-based sensitivity analysis** for gradient computation
 - **YDFA gain modeling** (Yb-doped fiber amplifier via rate equations)
-- **Quantum noise analysis** (shot noise, excess noise decomposition via mode overlaps)
 - **GRIN fiber mode solving** (graded-index eigenvalue problem)
 
 The conceptual center is the adjoint contract: controls decode optimizer
@@ -56,13 +55,14 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        fundamental_mode_objective, mode_sum_objective, raman_band_objective,
        raman_peak_objective, temporal_width_objective, worst_mode_objective,
        sample_count, single_mode_fiber_problem, single_mode_phase_model, single_mode_shaper_model,
+       resolve_grid, resolve_sampling_grid,
        display_report, standard_figures, standard_report,
        spectral_shaper_model, trust_check,
        solve, summarize, terminal_adjoint, verify,
        write_experiment_config,
        OUTPUT_FORMAT_SCHEMA_VERSION, deterministic_environment_status,
        artifact_paths_for_prefix, ensure_deterministic_environment,
-       load_run, load_canonical_runs, read_run_manifest, save_run,
+       load_run, read_run_manifest, save_run,
        update_run_manifest_entry, upsert_run_manifest_entry!, write_jld2_file,
        write_json_file, write_run_manifest
 
@@ -89,9 +89,6 @@ include("simulation/sensitivity_disp_mmf.jl")
 include("simulation/simulate_disp_gain_mmf.jl")
 include("simulation/fibers.jl")
 
-include("analysis/analysis.jl")
-include("analysis/plotting.jl")
-
 include("helpers/helpers.jl")
 include("io/artifacts.jl")
 include("io/results.jl")
@@ -110,6 +107,8 @@ include("fiberlab/physics_models.jl")
 include("fiberlab/propagation.jl")
 include("fiberlab/spectral_measurements.jl")
 include("fiberlab/design_api.jl")
+include("fiberlab/visualization.jl")
+include("fiberlab/standard_images.jl")
 include("fiberlab/standard_figures.jl")
 
 end

@@ -28,13 +28,13 @@ Base.@kwdef struct Pulse
 end
 
 """
-    Grid(; nt=8192, time_window_ps=12.0, policy=:auto_if_undersized)
+    Grid(; nt=1024, time_window_ps=10.0, policy=:auto_if_undersized)
 
 Simulation grid request for a FiberLab experiment.
 """
 Base.@kwdef struct Grid
-    nt::Int = 8192
-    time_window_ps::Float64 = 12.0
+    nt::Int = 1024
+    time_window_ps::Float64 = 10.0
     policy::Symbol = :auto_if_undersized
 end
 
@@ -94,7 +94,6 @@ Base.@kwdef struct ArtifactPolicy
     bundle::Symbol = :standard
     save_payload::Bool = true
     save_sidecar::Bool = true
-    update_manifest::Bool = true
     write_trust_report::Bool = true
     standard_images::Bool = true
     export_phase::Bool = false
@@ -257,7 +256,6 @@ function experiment_config_text(experiment::Experiment)
     _push_kv!(lines, "bundle", experiment.artifacts.bundle)
     _push_kv!(lines, "save_payload", experiment.artifacts.save_payload)
     _push_kv!(lines, "save_sidecar", experiment.artifacts.save_sidecar)
-    _push_kv!(lines, "update_manifest", experiment.artifacts.update_manifest)
     _push_kv!(lines, "write_trust_report", experiment.artifacts.write_trust_report)
     _push_kv!(lines, "write_standard_images", experiment.artifacts.standard_images)
     _push_kv!(lines, "export_phase_handoff", experiment.artifacts.export_phase)
@@ -265,9 +263,6 @@ function experiment_config_text(experiment::Experiment)
     push!(lines, "", "[verification]")
     _push_kv!(lines, "mode", "standard")
     _push_kv!(lines, "block_on_failed_checks", true)
-    _push_kv!(lines, "gradient_check", experiment.solver.validate_gradient)
-    _push_kv!(lines, "taylor_check", false)
-    _push_kv!(lines, "exact_grid_replay", false)
     _push_kv!(lines, "artifact_validation", true)
 
     push!(lines, "", "[export]")

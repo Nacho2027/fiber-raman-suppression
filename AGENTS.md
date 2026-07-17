@@ -20,7 +20,7 @@ operational.
 - `scripts/canonical/` and `./fiberlab` are maintained compatibility entry
   points and readiness tools.
 - Python is not a supported API surface unless the user explicitly asks for it.
-- Ignored local folders such as `.venv/`, `.claude/`, `.burst-sync/`,
+- Ignored local folders such as `.venv/`, `.claude/`,
   `.pytest_cache/`, and `.bg-shell/` are not repo structure. Do not inspect or
   summarize them unless the task is explicitly about local tooling.
 - Treat one-off notebooks, old phase scripts, generated outputs, and historical
@@ -59,19 +59,17 @@ operational.
 - If a git operation leaves you unsure about another agent's in-flight work,
   stop and coordinate instead of deleting or reverting.
 
-## Git And Sync
+## Git
 
 - Work on `main` unless the user asks otherwise.
-- Start substantial sessions by checking local state and Syncthing health:
+- Start substantial sessions by checking local state:
 
 ```bash
 git status
-syncthing cli show connections
 ```
 
-- Do not reflexively `git pull` at session start. Syncthing keeps the Mac and
-  `claude-code-host` working trees aligned; use git to reconcile commit history
-  only when needed.
+- Do not reflexively `git pull` at session start; inspect and reconcile commit
+  history only when needed.
 - Before committing or pushing, run:
 
 ```bash
@@ -84,9 +82,7 @@ git status
 - When rebasing, avoid opening editors by using `GIT_EDITOR=:` and
   `GIT_SEQUENCE_EDITOR=:` or an equivalent no-editor option.
 - Never amend commits without explicit written approval.
-- The Mac and `claude-code-host` sync via Syncthing; `.git` is not synced.
-- Syncthing does not solve simultaneous edits. Avoid overlapping edits to the
-  same path, or `.sync-conflict-*` files may appear.
+- Avoid simultaneous edits to the same path across machines or agents.
 
 ## Research Before Coding
 
@@ -103,16 +99,16 @@ git status
 
 ## Compute Rules
 
-- Heavy simulation work belongs on `fiber-raman-burst`, not on
-  `claude-code-host`.
-- `claude-code-host` is for editing, orchestration, dependency operations, and
-  inspection only.
-- Stage code to burst explicitly with `rsync`, run through
-  `~/bin/burst-run-heavy`, then pull `results/` back explicitly with `rsync`.
-- Never bypass the heavy-job wrapper for substantial Julia runs on burst.
+- No cloud provider or remote host is assumed to exist.
+- Use local machines for validation and small smoke runs. Inspect
+  `./fiberlab compute-plan SPEC` before high-resource work.
+- Run long-fiber, multimode, or large-grid jobs only on a workstation, cluster,
+  or cloud node with sufficient memory/time, and acknowledge them explicitly
+  with the supported `--heavy-ok` path.
 - Always launch Julia with threading enabled for simulation work:
   `julia -t auto --project=. ...`
-- Always stop the burst VM when done.
+- Copy result bundles back deliberately and stop any metered compute resource
+  when the job finishes.
 
 ## Results And Outputs
 
@@ -122,7 +118,7 @@ git status
 - Preserve important raw results by inventorying or moving them to a results
   vault before deleting from the active repo.
 - Commit only durable, intentionally chosen summaries, fixtures, or figures.
-- Generated PNGs, burst logs, and routine JLD2 outputs should stay out of git
+- Generated PNGs, run logs, and routine JLD2 outputs should stay out of git
   unless deliberately curated.
 - Any optimization driver that produces `phi_opt` must save the standard image
   set before exiting.

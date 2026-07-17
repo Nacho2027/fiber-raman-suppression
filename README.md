@@ -1,12 +1,18 @@
 # FiberLab
 
-Julia-first FiberLab API for adjoint-based inverse design in nonlinear
-fiber-optic systems.
+FiberLab is a Julia-first nonlinear-fiber workbench for three connected lab
+workflows:
 
-The active user-facing model is a composable adjoint problem. Researchers pass
-physics problems, controls, objectives, and models directly: controls decode
-optimizer coordinates, objectives return a scalar cost and terminal adjoint
-seed, and models provide the physical adjoint gradient.
+- forward propagation with explicit numerical evidence;
+- adjoint inverse design with composable controls and objectives; and
+- experimental simulation-to-OSA spectral-shape comparison.
+
+Forward single- and multimode propagation and the validated single-mode Raman
+benchmark are the strongest paths today. Multivariable, long-fiber, multimode
+optimization, and real-instrument comparison remain explicitly experimental.
+The shared user model is a resolved physics problem: researchers may propagate
+it directly or connect controls, objectives, and an adjoint model for inverse
+design.
 
 ```julia
 using FiberLab
@@ -84,11 +90,8 @@ Start with [docs/README.md](docs/README.md) for the human doc map and
 ## Archive Boundary
 
 Old notebooks, raw result trees, cached fiber/data files, historical plans, and
-superseded research drivers were moved out of the active repo:
-
-```text
-/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/
-```
+superseded research drivers belong in an external results vault, not this
+source repository.
 
 Do not reintroduce archived code as active source. Promote reusable Julia logic
 into the FiberLab API or the maintained backend first.

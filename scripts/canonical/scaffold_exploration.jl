@@ -5,7 +5,7 @@ Create a complete notebook exploration bundle:
 - executable variable/control extension;
 - runnable experiment config wired to both.
 
-This command is the real backend behind `Experiment(...).scaffold(...)`.
+This is the maintained command for scaffolding an experimental extension.
 """
 
 include(joinpath(@__DIR__, "..", "lib", "objective_registry.jl"))
@@ -250,7 +250,6 @@ $solver_body
 bundle = "experimental_multivar"
 save_payload = true
 save_sidecar = true
-update_manifest = false
 write_trust_report = false
 write_standard_images = true
 export_phase_handoff = false
@@ -258,9 +257,6 @@ export_phase_handoff = false
 [verification]
 mode = "standard"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

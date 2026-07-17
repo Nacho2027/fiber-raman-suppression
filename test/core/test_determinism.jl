@@ -10,7 +10,7 @@
 #     maximum(abs.(phi_opt_a .- phi_opt_b)) == 0.0
 #
 # This locks the fix from Phase 15 Plan 01:
-#   1. scripts/determinism.jl pins FFTW + BLAS threads to 1
+#   1. FiberLab's deterministic environment helper pins FFTW + BLAS threads to 1
 #   2. Task 1.5 swapped flags=FFTW.MEASURE -> flags=FFTW.ESTIMATE in
 #      src/simulation/*.jl (16 occurrences across 4 files)
 #
@@ -32,11 +32,11 @@ using FFTW
 using LinearAlgebra
 using Printf
 using Optim
+using FiberLab
 
 # Apply determinism BEFORE loading the pipeline. The include below triggers
 # the pipeline which also calls ensure_deterministic_environment(); this early
 # call makes the effect unambiguous and matches the end-user pattern.
-include(joinpath(@__DIR__, "..", "..", "scripts", "lib", "determinism.jl"))
 ensure_deterministic_environment(verbose=true)
 
 include(joinpath(@__DIR__, "..", "..", "scripts", "lib", "common.jl"))

@@ -10,7 +10,8 @@ models connected by an explicit adjoint contract.
 using FiberLab
 
 fiber = Fiber(preset = :SMF28, length_m = 2.0, power_w = 0.2)
-grid = Grid(nt = 8192, time_window_ps = 12.0)
+grid = Grid(nt = 4096, time_window_ps = 12.0)
+resolved_grid = resolve_grid(fiber, Pulse(), grid)
 problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -5.0)
 
 control = FullGridPhase(problem)
@@ -26,6 +27,12 @@ check_adjoint_gradient(
     coordinate_indices = [1, dimension(control) ÷ 2],
 )
 ```
+
+`resolve_grid` is a setup-only preflight. It reports the exact grid that the
+auto-sizing policy will construct. Auto grids preserve a 10% carrier-frequency
+margin; exact grids are rejected if their FFT bandwidth reaches nonpositive
+absolute optical frequencies. `resolve_sampling_grid` applies the same
+hardware-independent sampling checks without a fiber model.
 
 See [Notebook API Quickstart](notebook-api.md) for native adjoint execution and
 the compatibility bridge to config-backed runs.
@@ -48,6 +55,11 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl --list
 julia -t auto --project=. scripts/canonical/run_experiment.jl --dry-run research_engine_poc
 julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_poc
 ```
+
+The retired `smf28_L2m_P0p2W` config maps to `research_engine_poc`. For a new
+HNLF point, copy `configs/experiments/templates/single_mode_phase_template.toml`
+and set the fiber parameters. Compare completed runs with
+`./fiberlab explore compare RESULTS_ROOT`.
 
 ## Lab Handoff Smoke
 

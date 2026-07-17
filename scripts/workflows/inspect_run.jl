@@ -9,12 +9,14 @@ using Printf
 using FiberLab
 
 include(joinpath(@__DIR__, "..", "lib", "run_artifacts.jl"))
+include(joinpath(@__DIR__, "..", "lib", "export_integrity.jl"))
 
 const INSPECT_EXPORT_REQUIRED_FILES = (
     phase_csv = "phase_profile.csv",
     metadata_json = "metadata.json",
     readme = "README.md",
     source_config = "source_run_config.toml",
+    roundtrip_json = "roundtrip_validation.json",
 )
 
 const INSPECT_PHASE_CSV_REQUIRED_COLUMNS = (
@@ -119,7 +121,7 @@ function validate_phase_profile_csv(path::AbstractString)
     )
 end
 
-function export_handoff_status(run_dir::AbstractString)
+function export_handoff_status(run_dir::AbstractString; source_artifact=nothing)
     export_dir = joinpath(run_dir, "export_handoff")
     paths = Dict{Symbol,String}()
     missing = String[]
@@ -131,6 +133,10 @@ function export_handoff_status(run_dir::AbstractString)
     end
 
     phase_csv_validation = validate_phase_profile_csv(paths[:phase_csv])
+    integrity_validation = isdir(export_dir) ?
+        validate_export_handoff_integrity(
+            export_dir; source_artifact=source_artifact) :
+        (complete=false, errors=("missing_export_handoff",), checked=(), source_artifact_checked=false)
     files_complete = isdir(export_dir) && isempty(missing)
 
     return (
@@ -146,7 +152,9 @@ function export_handoff_status(run_dir::AbstractString)
         phase_csv_valid = phase_csv_validation.valid,
         phase_csv_rows = phase_csv_validation.row_count,
         phase_csv_errors = phase_csv_validation.errors,
-        complete = files_complete && phase_csv_validation.valid,
+        integrity_valid = integrity_validation.complete,
+        integrity_errors = integrity_validation.errors,
+        complete = files_complete && phase_csv_validation.valid && integrity_validation.complete,
     )
 end
 
@@ -163,7 +171,7 @@ function inspect_run_summary(path::AbstractString)
         run_config = isfile(run_config) ? run_config : missing,
         trust_reports = [joinpath(dir, name) for name in trust_candidates],
         standard_images = images,
-        export_handoff = export_handoff_status(dir),
+        export_handoff = export_handoff_status(dir; source_artifact=artifact),
     )
 end
 
@@ -202,6 +210,9 @@ function render_run_summary(summary; io::IO=stdout)
         println(io, "Export handoff missing: ", join(summary.export_handoff.missing, ", "))
         if !summary.export_handoff.phase_csv_valid
             println(io, "Export phase CSV invalid: ", join(summary.export_handoff.phase_csv_errors, ", "))
+        end
+        if !summary.export_handoff.integrity_valid
+            println(io, "Export integrity invalid: ", join(summary.export_handoff.integrity_errors, ", "))
         end
     else
         println(io, "Export handoff: none")

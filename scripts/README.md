@@ -12,8 +12,6 @@ stabilizes.
 | `canonical/` | maintained compatibility wrappers |
 | `lib/` | transitional implementation used by scripts |
 | `workflows/` | compatibility implementation called by wrappers |
-| `burst/` | burst-machine helpers |
-| `ops/` | local operations helpers |
 
 Old phase, analysis, validation, report-generation, and dedicated research
 drivers were moved out of the active repo on 2026-05-04.

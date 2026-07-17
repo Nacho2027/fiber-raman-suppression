@@ -2,15 +2,10 @@
 Experimental multi-variable spectral pulse-shaping optimizer.
 
 Jointly optimizes any subset of {spectral phase φ(ω), spectral amplitude A(ω),
-pulse energy E} for Raman suppression, through a SINGLE forward-adjoint solve
-per iteration. Mode coefficients {c_m} are stubbed in the API for future
-extension — they are stripped + warned at runtime.
+pulse energy E} for Raman suppression, through a single forward-adjoint solve
+per iteration.
 
-Complements — does NOT replace — the existing single-variable paths:
-  - `scripts/lib/raman_optimization.jl :: optimize_spectral_phase`   (phase-only)
-  - `scripts/lib/amplitude_optimization.jl :: optimize_spectral_amplitude`  (amp-only)
-
-Both remain usable for A/B comparison.
+The phase-only path remains in `scripts/lib/raman_optimization.jl`.
 
 Status: see `agent-docs/current-agent-context/MULTIVAR.md`.
 Historical derivations and schema notes are in the external cleanup archive.
@@ -18,7 +13,7 @@ Historical derivations and schema notes are in the external cleanup archive.
 Entry points:
   - `cost_and_gradient_multivar(x, uω0, fiber, sim, band_mask, cfg)`
   - `optimize_spectral_multivariable(uω0, fiber, sim, band_mask; kwargs...)`
-  - `save_multivar_result(prefix, result_dict)`  /  `load_multivar_result(prefix)`
+  - `save_multivar_result(prefix, result_dict)`
   - `run_multivar_optimization(; kwargs...)` — high-level end-to-end runner
 """
 
@@ -40,7 +35,6 @@ if !(@isdefined _MULTIVAR_OPT_LOADED)
 const _MULTIVAR_OPT_LOADED = true
 
 include(joinpath(@__DIR__, "common.jl"))
-include(joinpath(@__DIR__, "determinism.jl"))
 include(joinpath(@__DIR__, "objective_surface.jl"))
 include(joinpath(@__DIR__, "regularizers.jl"))
 include(joinpath(@__DIR__, "run_artifacts.jl"))
@@ -50,7 +44,7 @@ ensure_deterministic_environment()
 # Constants and config struct (Script Constant Prefix convention: MV_)
 # ─────────────────────────────────────────────────────────────────────────────
 
-const MV_LEGAL_VARS = (:phase, :amplitude, :energy, :gain_tilt, :mode_coeffs)
+const MV_LEGAL_VARS = (:phase, :amplitude, :energy, :gain_tilt)
 const MV_DEFAULT_DELTA_AMP = 0.10     # box half-width for A(ω)
 const MV_DEFAULT_EPS_FD_PHASE  = 1e-5
 const MV_DEFAULT_EPS_FD_AMP    = 1e-6
@@ -73,11 +67,10 @@ Fields
   # regularizers (phase-side, inherited from raman_optimization semantics)
   λ_gdd::Float64
   λ_boundary::Float64
-  # regularizers (amplitude-side, inherited from amplitude_optimization semantics)
+  # amplitude regularizers
   λ_energy::Float64    # energy-preservation penalty λ_E·(E_shaped/E_ref − 1)²
   λ_tikhonov::Float64
   λ_tv::Float64
-  λ_flat::Float64
 """
 Base.@kwdef mutable struct MVConfig
     variables::Tuple{Vararg{Symbol}} = (:phase, :amplitude)
@@ -97,7 +90,6 @@ Base.@kwdef mutable struct MVConfig
     λ_energy::Float64   = 0.0
     λ_tikhonov::Float64 = 0.0
     λ_tv::Float64       = 0.0
-    λ_flat::Float64     = 0.0
 end
 
 """
@@ -123,7 +115,6 @@ function multivar_cost_surface_spec(
                 (cfg.λ_energy > 0, "λ_energy*R_energy"),
                 (cfg.λ_tikhonov > 0, "λ_tikhonov*R_tikhonov"),
                 (cfg.λ_tv > 0, "λ_tv*R_tv"),
-                (cfg.λ_flat > 0, "λ_flat*R_flat"),
             ],
         ),
         trailing_fields = (
@@ -132,20 +123,18 @@ function multivar_cost_surface_spec(
             lambda_energy = cfg.λ_energy,
             lambda_tikhonov = cfg.λ_tikhonov,
             lambda_tv = cfg.λ_tv,
-            lambda_flat = cfg.λ_flat,
         ),
     )
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Variable validation + stripping
+# Variable validation
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
     sanitize_variables(variables) -> Tuple{Vararg{Symbol}}
 
-Enforce that `variables` is a non-empty subset of MV_LEGAL_VARS.
-Strips `:mode_coeffs` with a @warn (deferred to Session C per Decision D4).
+Enforce that `variables` is a non-empty subset of `MV_LEGAL_VARS`.
 """
 function sanitize_variables(variables)
     vars = Symbol[]
@@ -153,10 +142,6 @@ function sanitize_variables(variables)
     for v in variables
         if v ∉ MV_LEGAL_VARS
             throw(ArgumentError("Unknown variable $v. Legal: $(MV_LEGAL_VARS)"))
-        end
-        if v === :mode_coeffs
-            @warn "Variable :mode_coeffs is out of Session A scope (deferred to Session C). Stripping."
-            continue
         end
         if v in seen
             continue
@@ -346,7 +331,7 @@ function cost_and_gradient_multivar(
     parts = mv_unpack(x, cfg, Nt, M, _E_ref)
     φ, A_raw, E = parts.φ, parts.A, parts.E
 
-    # Amplitude parameterization transform (Decision D2 revisited — 2026-04-17):
+    # Amplitude parameterization transform:
     #   :tanh    → search variable is ξ; A = 1 + δ·tanh(ξ), bounded in (1-δ, 1+δ).
     #              ∂A/∂ξ = δ·(1 - tanh²(ξ)) = δ - (A-1)²/δ   (stable via (A-1))
     #   :fminbox → search variable IS A; no transform here (Fminbox enforces bounds).
@@ -498,30 +483,32 @@ function cost_and_gradient_multivar(
         end
     end
 
-    # Amplitude regularizers (inherited from amplitude_optimization.jl)
+    # Energy preservation applies to the shaped launch whether its energy is
+    # changed by amplitude, a scalar energy coordinate, or both.
+    if cfg.λ_energy > 0
+        uω0_abs2 = abs2.(uω0)
+        E_original = sum(uω0_abs2)
+        ratio = α^2 * sum((A .^ 2) .* uω0_abs2) / E_original
+        J_E_pen = cfg.λ_energy * (ratio - 1.0)^2
+        if haskey(off.ranges, :amplitude) || haskey(off.ranges, :gain_tilt)
+            g_E_pen = @. 4.0 * cfg.λ_energy * (ratio - 1.0) * α^2 * A * uω0_abs2 / E_original
+            _accumulate_A_space_gradient!(
+                g, off, g_E_pen, A_amp, A_tilt, dA_amp_dξ, dA_tilt_dξ)
+        end
+        if haskey(off.ranges, :energy)
+            # η = log(E), and ratio is proportional to E.
+            g[first(off.ranges[:energy])] +=
+                2.0 * cfg.λ_energy * (ratio - 1.0) * ratio
+        end
+        J_total += J_E_pen
+        reg_breakdown["J_energy"] = J_E_pen
+    end
+
+    # Amplitude-shape regularizers
     # Accumulate in A-space first, then chain-rule through dA/dξ at the end so
     # the :tanh path gets a consistent ∂J_total/∂ξ.
     if haskey(off.ranges, :amplitude) || haskey(off.ranges, :gain_tilt)
-        uω0_abs2 = abs2.(uω0)
-        E_original = sum(uω0_abs2)
         g_A_reg = zeros(Nt, M)
-
-        # Energy-preservation penalty (soft): matches amplitude_cost semantics
-        if cfg.λ_energy > 0
-            S_A = sum((A .^ 2) .* uω0_abs2)
-            E_shaped = (α^2) * S_A
-            ratio = E_shaped / E_original
-            J_E_pen = cfg.λ_energy * (ratio - 1.0)^2
-            # ∂(ratio)/∂A = 2·α²·A·|uω0|² / E_original
-            g_E_pen = @. 2.0 * cfg.λ_energy * (ratio - 1.0) * (2.0 * α^2 * A * uω0_abs2) / E_original
-            g_A_reg .+= g_E_pen
-            if haskey(off.ranges, :energy)
-                # ratio is proportional to E, so d(ratio)/dη = ratio.
-                g[first(off.ranges[:energy])] += 2.0 * cfg.λ_energy * (ratio - 1.0) * ratio
-            end
-            J_total += J_E_pen
-            reg_breakdown["J_energy"] = J_E_pen
-        end
 
         if cfg.λ_tikhonov > 0
             deviation = A .- 1.0
@@ -612,7 +599,7 @@ end
         φ0=nothing, A0=nothing, E0=nothing,
         δ_bound=MV_DEFAULT_DELTA_AMP,
         λ_gdd=0.0, λ_boundary=0.0,
-        λ_energy=0.0, λ_tikhonov=0.0, λ_tv=0.0, λ_flat=0.0,
+        λ_energy=0.0, λ_tikhonov=0.0, λ_tv=0.0,
         log_cost=true,
         store_trace=true)
 
@@ -636,7 +623,7 @@ function optimize_spectral_multivariable(
     δ_bound::Real=MV_DEFAULT_DELTA_AMP,
     amp_param::Symbol=:tanh,
     λ_gdd::Real=0.0, λ_boundary::Real=0.0,
-    λ_energy::Real=0.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0, λ_flat::Real=0.0,
+    λ_energy::Real=0.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0,
     log_cost::Bool=true,
     store_trace::Bool=true,
 )
@@ -646,7 +633,7 @@ function optimize_spectral_multivariable(
 
     E_ref = sum(abs2, uω0)
 
-    # Construct config and scaling (preconditioning per Decision D5).
+    # Construct config and per-variable preconditioning.
     # For :tanh, the search variable ξ is already O(1); s_A = 1.0 is correct.
     # For :fminbox, search variable is raw A with perturbation scale δ_bound → s_A=1/δ.
     s_A_val = if :amplitude in vars
@@ -667,7 +654,6 @@ function optimize_spectral_multivariable(
         λ_energy = λ_energy,
         λ_tikhonov = λ_tikhonov,
         λ_tv = λ_tv,
-        λ_flat = λ_flat,
     )
     scale = build_scaling_vector(cfg, Nt, M)
 
@@ -687,8 +673,7 @@ function optimize_spectral_multivariable(
     y0 = scale .* x0   # scaled search variable (L-BFGS operates on y)
 
     # Fiber mutation guard: caller should set zsave = nothing but we enforce.
-    # (Mutating once at the TOP is fine — amplitude_optimization.jl does the
-    # deepcopy per call; here we save the GC pressure by enforcing up front.)
+    # Mutate once up front to avoid a deepcopy per call.
     fiber["zsave"] = nothing
 
     # Optim.jl interface in scaled space
@@ -815,7 +800,7 @@ function optimize_spectral_multivariable(
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Persistence: JLD2 payload + JSON sidecar (Decision D6, schema doc)
+# Persistence: JLD2 payload + JSON sidecar
 # ─────────────────────────────────────────────────────────────────────────────
 
 """
@@ -898,7 +883,6 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         gain_tilt_search = Float64(get(outcome, :gain_tilt_search, 0.0)),
         E_opt = E_opt,
         E_ref = E_ref,
-        c_opt = ComplexF64[1.0 + 0im for _ in 1:M],  # stub per Decision D4
         uomega0 = Matrix{ComplexF64}(get(meta, :uomega0, zeros(ComplexF64, Nt, M))),
         # metrics
         J_before = Float64(get(meta, :J_before, NaN)),
@@ -918,7 +902,6 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "lambda_energy"   => cfg.λ_energy,
             "lambda_tikhonov" => cfg.λ_tikhonov,
             "lambda_tv"       => cfg.λ_tv,
-            "lambda_flat"     => cfg.λ_flat,
         ),
         cost_surface = cost_surface_payload,
         preconditioning_s = Dict{String,Float64}(
@@ -960,7 +943,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         "scalar_controls" => control_scalars,
         "cost_surface" => cost_surface_payload,
         "shaped_input_formula" =>
-            "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * c_m * uomega0(omega); " *
+            "u_shaped(omega) = alpha * A(omega) * exp(i*phi(omega)) * uomega0(omega); " *
             "alpha = sqrt(E_opt / E_ref)",
         "outputs" => Dict(
             "phase"     => Dict("storage_key" => "phi_opt", "shape" => [Nt, M], "units" => "rad"),
@@ -969,7 +952,6 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "scalar_controls" => Dict("storage_key" => "control_scalars", "units" => "variable-specific"),
             "energy_E"  => Dict("storage_key" => "E_opt", "units" => "arb."),
             "energy_reference" => Dict("storage_key" => "E_ref", "units" => "arb."),
-            "mode_coeffs" => Dict("storage_key" => "c_opt", "shape" => [M], "units" => "dimensionless complex"),
         ),
         "metrics" => Dict(
             "J_before" => Float64(get(meta, :J_before, NaN)),
@@ -992,47 +974,6 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     return (jld2=jld2_path, json=json_path)
 end
 
-"""
-    load_multivar_result(prefix) -> NamedTuple
-
-Read both `<prefix>_result.jld2` and `<prefix>_slm.json`. Returns a NamedTuple
-mirroring the save format with a `.sidecar` field for the JSON contents.
-"""
-function load_multivar_result(prefix::AbstractString)
-    jld2_path = "$(prefix)_result.jld2"
-    json_path = "$(prefix)_slm.json"
-    @assert isfile(jld2_path) "missing $jld2_path"
-    @assert isfile(json_path) "missing $json_path"
-
-    payload = jldopen(jld2_path, "r") do f
-        Dict(k => read(f, k) for k in keys(f))
-    end
-    sidecar = JSON3.read(read(json_path, String))
-
-    return (
-        phi_opt = payload["phi_opt"],
-        amp_opt = payload["amp_opt"],
-        gain_tilt_opt = haskey(payload, "gain_tilt_opt") ? payload["gain_tilt_opt"] : 0.0,
-        gain_tilt_search = haskey(payload, "gain_tilt_search") ? payload["gain_tilt_search"] : 0.0,
-        E_opt = payload["E_opt"],
-        E_ref = payload["E_ref"],
-        c_opt = payload["c_opt"],
-        J_after = payload["J_after"],
-        J_before = payload["J_before"],
-        delta_J_dB = payload["delta_J_dB"],
-        converged = payload["converged"],
-        iterations = payload["iterations"],
-        wall_time_s = payload["wall_time_s"],
-        convergence_history = payload["convergence_history"],
-        regularizers = payload["regularizers"],
-        cost_surface = payload["cost_surface"],
-        preconditioning_s = payload["preconditioning_s"],
-        variables_enabled = payload["variables_enabled"],
-        payload = payload,
-        sidecar = sidecar,
-    )
-end
-
 # ─────────────────────────────────────────────────────────────────────────────
 # High-level runner (analogous to run_optimization in raman_optimization.jl)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1053,11 +994,12 @@ function run_multivar_optimization(;
     fiber_name::AbstractString="Custom",
     max_iter::Int=50,
     validate::Bool=true,
+    store_trace::Bool=true,
     δ_bound::Real=MV_DEFAULT_DELTA_AMP,
     amp_param::Symbol=:tanh,
     φ0=nothing, A0=nothing,
     λ_gdd::Real=1e-4, λ_boundary::Real=1.0,
-    λ_energy::Real=1.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0, λ_flat::Real=0.0,
+    λ_energy::Real=1.0, λ_tikhonov::Real=0.0, λ_tv::Real=0.0,
     log_cost::Bool=true,
     objective_kind::Symbol=:raman_band,
     solver_reltol::Real=1e-8,
@@ -1104,8 +1046,9 @@ function run_multivar_optimization(;
         φ0 = φ0, A0 = A0,
         λ_gdd = λ_gdd, λ_boundary = λ_boundary,
         λ_energy = λ_energy, λ_tikhonov = λ_tikhonov,
-        λ_tv = λ_tv, λ_flat = λ_flat,
+        λ_tv = λ_tv,
         log_cost = log_cost,
+        store_trace = store_trace,
     )
 
     # Metrics for meta dict.

@@ -1,8 +1,8 @@
 # Template: experimental multimode planning config.
 #
-# This is not a local front-layer execution path yet. Use it to validate a
-# proposed MMF regime and print a compute plan, then run the dedicated MMF
-# workflow on suitable compute.
+# Validate and plan this high-resource MMF run locally. Execute through the
+# same front layer on suitable compute only after explicitly passing
+# `--heavy-ok`.
 
 id = "my_grin50_mmf_phase_plan"
 description = "GRIN-50 multimode shared-phase Raman planning run."
@@ -52,17 +52,13 @@ store_trace = true
 bundle = "mmf_planning"
 save_payload = true
 save_sidecar = true
-update_manifest = false
 write_trust_report = false
 write_standard_images = true
 export_phase_handoff = false
 
 [verification]
-mode = "burst_required"
+mode = "high_resource"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]

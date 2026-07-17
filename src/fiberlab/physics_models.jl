@@ -107,12 +107,12 @@ function _single_mode_low_level_setup(fiber_spec::Fiber, pulse::Pulse, grid::Gri
     fiber_spec.regime == :single_mode || throw(ArgumentError(
         "single_mode_fiber_problem requires fiber.regime = :single_mode"))
     preset = _single_mode_preset(fiber_spec.preset)
-    nt, time_window_ps = _resolved_grid(grid, fiber_spec, pulse, preset)
+    resolved_grid = resolve_grid(fiber_spec, pulse, grid; wavelength_m=wavelength_m)
     sim = get_disp_sim_params(
         Float64(wavelength_m),
         1,
-        nt,
-        time_window_ps,
+        resolved_grid.nt,
+        resolved_grid.time_window_ps,
         fiber_spec.beta_order,
     )
     fiber = get_disp_fiber_params_user_defined(
@@ -275,17 +275,6 @@ single_mode_fiber_problem(experiment::Experiment; kwargs...) =
         kwargs...,
     )
 
-function _single_mode_grid_fiber(fiber_spec::Fiber)
-    haskey(SINGLE_MODE_FIBER_PRESETS, fiber_spec.preset) && return fiber_spec
-    return Fiber(;
-        regime = :single_mode,
-        preset = :SMF28,
-        length_m = fiber_spec.length_m,
-        power_w = fiber_spec.power_w,
-        beta_order = fiber_spec.beta_order,
-    )
-end
-
 function _validated_multimode_launch(initial_modes, mode_count::Int)
     initial_modes !== nothing || throw(ArgumentError(
         "fiber_problem with multimode package-built setup requires explicit initial_modes"))
@@ -322,9 +311,10 @@ Build a direct FiberLab propagation problem.
 
 For `modes == 1`, FiberLab can construct the package-native setup from a
 `Fiber`, `Pulse`, and `Grid`. For `modes > 1`, callers must provide explicit
-multimode physics (`dispersion`, `gamma_tensor`, and optionally
-`initial_modes`) or pass the low-level `(uω0, fiber, sim)` objects directly.
-This keeps multimode support real rather than silently inventing fiber physics.
+multimode physics (`dispersion`, `gamma_tensor`, and `initial_modes`) on an
+exact/fixed grid, or pass the low-level
+`(uω0, fiber, sim)` objects directly. Sampled dispersion is never reinterpreted
+after automatic grid changes.
 """
 function fiber_problem(fiber_spec::Fiber;
                        modes::Integer=1,
@@ -365,9 +355,10 @@ function fiber_problem(fiber_spec::Fiber;
         )
     end
 
-    grid_fiber = _single_mode_grid_fiber(fiber_spec)
-    base_preset = _single_mode_preset(grid_fiber.preset)
-    nt, time_window_ps = _resolved_grid(grid, grid_fiber, pulse, base_preset)
+    grid.policy in (:exact, :fixed) || throw(ArgumentError(
+        "fiber_problem with explicit sampled dispersion requires grid.policy=:exact or :fixed"))
+    resolved_grid = resolve_sampling_grid(grid; wavelength_m=Float64(wavelength_m))
+    nt, time_window_ps = resolved_grid.nt, resolved_grid.time_window_ps
     sim = get_disp_sim_params(
         Float64(wavelength_m),
         mode_count,
@@ -388,7 +379,8 @@ function fiber_problem(fiber_spec::Fiber;
     )
     raman = _single_oscillator_raman_fields(
         sim;
-        fR = base_preset.fR,
+        fR = haskey(SINGLE_MODE_FIBER_PRESETS, fiber_spec.preset) ?
+            _single_mode_preset(fiber_spec.preset).fR : _SILICA_RAMAN_FRACTION,
         τ1 = _SILICA_RAMAN_TAU1_FS,
         τ2 = _SILICA_RAMAN_TAU2_FS,
     )
@@ -730,13 +722,22 @@ end
 function _field_objective_from_cost_adjoint(kind::Symbol, cost_adjoint::Function,
                                             log_cost::Bool,
                                             problem::FiberFieldProblem,
-                                            figure_hooks = (:field_summary, :convergence_trace))
+                                            figure_hooks = nothing;
+                                            contract_kind::Symbol=kind)
+    hooks = if figure_hooks === nothing
+        contract = objective_contract(contract_kind)
+        contract === nothing ? (:field_summary, :convergence_trace) : contract.figure_hooks
+    else
+        Tuple(Symbol(hook) for hook in figure_hooks)
+    end
     return ObjectiveMap(
         _OBJECTIVE_BINDING_TOKEN,
         kind;
         cost = field -> first(_maybe_log_cost(cost_adjoint(field)..., log_cost)),
         terminal_adjoint = (field, context) -> last(_maybe_log_cost(cost_adjoint(field)..., log_cost)),
-        figure_hooks = Tuple(Symbol(hook) for hook in figure_hooks),
+        figure_hooks = hooks,
+        cost_scale = log_cost ? :db : :linear,
+        contract_kind = contract_kind,
         problem_sha256 = _resolved_problem_signature(problem),
     )
 end
@@ -757,6 +758,8 @@ function raman_band_objective(problem::FiberFieldProblem;
         field -> _field_spectral_band_cost(field, mask),
         log_cost,
         problem,
+        nothing;
+        contract_kind = :raman_band,
     )
 end
 
@@ -768,7 +771,8 @@ function mode_sum_objective(problem::FiberFieldProblem; log_cost::Bool=false,
         field -> _field_spectral_band_cost(field, mask),
         log_cost,
         problem,
-        (:field_summary, :mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
+        nothing;
+        contract_kind = :mmf_sum,
     )
 end
 
@@ -781,10 +785,20 @@ function fundamental_mode_objective(problem::FiberFieldProblem;
         field -> _field_fundamental_band_cost(field, mask),
         log_cost,
         problem,
-        (:field_summary, :mode_resolved_spectra, :convergence_trace),
+        nothing;
+        contract_kind = :mmf_fundamental,
     )
 end
 
+"""
+    worst_mode_objective(problem; log_cost=false, worst_mode_tau=50.0, name=:worst_mode)
+
+Create the differentiable worst-mode optimization objective. Its scalar cost
+is a normalized log-sum-exp proxy over nonzero-energy modes and obeys
+`max(leakage) - log(K)/worst_mode_tau ≤ cost ≤ max(leakage)`. Per-mode
+artifact reporting uses the true leakage fractions and true maximum instead of
+presenting this smooth proxy as a measurement.
+"""
 function worst_mode_objective(problem::FiberFieldProblem;
                               log_cost::Bool=false,
                               worst_mode_tau::Real=50.0,
@@ -799,7 +813,8 @@ function worst_mode_objective(problem::FiberFieldProblem;
         ),
         log_cost,
         problem,
-        (:field_summary, :mode_resolved_spectra, :per_mode_leakage_table, :convergence_trace),
+        nothing;
+        contract_kind = :mmf_worst_mode,
     )
 end
 
@@ -812,6 +827,8 @@ function raman_peak_objective(problem::FiberFieldProblem;
         field -> _field_spectral_peak_cost(field, mask),
         log_cost,
         problem,
+        nothing;
+        contract_kind = :raman_peak,
     )
 end
 
@@ -823,6 +840,8 @@ function temporal_width_objective(problem::FiberFieldProblem;
         field -> _field_temporal_width_cost(field, problem.sim),
         log_cost,
         problem,
+        nothing;
+        contract_kind = :temporal_width,
     )
 end
 

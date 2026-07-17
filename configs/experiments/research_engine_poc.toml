@@ -1,14 +1,12 @@
-# Proof-of-concept front-layer schema sketch.
+# Maintained supported single-mode benchmark.
 #
-# This file is intentionally illustrative. It documents the proposed user-facing
-# shape for a future configurable research-engine entry point:
+# Run or inspect this experiment through the general front layer:
 #
 #     julia --project=. -t auto scripts/canonical/run_experiment.jl \
 #         configs/experiments/research_engine_poc.toml
 #
-# The idea is to keep the top-level questions stable across single-mode,
-# long-fiber, multimode, and multivariable paths while letting each regime
-# validate its own allowed capabilities.
+# The schema keeps top-level questions stable across regimes while each regime
+# validates its own allowed capabilities.
 
 id = "smf28_phase_lbfgs_poc"
 description = "POC front-layer config: supported single-mode phase-only Raman suppression."
@@ -58,7 +56,6 @@ store_trace = true
 bundle = "standard"
 save_payload = true
 save_sidecar = true
-update_manifest = true
 write_trust_report = true
 write_standard_images = true
 export_phase_handoff = false
@@ -66,9 +63,6 @@ export_phase_handoff = false
 [verification]
 mode = "standard"
 block_on_failed_checks = true
-gradient_check = false
-taylor_check = false
-exact_grid_replay = false
 artifact_validation = true
 
 [export]
@@ -85,58 +79,8 @@ include_group_delay = true
 # - [problem] preset, L_fiber, P_cont, Nt, time_window, grid_policy
 # - [controls] variables and parameterization
 # - [objective] objective family and regularizer weights
-# - [solver] solver family and iteration/checkpoint settings
+# - [solver] solver family and iteration settings
 # - [artifacts]/[verification]/[export] output and validation policy
 #
 # New mathematics still belongs in code first. Once a variable/objective/solver
 # is implemented and tested, it should become selectable here by name.
-
-# Future regimes should keep the SAME top-level sections and change only the
-# regime-specific fields under [problem] plus the allowed control/objective set.
-#
-# Example direction:
-#
-# [problem]
-# regime = "long_fiber"
-# preset = "SMF28_beta2_only"
-# L_fiber = 100.0
-# P_cont = 0.05
-# beta_order = 2
-# Nt = 32768
-# time_window = 160.0
-# grid_policy = "exact"
-# warm_start = "results/raman/phase16/100m_seed.jld2"
-#
-# [controls]
-# variables = ["phase"]
-# parameterization = "full_grid"
-# initialization = "warm_start"
-#
-# [objective]
-# kind = "raman_band"
-#
-# [problem]
-# regime = "multimode"
-# preset = "GRIN_50"
-# L_fiber = 2.0
-# P_cont = 0.2
-# Nt = 4096
-# time_window = 12.0
-# grid_policy = "auto_if_undersized"
-#
-# [controls]
-# variables = ["phase"]
-# parameterization = "shared_across_modes"
-#
-# [objective]
-# kind = "mmf_sum"
-#
-# [export]
-# enabled = true
-# profile = "santec_csv_v1"
-#
-# or
-#
-# [export]
-# enabled = true
-# profile = "holoeye_image_v1"

@@ -1,5 +1,6 @@
 using Test
 using FiberLab
+using JSON3
 
 include(joinpath(_ROOT, "scripts", "lib", "experiment_runner.jl"))
 include(joinpath(_ROOT, "scripts", "lib", "results_index.jl"))
@@ -42,10 +43,16 @@ function _acceptance_payload()
     )
 end
 
-function _write_standard_image_placeholders(prefix::AbstractString)
+function _write_standard_test_images(prefix::AbstractString)
+    seed = string(prefix, "_seed.png")
+    figure, axis = FiberLab.PyPlot.subplots(figsize=(2, 2))
+    axis.plot([0.0, 1.0], [1.0, 0.0], color="tab:orange")
+    figure.savefig(seed, dpi=72)
+    FiberLab.PyPlot.close(figure)
     for suffix in REQUIRED_STANDARD_IMAGE_SUFFIXES
-        write(string(prefix, suffix), "")
+        cp(seed, string(prefix, suffix); force=true)
     end
+    rm(seed; force=true)
 end
 
 @testset "Research engine acceptance harness" begin
@@ -70,12 +77,9 @@ end
 
         FiberLab.save_run(artifact_path, _acceptance_payload())
         cp(supported_spec.config_path, config_copy; force=true)
-        write(string(save_prefix, "_trust.md"), "# trust\n\nPASS\n")
-        _write_standard_image_placeholders(save_prefix)
-
-        exported = export_run_bundle(run_dir, joinpath(run_dir, "export_handoff"))
-        export_report = validate_experiment_export_bundle(supported_spec, exported)
-        @test export_report.complete
+        write(string(save_prefix, "_trust.md"),
+            "# Numerical Trust Report\n\n- Overall verdict: **PASS**\n")
+        _write_standard_test_images(save_prefix)
 
         run_bundle = (
             spec = supported_spec,
@@ -84,9 +88,31 @@ end
             config_copy = config_copy,
             artifact_path = artifact_path,
         )
-        artifact_report = validate_experiment_artifacts(run_bundle)
+        finalized = _finalize_experiment_run(
+            run_bundle;
+            run_context=:run,
+            run_command="./fiberlab run research_engine_export_smoke",
+        )
+        exported = finalized.exported
+        export_report = finalized.export_validation
+        artifact_report = finalized.artifact_validation
         @test artifact_report.complete
         @test artifact_report.standard_images.complete
+        @test export_report.complete
+        @test isfile(joinpath(exported.output_dir, "source_run_manifest.json"))
+
+        export_metadata = JSON3.read(read(exported.metadata_json, String))
+        @test String(export_metadata.run_context) == "run"
+        @test String(export_metadata.run_command) ==
+            "./fiberlab run research_engine_export_smoke"
+        @test String(export_metadata.provenance.source_run_manifest) ==
+            "source_run_manifest.json"
+        @test String(export_metadata.integrity.source_run_manifest.sha256) ==
+            export_file_sha256(joinpath(exported.output_dir, "source_run_manifest.json"))
+
+        final_manifest = JSON3.read(read(finalized.run_manifest_path, String))
+        @test final_manifest.export_handoff.complete == true
+        @test String(final_manifest.run_context) == "run"
 
         run_gate = lab_ready_run_report(run_dir; require_export=true)
         @test run_gate.pass
@@ -116,7 +142,9 @@ end
         @test validate_experiment_spec(spec) isa NamedTuple
         @test run_experiment_main(["--dry-run", spec_id]).id == spec.id
         @test run_experiment_main(["--compute-plan", spec_id]).id == spec.id
-        @test lab_ready_config_report(spec_id).pass
+        config_gate = lab_ready_config_report(spec_id)
+        @test !config_gate.pass
+        @test "promotion_stage_smoke" in config_gate.blockers
     end
 
     for spec_id in ("smf28_longfiber_phase_poc", "grin50_mmf_phase_sum_poc")

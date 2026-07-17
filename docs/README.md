@@ -16,7 +16,6 @@ Human-facing docs for the FiberLab API.
 | Doc | Use it for |
 |---|---|
 | [Public API](reference/api.md) | Notebook-facing types and functions |
-| [Julia File Inventory](reference/julia-file-inventory.md) | What each tracked Julia file does and what still needs cleanup |
 | [Adjoint Inverse Design](architecture/adjoint-inverse-design.md) | Architecture contract for controls, objectives, adjoints, and figures |
 | [Repo Navigation](architecture/repo-navigation.md) | Where code belongs |
 | [Output Format](architecture/output-format.md) | Result bundles and artifacts |
@@ -31,12 +30,6 @@ These are supporting notes, not the main starting point:
 
 ## Archive Boundary
 
-Historical planning, old reports, bulky artifacts, notebooks, raw results, and
-superseded research drivers were moved out of the active repo on 2026-05-04:
-
-```text
-/Users/ignaciojlizama/RiveraLab/fiber-raman-results-vault/active-tree-archive-20260504/
-```
-
-Use Git history and the external vault for archaeology. Do not rebuild active
-docs by copying old planning material back into the repo.
+Historical planning, bulky artifacts, and superseded drivers are outside the
+active tree. Use Git history or the external results vault for archaeology;
+do not copy stale planning material back into the supported surface.
