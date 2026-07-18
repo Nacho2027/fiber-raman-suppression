@@ -19,6 +19,7 @@ end
     summary = summarize(experiment)
     @test summary.id == "api_smf28_phase"
     @test summary.regime == :single_mode
+    @test summary.raman_fraction_override === nothing
     @test summary.variables == (:phase,)
     @test summary.max_iter == 7
 
@@ -190,6 +191,21 @@ end
         ),
         field,
     )
+    unsupported_error = try
+        terminal_adjoint(
+            ObjectiveMap(
+                :unsupported_state;
+                cost = state -> 0.0,
+                terminal_adjoint = (state, context) -> state,
+            ),
+            Dict(:field => field),
+        )
+        nothing
+    catch err
+        err
+    end
+    @test unsupported_error isa ArgumentError
+    @test occursin("unsupported terminal-state type", sprint(showerror, unsupported_error))
 end
 
 @testset "FiberLab control spaces" begin
@@ -477,6 +493,13 @@ end
         :identity_scalar;
         forward = (decoded_control, context) -> [decoded_control],
         physical_gradient = (decoded_control, terminal_seed, context) -> terminal_seed,
+    )
+    @test model.provenance === nothing
+    @test_throws ArgumentError AdjointModel(
+        :opaque_provenance;
+        forward = (decoded, context) -> decoded,
+        physical_gradient = (decoded, seed, context) -> seed,
+        provenance = (implementation = identity,),
     )
     experiment = Experiment(
         fiber,

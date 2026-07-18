@@ -504,6 +504,8 @@ function run_reduced_phase_optimization(;
         trust_report = trust_report,
         trust_report_md = trust_md_path,
         band_mask = band_mask,
+        raman_response = raman_response_identity(
+            get(kwargs, :raman_fraction, nothing), fiber),
     )
     jld2_path = "$(save_prefix)_result.jld2"
     sidecar_path = FiberLab.save_run(jld2_path, result_payload)

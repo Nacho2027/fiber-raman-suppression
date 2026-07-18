@@ -666,24 +666,70 @@ has_terminal_adjoint(::AbstractFiberObjective) = false
 has_terminal_adjoint(::AdjointObjective) = true
 has_terminal_adjoint(objective::ObjectiveMap) = objective.terminal_adjoint_function !== nothing
 
-function terminal_adjoint(objective::AdjointObjective, final_state, context=nothing)
-    adjoint = objective.terminal_adjoint_function(final_state, context)
-    size(adjoint) == size(final_state) || throw(ArgumentError(
-        "terminal adjoint shape $(size(adjoint)) does not match final state shape $(size(final_state))"))
-    all(isfinite, real.(adjoint)) && all(isfinite, imag.(adjoint)) || throw(ArgumentError(
+function _validate_terminal_structure(final_state, adjoint, path::AbstractString="state")
+    if final_state isa NamedTuple
+        adjoint isa NamedTuple || throw(ArgumentError(
+            "terminal adjoint at $path must be a NamedTuple"))
+        propertynames(adjoint) == propertynames(final_state) || throw(ArgumentError(
+            "terminal adjoint fields $(propertynames(adjoint)) do not match $path fields $(propertynames(final_state))"))
+        for name in propertynames(final_state)
+            _validate_terminal_structure(
+                getproperty(final_state, name),
+                getproperty(adjoint, name),
+                "$path.$name",
+            )
+        end
+        return nothing
+    end
+    if final_state isa Tuple
+        adjoint isa Tuple && length(adjoint) == length(final_state) || throw(ArgumentError(
+            "terminal adjoint tuple at $path does not match the final state"))
+        for index in eachindex(final_state)
+            _validate_terminal_structure(final_state[index], adjoint[index], "$path[$index]")
+        end
+        return nothing
+    end
+    if final_state isa AbstractArray
+        adjoint isa AbstractArray || throw(ArgumentError(
+            "terminal adjoint at $path must be an array"))
+        size(adjoint) == size(final_state) || throw(ArgumentError(
+            "terminal adjoint shape $(size(adjoint)) does not match $path shape $(size(final_state))"))
+        return nothing
+    end
+    if final_state isa Number
+        adjoint isa Number || throw(ArgumentError(
+            "terminal adjoint at $path must be a scalar"))
+        return nothing
+    end
+    throw(ArgumentError(
+        "unsupported terminal-state type `$(typeof(final_state))` at $path; " *
+        "use numbers, arrays, tuples, or named tuples"))
+end
+
+_finite_terminal_value(value::Number) = isfinite(real(value)) && isfinite(imag(value))
+_finite_terminal_value(value::AbstractArray) = all(_finite_terminal_value, value)
+_finite_terminal_value(value::NamedTuple) =
+    all(name -> _finite_terminal_value(getproperty(value, name)), propertynames(value))
+_finite_terminal_value(value::Tuple) = all(_finite_terminal_value, value)
+_finite_terminal_value(value) = false
+
+function _validated_terminal_adjoint(objective::AbstractFiberObjective, final_state, adjoint)
+    _validate_terminal_structure(final_state, adjoint)
+    _finite_terminal_value(adjoint) || throw(ArgumentError(
         "terminal adjoint for objective `$(objective.name)` contains non-finite values"))
     return adjoint
+end
+
+function terminal_adjoint(objective::AdjointObjective, final_state, context=nothing)
+    adjoint = objective.terminal_adjoint_function(final_state, context)
+    return _validated_terminal_adjoint(objective, final_state, adjoint)
 end
 
 function terminal_adjoint(objective::ObjectiveMap, final_state, context=nothing)
     objective.terminal_adjoint_function === nothing && throw(ArgumentError(
         "objective `$(objective.name)` does not declare a terminal adjoint"))
     adjoint = objective.terminal_adjoint_function(final_state, context)
-    size(adjoint) == size(final_state) || throw(ArgumentError(
-        "terminal adjoint shape $(size(adjoint)) does not match final state shape $(size(final_state))"))
-    all(isfinite, real.(adjoint)) && all(isfinite, imag.(adjoint)) || throw(ArgumentError(
-        "terminal adjoint for objective `$(objective.name)` contains non-finite values"))
-    return adjoint
+    return _validated_terminal_adjoint(objective, final_state, adjoint)
 end
 
 function terminal_adjoint(objective::ScalarObjective, final_state, context=nothing)

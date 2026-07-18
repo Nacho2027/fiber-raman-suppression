@@ -1,6 +1,7 @@
 """
-Shared Raman suppression optimization library used by the maintained workflow
-surface.
+Shared red-band phase-optimization library used by the maintained workflow
+surface. Its masked objective is a numerical regression metric, not causal
+evidence of Raman suppression.
 
 This file provides `run_optimization`, cost/gradient helpers, result payload
 assembly, and plotting glue for single-mode spectral-phase optimization.
@@ -349,6 +350,7 @@ function build_raman_result_payload(;
     trust_report,
     trust_report_md::AbstractString,
     band_mask,
+    raman_response,
 )
     return (
         # Run identification
@@ -386,6 +388,7 @@ function build_raman_result_payload(;
         bc_output_ok = bc_output_ok,
         trust_report = trust_report,
         trust_report_md = String(trust_report_md),
+        raman_response = raman_response,
         # Simulation context
         band_mask = band_mask,
         sim_Dt = sim["Δt"],
@@ -579,6 +582,8 @@ function run_optimization(; max_iter=20, validate=true, save_prefix="raman_opt",
         trust_report = trust_report,
         trust_report_md = trust_md_path,
         band_mask = band_mask,
+        raman_response = raman_response_identity(
+            get(kwargs, :raman_fraction, nothing), fiber),
     )
     sidecar_path = FiberLab.save_run(jld2_path, result_payload)
     @info "Saved JSON sidecar to $sidecar_path"

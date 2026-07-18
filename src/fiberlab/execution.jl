@@ -105,6 +105,7 @@ function _plan_grid_resolution(experiment::Experiment)
         length_m=experiment.fiber.length_m,
         power_w=experiment.fiber.power_w,
         beta_order=experiment.fiber.beta_order,
+        raman_fraction=experiment.fiber.raman_fraction,
     ) : experiment.fiber
     initial = try
         single_mode_backend ?

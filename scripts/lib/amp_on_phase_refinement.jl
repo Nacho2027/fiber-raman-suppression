@@ -153,6 +153,7 @@ function run_amp_on_phase_refinement(;
         :rep_rate_Hz => 80.5e6,
         :gamma => fiber["γ"][1],
         :betas => haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        :raman_response => raman_response_identity(nothing, fiber),
         :time_window_ps => sim["Nt"] * sim["Δt"],
         :sim_Dt => sim["Δt"],
         :sim_omega0 => sim["ω0"],

@@ -103,6 +103,14 @@ end
                 gain_tilt_opt = 0.05,
                 gain_tilt_search = 0.05,
             )
+            provenance_sim = FiberLab.get_disp_sim_params(1550e-9, 1, 8, 2.0, 2)
+            provenance_fiber = FiberLab.get_disp_fiber_params_user_defined(
+                1.0,
+                provenance_sim;
+                fR = 0.27,
+                gamma_user = 1.0e-3,
+                betas_user = [-2.6e-26],
+            )
             saved = save_multivar_result(joinpath(dir, "opt"), outcome; meta = Dict{Symbol,Any}(
                 :objective_kind => :temporal_peak_scalar,
                 :objective_backend => :scalar_extension,
@@ -115,6 +123,7 @@ end
                 :fwhm_fs => 185.0,
                 :rep_rate_Hz => 80.5e6,
                 :gamma => 1.0e-3,
+                :raman_response => raman_response_identity(0.27, provenance_fiber),
                 :time_window_ps => 1.0,
                 :J_before => 0.6,
                 :J_after_lin => 0.5,
@@ -126,6 +135,16 @@ end
             @test sidecar["cost_surface"]["objective_label"] == "temporal peak scalar test objective"
             @test sidecar["cost_surface"]["surface"] == "extension:temporal_peak_scalar"
             @test sidecar["generator"] == "scripts/lib/multivar_optimization.jl"
+            response = sidecar["fiber"]["raman_response"]
+            @test response["requested_fraction"] == 0.27
+            @test response["resolved_fraction"] == 0.27
+            @test response["model"] == "blow_wood_single_damped_oscillator_v1"
+            @test response["tau1_fs"] == 12.2
+            @test response["tau2_fs"] == 32.0
+            @test !haskey(response, "one_m_fR")
+            stored = JLD2.load(saved.jld2)
+            @test stored["raman_response"]["resolved_fraction"] == 0.27
+            @test !haskey(stored["raman_response"], "one_m_fR")
         end
     end
 

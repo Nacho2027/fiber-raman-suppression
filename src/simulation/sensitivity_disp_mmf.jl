@@ -300,9 +300,10 @@ ODESolution object. The adjoint field at z=0 is obtained via `sol(0)`, which giv
 λ̃(ω,0) — the sensitivity of the cost to perturbations in the input field.
 
 # Solver choice
-Uses Tsit5 at reltol=1e-8, matching the forward solver. The adjoint accuracy is
-bounded by Tsit5's 4th-order interpolant regardless of adjoint solver order, so
-using a higher-order solver (Vern9) or tighter tolerance (1e-10) provides no benefit.
+Uses Tsit5 with the configured relative tolerance. The configured `abstol` is
+scaled by the largest terminal-adjoint magnitude because this ODE is
+real-linear and homogeneous in the adjoint. That preserves numerical accuracy
+when an aggregate objective multiplies a terminal seed by a small or large scalar.
 L-BFGS requires only ~1e-4 relative gradient accuracy (Xie, Byrd, Nocedal 2020).
 """
 function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
@@ -314,8 +315,18 @@ function solve_adjoint_disp_mmf(λωL, ũω, fiber, sim)
     prob_adjoint_disp_mmf = ODEProblem(adjoint_disp_mmf!, λ̃ωL, (fiber["L"], 0), p_adjoint_disp_mmf)
     reltol = Float64(get(fiber, "reltol", 1e-8))
     abstol = Float64(get(fiber, "abstol", 1e-6))
+    isfinite(reltol) && reltol > 0 || throw(ArgumentError(
+        "adjoint reltol must be positive and finite"))
+    isfinite(abstol) && abstol > 0 || throw(ArgumentError(
+        "adjoint abstol must be positive and finite"))
+    all(isfinite, λ̃ωL) || throw(ArgumentError(
+        "adjoint terminal condition must be finite"))
+    terminal_scale = maximum(abs, λ̃ωL)
+    scaled_abstol = iszero(terminal_scale) ? abstol : abstol * terminal_scale
+    isfinite(scaled_abstol) && scaled_abstol > 0 || throw(ArgumentError(
+        "scaled adjoint abstol must be positive and finite"))
     sol_adjoint_disp_mmf = solve(prob_adjoint_disp_mmf, Tsit5(), reltol=reltol,
-        abstol=abstol, saveat=(0, fiber["L"]))
+        abstol=scaled_abstol, saveat=(0, fiber["L"]))
 
     return sol_adjoint_disp_mmf
 end

@@ -65,6 +65,7 @@ function _canonical_sidecar_metadata(result, jld2_path::AbstractString;
             :n_iter => get(payload, :iterations, nothing),
             :converged => get(payload, :converged, nothing),
             :seed => get(payload, :seed, 0),
+            :raman_response => get(payload, :raman_response, nothing),
         )
     end
 

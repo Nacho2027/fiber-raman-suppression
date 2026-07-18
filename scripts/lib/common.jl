@@ -422,6 +422,34 @@ function _validate_single_mode_setup(;
     @assert length(betas_user) ≥ 1 "need at least β₂"
 end
 
+"""
+    raman_response_identity(requested, fiber) -> Dict{String,Any}
+
+Describe the requested Raman-fraction override and the response actually
+encoded by a resolved fiber. `requested` may be an experiment spec, its problem
+section, a numeric override, or `nothing`.
+"""
+function raman_response_identity(requested, fiber)
+    hasproperty(requested, :problem) && (requested = requested.problem)
+    hasproperty(requested, :raman_fraction) &&
+        (requested = requested.raman_fraction)
+    requested_fraction = requested === nothing || ismissing(requested) ?
+        nothing : Float64(requested)
+    if requested_fraction !== nothing
+        isfinite(requested_fraction) && 0 <= requested_fraction <= 1 ||
+            throw(ArgumentError("requested Raman fraction must lie in [0, 1]"))
+    end
+
+    response = fiber === nothing ? missing : FiberLab._raman_response_metadata(fiber)
+    return Dict{String,Any}(
+        "requested_fraction" => requested_fraction,
+        "resolved_fraction" => ismissing(response) ? nothing : response.fraction,
+        "model" => ismissing(response) ? nothing : response.model,
+        "tau1_fs" => ismissing(response) ? nothing : response.tau1_fs,
+        "tau2_fs" => ismissing(response) ? nothing : response.tau2_fs,
+    )
+end
+
 function _auto_size_single_mode_grid(λ0, Nt, time_window, L_fiber, P_cont,
                                      pulse_fwhm, pulse_rep_rate, pulse_shape,
                                      gamma_user, betas_user)
@@ -465,11 +493,17 @@ function _setup_single_mode_problem(;
     gamma_user,
     betas_user,
     fR,
+    raman_fraction,
     fiber_preset::Union{Nothing, Symbol},
     auto_size::Bool=true,
 )
     pulse_shape = canonical_pulse_shape(pulse_shape)
     gamma_user, betas_user, fR = _apply_fiber_preset(fiber_preset, gamma_user, betas_user, fR)
+    if raman_fraction !== nothing
+        fR = Float64(raman_fraction)
+        isfinite(fR) && 0 <= fR <= 1 || throw(ArgumentError(
+            "raman_fraction must be finite and lie in [0, 1]"))
+    end
     _validate_single_mode_setup(;
         λ0, M, Nt, time_window, L_fiber, P_cont, pulse_fwhm, gamma_user, betas_user,
     )
@@ -515,9 +549,9 @@ end
 Create all objects needed for Raman phase optimization from single-mode fiber
 parameters. Uses `get_disp_fiber_params_user_defined` with M=1 (bypasses GRIN).
 
-When `fiber_preset` is provided, its `gamma`, `betas`, and `fR` override the
-corresponding keyword arguments. Explicit kwargs take precedence when
-`fiber_preset` is `nothing` (the default).
+When `fiber_preset` is provided, it resolves `gamma`, `betas`, and `fR` before
+problem construction. An explicit `raman_fraction` then overrides the resolved
+`fR`; otherwise the preset value is used.
 
 Defaults: Nt=2^10, time_window=10.0, β_order=2, P_cont=0.05, betas_user=[-2.6e-26].
 
@@ -538,12 +572,13 @@ function setup_raman_problem(;
     gamma_user = 0.0013,
     betas_user = [-2.6e-26],
     fR = 0.18,
+    raman_fraction = nothing,
     fiber_preset::Union{Nothing, Symbol} = nothing
 )
     setup = _setup_single_mode_problem(;
         λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
         pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
-        fR, fiber_preset,
+        fR, raman_fraction, fiber_preset,
     )
 
     @debug "Setup (raman)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] fiber_preset=fiber_preset
@@ -581,12 +616,13 @@ function setup_raman_problem_exact(;
     gamma_user = 0.0013,
     betas_user = [-2.6e-26],
     fR = 0.18,
+    raman_fraction = nothing,
     fiber_preset::Union{Nothing, Symbol} = nothing
 )
     setup = _setup_single_mode_problem(;
         λ0, M, Nt, time_window, β_order, L_fiber, P_cont, pulse_fwhm,
         pulse_rep_rate, pulse_shape, raman_threshold, gamma_user, betas_user,
-        fR, fiber_preset, auto_size=false,
+        fR, raman_fraction, fiber_preset, auto_size=false,
     )
 
     @debug "Setup (raman exact)" L=L_fiber P_cont=P_cont pulse=pulse_shape fwhm_fs=pulse_fwhm*1e15 γ=setup.gamma_user β₂=setup.betas_user[1] raman_bins=sum(setup.band_mask) total_bins=setup.sim["Nt"] fiber_preset=fiber_preset

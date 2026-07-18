@@ -160,6 +160,45 @@ end
     )
     @test check.pass
     @test maximum(check.relative_error) < 2e-5
+
+end
+
+@testset "Adjoint tolerance is invariant to objective scale" begin
+    problem = fiber_problem(
+        Fiber(
+            preset = :SMF28,
+            length_m = 0.3,
+            power_w = 0.1,
+            beta_order = 3,
+            raman_fraction = 0.18,
+        );
+        pulse = Pulse(fwhm_s = 185e-15, rep_rate_hz = 80.5e6, shape = :sech_sq),
+        grid = Grid(nt = 64, time_window_ps = 3.0, policy = :exact),
+        raman_threshold_thz = -4.0,
+    )
+    objective = spectral_asymmetry_objective(
+        problem,
+        (-8.0, -4.0),
+        (4.0, 8.0),
+    )
+    control = PhaseBasis(taylor_phase_basis(
+        problem,
+        2;
+        coefficient_scales_fs = 1000.0,
+    ))
+    decoded = decode(control, [-3.0])
+    model = fiber_model(problem)
+    state = FiberLab._run_model_forward(model, decoded, nothing)
+    seed = terminal_adjoint(objective, state)
+    gradient = FiberLab._run_model_physical_gradient(model, decoded, seed, nothing)
+    scale = -1e-4
+    scaled_gradient = FiberLab._run_model_physical_gradient(
+        model,
+        decoded,
+        scale .* seed,
+        nothing,
+    )
+    @test scaled_gradient ≈ scale .* gradient rtol = 5e-4 atol = 1e-12
 end
 
 @testset "Silica Raman shift has the Stokes sign" begin

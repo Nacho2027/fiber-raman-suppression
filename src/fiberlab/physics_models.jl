@@ -70,6 +70,17 @@ function _validate_package_inputs(fiber::Fiber, pulse::Pulse, wavelength_m::Real
     return nothing
 end
 
+_resolved_raman_fraction(fiber::Fiber, preset_fraction::Real) =
+    fiber.raman_fraction === nothing ? Float64(preset_fraction) : fiber.raman_fraction
+
+function _preset_raman_fraction(preset::Symbol)
+    haskey(SINGLE_MODE_FIBER_PRESETS, preset) &&
+        return Float64(SINGLE_MODE_FIBER_PRESETS[preset].fR)
+    haskey(MULTIMODE_FIBER_PRESETS, preset) &&
+        return Float64(MULTIMODE_FIBER_PRESETS[preset].fR)
+    return _SILICA_RAMAN_FRACTION
+end
+
 """
     FullGridPhase(problem; kwargs...)
 
@@ -118,7 +129,7 @@ function _single_mode_low_level_setup(fiber_spec::Fiber, pulse::Pulse, grid::Gri
     fiber = get_disp_fiber_params_user_defined(
         fiber_spec.length_m,
         sim;
-        fR = preset.fR,
+        fR = _resolved_raman_fraction(fiber_spec, preset.fR),
         gamma_user = preset.gamma,
         betas_user = preset.betas,
     )
@@ -379,8 +390,10 @@ function fiber_problem(fiber_spec::Fiber;
     )
     raman = _single_oscillator_raman_fields(
         sim;
-        fR = haskey(SINGLE_MODE_FIBER_PRESETS, fiber_spec.preset) ?
-            _single_mode_preset(fiber_spec.preset).fR : _SILICA_RAMAN_FRACTION,
+        fR = _resolved_raman_fraction(
+            fiber_spec,
+            _preset_raman_fraction(fiber_spec.preset),
+        ),
         τ1 = _SILICA_RAMAN_TAU1_FS,
         τ2 = _SILICA_RAMAN_TAU2_FS,
     )
@@ -574,6 +587,92 @@ function fiber_field_problem(uω0, fiber, sim;
         band_mask = band_mask,
         raman_threshold_thz = raman_threshold_thz,
         metadata = _problem_metadata(preset = preset),
+    )
+end
+
+function _fiber_with_raman_fraction(fiber::Fiber, fraction::Float64)
+    return Fiber(
+        regime = fiber.regime,
+        preset = fiber.preset,
+        length_m = fiber.length_m,
+        power_w = fiber.power_w,
+        beta_order = fiber.beta_order,
+        raman_fraction = fraction,
+    )
+end
+
+"""
+    with_raman_fraction(problem, fraction) -> FiberFieldProblem
+
+Construct a Raman counterfactual from a sealed package-built problem without
+mutating it. The new problem preserves the launch, numerical grid, dispersion,
+nonlinear coupling, band selection, and Raman time constants; only the delayed
+Raman fraction and its response fields change. `fraction` must lie in `[0, 1]`.
+
+This operation requires package provenance. Build explicit multimode physics
+through `fiber_problem(Fiber(...); dispersion, gamma_tensor, initial_modes)`
+when a sealed counterfactual is needed.
+"""
+function with_raman_fraction(problem::FiberFieldProblem, fraction::Real)
+    value = Float64(fraction)
+    isfinite(value) && 0 <= value <= 1 || throw(ArgumentError(
+        "Raman fraction must be finite and lie in [0, 1]"))
+    metadata = problem.metadata
+    any(ismissing, (
+        metadata.requested_fiber,
+        metadata.requested_pulse,
+        metadata.requested_grid,
+    )) && throw(ArgumentError(
+        "with_raman_fraction requires a package-built problem with complete provenance"))
+    _validate_package_problem_snapshot(problem)
+
+    raman = _raman_response_metadata(problem.fiber)
+    ismissing(raman) && throw(ArgumentError(
+        "with_raman_fraction requires declared Raman response provenance"))
+    raman.model == _RAMAN_RESPONSE_MODEL || throw(ArgumentError(
+        "with_raman_fraction does not know how to rescale Raman model `$(raman.model)`"))
+
+    fiber = deepcopy(problem.fiber)
+    merge!(fiber, _single_oscillator_raman_fields(
+        problem.sim;
+        fR = value,
+        τ1 = raman.tau1_fs,
+        τ2 = raman.tau2_fs,
+    ))
+    transformed_metadata = _problem_metadata(
+        requested_fiber = _fiber_with_raman_fraction(metadata.requested_fiber, value),
+        requested_pulse = metadata.requested_pulse,
+        requested_grid = metadata.requested_grid,
+        preset = metadata.preset,
+    )
+    return _fiber_field_problem(
+        copy(problem.uω0),
+        fiber,
+        deepcopy(problem.sim);
+        band_mask = problem.band_mask === nothing ? nothing : copy(problem.band_mask),
+        raman_threshold_thz = problem.raman_threshold_thz,
+        metadata = transformed_metadata,
+    )
+end
+
+"""
+    with_launch(problem, launch) -> FiberFieldProblem
+
+Create an explicit numerical problem with a replacement launch field while
+preserving the resolved fiber model, grid, and optional band selection. The
+source problem is not mutated. Because the launch no longer follows directly
+from the original `Fiber`/`Pulse` request, the returned problem intentionally
+uses resolved-numerical rather than authoritative construction provenance.
+"""
+function with_launch(problem::FiberFieldProblem, launch)
+    _validate_package_problem_snapshot(problem)
+    return _fiber_field_problem(
+        launch,
+        deepcopy(problem.fiber),
+        deepcopy(problem.sim);
+        band_mask = problem.band_mask === nothing ? nothing : copy(problem.band_mask),
+        raman_threshold_thz = problem.raman_threshold_thz,
+        metadata = _problem_metadata(preset = problem.metadata.preset),
     )
 end
 
@@ -999,6 +1098,7 @@ function _execution_metadata_from_problem(problem::FiberFieldProblem)
         length_m = Float64(problem.fiber["L"]),
         power_w = recorded.requested_fiber.power_w,
         beta_order = Int(problem.sim["β_order"]),
+        raman_fraction = recorded.requested_fiber.raman_fraction,
     )
     recorded.requested_fiber == resolved_fiber || throw(ArgumentError(
         "requested fiber metadata disagrees with the resolved problem"))

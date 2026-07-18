@@ -156,6 +156,7 @@ Returns a NamedTuple with fields:
 - `band_mask`      : Bool vector length Nt, true inside the Raman-shifted band
 - `Δf`             : fftshift-ordered frequency grid [THz]
 - `raman_threshold`: cutoff frequency [THz] below which band_mask is true
+- `raman_fraction` : resolved delayed Raman fraction used by the backend
 - `mode_weights`   : unit-norm ComplexF64 vector length M (input mode content)
 - `preset`         : the NamedTuple from MMF_FIBER_PRESETS
 - `fiber_cache`    : path used for the NPZ eigensolver cache (reused across runs)
@@ -171,6 +172,7 @@ Returns a NamedTuple with fields:
 - `time_window = 10.0`     : time window [ps]
 - `mode_weights = nothing` : if nothing, uses `default_mode_weights(M)`
 - `raman_threshold = -5.0` : Raman band cutoff [THz]
+- `raman_fraction = nothing`: optional override; otherwise use the preset value
 - `λ0 = 1550e-9`
 - `fiber_cache_dir = "results/raman/mmf/fiber_cache"`
 - `auto_time_window = true` : conservatively upsize undersized windows
@@ -194,6 +196,7 @@ function setup_mmf_raman_problem(;
     time_window = 10.0,
     mode_weights::Union{Nothing, AbstractVector} = nothing,
     raman_threshold = -5.0,
+    raman_fraction = nothing,
     λ0 = 1550e-9,
     fiber_cache_dir::AbstractString = joinpath(@__DIR__, "..", "..", "results", "raman", "mmf", "fiber_cache"),
     auto_time_window::Bool = true,
@@ -208,6 +211,10 @@ function setup_mmf_raman_problem(;
 
     p = get_mmf_fiber_preset(preset)
     M = p.M
+    resolved_raman_fraction = raman_fraction === nothing ?
+        Float64(p.fR) : Float64(raman_fraction)
+    isfinite(resolved_raman_fraction) && 0 <= resolved_raman_fraction <= 1 ||
+        throw(ArgumentError("raman_fraction must be finite and lie in [0, 1]"))
 
     # Mode weights
     w = isnothing(mode_weights) ? default_mode_weights(M) : ComplexF64.(mode_weights)
@@ -235,7 +242,7 @@ function setup_mmf_raman_problem(;
             L_fiber, p.radius, p.core_NA, p.alpha, p.nx, sim_local, cache_fname_local;
             spatial_window = p.spatial_window,
             Δf = p.Δf_THz,
-            fR = p.fR,
+            fR = resolved_raman_fraction,
             τ1 = p.τ1,
             τ2 = p.τ2,
         )
@@ -299,6 +306,7 @@ function setup_mmf_raman_problem(;
         band_mask       = band_mask,
         Δf              = Δf,
         raman_threshold = raman_threshold,
+        raman_fraction  = resolved_raman_fraction,
         mode_weights    = w,
         preset          = p,
         fiber_cache     = cache_fname,

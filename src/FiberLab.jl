@@ -32,7 +32,8 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        ObjectiveMap, PhaseBasis, PositiveScalar, PropagationResult, Pulse,
        MeasuredSpectrum, SpectrumComparison,
        NoExecutionBackend, ObjectiveContract, ScalarObjective, Solver,
-       ScalarControl, SingleModeFiberProblem, LabProfile, TrustCheck, TrustReport,
+       ScalarControl, ScenarioComposition, ScenarioTerm, SingleModeFiberProblem,
+       LabProfile, TrustCheck, TrustReport,
        assert_adjoint_ready, check, check_adjoint_gradient,
        control_bounds, control_contract, control_slices, decode,
        decoded_final, default_assumptions, dimension, evaluate_control, execute,
@@ -45,11 +46,19 @@ export AbstractControlMap, AbstractFeasibilityMap, AbstractFiberObjective, Adjoi
        fiber_field_problem, fiber_problem, fiber_model, field_objective,
        frequency_offsets, gradient_vector, metrics, mode_count, objective_contract,
        objective_value, plan,
+       component_costs, compose_scenarios,
        initial_coordinates, phase_control, fourier_basis, polynomial_basis,
+       taylor_phase_basis, with_launch, with_raman_fraction,
+       pulse_quality_metrics, pulse_quality_check, frequency_band_mask,
+       counterfactual_band_metrics, counterfactual_spectrum_metrics,
+       raman_counterfactual_contract,
+       spectral_band_energy_objective, spectral_asymmetry_objective,
+       spectral_centroid_objective,
        project, pullback, pullback_gradient,
        propagate,
        spectral_density, load_osa_spectrum, compare_spectrum, write_spectrum_report,
        registered_control_kinds, run_adjoint_step,
+       squared_difference_aggregate, weighted_scenario_aggregate,
        registered_objective_kinds,
        register_control!, register_objective!,
        fundamental_mode_objective, mode_sum_objective, raman_band_objective,
@@ -104,9 +113,11 @@ include("fiberlab/native_execution.jl")
 include("fiberlab/trust.jl")
 include("fiberlab/physics_helpers.jl")
 include("fiberlab/physics_models.jl")
+include("fiberlab/scenario_composition.jl")
 include("fiberlab/propagation.jl")
 include("fiberlab/spectral_measurements.jl")
 include("fiberlab/design_api.jl")
+include("fiberlab/scientific_metrics.jl")
 include("fiberlab/visualization.jl")
 include("fiberlab/standard_images.jl")
 include("fiberlab/standard_figures.jl")

@@ -45,6 +45,62 @@ function polynomial_basis(problem::FiberFieldProblem, powers=0:3)
 end
 
 """
+    taylor_phase_basis(problem, orders=2:4; coefficient_scales_fs=nothing)
+
+Create physical spectral-phase Taylor columns in the raw FFT order used by the
+solver. For angular-frequency offset `Ω` in rad/ps, column `n` implements
+`(Ωⁿ/n!) (10⁻³)ⁿ`, so an optimizer coordinate is the physical Taylor
+coefficient `φₙ` in fsⁿ and decoding obeys
+`φ(Ω) = Σₙ (φₙ/n!) (10⁻³Ω)ⁿ` for `Ω` in rad/ps.
+
+Pass one positive finite `coefficient_scales_fs` value per order to multiply
+each column by that many fsⁿ. The resulting optimizer coordinates are then
+dimensionless. Unlike `polynomial_basis`, these columns are not normalized or
+centered, so their physical meaning is independent of the numerical grid.
+"""
+function taylor_phase_basis(problem::FiberFieldProblem,
+                            orders=2:4;
+                            coefficient_scales_fs=nothing)
+    raw_orders = orders isa Integer ? (orders,) : Tuple(orders)
+    isempty(raw_orders) && throw(ArgumentError(
+        "taylor_phase_basis requires at least one order"))
+    all(order -> order isa Integer && !(order isa Bool), raw_orders) ||
+        throw(ArgumentError("Taylor phase orders must be integers"))
+    resolved_orders = Tuple(Int(order) for order in raw_orders)
+    all(>=(0), resolved_orders) || throw(ArgumentError(
+        "Taylor phase orders must be non-negative"))
+    length(unique(resolved_orders)) == length(resolved_orders) ||
+        throw(ArgumentError("Taylor phase orders must be unique"))
+
+    scales = if coefficient_scales_fs === nothing
+        ones(Float64, length(resolved_orders))
+    else
+        raw_scales = coefficient_scales_fs isa Real ?
+            (coefficient_scales_fs,) : Tuple(coefficient_scales_fs)
+        length(raw_scales) == length(resolved_orders) || throw(ArgumentError(
+            "coefficient_scales_fs must provide one scale per Taylor order"))
+        values = Float64.(raw_scales)
+        all(value -> isfinite(value) && value > 0, values) || throw(ArgumentError(
+            "coefficient_scales_fs values must be positive and finite"))
+        values
+    end
+
+    nt = sample_count(problem)
+    omega_fs = 2π .* FFTW.fftfreq(nt, 1 / problem.sim["Δt"]) .* 1e-3
+    basis = Matrix{Float64}(undef, nt, length(resolved_orders))
+    for (column_index, (order, scale)) in enumerate(zip(resolved_orders, scales))
+        divisor = Float64(factorial(big(order)))
+        isfinite(divisor) || throw(ArgumentError(
+            "Taylor phase order $order is too large for Float64 evaluation"))
+        column = scale .* omega_fs .^ order ./ divisor
+        all(isfinite, column) || throw(ArgumentError(
+            "Taylor phase order $order is outside the supported numerical range"))
+        basis[:, column_index] .= column
+    end
+    return basis
+end
+
+"""
     fourier_basis(problem, harmonics=8)
 
 Create a smooth real Fourier basis over the simulation frequency grid. The

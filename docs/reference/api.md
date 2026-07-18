@@ -33,6 +33,8 @@ surface; config-backed commands are a reproducibility bridge, not a second API.
 - `ScalarControl`
 - `AdjointObjective`
 - `ScalarObjective`
+- `ScenarioTerm`
+- `ScenarioComposition`
 - `Solver`
 - `ArtifactPolicy`
 - `Experiment`
@@ -89,6 +91,8 @@ surface; config-backed commands are a reproducibility bridge, not a second API.
 - `resolve_sampling_grid(grid; wavelength_m=1550e-9, minimum_time_window_ps=0, max_time_step_ps=0.0105, minimum_frequency_fraction=0.1)`
 - `fiber_problem(experiment; kwargs...)`
 - `fiber_problem(uω0, fiber, sim; kwargs...)`
+- `with_launch(problem, launch)`
+- `with_raman_fraction(problem, fraction)`
 - `propagate(problem; saveat=nothing)`
 - `spectral_density(result::PropagationResult)`
 - `load_osa_spectrum(path; wavelength_column, value_column, ...)`
@@ -96,6 +100,7 @@ surface; config-backed commands are a reproducibility bridge, not a second API.
 - `write_spectrum_report(comparison; output_dir, tag="spectrum_comparison")`
 - `FullGridPhase(problem; kwargs...)`
 - `polynomial_basis(problem, powers=0:3)`
+- `taylor_phase_basis(problem, orders=2:4; coefficient_scales_fs=nothing)`
 - `fourier_basis(problem, harmonics=8)`
 - `phase_control(problem; basis=nothing, bounds=nothing, name=:phase)`
 - `amplitude_control(problem; basis=polynomial_basis(problem, 0:2), bounds=(0.8, 1.2), name=:amplitude)`
@@ -104,6 +109,11 @@ surface; config-backed commands are a reproducibility bridge, not a second API.
 - `controls(control_maps...)`
 - `initial_coordinates(control)`
 - `fiber_model(problem)`
+- `compose_scenarios(terms...; aggregate=weighted_scenario_aggregate())`
+- `weighted_scenario_aggregate([weights])`
+- `squared_difference_aggregate(minuend, subtrahend)`
+- `component_costs(composition, states)`
+- `component_costs(composition, coordinates; control, context=nothing)`
 - `sample_count(problem)`
 - `mode_count(problem)`
 - `frequency_offsets(problem)`
@@ -113,6 +123,15 @@ surface; config-backed commands are a reproducibility bridge, not a second API.
 - `worst_mode_objective(problem; log_cost=false, worst_mode_tau=50.0)`
 - `raman_peak_objective(problem; log_cost=false)`
 - `temporal_width_objective(problem; log_cost=false)`
+- `spectral_band_energy_objective(problem, band)`
+- `spectral_asymmetry_objective(problem, red_band, blue_band)`
+- `spectral_centroid_objective(problem)`
+- `pulse_quality_metrics(reference, candidate, sim)`
+- `pulse_quality_check(metrics; thresholds...)`
+- `frequency_band_mask(problem, interval)`
+- `counterfactual_band_metrics(on, off, launch; red_mask, blue_mask)`
+- `counterfactual_spectrum_metrics(on, off, launch, problem)`
+- `raman_counterfactual_contract(on, off; allow_response_shape_change=false)`
 - `decoded_final(result)`
 - `metrics(result)`
 - `summarize(result::PropagationResult)`

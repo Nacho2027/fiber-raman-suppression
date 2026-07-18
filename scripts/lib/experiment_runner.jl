@@ -463,6 +463,10 @@ function experiment_run_manifest_data(run_bundle;
     artifact_ready || _push_unique!(post_run_missing, "artifact_validation_failed")
     convergence_ready || _push_unique!(post_run_missing, "not_converged")
     compare_ready = check.compare_ready && trust.pass && artifact_ready && convergence_ready
+    raman_response = raman_response_identity(
+        spec,
+        hasproperty(run_bundle, :fiber) ? run_bundle.fiber : nothing,
+    )
 
     return Dict{String,Any}(
         "schema_version" => "run_manifest_v1",
@@ -485,6 +489,9 @@ function experiment_run_manifest_data(run_bundle;
             "P_cont" => spec.problem.P_cont,
             "Nt" => resolved_grid === nothing ? nothing : resolved_grid["nt"],
             "time_window" => resolved_grid === nothing ? nothing : resolved_grid["time_window_ps"],
+            "raman_fraction_override" => spec.problem.raman_fraction,
+            "raman_fraction_resolved" => raman_response["resolved_fraction"],
+            "raman_response" => raman_response,
             "requested_grid" => grid_evidence.requested,
             "resolved_grid" => resolved_grid,
         ),
@@ -636,6 +643,7 @@ function supported_experiment_run_kwargs(spec)
         pulse_rep_rate = spec.problem.pulse_rep_rate,
         pulse_shape = spec.problem.pulse_shape,
         raman_threshold = spec.problem.raman_threshold,
+        raman_fraction = spec.problem.raman_fraction,
         max_iter = spec.solver.max_iter,
         validate = spec.solver.validate_gradient,
         store_trace = spec.solver.store_trace,
@@ -1351,6 +1359,7 @@ function run_scalar_gain_tilt_search(;
         :rep_rate_Hz => _rep_rate,
         :gamma => fiber["γ"][1],
         :betas => haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        :raman_response => raman_response_identity(spec, fiber),
         :time_window_ps => Nt * sim["Δt"],
         :sim_Dt => sim["Δt"],
         :sim_omega0 => sim["ω0"],
@@ -1567,6 +1576,7 @@ function run_vector_phase_extension_search(;
         :rep_rate_Hz => _rep_rate,
         :gamma => fiber["γ"][1],
         :betas => haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        :raman_response => raman_response_identity(spec, fiber),
         :time_window_ps => Nt * sim["Δt"],
         :sim_Dt => sim["Δt"],
         :sim_omega0 => sim["ω0"],
@@ -1703,7 +1713,9 @@ function _write_mmf_per_mode_leakage_csv(path::AbstractString, trust_ref, trust_
     return path
 end
 
-function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setup, opt, trust_ref, trust_opt, variant::Symbol, wall_time_s::Real)
+function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setup,
+                                 opt, trust_ref, trust_opt, variant::Symbol,
+                                 wall_time_s::Real, raman_response)
     reference = _mmf_primary_metrics(trust_ref.cost_report, variant)
     optimized = _mmf_primary_metrics(trust_opt.cost_report, variant)
     regularizers = _regularizer_evidence(spec)
@@ -1735,6 +1747,9 @@ function _write_mmf_sidecar_json(path::AbstractString; spec, artifact_path, setu
         "fiber" => Dict(
             "name" => String(setup.preset.name),
             "L_m" => spec.problem.L_fiber,
+            "raman_fraction_override" => spec.problem.raman_fraction,
+            "raman_fraction" => setup.raman_fraction,
+            "raman_response" => raman_response,
         ),
         "pulse" => Dict(
             "P_cont_W" => spec.problem.P_cont,
@@ -1772,6 +1787,7 @@ function run_mmf_front_layer_phase_search(;
     pulse_rep_rate::Real,
     pulse_shape::AbstractString,
     raman_threshold::Real,
+    raman_fraction,
     max_iter::Integer,
     objective_kind::Symbol,
     λ_gdd::Real,
@@ -1792,6 +1808,7 @@ function run_mmf_front_layer_phase_search(;
         Nt = Nt,
         time_window = time_window,
         raman_threshold = raman_threshold,
+        raman_fraction = raman_fraction,
         auto_time_window = spec.problem.grid_policy == :auto_if_undersized,
     )
 
@@ -1887,6 +1904,7 @@ function run_mmf_front_layer_phase_search(;
     artifact_paths = artifact_paths_for_prefix(save_prefix)
     artifact_path = artifact_paths.jld2
     sidecar_path = artifact_paths.json
+    raman_response = raman_response_identity(spec, setup.fiber)
     E_ref = sum(abs2, setup.uω0)
     E_opt = sum(abs2, setup.uω0 .* cis.(opt.φ_opt))
     write_jld2_file(artifact_path;
@@ -1895,6 +1913,8 @@ function run_mmf_front_layer_phase_search(;
         fiber_name = String(fiber_name),
         L_m = Float64(L_fiber),
         P_cont_W = Float64(P_cont),
+        raman_fraction = Float64(setup.raman_fraction),
+        raman_response = raman_response,
         lambda0_nm = 1550.0,
         fwhm_fs = Float64(pulse_fwhm * 1e15),
         Nt = size(setup.uω0, 1),
@@ -1944,6 +1964,7 @@ function run_mmf_front_layer_phase_search(;
         trust_opt = trust_opt,
         variant = variant,
         wall_time_s = wall_time_s,
+        raman_response = raman_response,
     )
 
     return (

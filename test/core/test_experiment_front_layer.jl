@@ -354,8 +354,17 @@ end
     manifest_config = joinpath(manifest_dir, "run_config.toml")
     write(manifest_artifact, "placeholder")
     write(manifest_config, "placeholder")
+    provenance_sim = FiberLab.get_disp_sim_params(1550e-9, 1, 8, 2.0, 2)
+    provenance_fiber = FiberLab.get_disp_fiber_params_user_defined(
+        1.0,
+        provenance_sim;
+        fR = 0.27,
+        gamma_user = 1.0e-3,
+        betas_user = [-2.6e-26],
+    )
     manifest_bundle = (
         spec = load_experiment_spec("research_engine_gain_tilt_smoke"),
+        fiber = provenance_fiber,
         output_dir = manifest_dir,
         save_prefix = joinpath(manifest_dir, "opt"),
         config_copy = manifest_config,
@@ -382,6 +391,17 @@ end
     @test manifest_data["problem"]["resolved_grid"]["time_window_ps"] == 5.0
     @test manifest_data["problem"]["Nt"] ==
           manifest_data["problem"]["resolved_grid"]["nt"]
+    @test manifest_data["problem"]["raman_fraction_override"] === nothing
+    @test manifest_data["problem"]["raman_fraction_resolved"] == 0.27
+    manifest_response = manifest_data["problem"]["raman_response"]
+    @test manifest_response == Dict{String,Any}(
+        "requested_fraction" => nothing,
+        "resolved_fraction" => 0.27,
+        "model" => "blow_wood_single_damped_oscillator_v1",
+        "tau1_fs" => 12.2,
+        "tau2_fs" => 32.0,
+    )
+    @test !haskey(manifest_response, "one_m_fR")
     @test manifest_data["artifacts"]["complete"] == true
     @test manifest_data["pre_run_check"]["compare_ready"] == false
     manifest_path = write_experiment_run_manifest(
@@ -394,6 +414,53 @@ end
     parsed_manifest = JSON3.read(read(manifest_path, String))
     @test parsed_manifest.schema_version == "run_manifest_v1"
     @test parsed_manifest.config.id == "smf28_phase_gain_tilt_smoke"
+    @test parsed_manifest.problem.raman_response.resolved_fraction == 0.27
+    @test !haskey(parsed_manifest.problem.raman_response, :one_m_fR)
+
+    canonical_payload = build_raman_result_payload(;
+        run_meta = (
+            fiber_name = "unit-test",
+            P_cont_W = 0.1,
+            lambda0_nm = 1550.0,
+            fwhm_fs = 185.0,
+        ),
+        run_tag = "provenance-test",
+        fiber = provenance_fiber,
+        sim = provenance_sim,
+        Nt = 8,
+        time_window_ps = 2.0,
+        J_before = 0.2,
+        J_after = 0.1,
+        delta_J_dB = -3.0,
+        grad_norm = 0.01,
+        converged = true,
+        iterations = 1,
+        wall_time_s = 0.1,
+        convergence_history = [0.2, 0.1],
+        phi_opt = zeros(8),
+        uω0 = zeros(ComplexF64, 8, 1),
+        E_conservation = 0.0,
+        bc_input_frac = 0.0,
+        bc_output_frac = 0.0,
+        bc_input_ok = true,
+        bc_output_ok = true,
+        trust_report = Dict{String,Any}(),
+        trust_report_md = "trust.md",
+        band_mask = falses(8),
+        raman_response = raman_response_identity(0.27, provenance_fiber),
+    )
+    canonical_jld2 = joinpath(manifest_dir, "canonical_result.jld2")
+    canonical_sidecar = FiberLab.save_run(canonical_jld2, canonical_payload)
+    canonical_stored = JLD2.load(canonical_jld2)
+    @test canonical_stored["raman_response"]["requested_fraction"] == 0.27
+    @test canonical_stored["raman_response"]["resolved_fraction"] == 0.27
+    @test !haskey(canonical_stored["raman_response"], "one_m_fR")
+    canonical_json = JSON3.read(read(canonical_sidecar, String))
+    @test canonical_json.raman_response.model ==
+          "blow_wood_single_damped_oscillator_v1"
+    @test canonical_json.raman_response.tau1_fs == 12.2
+    @test canonical_json.raman_response.tau2_fs == 32.0
+    @test !haskey(canonical_json.raman_response, :one_m_fR)
 
     scaffold_dir = mktempdir()
     scaffold = scaffold_objective_extension(

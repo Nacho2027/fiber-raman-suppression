@@ -30,6 +30,7 @@ function resolve_experiment_grid(spec)
             length_m=spec.problem.L_fiber,
             power_w=spec.problem.P_cont,
             beta_order=spec.problem.β_order,
+            raman_fraction=spec.problem.raman_fraction,
         )
         pulse = Pulse(
             fwhm_s=spec.problem.pulse_fwhm,
@@ -259,7 +260,7 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
     _reject_unknown_config_keys(problem, (
         "regime", "preset", "L_fiber", "P_cont", "beta_order", "Nt",
         "time_window", "grid_policy", "pulse_fwhm", "pulse_rep_rate",
-        "pulse_shape", "raman_threshold",
+        "pulse_shape", "raman_threshold", "raman_fraction",
     ), "[problem]")
     _reject_unknown_config_keys(controls, (
         "variables", "parameterization", "initialization", "policy",
@@ -326,6 +327,8 @@ function _front_layer_spec_from_parsed(parsed::AbstractDict{<:Any,<:Any}, path::
             pulse_rep_rate = Float64(get(problem, "pulse_rep_rate", 80.5e6)),
             pulse_shape = canonical_pulse_shape(String(get(problem, "pulse_shape", "sech_sq"))),
             raman_threshold = Float64(get(problem, "raman_threshold", -5.0)),
+            raman_fraction = haskey(problem, "raman_fraction") ?
+                Float64(problem["raman_fraction"]) : nothing,
         ),
         controls = (
             variables = Tuple(_normalize_symbol(v) for v in get(controls, "variables", ["phase"])),
@@ -867,6 +870,10 @@ function validate_experiment_spec(spec)
     isfinite(spec.problem.raman_threshold) && spec.problem.raman_threshold < 0 ||
         throw(ArgumentError(
             "problem.raman_threshold must be finite and negative (a Stokes frequency offset in THz)"))
+    spec.problem.raman_fraction === nothing ||
+        isfinite(spec.problem.raman_fraction) && 0 <= spec.problem.raman_fraction <= 1 ||
+        throw(ArgumentError(
+            "problem.raman_fraction must be finite and lie in [0, 1]"))
     grid_resolution = resolve_experiment_grid(spec)
     sampling_grid = grid_resolution.initial
     minimum_offset = minimum(FFTW.fftfreq(
@@ -1100,7 +1107,7 @@ function render_experiment_capabilities(; io::IO=stdout)
         caps = experiment_capability_profile(regime)
         println(io, "  regime=", regime)
         stage_summary =
-            regime == :single_mode ? "lab_ready for validated benchmark configs; smoke for experimental multivariable" :
+            regime == :single_mode ? "operationally promoted red-band regressions; smoke for experimental multivariable" :
             regime == :multimode ? "smoke for validated shared-phase MMF checks; high-resource configs use dedicated workflows" :
             "experimental smoke/high-resource capability through exact-grid single-mode execution"
         println(io, "    current_stage=", stage_summary)
@@ -1116,7 +1123,7 @@ function render_experiment_capabilities(; io::IO=stdout)
     end
     println(io)
     println(io, "Execution notes:")
-    println(io, "  single_mode phase/Raman configs are validated benchmark and regression paths.")
+    println(io, "  single_mode red-band configs are operational regression paths, not Raman attribution.")
     println(io, "  single_mode multivariable controls are experimental.")
     println(io, "  use `fiberlab explore` for intentional experimental exploration runs.")
     println(io, "  multimode shared-phase smoke configs can execute through the front layer.")

@@ -8,7 +8,7 @@ organized around experiments:
 
 | Concept | Meaning |
 |---|---|
-| `Fiber` | Regime, preset, length, power, and dispersion order |
+| `Fiber` | Regime, preset, length, power, dispersion order, and optional delayed-Raman fraction override |
 | `Pulse` | Input pulse duration, repetition rate, and shape |
 | `Grid` | Requested simulation resolution and time window |
 | `Control` | What the optimizer can change, such as phase, amplitude, energy, mode weights, or an extension control |
@@ -23,8 +23,24 @@ Configs under `configs/experiments/` are serialized experiments. They are useful
 for reproducibility and batch execution, but they should not be treated as the
 conceptual center of the project.
 
-Raman-band suppression is a built-in objective and benchmark. It is kept as
-regression evidence, not as a restriction on the API model.
+The historical `raman_band` red-leakage objective is a built-in regression
+benchmark. It is not a causal Raman observable. Raman mechanism studies must
+pair it with a matched Raman-off scenario and visible component metrics.
+For a sealed package-built problem, `with_raman_fraction(problem, 0.0)` creates
+that matched counterfactual without changing its launch, grid, dispersion, or
+nonlinear coupling. Physical low-dimensional phase studies can use
+`taylor_phase_basis`; its coordinates are Taylor coefficients in fsⁿ (or
+dimensionless when explicit coefficient scales are supplied), not
+grid-normalized polynomial weights.
+
+Shared-control studies use `ScenarioTerm` and `compose_scenarios`. Each term
+keeps its own problem/objective digest; there is deliberately no single
+`resolved_problem_sha256` for a composition of different physical problems.
+Native result sidecars instead record `model_provenance`, including every term,
+its source authority, and the exact parameters of the package-defined
+aggregate (`weighted_scenario_aggregate` or `squared_difference_aggregate`).
+Opaque aggregate closures are rejected because their identity cannot be
+serialized truthfully.
 
 Measurement support begins with one concrete seam rather than a generic data
 framework. FiberLab can predict a single-mode OSA spectrum from a sealed

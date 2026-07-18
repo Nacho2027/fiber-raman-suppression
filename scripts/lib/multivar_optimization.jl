@@ -2,8 +2,8 @@
 Experimental multi-variable spectral pulse-shaping optimizer.
 
 Jointly optimizes any subset of {spectral phase φ(ω), spectral amplitude A(ω),
-pulse energy E} for Raman suppression, through a single forward-adjoint solve
-per iteration.
+pulse energy E} against the historical red-band leakage objective, through a
+single forward-adjoint solve per iteration.
 
 The phase-only path remains in `scripts/lib/raman_optimization.jl`.
 
@@ -833,6 +833,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
     objective_backend = string(get(meta, :objective_backend, "raman_optimization"))
     objective_label = String(get(meta, :objective_label, "multivariable Raman spectral shaping optimization"))
     objective_base_term = String(get(meta, :objective_base_term, "J_physics"))
+    raman_response = get(meta, :raman_response, nothing)
     control_scalars = Dict{String,Float64}(
         String(key) => Float64(value)
         for (key, value) in get(meta, :control_scalars, Dict{String,Float64}())
@@ -868,6 +869,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
         fwhm_fs = Float64(get(meta, :fwhm_fs, NaN)),
         gamma = Float64(get(meta, :gamma, NaN)),
         betas = Vector{Float64}(get(meta, :betas, Float64[])),
+        raman_response = raman_response,
         # grid
         Nt = Nt,
         M = M,
@@ -923,6 +925,7 @@ function save_multivar_result(prefix::AbstractString, outcome; meta::Dict=Dict{S
             "L_m" => Float64(get(meta, :L_m, NaN)),
             "gamma_W_inv_m_inv" => Float64(get(meta, :gamma, NaN)),
             "betas" => Vector{Float64}(get(meta, :betas, Float64[])),
+            "raman_response" => raman_response,
         ),
         "pulse" => Dict(
             "lambda0_nm" => Float64(get(meta, :lambda0_nm, NaN)),
@@ -1088,6 +1091,8 @@ function run_multivar_optimization(;
         :rep_rate_Hz => _rep_rate,
         :gamma => fiber["γ"][1],
         :betas => haskey(fiber, "betas") ? fiber["betas"] : Float64[],
+        :raman_response => raman_response_identity(
+            get(kwargs, :raman_fraction, nothing), fiber),
         :time_window_ps => Nt * sim["Δt"],
         :sim_Dt => sim["Δt"],
         :sim_omega0 => sim["ω0"],

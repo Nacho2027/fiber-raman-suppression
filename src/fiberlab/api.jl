@@ -1,12 +1,14 @@
 """
-    Fiber(; preset=:SMF28, length_m, power_w, regime=:single_mode, beta_order=3)
+    Fiber(; preset=:SMF28, length_m, power_w, regime=:single_mode,
+          beta_order=3, raman_fraction=nothing)
 
 Notebook-facing description of a fiber propagation setting.
 
 `Fiber` is a high-level experiment object. It intentionally stores user-facing
 choices, not the low-level propagation dictionaries consumed by the inherited
 simulation backend. `regime` must agree with the number of fields requested
-through `fiber_problem(...; modes=...)`.
+through `fiber_problem(...; modes=...)`. Set `raman_fraction` to an explicit
+value in `[0, 1]` to override the selected preset's delayed Raman fraction.
 """
 Base.@kwdef struct Fiber
     regime::Symbol = :single_mode
@@ -14,7 +16,32 @@ Base.@kwdef struct Fiber
     length_m::Float64
     power_w::Float64
     beta_order::Int = 3
+    raman_fraction::Union{Nothing,Float64} = nothing
+
+    function Fiber(regime::Symbol,
+                   preset::Symbol,
+                   length_m::Real,
+                   power_w::Real,
+                   beta_order::Integer,
+                   raman_fraction::Union{Nothing,Real})
+        fraction = raman_fraction === nothing ? nothing : Float64(raman_fraction)
+        fraction === nothing ||
+            isfinite(fraction) && 0 <= fraction <= 1 || throw(ArgumentError(
+                "fiber raman_fraction must be finite and lie in [0, 1]"))
+        return new(
+            regime,
+            preset,
+            Float64(length_m),
+            Float64(power_w),
+            Int(beta_order),
+            fraction,
+        )
+    end
 end
+
+Fiber(regime::Symbol, preset::Symbol, length_m::Real, power_w::Real,
+      beta_order::Integer) =
+    Fiber(regime, preset, length_m, power_w, beta_order, nothing)
 
 """
     Pulse(; fwhm_s=185e-15, rep_rate_hz=80.5e6, shape=:sech_sq)
@@ -222,6 +249,8 @@ function experiment_config_text(experiment::Experiment)
     _push_kv!(lines, "L_fiber", experiment.fiber.length_m)
     _push_kv!(lines, "P_cont", experiment.fiber.power_w)
     _push_kv!(lines, "beta_order", experiment.fiber.beta_order)
+    experiment.fiber.raman_fraction === nothing ||
+        _push_kv!(lines, "raman_fraction", experiment.fiber.raman_fraction)
     _push_kv!(lines, "Nt", experiment.grid.nt)
     _push_kv!(lines, "time_window", experiment.grid.time_window_ps)
     _push_kv!(lines, "grid_policy", experiment.grid.policy)
@@ -322,6 +351,7 @@ function summarize(experiment::Experiment)
         preset = experiment.fiber.preset,
         length_m = experiment.fiber.length_m,
         power_w = experiment.fiber.power_w,
+        raman_fraction_override = experiment.fiber.raman_fraction,
         variables = _summary_control_variables(experiment.control),
         objective = _summary_objective_kind(experiment.objective),
         solver = experiment.solver.kind,

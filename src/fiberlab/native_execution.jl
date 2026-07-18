@@ -20,8 +20,25 @@ struct NativeRunSource{M,P}
     snapshot_sha256::String
 end
 
+_valid_model_provenance(value::Nothing) = true
+_valid_model_provenance(value::Union{Symbol,AbstractString,Bool}) = true
+_valid_model_provenance(value::Integer) = typemin(Int) <= value <= typemax(Int)
+_valid_model_provenance(value::Real) = isfinite(Float64(value))
+_valid_model_provenance(value::Tuple) = all(_valid_model_provenance, value)
+_valid_model_provenance(value::NamedTuple) = all(_valid_model_provenance, values(value))
+_valid_model_provenance(value) = false
+
+function _model_provenance(value)
+    value === nothing && return nothing
+    value isa NamedTuple || throw(ArgumentError(
+        "adjoint model provenance must be a NamedTuple or nothing"))
+    _valid_model_provenance(value) || throw(ArgumentError(
+        "adjoint model provenance must contain only finite, immutable JSON scalars"))
+    return value
+end
+
 """
-    AdjointModel(name; forward, physical_gradient, description="")
+    AdjointModel(name; forward, physical_gradient, description="", provenance=nothing)
 
 Generic model contract for API-native adjoint execution.
 
@@ -36,19 +53,23 @@ struct AdjointModel
     description::String
     problem_source::Union{Nothing,ResolvedProblemSource}
     run_source::Union{Nothing,NativeRunSource}
+    provenance::Union{Nothing,NamedTuple}
 
     function AdjointModel(name::Symbol; forward::Function,
                           physical_gradient::Function,
-                          description::AbstractString="")
+                          description::AbstractString="",
+                          provenance=nothing)
         _nonempty_name(name, "adjoint model")
-        return new(name, forward, physical_gradient, String(description), nothing, nothing)
+        return new(name, forward, physical_gradient, String(description), nothing, nothing,
+                   _model_provenance(provenance))
     end
 
     function AdjointModel(name::Symbol, problem_source::ResolvedProblemSource;
                           run_source::Union{Nothing,NativeRunSource}=nothing,
                           forward::Function,
                           physical_gradient::Function,
-                          description::AbstractString="")
+                          description::AbstractString="",
+                          provenance=nothing)
         _nonempty_name(name, "adjoint model")
         return new(
             name,
@@ -57,6 +78,7 @@ struct AdjointModel
             String(description),
             problem_source,
             run_source,
+            _model_provenance(provenance),
         )
     end
 end
@@ -1317,6 +1339,7 @@ function _write_native_artifacts(plan::ExperimentPlan, result::NativeAdjointResu
         ),
         "source_metadata" => _native_json_value(
             result.backend.run_source === nothing ? nothing : result.backend.run_source.metadata),
+        "model_provenance" => _native_json_value(result.backend.model.provenance),
         "x_initial" => result.x_initial,
         "x_final" => result.x_final,
         "decoded_final" => _native_json_value(decoded_final(result)),
