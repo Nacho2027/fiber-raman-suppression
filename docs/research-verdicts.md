@@ -7,6 +7,7 @@ archive.
 | Lane | Verdict | Active Surface |
 |---|---|---|
 | Single-mode red-band phase optimization | Keep as a numerical regression lane. Do not call its masked spectral fraction Raman suppression without a matched Raman-off counterfactual and pulse-quality controls. | Experiment configs plus `scripts/lib/raman_optimization.jl`. |
+| Matched delayed-response centroid benchmark | Keep as the audited scalar scientific benchmark. The quadratic+cubic result is model-specific; do not claim fixed-GDD causality, reduced total Raman transfer, hardware performance, or broad generalization. | `examples/05_counterfactual_raman.jl` and `docs/research/counterfactual-raman-benchmark.md`. |
 | Reduced/extension phase controls | Keep as experimental API options. | Variable extensions and front-layer configs. |
 | Multivar joint phase/amplitude/energy | Keep as continuous adjoint-compatible control blocks for explicit experiments. | `scripts/lib/multivar_optimization.jl`. |
 | Amp-on-phase refinement | Optional, staged, experimental comparison workflow. | `scripts/lib/amp_on_phase_refinement.jl` and canonical refinement wrapper. |

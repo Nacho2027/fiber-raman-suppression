@@ -10,6 +10,7 @@ Human-facing docs for the FiberLab API.
 4. [Supported Workflows](guides/supported-workflows.md)
 5. [Interpreting Plots](guides/interpreting-plots.md)
 6. [Extending FiberLab](guides/extend-and-troubleshoot.md)
+7. [Counterfactual Raman Benchmark](research/counterfactual-raman-benchmark.md)
 
 ## Reference
 
@@ -20,6 +21,7 @@ Human-facing docs for the FiberLab API.
 | [Repo Navigation](architecture/repo-navigation.md) | Where code belongs |
 | [Output Format](architecture/output-format.md) | Result bundles and artifacts |
 | [Research Verdicts](research-verdicts.md) | Which research paths are kept, deferred, or archived |
+| [Counterfactual Raman Benchmark](research/counterfactual-raman-benchmark.md) | Audited result, limits, figures, and reproduction |
 
 ## Technical Notes
 

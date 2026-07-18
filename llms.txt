@@ -34,6 +34,7 @@ not source structure.
 - [Public API](docs/reference/api.md)
 - [Supported workflows](docs/guides/supported-workflows.md)
 - [Research verdicts](docs/research-verdicts.md)
+- [Counterfactual Raman benchmark](docs/research/counterfactual-raman-benchmark.md)
 - [Repo navigation](docs/architecture/repo-navigation.md)
 - [Output format](docs/architecture/output-format.md)
 - [Cost-function physics](docs/notes/cost-function-physics.md)

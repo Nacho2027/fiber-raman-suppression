@@ -45,6 +45,8 @@ The matched delayed-response benchmark is
 [`examples/05_counterfactual_raman.jl`](examples/05_counterfactual_raman.jl).
 It makes a narrow scalar-model claim and explicitly does not establish hardware
 performance, experimental Raman decomposition, or universal fiber behavior.
+The audited numbers, figures, prior-art boundary, and reproduction record are in
+the [counterfactual Raman benchmark report](docs/research/counterfactual-raman-benchmark.md).
 
 FiberLab also has an experimental OSA comparison seam for sealed single-mode
 forward results. It applies the wavelength Jacobian and an explicit Gaussian
