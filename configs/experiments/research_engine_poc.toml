@@ -9,7 +9,7 @@
 # validates its own allowed capabilities.
 
 id = "smf28_phase_lbfgs_poc"
-description = "POC front-layer config: supported single-mode phase-only Raman suppression."
+description = "Supported single-mode phase-only red-band optimization regression; Raman attribution requires a matched counterfactual."
 maturity = "supported"
 output_root = "results/raman"
 output_tag = "smf28_phase_lbfgs_poc"

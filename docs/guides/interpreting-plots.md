@@ -13,7 +13,8 @@ Use plots to check physics and artifacts, not just to decorate a report.
 ## What to look for
 
 - The optimized and unshaped evolutions should use comparable axes.
-- The Raman band should be visibly reduced when the reported dB value improves.
+- A lower historical red-band cost should be visible in the declared band, but
+  that agreement validates plotting and optimization—not Raman attribution.
 - Phase diagnostics should not be blank, wrapped beyond recognition, or cropped
   into a misleading view.
 - Sweep heatmaps should have labeled axes, clear units, and enough contrast to

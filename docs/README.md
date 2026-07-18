@@ -25,7 +25,6 @@ Human-facing docs for the FiberLab API.
 
 These are supporting notes, not the main starting point:
 
-- [Cost Convention](notes/cost-convention.md)
 - [Cost Function Physics](notes/cost-function-physics.md)
 
 ## Archive Boundary

@@ -1,5 +1,5 @@
 id = "smf28_phase_peak_smoke"
-description = "Smoke front-layer config: tiny single-mode phase-only run using the experimental peak-bin Raman objective."
+description = "Smoke front-layer config: tiny single-mode phase-only run using the experimental red-detuned peak-bin objective."
 maturity = "experimental"
 output_root = "results/raman/smoke"
 output_tag = "smf28_phase_peak_smoke"

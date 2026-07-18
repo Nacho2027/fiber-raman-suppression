@@ -7,8 +7,8 @@ workflows:
 - adjoint inverse design with composable controls and objectives; and
 - experimental simulation-to-OSA spectral-shape comparison.
 
-Forward single- and multimode propagation and the validated single-mode Raman
-benchmark are the strongest paths today. Multivariable, long-fiber, multimode
+Forward single- and multimode propagation and the single-mode counterfactual
+computational benchmark are the strongest paths today. Multivariable, long-fiber, multimode
 optimization, and real-instrument comparison remain explicitly experimental.
 The shared user model is a resolved physics problem: researchers may propagate
 it directly or connect controls, objectives, and an adjoint model for inverse
@@ -17,21 +17,18 @@ design.
 ```julia
 using FiberLab
 
-fiber = Fiber(preset = :SMF28, length_m = 2.0, power_w = 0.2)
-grid = Grid(nt = 1024, time_window_ps = 12.0, policy = :exact)
-problem = fiber_problem(fiber; grid = grid, raman_threshold_thz = -13.2)
+fiber = Fiber(preset = :SMF28, length_m = 0.5, power_w = 0.1)
+problem = fiber_problem(fiber; grid = Grid(policy = :exact),
+                        raman_threshold_thz = nothing)
 
-control = controls(
-    phase_control(problem; basis = polynomial_basis(problem, 0:3), bounds = (-3.0, 3.0)),
-    amplitude_control(problem; bounds = (0.8, 1.2)),
-    energy_control(),
-)
-objective = raman_band_objective(problem)
+baseline = propagate(problem)
+verify(baseline)
 
-result = solve(problem, control, objective; max_iter = 4)
-metrics(result)
-report = standard_report(problem, result; output_dir = "results/demo", tag = "demo")
-display_report(report)  # shows PNGs inline in notebooks
+basis = taylor_phase_basis(problem, (2, 3))
+phase = basis * [-6000.0, -300_000.0]  # fs² and fs³
+launch = problem.uω0 .* cis.(reshape(phase, :, 1))
+shaped = propagate(with_launch(problem, launch))
+verify(shaped)
 ```
 
 Symbolic objects such as `Control(variables = (:phase,))` and
@@ -43,6 +40,11 @@ solvers, results, and figures.
 The inherited low-level propagation code remains in `src/` as the physics
 backend. New work should start from the FiberLab concepts: fibers, pulses,
 grids, controls, objectives, solvers, experiments, and artifacts.
+
+The matched delayed-response benchmark is
+[`examples/05_counterfactual_raman.jl`](examples/05_counterfactual_raman.jl).
+It makes a narrow scalar-model claim and explicitly does not establish hardware
+performance, experimental Raman decomposition, or universal fiber behavior.
 
 FiberLab also has an experimental OSA comparison seam for sealed single-mode
 forward results. It applies the wavelength Jacobian and an explicit Gaussian

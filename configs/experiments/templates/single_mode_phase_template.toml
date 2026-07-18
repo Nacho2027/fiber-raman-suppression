@@ -5,7 +5,7 @@
 # select from registered contracts.
 
 id = "my_single_mode_phase_run"
-description = "Single-mode phase-only Raman suppression run."
+description = "Single-mode phase-only red-band optimization run; not Raman attribution."
 maturity = "supported"
 output_root = "results/raman"
 output_tag = "my_single_mode_phase_run"

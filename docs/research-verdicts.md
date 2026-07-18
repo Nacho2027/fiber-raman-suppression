@@ -6,7 +6,7 @@ archive.
 
 | Lane | Verdict | Active Surface |
 |---|---|---|
-| Single-mode phase optimization | Keep as a validated benchmark and regression lane. | Experiment configs plus `scripts/lib/raman_optimization.jl`. |
+| Single-mode red-band phase optimization | Keep as a numerical regression lane. Do not call its masked spectral fraction Raman suppression without a matched Raman-off counterfactual and pulse-quality controls. | Experiment configs plus `scripts/lib/raman_optimization.jl`. |
 | Reduced/extension phase controls | Keep as experimental API options. | Variable extensions and front-layer configs. |
 | Multivar joint phase/amplitude/energy | Keep as continuous adjoint-compatible control blocks for explicit experiments. | `scripts/lib/multivar_optimization.jl`. |
 | Amp-on-phase refinement | Optional, staged, experimental comparison workflow. | `scripts/lib/amp_on_phase_refinement.jl` and canonical refinement wrapper. |

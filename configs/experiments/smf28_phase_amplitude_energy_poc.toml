@@ -1,5 +1,5 @@
 id = "smf28_phase_amplitude_energy_poc"
-description = "POC front-layer config: experimental single-mode phase+amplitude+energy Raman suppression."
+description = "Experimental single-mode phase+amplitude+energy red-band optimization; not Raman attribution."
 maturity = "experimental"
 output_root = "results/raman/multivar"
 output_tag = "smf28_phase_amplitude_energy_poc"

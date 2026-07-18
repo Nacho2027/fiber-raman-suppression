@@ -1,5 +1,5 @@
 id = "grin50_mmf_phase_sum_poc"
-description = "Experimental GRIN-50 multimode front-layer config: shared phase with mode-summed Raman objective for planning."
+description = "Experimental GRIN-50 shared-phase red-band planning objective; not Raman attribution."
 maturity = "experimental"
 output_root = "results/raman/mmf"
 output_tag = "grin50_mmf_phase_sum_poc"
