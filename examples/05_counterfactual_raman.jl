@@ -23,9 +23,9 @@ const COLORS = (blue = "#0072B2", orange = "#D55E00",
 
 const COMMITTED_CANDIDATES = (
     neutral = (family = :neutral, tier = :reference, phi2_fs2 = 0.0, phi3_fs3 = 0.0),
-    gate_gdd = (family = :gdd, tier = :primary, phi2_fs2 = -6030.0, phi3_fs3 = 0.0),
+    gate_gdd = (family = :gdd, tier = :primary, phi2_fs2 = -6035.0, phi3_fs3 = 0.0),
     gate_gdd_tod = (family = :gdd_tod, tier = :primary,
-                    phi2_fs2 = -6550.0, phi3_fs3 = -350_000.0),
+                    phi2_fs2 = -6555.0, phi3_fs3 = -350_000.0),
 )
 
 const DEVELOPMENT_STRESS_SPEC = (
