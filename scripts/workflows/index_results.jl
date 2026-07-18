@@ -5,7 +5,7 @@ Usage:
     julia -t auto --project=. scripts/canonical/index_results.jl [options] [root ...]
 
 Options:
-    --compare             Rank run artifacts by lab readiness, then suppression.
+    --compare             Rank runs sharing one copied problem/objective config signature.
     --compare-sweeps      Rank sweep summaries by best completed case.
     --csv                 Render CSV instead of Markdown.
     --kind run|sweep      Keep only run artifacts or sweep summaries.
@@ -29,7 +29,7 @@ Usage:
     julia -t auto --project=. scripts/canonical/index_results.jl [options] [root ...]
 
 Options:
-    --compare             Rank run artifacts by lab readiness, then suppression.
+    --compare             Rank runs sharing one copied problem/objective config signature.
     --compare-sweeps      Rank sweep summaries by best completed case.
     --csv                 Render CSV instead of Markdown.
     --kind run|sweep      Keep only run artifacts or sweep summaries.

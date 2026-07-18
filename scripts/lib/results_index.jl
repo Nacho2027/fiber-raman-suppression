@@ -9,6 +9,7 @@ if !(@isdefined _RESULTS_INDEX_JL_LOADED)
 const _RESULTS_INDEX_JL_LOADED = true
 
 using JSON3
+using SHA
 using TOML
 
 include(joinpath(@__DIR__, "run_artifacts.jl"))
@@ -47,6 +48,34 @@ function _join_index_values(value)
     end
 end
 
+_missing_comparison_metadata(reason) = (
+    objective_cost_scale = "",
+    comparison_signature = "",
+    comparison_blocker = String(reason),
+)
+
+function _run_config_comparison_metadata(data)
+    problem = get(data, "problem", nothing)
+    objective = get(data, "objective", nothing)
+    problem isa AbstractDict || return _missing_comparison_metadata(
+        "run_config.toml is missing [problem]")
+    objective isa AbstractDict || return _missing_comparison_metadata(
+        "run_config.toml is missing [objective]")
+    isempty(strip(_join_index_values(get(objective, "kind", "")))) &&
+        return _missing_comparison_metadata(
+            "run_config.toml is missing objective.kind")
+    log_cost = get(objective, "log_cost", missing)
+    log_cost isa Bool || return _missing_comparison_metadata(
+        "run_config.toml is missing Boolean objective.log_cost")
+    payload = sprint(io -> TOML.print(io,
+        Dict("problem" => problem, "objective" => objective); sorted=true))
+    return (
+        objective_cost_scale = log_cost ? "log10_db" : "linear",
+        comparison_signature = bytes2hex(SHA.sha256(payload)),
+        comparison_blocker = "",
+    )
+end
+
 function _run_config_metadata(dir::AbstractString)
     path = joinpath(dir, "run_config.toml")
     if !isfile(path)
@@ -57,11 +86,13 @@ function _run_config_metadata(dir::AbstractString)
             variables = "",
             solver_kind = "",
             run_config_path = "",
+            _missing_comparison_metadata("missing run_config.toml")...,
         )
     end
 
     try
         data = TOML.parsefile(path)
+        comparison = _run_config_comparison_metadata(data)
         return (
             config_id = _join_index_values(_nested_toml_value(data, (:id,))),
             regime = _join_index_values(_nested_toml_value(data, (:problem, :regime))),
@@ -69,8 +100,9 @@ function _run_config_metadata(dir::AbstractString)
             variables = _join_index_values(_nested_toml_value(data, (:controls, :variables))),
             solver_kind = _join_index_values(_nested_toml_value(data, (:solver, :kind))),
             run_config_path = abspath(path),
+            comparison...,
         )
-    catch
+    catch err
         return (
             config_id = "",
             regime = "",
@@ -78,6 +110,8 @@ function _run_config_metadata(dir::AbstractString)
             variables = "",
             solver_kind = "",
             run_config_path = abspath(path),
+            _missing_comparison_metadata(string(
+                "invalid run_config.toml: ", sprint(showerror, err)))...,
         )
     end
 end
@@ -405,8 +439,11 @@ function _safe_run_index_row(path::AbstractString)
             config_id = meta.config_id,
             regime = meta.regime,
             objective_kind = meta.objective_kind,
+            objective_cost_scale = meta.objective_cost_scale,
             variables = meta.variables,
             solver_kind = meta.solver_kind,
+            comparison_signature = meta.comparison_signature,
+            comparison_blocker = meta.comparison_blocker,
             timestamp_utc = sidecar.timestamp_utc,
             manifest_present = manifest.present,
             manifest_schema_version = manifest.schema_version,
@@ -457,8 +494,11 @@ function _safe_run_index_row(path::AbstractString)
             config_id = "",
             regime = "",
             objective_kind = "",
+            objective_cost_scale = "",
             variables = "",
             solver_kind = "",
+            comparison_signature = "",
+            comparison_blocker = "run artifact could not be indexed",
             timestamp_utc = "",
             manifest_present = false,
             manifest_schema_version = "",
@@ -504,8 +544,11 @@ function _sweep_index_row(path::AbstractString)
         config_id = "",
         regime = "",
         objective_kind = "",
+        objective_cost_scale = "",
         variables = "",
         solver_kind = "",
+        comparison_signature = "",
+        comparison_blocker = "not a run artifact",
         timestamp_utc = "",
         manifest_present = false,
         manifest_schema_version = "",
@@ -590,8 +633,11 @@ function _row_contains(row, needle::AbstractString)
         row.config_id,
         row.regime,
         row.objective_kind,
+        row.objective_cost_scale,
         row.variables,
         row.solver_kind,
+        row.comparison_signature,
+        row.comparison_blocker,
         row.timestamp_utc,
         row.run_context,
         row.manifest_command,
@@ -664,12 +710,52 @@ function filter_results_index(
     )
 end
 
+function _require_comparable_results(rows)
+    invalid = filter(rows) do row
+        isempty(row.objective_kind) || isempty(row.objective_cost_scale) ||
+        isempty(row.comparison_signature)
+    end
+    if !isempty(invalid)
+        details = join((string(
+            isempty(row.id) ? "<unnamed>" : row.id, " (",
+            isempty(row.comparison_blocker) ?
+                "missing objective/comparison identity" : row.comparison_blocker,
+            ")",
+        ) for row in invalid), ", ")
+        throw(ArgumentError(
+            "cannot rank results without complete requested-config comparison metadata: " *
+            details * ". Use the inventory view without --compare, or filter to " *
+            "runs with a complete copied run_config.toml."))
+    end
+
+    groups = Dict{Tuple{String,String,String},Vector{String}}()
+    for row in rows
+        key = (row.objective_kind, row.objective_cost_scale,
+            row.comparison_signature)
+        push!(get!(groups, key, String[]), row.id)
+    end
+    if length(groups) > 1
+        summaries = [string(
+            kind, "/", scale, "/", first(signature, min(12, length(signature))),
+            " [", join(sort!(ids), ", "), "]",
+        ) for ((kind, scale, signature), ids) in sort!(collect(groups); by=first)]
+        throw(ArgumentError(
+            "cannot rank runs with different requested configurations; --compare " *
+            "requires one objective kind, optimization cost scale, and copied " *
+            "[problem]/[objective] signature. This is not a resolved-physics identity. " *
+            "Found: " * join(summaries, "; ") * ". Narrow the inventory " *
+            "with --config-id, --objective, --fiber, or --contains before comparing."))
+    end
+    return isempty(groups) ? ("", "", "") : first(keys(groups))
+end
+
 function compare_results_index(index; lab_ready_only::Bool=false,
                                export_ready_only::Bool=false,
                                top::Union{Nothing,Int}=nothing)
     rows = [row for row in index.rows if row.kind == :run]
     lab_ready_only && filter!(row -> row.lab_ready === true, rows)
     export_ready_only && filter!(row -> row.export_handoff_complete === true, rows)
+    identity = _require_comparable_results(rows)
     sort!(rows; by = row -> (
         row.lab_ready === true ? 0 : 1,
         row.converged === true ? 0 : 1,
@@ -685,6 +771,9 @@ function compare_results_index(index; lab_ready_only::Bool=false,
     return (
         roots = index.roots,
         total = length(rows),
+        comparison_identity = isempty(rows) ? "" : string(
+            identity[1], "/", identity[2], "/", first(identity[3], 12)),
+        comparison_signature = isempty(rows) ? "" : identity[3],
         rows = Tuple(rows),
     )
 end

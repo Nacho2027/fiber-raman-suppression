@@ -59,7 +59,12 @@ julia -t auto --project=. scripts/canonical/run_experiment.jl research_engine_po
 The retired `smf28_L2m_P0p2W` config maps to `research_engine_poc`. For a new
 HNLF point, copy `configs/experiments/templates/single_mode_phase_template.toml`
 and set the fiber parameters. Compare completed runs with
-`./fiberlab explore compare RESULTS_ROOT`.
+`./fiberlab explore compare RESULTS_ROOT`. Comparison fails closed unless every
+ranked run has the same objective, optimization-cost scale, and copied
+`[problem]`/`[objective]` configuration signature. This guards requested-config
+heterogeneity; it is not a resolved-physics or source-code identity. Use the ordinary index or narrow it with
+`--config-id`, `--objective`, `--fiber`, or `--contains` when a results root
+contains heterogeneous experiments.
 
 ## Lab Handoff Smoke
 

@@ -15,7 +15,7 @@ using JSON3
 using FiberLab
 using TOML
 
-const SLM_REPLAY_SCHEMA_VERSION = "1.0"
+const SLM_REPLAY_SCHEMA_VERSION = "1.2"
 
 _norm_symbol(x) = Symbol(replace(lowercase(String(x)), "-" => "_"))
 
@@ -233,6 +233,32 @@ function _hardware_phase_values(values::Vector{Float64}, profile)
     return out
 end
 
+function _phase_step_status(sampled::Vector{Float64})
+    max_step = length(sampled) < 2 ? 0.0 : maximum(abs, diff(sampled))
+    tolerance = 64eps(max(1.0, max_step))
+    return (resolved = max_step <= π + tolerance, max_step = max_step)
+end
+
+function _pixel_winding_status(sampled::Vector{Float64}, profile)
+    status = _phase_step_status(sampled)
+    resolved = !(profile.phase.wrap || profile.phase.quantize) ||
+               status.resolved
+    return (resolved = resolved, max_step = status.max_step)
+end
+
+function _lift_loaded_phase(loaded::Vector{Float64}, sampled::Vector{Float64}, profile)
+    length(loaded) == length(sampled) || throw(ArgumentError(
+        "loaded and sampled pixel phases must have equal lengths"))
+    (profile.phase.wrap || profile.phase.quantize) || return copy(loaded)
+    winding = _pixel_winding_status(sampled, profile)
+    winding.resolved || throw(ArgumentError(
+        "pixel grid under-resolves phase winding: adjacent ideal samples differ by " *
+        "$(winding.max_step) rad > π"))
+    lo, hi = _phase_range_bounds(profile.phase.range)
+    span = hi - lo
+    return loaded .+ span .* round.((sampled .- loaded) ./ span)
+end
+
 function _pixel_centers(active_min::Real, active_max::Real, n_pixels::Int)
     n_pixels == 1 && return [0.5 * (active_min + active_max)]
     return collect(range(active_min, active_max; length=n_pixels))
@@ -243,13 +269,24 @@ end
 
 Replay `phi` through the generic SLM profile and reconstruct the loaded phase on
 the original simulation frequency axis. `rel_f_THz` must be the frequency-offset
-axis in the same storage order as `phi`.
+axis in the same storage order as `phi`. `pixel_phase_rad` is the hardware-loaded
+phase; `pixel_phase_continuous_rad` is only the reference-guided branch used to
+interpolate an equivalent phase back onto the simulation grid. The ideal phase
+must itself be sampled finely enough that adjacent simulation points differ by
+less than π. Wrapped or quantized profiles also reject adjacent ideal pixel
+samples differing by more than π because the hardware command cannot identify
+that winding branch.
 """
 function replay_slm_phase(phi::AbstractVector{<:Real},
                           rel_f_THz::AbstractVector{<:Real},
                           profile)
     length(phi) == length(rel_f_THz) || throw(ArgumentError(
         "phi length $(length(phi)) must match frequency axis length $(length(rel_f_THz))"))
+    all(isfinite, phi) || throw(ArgumentError("phi must contain only finite values"))
+    all(isfinite, rel_f_THz) || throw(ArgumentError(
+        "frequency axis must contain only finite values"))
+    length(unique(rel_f_THz)) == length(rel_f_THz) || throw(ArgumentError(
+        "frequency axis values must be unique"))
     profile.pixel_grid.axis == :frequency || throw(ArgumentError(
         "only frequency-axis SLM replay is currently supported"))
 
@@ -259,15 +296,27 @@ function replay_slm_phase(phi::AbstractVector{<:Real},
 
     sorted_active = sort(active; by=i -> rel_f_THz[i])
     x_active = Float64[rel_f_THz[i] for i in sorted_active]
-    phi_active = unwrap_phase(Float64[phi[i] for i in sorted_active])
+    phi_sorted = Float64[phi[i] for i in sorted_active]
+    simulation_winding = _phase_step_status(phi_sorted)
+    simulation_winding.resolved || throw(ArgumentError(
+        "simulation grid under-resolves phase winding: adjacent active samples " *
+        "differ by $(simulation_winding.max_step) rad > π"))
+    phi_active = unwrap_phase(phi_sorted)
     centers = _pixel_centers(profile.pixel_grid.active_min_THz,
         profile.pixel_grid.active_max_THz, profile.pixel_grid.n_pixels)
 
     sampled = _interp_values(x_active, phi_active, centers, profile.pixel_grid.interpolation)
     sampled = _smooth_pixels(sampled, profile.replay.smoothing_kernel_pixels)
     pixel_phase = _hardware_phase_values(sampled, profile)
+    continuous_pixel_phase = _lift_loaded_phase(pixel_phase, sampled, profile)
+    winding = _pixel_winding_status(sampled, profile)
 
-    replay_sorted = _interp_values(centers, pixel_phase, x_active, profile.pixel_grid.interpolation)
+    replay_sorted = _interp_values(
+        centers,
+        continuous_pixel_phase,
+        x_active,
+        profile.pixel_grid.interpolation,
+    )
     phi_replayed = if profile.pixel_grid.outside_active_policy == :preserve_ideal
         collect(Float64, phi)
     else
@@ -288,7 +337,13 @@ function replay_slm_phase(phi::AbstractVector{<:Real},
         sorted_active_indices = sorted_active,
         pixel_centers_THz = centers,
         pixel_phase_rad = pixel_phase,
+        pixel_phase_continuous_rad = continuous_pixel_phase,
         pixel_phase_sampled_rad = sampled,
+        max_adjacent_simulation_phase_step_rad = simulation_winding.max_step,
+        simulation_winding_resolved = simulation_winding.resolved,
+        max_adjacent_sampled_phase_step_rad = winding.max_step,
+        pixel_winding_resolved = winding.resolved,
+        reconstruction_policy = "reference_guided_phase_lift",
     )
 end
 
@@ -296,6 +351,7 @@ function slm_replay_survival_status(ideal_J_dB::Real, replayed_J_dB::Real, profi
     loss = Float64(replayed_J_dB) - Float64(ideal_J_dB)
     threshold = profile.replay.max_allowed_replay_loss_dB
     return (
+        evaluated = true,
         pass = isfinite(loss) && loss <= threshold,
         ideal_J_dB = Float64(ideal_J_dB),
         replayed_J_dB = Float64(replayed_J_dB),
@@ -327,13 +383,14 @@ end
 
 function _write_pixel_phase_csv(path::AbstractString, replay)
     open(path, "w") do io
-        println(io, "pixel_index,frequency_center_THz,phase_sampled_rad,phase_loaded_rad")
+        println(io, "pixel_index,frequency_center_THz,phase_sampled_rad,phase_loaded_rad,phase_continuous_rad")
         for i in eachindex(replay.pixel_centers_THz)
             println(io, join((
                 string(i),
                 _csv_value(replay.pixel_centers_THz[i]),
                 _csv_value(replay.pixel_phase_sampled_rad[i]),
                 _csv_value(replay.pixel_phase_rad[i]),
+                _csv_value(replay.pixel_phase_continuous_rad[i]),
             ), ","))
         end
     end
@@ -403,7 +460,8 @@ function write_slm_replay_bundle(output_dir::AbstractString,
         slm_replay_survival_status(ideal_J_dB, replayed_J_dB, replay.profile)
     else
         (
-            pass = false,
+            evaluated = false,
+            pass = nothing,
             ideal_J_dB = Float64(ideal_J_dB),
             replayed_J_dB = Float64(replayed_J_dB),
             replay_loss_dB = NaN,
@@ -421,7 +479,15 @@ function write_slm_replay_bundle(output_dir::AbstractString,
         "n_simulation_points" => length(replay.phi_replayed),
         "n_active_simulation_points" => length(replay.active_indices),
         "n_pixels" => length(replay.pixel_phase_rad),
+        "reconstruction_policy" => replay.reconstruction_policy,
+        "max_adjacent_sampled_phase_step_rad" =>
+            replay.max_adjacent_sampled_phase_step_rad,
+        "max_adjacent_simulation_phase_step_rad" =>
+            replay.max_adjacent_simulation_phase_step_rad,
+        "simulation_winding_resolved" => replay.simulation_winding_resolved,
+        "pixel_winding_resolved" => replay.pixel_winding_resolved,
         "survival" => Dict{String,Any}(
+            "evaluated" => survival.evaluated,
             "pass" => survival.pass,
             "ideal_J_dB" => _json_number_or_nothing(survival.ideal_J_dB),
             "replayed_J_dB" => _json_number_or_nothing(survival.replayed_J_dB),

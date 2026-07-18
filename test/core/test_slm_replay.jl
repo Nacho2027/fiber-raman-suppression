@@ -101,7 +101,7 @@ bit_depth = 8
             smoothing_kernel_pixels = 0,
         )
         rel_f = [-1.5, -0.5, 0.5, 1.5]
-        phi = [-0.1, 0.2, 2pi + 0.3, 4pi - 0.1]
+        phi = [5.2, 5.8, 2pi + 0.4, 2pi + 1.2]
 
         replay = replay_slm_phase(phi, rel_f, profile)
         step = 2pi / 2^profile.phase.bit_depth
@@ -109,7 +109,56 @@ bit_depth = 8
         @test all(0 .<= replay.pixel_phase_rad .< 2pi)
         @test all(isapprox.(replay.pixel_phase_rad ./ step,
             round.(replay.pixel_phase_rad ./ step); atol=1e-12))
+        quantization_error = abs.(angle.(cis.(
+            replay.pixel_phase_rad .- replay.pixel_phase_sampled_rad,
+        )))
+        @test all(quantization_error .<= step / 2 + 10eps(Float64))
         @test all(0 .<= mod.(replay.phi_replayed, 2pi) .< 2pi)
+        @test cis.(replay.pixel_phase_continuous_rad) ≈
+              cis.(replay.pixel_phase_rad) atol = 1e-12
+    end
+
+    @testset "Replay interpolates wrapped pixels on the phase circle" begin
+        profile = slm_replay_profile(;
+            profile_id = "wrapped_seam",
+            n_pixels = 3,
+            active_min_THz = -1.0,
+            active_max_THz = 1.0,
+            quantize = false,
+            wrap = true,
+        )
+        rel_f = collect(-1.0:0.25:1.0)
+        phase = 6.2 .+ 0.6 .* rel_f
+        replay = replay_slm_phase(phase, rel_f, profile)
+
+        @test cis.(replay.phi_replayed) ≈ cis.(phase) atol = 1e-12
+    end
+
+    @testset "Replay rejects hardware-ambiguous sparse winding" begin
+        rel_f = collect(-1.0:0.25:1.0)
+        phase = 4.0 .* (rel_f .+ 1.0)
+        unwrapped = slm_replay_profile(;
+            profile_id = "unwrapped_winding", n_pixels = 3,
+            active_min_THz = -1.0, active_max_THz = 1.0,
+            quantize = false, wrap = false)
+        replay = replay_slm_phase(phase, rel_f, unwrapped)
+        @test cis.(replay.phi_replayed) ≈ cis.(phase) atol = 1e-12
+
+        wrapped = slm_replay_profile(;
+            profile_id = "ambiguous_winding", n_pixels = 3,
+            active_min_THz = -1.0, active_max_THz = 1.0,
+            quantize = false, wrap = true)
+        @test_throws ArgumentError replay_slm_phase(phase, rel_f, wrapped)
+    end
+
+    @testset "Replay rejects under-resolved simulation winding" begin
+        profile = slm_replay_profile(;
+            profile_id = "simulation_alias", n_pixels = 5,
+            active_min_THz = -1.0, active_max_THz = 1.0,
+            quantize = false, wrap = false)
+        rel_f = collect(-1.0:0.5:1.0)
+        @test_throws ArgumentError replay_slm_phase(7 .* (rel_f .+ 1), rel_f, profile)
+        @test_throws ArgumentError replay_slm_phase(zeros(5), [rel_f[1:4]; rel_f[4]], profile)
     end
 
     @testset "Replay survival status uses ideal-vs-replayed dB degradation" begin
@@ -155,10 +204,16 @@ bit_depth = 8
             @test isfile(bundle.metadata_json)
 
             metadata = JSON3.read(read(bundle.metadata_json, String))
+            @test metadata.schema_version == "1.2"
             @test metadata.profile_id == "bundle_test"
             @test metadata.source_artifact == "source_result.jld2"
             @test metadata.survival.pass == true
             @test metadata.survival.replay_loss_dB == 2.0
+            @test metadata.reconstruction_policy == "reference_guided_phase_lift"
+            @test metadata.pixel_winding_resolved == true
+            @test metadata.simulation_winding_resolved == true
+            pixel_header = first(readlines(bundle.pixel_phase_csv))
+            @test endswith(pixel_header, "phase_continuous_rad")
         end
     end
 
@@ -176,7 +231,8 @@ bit_depth = 8
         mktempdir() do dir
             bundle = write_slm_replay_bundle(dir, replay; source_artifact = "source_result.jld2")
             metadata = JSON3.read(read(bundle.metadata_json, String))
-            @test metadata.survival.pass == false
+            @test metadata.survival.evaluated == false
+            @test metadata.survival.pass === nothing
             @test metadata.survival.ideal_J_dB === nothing
             @test metadata.survival.replayed_J_dB === nothing
             @test metadata.survival.replay_loss_dB === nothing

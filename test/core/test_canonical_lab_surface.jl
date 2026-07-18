@@ -168,6 +168,18 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     @test run_row.config_id == "smf28_L2m_P0p2W"
     @test run_row.regime == "single_mode"
     @test run_row.objective_kind == "raman_band"
+    @test run_row.objective_cost_scale == "log10_db"
+    @test occursin(r"^[0-9a-f]{64}$", run_row.comparison_signature)
+    @test isempty(run_row.comparison_blocker)
+    config_data = TOML.parsefile(run_row.run_config_path)
+    control_variant = deepcopy(config_data)
+    control_variant["controls"]["variables"] = ["reduced_phase"]
+    @test _run_config_comparison_metadata(control_variant).comparison_signature ==
+        run_row.comparison_signature
+    problem_variant = deepcopy(config_data)
+    problem_variant["problem"]["P_cont"] *= 2
+    @test _run_config_comparison_metadata(problem_variant).comparison_signature !=
+        run_row.comparison_signature
     @test run_row.variables == "phase"
     @test run_row.solver_kind == "lbfgs"
     @test occursin("T", run_row.timestamp_utc)
@@ -200,6 +212,43 @@ include(joinpath(_ROOT, "scripts", "workflows", "refine_amp_on_phase.jl"))
     comparison = compare_results_index(index)
     @test comparison.total == 1
     @test only(comparison.rows).lab_ready
+    @test startswith(comparison.comparison_identity, "raman_band/log10_db/")
+
+    alternative_control = merge(run_row, (
+        id = "alternative_control",
+        variables = "reduced_phase",
+        solver_kind = "nelder_mead",
+        J_after_dB = run_row.J_after_dB - 1.0,
+    ))
+    comparable_index = (; index..., total=2, rows=(run_row, alternative_control))
+    @test compare_results_index(comparable_index).total == 2
+
+    for incompatible in (
+        merge(alternative_control, (objective_kind="temporal_width",)),
+        merge(alternative_control, (objective_cost_scale="linear",)),
+        merge(alternative_control, (comparison_signature=repeat("f", 64),)),
+    )
+        @test_throws ArgumentError compare_results_index(
+            (; comparable_index..., rows=(run_row, incompatible)))
+    end
+    missing_identity = merge(alternative_control, (
+        comparison_signature = "",
+        comparison_blocker = "missing comparison metadata",
+    ))
+    comparison_error(row) = try
+        compare_results_index((; comparable_index..., rows=(run_row, row)))
+        ""
+    catch err
+        sprint(showerror, err)
+    end
+    objective_error = comparison_error(
+        merge(alternative_control, (objective_kind="temporal_width",)))
+    @test occursin("different requested configurations", objective_error)
+    @test occursin("objective kind", objective_error)
+    missing_error = comparison_error(missing_identity)
+    @test occursin("complete requested-config comparison metadata", missing_error)
+    @test occursin("missing comparison metadata", missing_error)
+
     rendered_comparison = render_results_comparison(comparison)
     @test occursin("# Results Comparison", rendered_comparison)
     @test occursin("| 1 | true | ready | explore_local_smoke | true | experimental_maturity,no_export_handoff | smf28_L2m_P0p2W | raman_band | phase |", rendered_comparison)
