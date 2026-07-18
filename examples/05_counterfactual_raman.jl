@@ -5,6 +5,7 @@ using Dates
 using FFTW
 using FiberLab
 using JLD2
+using LinearAlgebra
 using Printf
 using PyPlot
 using SHA
@@ -17,6 +18,21 @@ const PRIMARY_GATE = (
     min_main_lobe_energy_ratio = 0.90,
 )
 const NUMERICAL_GATE = (max_relative_change = 0.005, min_gap_to_envelope = 10.0)
+const TIGHT_SOLVER = (method = "Tsit5", reltol = 1e-10, abstol = 1e-9)
+const SCALAR_CROSSCHECK_METHOD = "scalar_fixed_step_rk4ip_v1"
+const SCALAR_CROSSCHECK_STEPS = (250, 500, 1000, 2000)
+const SCALAR_CROSSCHECK_SHARED_COMPONENTS = (
+    "resolved Dω/γ/hRω/one_m_fR/L",
+    "grid/launch/self-steepening factor",
+    "periodic scalar GNLSE model form",
+    "FFTW",
+)
+const SCALAR_CROSSCHECK_GATE = (
+    min_observed_order = 3.5,
+    max_relative_field_error = 1e-7,
+    max_centroid_shift_error_thz = 1e-8,
+    max_error_fraction_of_candidate_gap = 0.01,
+)
 const NEGATIVE_CONTROL_MAX_ABS_SHIFT_THZ = 1e-7
 const COLORS = (blue = "#0072B2", orange = "#D55E00",
                 purple = "#CC79A7", gray = "#666666")
@@ -85,6 +101,14 @@ function parse_args(args)
     return (output_dir = output_dir,
             figure_dir = something(figure_dir, joinpath(output_dir, "figures")),
             search = search)
+end
+
+function require_fresh_directory(path, label)
+    ispath(path) || return path
+    isdir(path) || error("$label exists but is not a directory: $path")
+    isempty(readdir(path)) || error(
+        "$label must be new or empty so a stale completion manifest cannot survive: $path")
+    return path
 end
 
 function problem_pair(; nt=1024, time_window_ps=10.0, length_m=0.5,
@@ -282,16 +306,149 @@ function search_candidates(on, off)
     return vcat(gdd_pool, tod_pool)
 end
 
-function strict_solver_pair(on, off)
-    strict(problem) = begin
+function tight_solver_pair(on, off)
+    tight(problem) = begin
         fiber = deepcopy(problem.fiber)
-        fiber["reltol"], fiber["abstol"] = 1e-10, 1e-9
+        fiber["reltol"], fiber["abstol"] = TIGHT_SOLVER.reltol, TIGHT_SOLVER.abstol
         fiber_field_problem(problem.uω0, fiber, deepcopy(problem.sim);
                             preset = problem.metadata.preset)
     end
-    pair = (strict(on), strict(off))
-    raman_counterfactual_contract(pair...).pass || error("strict solver pair is not matched")
+    pair = (tight(on), tight(off))
+    raman_counterfactual_contract(pair...).pass || error(
+        "tight-tolerance solver pair is not matched")
     return pair
+end
+
+"""Run the benchmark-local, separately coded scalar propagation gate."""
+function scalar_crosscheck(candidates, on, off; steps=SCALAR_CROSSCHECK_STEPS)
+    schedule = FiberLab._doubling_step_schedule(steps)
+    length_m = Float64(on.fiber["L"])
+    rows = NamedTuple[]
+    evidence = Dict{String,Any}()
+    tight_evidence(result, output, output_sha256) = Dict(
+        "output" => output, "output_sha256" => output_sha256,
+        "resolved_sha256" => result.resolved_sha256,
+        "evidence_sha256" => result.evidence_sha256,
+        "accepted_steps" => result.accepted_steps,
+        "rhs_evaluations" => result.rhs_evaluations,
+    )
+    for name in propertynames(candidates)
+        candidate = String(name)
+        spec = getproperty(candidates, name)
+        launch = on.uω0 .* cis.(reshape(phase_profile(on, spec), :, 1))
+        pair = (with_launch(on, launch), with_launch(off, launch))
+        tight_on, tight_off = tight_solver_pair(pair...)
+        tight_on_result, tight_off_result = propagate(tight_on), propagate(tight_off)
+        tight_on_output = tight_on_result.output_spectrum
+        tight_off_output = tight_off_result.output_spectrum
+        tight_on_sha256 = FiberLab._array_sha256(tight_on_output)
+        tight_off_sha256 = FiberLab._array_sha256(tight_off_output)
+        tight_on_centroid = FiberLab._scalar_reference_centroid_thz(
+            tight_on_output, tight_on)
+        tight_off_centroid = FiberLab._scalar_reference_centroid_thz(
+            tight_off_output, tight_off)
+        tight_shift = tight_on_centroid - tight_off_centroid
+        levels = Dict{String,Any}()
+        for step_count in schedule
+            reference_on = FiberLab._scalar_rk4_output(pair[1]; steps = step_count)
+            reference_off = FiberLab._scalar_rk4_output(pair[2]; steps = step_count)
+            reference_on_sha256 = FiberLab._array_sha256(reference_on)
+            reference_off_sha256 = FiberLab._array_sha256(reference_off)
+            on_centroid = FiberLab._scalar_reference_centroid_thz(reference_on, pair[1])
+            off_centroid = FiberLab._scalar_reference_centroid_thz(reference_off, pair[2])
+            shift = on_centroid - off_centroid
+            on_error = norm(reference_on - tight_on_output) / norm(tight_on_output)
+            off_error = norm(reference_off - tight_off_output) / norm(tight_off_output)
+            push!(rows, (
+                candidate, method = SCALAR_CROSSCHECK_METHOD,
+                steps = step_count, step_m = length_m / step_count,
+                reference_on_centroid_thz = on_centroid,
+                reference_off_centroid_thz = off_centroid,
+                reference_centroid_shift_thz = shift,
+                tight_on_centroid_thz = tight_on_centroid,
+                tight_off_centroid_thz = tight_off_centroid,
+                tight_centroid_shift_thz = tight_shift,
+                on_relative_field_error = on_error,
+                off_relative_field_error = off_error,
+                centroid_shift_error_thz = abs(shift - tight_shift),
+                reference_on_sha256, reference_off_sha256,
+                tight_on_sha256, tight_off_sha256,
+                tight_solver = TIGHT_SOLVER.method,
+                tight_reltol = TIGHT_SOLVER.reltol,
+                tight_abstol = TIGHT_SOLVER.abstol,
+                tight_on_resolved_sha256 = tight_on_result.resolved_sha256,
+                tight_off_resolved_sha256 = tight_off_result.resolved_sha256,
+                tight_on_evidence_sha256 = tight_on_result.evidence_sha256,
+                tight_off_evidence_sha256 = tight_off_result.evidence_sha256,
+                tight_on_accepted_steps = tight_on_result.accepted_steps,
+                tight_off_accepted_steps = tight_off_result.accepted_steps,
+                tight_on_rhs_evaluations = tight_on_result.rhs_evaluations,
+                tight_off_rhs_evaluations = tight_off_result.rhs_evaluations,
+            ))
+            levels[string(step_count)] = Dict(
+                "step_m" => length_m / step_count,
+                "raman_on_output" => reference_on,
+                "raman_off_output" => reference_off,
+                "raman_on_sha256" => reference_on_sha256,
+                "raman_off_sha256" => reference_off_sha256,
+            )
+        end
+        evidence[candidate] = Dict(
+            "tight_raman_on" => tight_evidence(
+                tight_on_result, tight_on_output, tight_on_sha256),
+            "tight_raman_off" => tight_evidence(
+                tight_off_result, tight_off_output, tight_off_sha256),
+            "fixed_step_levels" => levels,
+        )
+    end
+
+    observed_orders = [begin
+        selected = sort(filter(row -> row.candidate == String(name), rows); by = row -> row.steps)
+        differences = abs.(diff([row.reference_centroid_shift_thz for row in selected]))
+        all(>(0), differences) || error("scalar cross-check did not resolve convergence")
+        orders = log2.(differences[1:end-1] ./ differences[2:end])
+        (candidate = String(name), orders = orders, minimum = minimum(orders))
+    end for name in propertynames(candidates)]
+    fine = filter(row -> row.steps == last(schedule), rows)
+    row(name) = only(item for item in fine if item.candidate == name)
+    gdd, tod = row("gate_gdd"), row("gate_gdd_tod")
+    candidate_gap = abs(gdd.tight_centroid_shift_thz) -
+                    abs(tod.tight_centroid_shift_thz)
+    tight_ordering = isfinite(candidate_gap) && candidate_gap > 0
+    max_field_error = maximum(max(item.on_relative_field_error,
+                                  item.off_relative_field_error) for item in fine)
+    max_shift_error = maximum(item.centroid_shift_error_thz for item in fine)
+    error_fraction = tight_ordering ? max_shift_error / candidate_gap : Inf
+    ordering = abs(tod.reference_centroid_shift_thz) <
+               abs(gdd.reference_centroid_shift_thz)
+    sign_preserved = all(sign(item.reference_centroid_shift_thz) ==
+                         sign(item.tight_centroid_shift_thz) for item in fine)
+    gate = (
+        pass = minimum(item.minimum for item in observed_orders) >=
+                   SCALAR_CROSSCHECK_GATE.min_observed_order &&
+               max_field_error <= SCALAR_CROSSCHECK_GATE.max_relative_field_error &&
+               max_shift_error <= SCALAR_CROSSCHECK_GATE.max_centroid_shift_error_thz &&
+               error_fraction <= SCALAR_CROSSCHECK_GATE.max_error_fraction_of_candidate_gap &&
+               tight_ordering && ordering && sign_preserved,
+        method = SCALAR_CROSSCHECK_METHOD,
+        implementation_scope = "separately coded propagation RHS and fixed-step integrator",
+        shared_components = SCALAR_CROSSCHECK_SHARED_COMPONENTS,
+        tight_solver = TIGHT_SOLVER,
+        steps = schedule, finest_steps = last(schedule),
+        order_metric = "counterfactual_centroid_shift_thz",
+        observed_orders = observed_orders,
+        minimum_observed_order = minimum(item.minimum for item in observed_orders),
+        finest_max_relative_field_discrepancy = max_field_error,
+        finest_max_centroid_shift_discrepancy_thz = max_shift_error,
+        candidate_gap_thz = candidate_gap,
+        finest_error_fraction_of_candidate_gap = error_fraction,
+        tight_ordering_preserved = tight_ordering,
+        reference_ordering_preserved = ordering,
+        centroid_shift_sign_preserved = sign_preserved,
+        thresholds = SCALAR_CROSSCHECK_GATE,
+    )
+    gate.pass || error("separately coded scalar propagation cross-check failed: $gate")
+    return rows, gate, evidence
 end
 
 function grid_validation_rows(candidates, nominal_on, nominal_rows, nominal_neutral_shift)
@@ -308,7 +465,7 @@ function grid_validation_rows(candidates, nominal_on, nominal_rows, nominal_neut
         ), row))
     end
     cases = (
-        (name = "strict ODE tolerances", pair = strict_solver_pair(problem_pair()...)),
+        (name = "tight ODE tolerances", pair = tight_solver_pair(problem_pair()...)),
         (name = "2048 × 10 ps", pair = problem_pair(nt = 2048, time_window_ps = 10.0)),
         (name = "2048 × 20 ps", pair = problem_pair(nt = 2048, time_window_ps = 20.0)),
         (name = "4096 × 20 ps", pair = problem_pair(nt = 4096, time_window_ps = 20.0)),
@@ -405,7 +562,7 @@ end
 
 write_rows(path, rows) = (mkpath(dirname(path)); CSV.write(path, rows); path)
 
-function write_selected_evidence(path, details)
+function write_selected_evidence(path, details, scalar_evidence, scalar_gate)
     evidence = Dict{String,Any}()
     for name in propertynames(COMMITTED_CANDIDATES)
         detail = details[name]
@@ -420,17 +577,35 @@ function write_selected_evidence(path, details)
             "spec" => getproperty(COMMITTED_CANDIDATES, name),
             "phase_rad" => detail.phase, "launch_spectrum" => detail.launch,
             "raman_on" => run(detail.on), "raman_off" => run(detail.off),
+            "scalar_fixed_step_crosscheck" => scalar_evidence[String(name)],
         )
     end
     problem = details[:neutral].on.problem
     frequency = Float64.(FFTW.fftfreq(
         sample_count(problem), 1 / problem.sim["Δt"]))
+    scalar_metadata = Dict(
+        "method" => scalar_gate.method,
+        "implementation_scope" => scalar_gate.implementation_scope,
+        "steps" => scalar_gate.steps,
+        "tight_solver" => Dict(
+            "method" => scalar_gate.tight_solver.method,
+            "reltol" => scalar_gate.tight_solver.reltol,
+            "abstol" => scalar_gate.tight_solver.abstol,
+        ),
+        "order_metric" => scalar_gate.order_metric,
+        "output_axes" => ("frequency", "mode"),
+        "output_frame" => "lab",
+        "field_units" => "sqrt(W)",
+        "shared_components" => scalar_gate.shared_components,
+    )
     mkpath(dirname(path))
-    JLD2.jldsave(path; schema_version = "counterfactual_selected_evidence_v1",
+    JLD2.jldsave(path; schema_version = "counterfactual_selected_evidence_v2",
                  field_units = "sqrt(W)", spectra_axes = ("frequency", "mode", "z"),
                  spectra_frame = "lab", frequency_order = "raw_fftfreq",
                  frequency_units = "THz", z_units = "m",
                  evidence_hash_scheme = "FiberLab propagation_evidence_sha256_v1",
+                 scalar_crosscheck_hash_scheme = "FiberLab dense_array_sha256_v1",
+                 scalar_crosscheck = scalar_metadata,
                  frequency_offset_thz = frequency, candidates = evidence)
     return path
 end
@@ -736,20 +911,105 @@ function plot_validation(grid_rows, stress_rows, predeclared_rows, figure_dir)
     return save_plot(fig, figure_dir, "03_validation.png")
 end
 
+function plot_scalar_crosscheck(rows, gate, figure_dir)
+    fig, axes = PyPlot.subplots(1, 2, figsize = (10.6, 3.9))
+    styles = (
+        ("neutral", "Neutral", COLORS.gray, "o"),
+        ("gate_gdd", "GDD", COLORS.blue, "s"),
+        ("gate_gdd_tod", "GDD + TOD", COLORS.orange, "D"),
+    )
+
+    convergence_differences = Float64[]
+    convergence_steps = Float64[]
+    for (candidate, label, color, marker) in styles
+        selected = sort(filter(row -> row.candidate == candidate, rows);
+                        by = row -> row.step_m)
+        step_m = [row.step_m for row in selected]
+        shifts = [row.reference_centroid_shift_thz for row in selected]
+        differences = abs.(diff(shifts))
+        coarse_steps = step_m[2:end]
+        append!(convergence_steps, coarse_steps)
+        append!(convergence_differences, differences)
+        axes[1].loglog(coarse_steps, differences; color, marker, linewidth = 1.4,
+                       markersize = 4.5)
+        label_endpoint(axes[1], coarse_steps, differences, label, color;
+                       offset = (5, candidate == "neutral" ? 5 :
+                                    candidate == "gate_gdd" ? 0 : -6))
+    end
+    guide_x = extrema(convergence_steps)
+    guide_y0 = 0.35 * minimum(convergence_differences)
+    guide_y = guide_y0 .* (collect(guide_x) ./ first(guide_x)) .^ 4
+    axes[1].loglog(collect(guide_x), guide_y; color = COLORS.purple,
+                   linewidth = 1.0, linestyle = "--")
+    axes[1].annotate("slope 4", (last(guide_x), last(guide_y));
+                     xytext = (-4, -9), textcoords = "offset points",
+                     ha = "right", color = COLORS.purple, fontsize = 8)
+    axes[1].text(0.03, 0.95,
+                 @sprintf("minimum observed order = %.3f",
+                          gate.minimum_observed_order),
+                 transform = axes[1].transAxes, va = "top", fontsize = 8)
+    axes[1].set(xlabel = "Fixed step h [m]",
+                ylabel = "Successive |ΔCₕ − ΔCₕ⁄₂| [THz]",
+                title = "Fourth-order ΔC self-convergence")
+
+    finest = filter(row -> row.steps == gate.finest_steps, rows)
+    field_errors = Float64[]
+    for (index, (candidate, _, color, _)) in enumerate(styles)
+        row = only(item for item in finest if item.candidate == candidate)
+        x = (index - 0.08, index + 0.08)
+        errors = (row.on_relative_field_error, row.off_relative_field_error)
+        append!(field_errors, errors)
+        axes[2].plot(collect(x), collect(errors); color, linewidth = 0.8, alpha = 0.45)
+        axes[2].scatter([first(x)], [first(errors)]; color, marker = "o", s = 28,
+                        label = index == 1 ? "delayed response on" : "_nolegend_")
+        axes[2].scatter([last(x)], [last(errors)]; color, marker = "^", s = 32,
+                        label = index == 1 ? "response off" : "_nolegend_")
+    end
+    field_gate = gate.thresholds.max_relative_field_error
+    axes[2].axhline(field_gate; color = COLORS.purple, linewidth = 1.0,
+                    linestyle = "--")
+    axes[2].text(0.02, field_gate * 1.08,
+                 @sprintf("acceptance gate = %.0e", field_gate),
+                 transform = axes[2].get_yaxis_transform(),
+                 color = COLORS.purple, fontsize = 8)
+    axes[2].set_yscale("log")
+    axes[2].set_ylim(minimum(field_errors) / 2, field_gate * 4)
+    axes[2].set_xticks(1:3)
+    axes[2].set_xticklabels(("Neutral", "GDD", "GDD + TOD"))
+    axes[2].legend(frameon = false, loc = "upper right", fontsize = 7)
+    axes[2].set(ylabel = "Relative L₂ field discrepancy",
+                title = "Finest step vs tight Tsit5")
+    axes[2].text(0.03, 0.95,
+                 @sprintf("max finest-step ΔC discrepancy = %.2g THz",
+                          gate.finest_max_centroid_shift_discrepancy_thz),
+                 transform = axes[2].transAxes, va = "top", fontsize = 8)
+
+    fig.suptitle("Separately coded scalar RK4-IP converges and agrees with tight Tsit5",
+                 y = 0.99, fontsize = 12)
+    fig.text(0.5, 0.015,
+             "Shared: " * join(gate.shared_components, ", "),
+             ha = "center", fontsize = 8, color = COLORS.gray)
+    fig.tight_layout(rect = (0, 0.07, 1, 0.93))
+    return save_plot(fig, figure_dir, "04_scalar_crosscheck.png")
+end
+
 function make_figures(search_rows, rows, details, grid_rows, stress_rows,
-                      predeclared_rows, figure_dir; selection_reproduced)
+                      predeclared_rows, scalar_rows, scalar_gate, figure_dir;
+                      selection_reproduced)
     configure_plots!()
     paths = (
         search_frontier = plot_search_frontier(search_rows, rows, figure_dir),
         counterfactual_spectra = plot_counterfactual_spectra(
             details, figure_dir; selection_reproduced),
         validation = plot_validation(grid_rows, stress_rows, predeclared_rows, figure_dir),
+        scalar_crosscheck = plot_scalar_crosscheck(
+            scalar_rows, scalar_gate, figure_dir),
     )
     return Dict(String(name) => path for (name, path) in pairs(paths))
 end
 
 function write_report(path, rows, selection_reproduced, numerical_gate,
-                      predeclared_rows, negative_rows, adjoint)
+                      scalar_gate, predeclared_rows, negative_rows, adjoint)
     row(name) = only(item for item in rows if item.candidate == name)
     neutral, gdd, tod = row("neutral"), row("gate_gdd"), row("gate_gdd_tod")
     selection = selection_reproduced ? "Best sampled feasible" :
@@ -772,6 +1032,15 @@ function write_report(path, rows, selection_reproduced, numerical_gate,
                     "and main-lobe gates; these are launch constraints, not output-utility claims.")
         println(io, @sprintf("Adjoint check passed (max relative error %.3g); numerical ordering passed with a %.1f× candidate-gap/envelope ratio.",
                             adjoint.max_relative_error, numerical_gate.gap_to_envelope_ratio))
+        println(io, @sprintf(
+            "Separately coded scalar fixed-step propagation passed (minimum observed ΔC self-convergence order %.3f; at the finest %d-step level, max relative field discrepancy %.3g and max ΔC discrepancy %.3g THz versus tight Tsit5).",
+            scalar_gate.minimum_observed_order,
+            scalar_gate.finest_steps,
+            scalar_gate.finest_max_relative_field_discrepancy,
+            scalar_gate.finest_max_centroid_shift_discrepancy_thz,
+        ))
+        println(io, "The finest-step cross-implementation discrepancies are not the " *
+                    "broader grid/tolerance numerical envelope reported above.")
         println(io, "Predeclared cases passed: $(length(unique(
             item.condition for item in predeclared_rows))).")
         max_negative = maximum(abs(item.centroid_shift_thz) for item in negative_rows)
@@ -779,7 +1048,10 @@ function write_report(path, rows, selection_reproduced, numerical_gate,
                             count(item -> item.near_zero, negative_rows), length(negative_rows),
                             max_negative, NEGATIVE_CONTROL_MAX_ABS_SHIFT_THZ))
         println(io, "\nScope: one scalar SMF28 preset model with a single-oscillator " *
-                    "delayed response; no measured fiber, launch, device, or independent solver.")
+                    "delayed response. The fixed-step cross-check shares " *
+                    join(scalar_gate.shared_components, ", ") *
+                    "; there is no external solver, independent model construction, " *
+                    "or measured fiber, launch, or device validation.")
     end
     return path
 end
@@ -790,6 +1062,9 @@ function main(args=ARGS)
     provenance = benchmark_provenance(on, off)
     provenance["git_dirty"] && error(
         "benchmark must start from a clean Git worktree")
+    require_fresh_directory(options.output_dir, "output directory")
+    options.figure_dir == options.output_dir ||
+        require_fresh_directory(options.figure_dir, "figure directory")
     mkpath(options.output_dir)
     mkpath(options.figure_dir)
     search_rows = options.search ? search_candidates(on, off) : NamedTuple[]
@@ -798,32 +1073,37 @@ function main(args=ARGS)
     grid_rows = grid_validation_rows(
         COMMITTED_CANDIDATES, on, rows, neutral_shift)
     numerical_gate = numerical_validation_gate(grid_rows)
+    scalar_rows, scalar_gate, scalar_evidence = scalar_crosscheck(
+        COMMITTED_CANDIDATES, on, off)
     stress_rows = development_stress_rows(COMMITTED_CANDIDATES)
     predeclared_rows = predeclared_validation_rows(COMMITTED_CANDIDATES)
     negative_rows = negative_control_rows(on, off)
     evidence_path = write_selected_evidence(
-        joinpath(options.output_dir, "selected_evidence.jld2"), details)
+        joinpath(options.output_dir, "selected_evidence.jld2"), details,
+        scalar_evidence, scalar_gate)
     figures = make_figures(search_rows, rows, details, grid_rows, stress_rows,
-                           predeclared_rows, options.figure_dir;
+                           predeclared_rows, scalar_rows, scalar_gate,
+                           options.figure_dir;
                            selection_reproduced = options.search)
     relative_figures = Dict(name => relpath(path, options.output_dir)
                             for (name, path) in figures)
     evidence_sha256 = open(evidence_path) do io
         bytes2hex(SHA.sha256(io))
     end
-    report_path = write_report(joinpath(options.output_dir, "REPORT.md"), rows,
-                               options.search, numerical_gate, predeclared_rows,
-                               negative_rows, adjoint)
+    report_path = write_report(
+        joinpath(options.output_dir, "REPORT.md"), rows, options.search,
+        numerical_gate, scalar_gate, predeclared_rows, negative_rows, adjoint)
 
     write_rows(joinpath(options.output_dir, "candidates.csv"), rows)
     write_rows(joinpath(options.output_dir, "numerical_validation.csv"), grid_rows)
+    write_rows(joinpath(options.output_dir, "scalar_crosscheck.csv"), scalar_rows)
     write_rows(joinpath(options.output_dir, "development_stress.csv"), stress_rows)
     write_rows(joinpath(options.output_dir, "predeclared_validation.csv"), predeclared_rows)
     write_rows(joinpath(options.output_dir, "negative_controls.csv"), negative_rows)
     isempty(search_rows) || write_rows(joinpath(options.output_dir, "selection_search.csv"), search_rows)
 
     payload = Dict(
-        "schema_version" => "1.0",
+        "schema_version" => "1.1",
         "generated_utc" => Dates.format(now(UTC), dateformat"yyyy-mm-ddTHH:MM:SSZ"),
         "primary_endpoint" => "Raman-on minus Raman-off whole-spectrum centroid (THz)",
         "interpretation" => "model counterfactual; not experimental Raman decomposition",
@@ -833,6 +1113,8 @@ function main(args=ARGS)
         "candidates" => rows, "adjoint_check" => adjoint,
         "post_selection_numerical_validation" => grid_rows,
         "numerical_validation_gate" => numerical_gate,
+        "scalar_crosscheck" => scalar_rows,
+        "scalar_crosscheck_gate" => scalar_gate,
         "development_stress_spec" => DEVELOPMENT_STRESS_SPEC,
         "development_stress_tests" => stress_rows,
         "predeclared_validation_spec" => PREDECLARED_VALIDATION_SPEC,
@@ -849,7 +1131,9 @@ function main(args=ARGS)
             "scalar single-mode SMF28 model",
             "single-damped-oscillator silica Raman response",
             "no measured launch, fiber characterization, or device calibration",
-            "no independent GNLSE cross-solver validation",
+            "fixed-step scalar cross-check shares " *
+                join(scalar_gate.shared_components, ", "),
+            "no external-package, independent model-construction, or alternative-model validation",
         ],
     )
     final_provenance = benchmark_provenance(on, off)
@@ -869,6 +1153,7 @@ function main(args=ARGS)
     println("data written to ", options.output_dir)
     return (options = options, candidates = rows, details = details,
             grid = grid_rows, numerical_gate = numerical_gate,
+            scalar_crosscheck = scalar_rows, scalar_crosscheck_gate = scalar_gate,
             stress = stress_rows, predeclared = predeclared_rows,
             negative = negative_rows, search = search_rows, figures = figures,
             evidence = evidence_path, report = report_path, adjoint = adjoint)

@@ -4,7 +4,7 @@
 Julia API for adjoint-based inverse design in nonlinear single-mode and
 multimode fiber systems, with support for:
 
-- **Kerr + Raman nonlinearity** in the interaction picture (split-step via ODE solver)
+- **Kerr + Raman nonlinearity** with an adaptive interaction-picture ODE solver
 - **Adjoint-based sensitivity analysis** for gradient computation
 - **YDFA gain modeling** (Yb-doped fiber amplifier via rate equations)
 - **GRIN fiber mode solving** (graded-index eigenvalue problem)
@@ -113,6 +113,7 @@ include("fiberlab/native_execution.jl")
 include("fiberlab/trust.jl")
 include("fiberlab/physics_helpers.jl")
 include("fiberlab/physics_models.jl")
+include("fiberlab/scalar_crosscheck.jl")
 include("fiberlab/scenario_composition.jl")
 include("fiberlab/propagation.jl")
 include("fiberlab/spectral_measurements.jl")
