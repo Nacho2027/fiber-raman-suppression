@@ -465,7 +465,12 @@ function benchmark_provenance(on, off)
     requested_pulse = on.metadata.requested_pulse
     requested_grid = on.metadata.requested_grid
     raman = summarize(on).raman_response
-    betas = Float64.(get(on.fiber, "betas", Float64[]))
+    preset = FiberLab.SINGLE_MODE_FIBER_PRESETS[on.metadata.preset]
+    beta_count = requested_fiber.beta_order - 1
+    length(preset.betas) <= beta_count || error(
+        "preset has more dispersion coefficients than the requested beta order")
+    betas = vcat(Float64.(preset.betas), zeros(beta_count - length(preset.betas)))
+    length(betas) == beta_count || error("resolved beta provenance is incomplete")
     git_commit = try
         readchomp(`git -C $ROOT rev-parse HEAD`)
     catch
@@ -681,8 +686,9 @@ function plot_validation(grid_rows, stress_rows, predeclared_rows, figure_dir)
         axes[1].plot(x, values; color = color, marker = "o", linewidth = 1.4)
         label_endpoint(axes[1], x, values, label, color)
     end
-    axes[1].set(xticks = x, xticklabels = cases,
-                ylabel = "Residual |ΔC| [THz]", title = "Numerical validation")
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(cases)
+    axes[1].set(ylabel = "Residual |ΔC| [THz]", title = "Numerical validation")
     axes[1].tick_params(axis = "x", rotation = 48)
 
     conditions = unique(row.condition for row in stress_rows)
@@ -699,8 +705,9 @@ function plot_validation(grid_rows, stress_rows, predeclared_rows, figure_dir)
     short_labels = replace.(conditions, "Raman fraction" => "fR",
                             "nonlinearity" => "γ")
     axes[2].axhline(0; color = "#999999", linewidth = 0.7)
-    axes[2].set(xticks = stress_x, xticklabels = short_labels,
-                ylabel = "TOD residual reduction vs GDD [%]",
+    axes[2].set_xticks(stress_x)
+    axes[2].set_xticklabels(short_labels)
+    axes[2].set(ylabel = "TOD residual reduction vs GDD [%]",
                 title = "Seen development stress tests")
     axes[2].tick_params(axis = "x", rotation = 52)
     axes[2].text(0.02, 0.03, "open = launch-quality failure",
@@ -718,8 +725,9 @@ function plot_validation(grid_rows, stress_rows, predeclared_rows, figure_dir)
         axes[3].text(index, value + 0.12, @sprintf("%.1f", value),
                      ha = "center", fontsize = 7, color = COLORS.purple)
     end
-    axes[3].set(xticks = validation_x, xticklabels = validation_conditions,
-                ylabel = "TOD residual reduction vs GDD [%]",
+    axes[3].set_xticks(validation_x)
+    axes[3].set_xticklabels(validation_conditions)
+    axes[3].set(ylabel = "TOD residual reduction vs GDD [%]",
                 title = "Predeclared validation set")
     axes[3].tick_params(axis = "x", rotation = 48)
     fig.suptitle("Numerical stability, seen stress tests, and predeclared checks",
@@ -778,9 +786,12 @@ end
 
 function main(args=ARGS)
     options = parse_args(args)
+    on, off = problem_pair()
+    provenance = benchmark_provenance(on, off)
+    provenance["git_dirty"] && error(
+        "benchmark must start from a clean Git worktree")
     mkpath(options.output_dir)
     mkpath(options.figure_dir)
-    on, off = problem_pair()
     search_rows = options.search ? search_candidates(on, off) : NamedTuple[]
     rows, details, neutral_shift = named_candidates(on, off)
     adjoint = adjoint_gate(on, off)
@@ -817,7 +828,7 @@ function main(args=ARGS)
         "primary_endpoint" => "Raman-on minus Raman-off whole-spectrum centroid (THz)",
         "interpretation" => "model counterfactual; not experimental Raman decomposition",
         "selection_reproduced" => options.search,
-        "provenance" => benchmark_provenance(on, off),
+        "provenance" => provenance,
         "quality_gate" => PRIMARY_GATE,
         "candidates" => rows, "adjoint_check" => adjoint,
         "post_selection_numerical_validation" => grid_rows,
@@ -841,6 +852,11 @@ function main(args=ARGS)
             "no independent GNLSE cross-solver validation",
         ],
     )
+    final_provenance = benchmark_provenance(on, off)
+    final_provenance["git_commit"] == provenance["git_commit"] || error(
+        "Git commit changed while the benchmark was running")
+    final_provenance["git_dirty"] && error(
+        "tracked or unignored files changed while the benchmark was running")
     write_json_file(joinpath(options.output_dir, "benchmark.json"), payload)
     println(@sprintf("neutral ΔC = %.9f THz", neutral_shift))
     for row in rows

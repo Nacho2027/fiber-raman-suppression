@@ -48,6 +48,10 @@ examples/outputs/
 !results/**/*.json
 results/raman/multivar/**/*.json
 
+# Reproducible counterfactual bundles are generated locally; curate only the
+# selected figures and interpretation under docs/.
+results/counterfactual-raman/
+
 # LaTeX build artifacts
 *.aux
 *.log
