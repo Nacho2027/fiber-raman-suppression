@@ -89,10 +89,19 @@ families. It does not isolate TOD at fixed GDD or at identical pulse quality.
 
 - The paired adjoint agrees with centered finite differences at one declared
   point; the worst relative error is `2.73×10⁻⁵`.
-- Strict ODE tolerances and three larger time/frequency grids preserve the
+- Tight ODE tolerances and three larger time/frequency grids preserve the
   ordering. The maximum relative endpoint change is `5.95×10⁻⁶`; the observed
   candidate gap is `13114×` the numerical envelope. That ratio covers only the
   tested grid/tolerance variation, not model-form or experimental uncertainty.
+- A separately coded fixed-step scalar RK4 interaction-picture implementation
+  reproduces all six selected complex fields: neutral, GDD, and GDD+TOD, each
+  with the delayed response on and off. Four step-doubling levels give a minimum
+  observed `ΔC` self-convergence order of `3.998`. At `2000` steps, the maximum
+  relative field discrepancy from tight Tsit5 is `5.98×10⁻¹⁰` and the maximum
+  `ΔC` discrepancy is `9.56×10⁻¹⁰ THz`, or `1.18×10⁻⁷` of the candidate gap.
+  This is a cross-implementation propagation check, not independent model
+  validation: it shares resolved physical inputs, grid, launch, scalar GNLSE
+  model form, and FFTW.
 - Three mechanism controls are near zero: `γ = 0`, an instantaneous response,
   and `1 nm` propagation. Their maximum `|ΔC|` is `7.72×10⁻¹¹ THz`, below the
   declared `10⁻⁷ THz` threshold.
@@ -105,6 +114,8 @@ families. It does not isolate TOD at fixed GDD or at identical pulse quality.
   two `FWHM −5%` rows fail the launch-quality gate and are drawn as open marks.
 
 ![Numerical, development, and code-predeclared validation checks](../figures/counterfactual-raman/validation.png)
+
+![Scalar fixed-step convergence and agreement with tight Tsit5](../figures/counterfactual-raman/cross-implementation.png)
 
 ## What may be scientifically useful
 
@@ -126,9 +137,10 @@ TOD, pulse shaping, or Raman control. It is:
 
 > An auditable matched Raman-on/off computational benchmark with explicit
 > launch-quality constraints, mechanism sanity checks, numerical-convergence
-> evidence, a hashed locally generated raw-field bundle, and a model-specific
-> hypothesis that constrained quadratic+cubic phase can outperform quadratic
-> phase for the whole-spectrum counterfactual centroid endpoint.
+> and cross-implementation evidence, a hashed locally generated raw-field
+> bundle, and a model-specific hypothesis that constrained quadratic+cubic
+> phase can outperform quadratic phase for the whole-spectrum counterfactual
+> centroid endpoint.
 
 That hypothesis is worth testing with measured launches and spectra. It is not
 yet a paper-level experimental conclusion.
@@ -143,14 +155,14 @@ The benchmark exercises reusable FiberLab pieces rather than a one-off solver:
 | Controls | Full-grid, basis, Taylor phase, amplitude, energy, bounded profiles | No hardware calibration yet |
 | Objectives | Band, asymmetry, centroid, peak, temporal, and modal objectives | Endpoint choice remains experiment-specific |
 | Scenarios | Typed shared-control composition and matched counterfactual contracts | One benchmark does not prove all compositions |
-| Artifacts | JSON/CSV summaries, raw JLD2 fields, hashes, reports, and standard figures | Raw bundles are generated, not committed wholesale |
+| Artifacts | JSON/CSV summaries, raw production/reference fields, hashes, reports, and standard figures | Raw bundles are generated, not committed wholesale |
 | Measurements | OSA import, wavelength-density correction, RBW model, shape comparison | Synthetic-tested; no untouched Rivera export validated |
 
 This is a general lab-workbench architecture with one audited computational use
 case, not a universally validated lab instrument. The shortest path to genuine
 lab adoption is one untouched OSA export, measured launch/device calibration,
-an independent GNLSE cross-check, and one real experiment reproduced from a
-checked configuration.
+an external solver with independently constructed model inputs, and one real
+experiment reproduced from a checked configuration.
 
 ## Reproduce
 
@@ -162,12 +174,13 @@ julia -t auto --project=. examples/05_counterfactual_raman.jl \
 ```
 
 The audited local run used Git commit
-`1d0fc4e69e183c279e86084c81c1b75d56b242c0`, recorded `git_dirty=false`, and
+`55e7e7061228315601c44ad4371009841e8ff4fb`, recorded `git_dirty=false`, and
 wrote `selected_evidence.jld2` with SHA-256
-`2acd67016dc8387b6a54ba1abac2f48e05672e1697e0c0ac64d7d01d191ba8df`.
+`b5c673d9983a979728746ea1bb732933afa3f8bb1df2eb2b98b56fa6810665df`.
 The bundle also contains the 1871-row sampled search, selected candidates,
-numerical checks, development stress rows, code-predeclared checks, negative
-controls, report, and figures.
+numerical checks, the 12-row scalar cross-check with raw fixed-step and tight
+comparator fields, development stress rows, code-predeclared checks, negative
+controls, report, and four figures.
 
 Before any external publication, confirm author/contributor attribution and
 software/data citation; repository metadata alone does not settle authorship.
